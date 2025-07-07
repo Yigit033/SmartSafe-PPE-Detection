@@ -137,32 +137,56 @@ class OptimizedPPEDetector:
             logger.error(f"Detection error: {e}")
             return []
     
-    def analyze_ppe_compliance(self, detections):
-        """Analyze PPE compliance"""
+    def analyze_ppe_compliance(self, detections, required_ppe=None):
+        """Analyze PPE compliance based on company requirements"""
+        if required_ppe is None:
+            required_ppe = ['helmet', 'vest']  # Default requirements
+        
         people = [d for d in detections if d['class_name'] == 'person']
         ppe_items = [d for d in detections if d['class_name'] in 
-                    ['helmet', 'safety_vest', 'safety_suit', 'hard hat']]
+                    ['helmet', 'safety_vest', 'safety_suit', 'hard hat', 'glasses', 'gloves', 'shoes', 'mask']]
         
         compliance_status = []
         
         for person in people:
             # Simple proximity-based PPE association
             person_bbox = person['bbox']
-            has_helmet = False
-            has_vest = False
+            detected_ppe = {
+                'helmet': False,
+                'vest': False,
+                'glasses': False,
+                'gloves': False,
+                'shoes': False,
+                'mask': False
+            }
             
             for ppe in ppe_items:
                 if self.boxes_overlap(person_bbox, ppe['bbox']):
                     if 'helmet' in ppe['class_name'] or 'hard hat' in ppe['class_name']:
-                        has_helmet = True
-                    if 'vest' in ppe['class_name'] or 'suit' in ppe['class_name']:
-                        has_vest = True
+                        detected_ppe['helmet'] = True
+                    elif 'vest' in ppe['class_name'] or 'suit' in ppe['class_name']:
+                        detected_ppe['vest'] = True
+                    elif 'glasses' in ppe['class_name']:
+                        detected_ppe['glasses'] = True
+                    elif 'gloves' in ppe['class_name']:
+                        detected_ppe['gloves'] = True
+                    elif 'shoes' in ppe['class_name']:
+                        detected_ppe['shoes'] = True
+                    elif 'mask' in ppe['class_name']:
+                        detected_ppe['mask'] = True
             
-            is_compliant = has_helmet and has_vest
+            # Check compliance based on required PPE
+            missing_ppe = []
+            for ppe_type in required_ppe:
+                if not detected_ppe.get(ppe_type, False):
+                    missing_ppe.append(ppe_type)
+            
+            is_compliant = len(missing_ppe) == 0
+            
             compliance_status.append({
                 'person': person,
-                'has_helmet': has_helmet,
-                'has_vest': has_vest,
+                'detected_ppe': detected_ppe,
+                'missing_ppe': missing_ppe,
                 'compliant': is_compliant
             })
         

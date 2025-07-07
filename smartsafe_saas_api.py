@@ -103,6 +103,32 @@ class SmartSafeSaaSAPI:
                     'password': request.form.get('password')
                 }
                 
+                # PPE seçimlerini al
+                ppe_requirements = []
+                if request.form.get('ppe_helmet'):
+                    ppe_requirements.append('helmet')
+                if request.form.get('ppe_vest'):
+                    ppe_requirements.append('vest')
+                if request.form.get('ppe_glasses'):
+                    ppe_requirements.append('glasses')
+                if request.form.get('ppe_gloves'):
+                    ppe_requirements.append('gloves')
+                if request.form.get('ppe_shoes'):
+                    ppe_requirements.append('shoes')
+                if request.form.get('ppe_mask'):
+                    ppe_requirements.append('mask')
+                
+                # En az bir PPE seçimi zorunlu
+                if not ppe_requirements:
+                    return '''
+                    <script>
+                        alert("❌ En az bir PPE türü seçmelisiniz!");
+                        window.history.back();
+                    </script>
+                    '''
+                
+                data['required_ppe'] = ppe_requirements
+                
                 # Doğrulama
                 required_fields = ['company_name', 'sector', 'contact_person', 'email', 'password']
                 for field in required_fields:
@@ -1265,6 +1291,76 @@ class SmartSafeSaaSAPI:
                                         company_id=company_id, 
                                         user_data=user_data)
 
+        @self.app.route('/api/company/<company_id>/ppe-config', methods=['PUT'])
+        def update_ppe_config(company_id):
+            """Update company PPE configuration"""
+            try:
+                # Session kontrolü
+                if not self.validate_session():
+                    return jsonify({'success': False, 'error': 'Oturum geçersiz'}), 401
+                
+                if session.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 403
+                
+                data = request.json
+                required_ppe = data.get('required_ppe', [])
+                
+                # Geçerli PPE türleri
+                valid_ppe_types = ['helmet', 'vest', 'glasses', 'gloves', 'shoes', 'mask']
+                
+                # Validation
+                if not required_ppe:
+                    return jsonify({'success': False, 'error': 'En az bir PPE türü seçmelisiniz'}), 400
+                
+                for ppe_type in required_ppe:
+                    if ppe_type not in valid_ppe_types:
+                        return jsonify({'success': False, 'error': f'Geçersiz PPE türü: {ppe_type}'}), 400
+                
+                # Database güncelleme
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    UPDATE companies 
+                    SET required_ppe = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = ?
+                ''', (json.dumps(required_ppe), company_id))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'PPE konfigürasyonu güncellendi',
+                    'required_ppe': required_ppe
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ PPE config güncelleme hatası: {e}")
+                return jsonify({'success': False, 'error': 'Güncelleme başarısız'}), 500
+
+        @self.app.route('/api/company/<company_id>/ppe-config', methods=['GET'])
+        def get_ppe_config(company_id):
+            """Get company PPE configuration"""
+            try:
+                # Session kontrolü
+                if not self.validate_session():
+                    return jsonify({'success': False, 'error': 'Oturum geçersiz'}), 401
+                
+                if session.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 403
+                
+                required_ppe = self.db.get_company_ppe_requirements(company_id)
+                
+                return jsonify({
+                    'success': True,
+                    'required_ppe': required_ppe
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ PPE config getirme hatası: {e}")
+                return jsonify({'success': False, 'error': 'Veri getirme başarısız'}), 500
+
     def validate_session(self):
         """Oturum doğrulama"""
         session_id = session.get('session_id')
@@ -1383,6 +1479,62 @@ class SmartSafeSaaSAPI:
                                         <textarea class="form-control" name="address" rows="2"></textarea>
                                     </div>
                                     
+                                    <!-- PPE Seçimi -->
+                                    <div class="mb-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-hard-hat text-warning"></i> 
+                                            Zorunlu PPE Seçimi *
+                                        </label>
+                                        <div class="card p-3" style="background-color: #f8f9fa;">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" name="ppe_helmet" id="ppe_helmet" value="1">
+                                                        <label class="form-check-label" for="ppe_helmet">
+                                                            <i class="fas fa-hard-hat text-primary"></i> Baret/Kask
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" name="ppe_vest" id="ppe_vest" value="1">
+                                                        <label class="form-check-label" for="ppe_vest">
+                                                            <i class="fas fa-vest text-warning"></i> Güvenlik Yeleği
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" name="ppe_glasses" id="ppe_glasses" value="1">
+                                                        <label class="form-check-label" for="ppe_glasses">
+                                                            <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" name="ppe_gloves" id="ppe_gloves" value="1">
+                                                        <label class="form-check-label" for="ppe_gloves">
+                                                            <i class="fas fa-mitten text-success"></i> İş Eldiveni
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" name="ppe_shoes" id="ppe_shoes" value="1">
+                                                        <label class="form-check-label" for="ppe_shoes">
+                                                            <i class="fas fa-shoe-prints text-dark"></i> Güvenlik Ayakkabısı
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" name="ppe_mask" id="ppe_mask" value="1">
+                                                        <label class="form-check-label" for="ppe_mask">
+                                                            <i class="fas fa-head-side-mask text-secondary"></i> Maske
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted mt-2">
+                                                <i class="fas fa-info-circle"></i> 
+                                                Sisteminizde izlenecek PPE türlerini seçin. En az bir PPE seçimi zorunludur.
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="mb-4">
                                         <label class="form-label">Şifre *</label>
                                         <input type="password" class="form-control" name="password" required>
@@ -1499,6 +1651,17 @@ class SmartSafeSaaSAPI:
                         e.preventDefault();
                         alert('❌ Email formatı geçersiz!\n\nTürkçe karakterler desteklenir.\nÖrnek: yildizteknık@gmail.com');
                         emailInput.focus();
+                        return false;
+                    }
+                    
+                    // PPE selection validation
+                    const ppeCheckboxes = ['ppe_helmet', 'ppe_vest', 'ppe_glasses', 'ppe_gloves', 'ppe_shoes', 'ppe_mask'];
+                    const selectedPPE = ppeCheckboxes.filter(id => document.getElementById(id).checked);
+                    
+                    if (selectedPPE.length === 0) {
+                        e.preventDefault();
+                        alert('❌ En az bir PPE türü seçmelisiniz!\n\nGüvenlik sisteminin çalışması için gereklidir.');
+                        document.getElementById('ppe_helmet').focus();
                         return false;
                     }
                 });
@@ -2885,7 +3048,53 @@ class SmartSafeSaaSAPI:
                                 </div>
                                 
                                 <div class="mt-4">
-                                    <button class="btn btn-primary">
+                                    <h6>Özel PPE Konfigürasyonu</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="ppe_helmet" name="ppe_helmet">
+                                                <label class="form-check-label" for="ppe_helmet">
+                                                    <i class="fas fa-hard-hat text-primary"></i> Baret/Kask
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="ppe_vest" name="ppe_vest">
+                                                <label class="form-check-label" for="ppe_vest">
+                                                    <i class="fas fa-vest text-warning"></i> Güvenlik Yeleği
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="ppe_glasses" name="ppe_glasses">
+                                                <label class="form-check-label" for="ppe_glasses">
+                                                    <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="ppe_gloves" name="ppe_gloves">
+                                                <label class="form-check-label" for="ppe_gloves">
+                                                    <i class="fas fa-mitten text-success"></i> İş Eldiveni
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="ppe_shoes" name="ppe_shoes">
+                                                <label class="form-check-label" for="ppe_shoes">
+                                                    <i class="fas fa-shoe-prints text-dark"></i> Güvenlik Ayakkabısı
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="ppe_mask" name="ppe_mask">
+                                                <label class="form-check-label" for="ppe_mask">
+                                                    <i class="fas fa-head-side-mask text-secondary"></i> Maske
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <button class="btn btn-primary" onclick="updatePPEConfig()">
                                         <i class="fas fa-save"></i> PPE Ayarlarını Kaydet
                                     </button>
                                     <button class="btn btn-outline-secondary ms-2">
@@ -3359,6 +3568,65 @@ class SmartSafeSaaSAPI:
                     }
                 }
                 
+                // PPE Configuration Update
+                function updatePPEConfig() {
+                    const requiredPPE = [];
+                    
+                    // Checkbox'ları kontrol et
+                    if (document.getElementById('ppe_helmet').checked) requiredPPE.push('helmet');
+                    if (document.getElementById('ppe_vest').checked) requiredPPE.push('vest');
+                    if (document.getElementById('ppe_glasses').checked) requiredPPE.push('glasses');
+                    if (document.getElementById('ppe_gloves').checked) requiredPPE.push('gloves');
+                    if (document.getElementById('ppe_shoes').checked) requiredPPE.push('shoes');
+                    if (document.getElementById('ppe_mask').checked) requiredPPE.push('mask');
+                    
+                    if (requiredPPE.length === 0) {
+                        alert('❌ En az bir PPE türü seçmelisiniz!');
+                        return;
+                    }
+                    
+                    fetch(`/api/company/${companyId}/ppe-config`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({required_ppe: requiredPPE})
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            alert('✅ PPE konfigürasyonu güncellendi!');
+                            location.reload();
+                        } else {
+                            alert('❌ Hata: ' + result.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('❌ Bir hata oluştu!');
+                    });
+                }
+                
+                // Load PPE Configuration
+                function loadPPEConfig() {
+                    fetch(`/api/company/${companyId}/ppe-config`)
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            const requiredPPE = result.required_ppe || [];
+                            
+                            // Checkbox'ları güncelle
+                            document.getElementById('ppe_helmet').checked = requiredPPE.includes('helmet');
+                            document.getElementById('ppe_vest').checked = requiredPPE.includes('vest');
+                            document.getElementById('ppe_glasses').checked = requiredPPE.includes('glasses');
+                            document.getElementById('ppe_gloves').checked = requiredPPE.includes('gloves');
+                            document.getElementById('ppe_shoes').checked = requiredPPE.includes('shoes');
+                            document.getElementById('ppe_mask').checked = requiredPPE.includes('mask');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading PPE config:', error);
+                    });
+                }
+                
                 // Logout
                 function logout() {
                     if (confirm('Çıkış yapmak istediğinizden emin misiniz?')) {
@@ -3374,6 +3642,13 @@ class SmartSafeSaaSAPI:
                         });
                     }
                 }
+                
+                // Sayfa yüklendiğinde PPE konfigürasyonunu yükle
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (document.getElementById('ppe-config-section')) {
+                        loadPPEConfig();
+                    }
+                });
             </script>
         </body>
         </html>

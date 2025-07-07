@@ -102,6 +102,7 @@ class MultiTenantDatabase:
                 subscription_end DATETIME,
                 status TEXT DEFAULT 'active',
                 api_key TEXT UNIQUE,
+                required_ppe TEXT, -- JSON: şirket bazlı PPE gereksinimleri
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -240,14 +241,14 @@ class MultiTenantDatabase:
             cursor.execute('''
                 INSERT INTO companies 
                 (company_id, company_name, sector, contact_person, email, phone, address, 
-                 max_cameras, subscription_type, subscription_end, api_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 max_cameras, subscription_type, subscription_end, api_key, required_ppe)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 company_id, company_data['company_name'], company_data['sector'],
                 company_data['contact_person'], company_data['email'], 
                 company_data.get('phone', ''), company_data.get('address', ''),
                 company_data.get('max_cameras', 5), company_data.get('subscription_type', 'basic'),
-                subscription_end, api_key
+                subscription_end, api_key, json.dumps(company_data.get('required_ppe', []))
             ))
             
             # Varsayılan admin kullanıcısı oluştur
@@ -605,6 +606,27 @@ class MultiTenantDatabase:
                 'violations_trend': 0,
                 'workers_trend': 0
             }
+    
+    def get_company_ppe_requirements(self, company_id: str) -> List[str]:
+        """Şirketin PPE gereksinimlerini al"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT required_ppe FROM companies WHERE company_id = ?
+            ''', (company_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result and result[0]:
+                return json.loads(result[0])
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ PPE gereksinimlerini alma hatası: {e}")
+            return []
 
 def main():
     """Test fonksiyonu"""
