@@ -1,0 +1,63 @@
+MIT License
+
+Copyright (c) 2025 PPE Detection System
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Additional Terms for Commercial Use
+
+This software is designed for workplace safety monitoring and may be used in 
+commercial environments. For enterprise deployments, please consider:
+
+1. **Data Privacy**: All video processing is performed locally by default
+2. **Safety Compliance**: This system is a tool to assist safety monitoring but should not be the sole method of ensuring workplace safety
+3. **Performance**: Results may vary based on hardware and environmental conditions
+4. **Model Accuracy**: Detection accuracy depends on training data and environmental factors
+
+## Third-Party Components
+
+This project utilizes several open-source libraries:
+- YOLOv8 (Ultralytics) - AGPL-3.0 License
+- OpenCV - Apache 2.0 License
+- PyTorch - BSD License
+- NumPy - BSD License
+
+Please ensure compliance with all third-party licenses when using this software.
+
+## Model Files
+
+Pre-trained model files (*.pt) are subject to the licensing terms of their respective creators:
+- YOLOv8 models are licensed under AGPL-3.0 by Ultralytics
+- Custom trained models follow this MIT license unless otherwise specified
+
+## Attribution
+
+When using this software in academic or commercial work, please consider citing:
+```
+PPE Detection System - Professional Grade Workplace Safety Solution
+Version: 2.0
+Year: 2025
+Performance: Up to 24.7 FPS real-time detection
+```
+
+## Disclaimer
+
+This software is provided for educational and commercial use. Users are responsible for ensuring compliance with local regulations and safety standards. The authors disclaim any liability for safety incidents or compliance failures. 

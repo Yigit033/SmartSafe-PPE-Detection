@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: smartsafe-ppe-detection
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      python download_models.py
+    startCommand: python smartsafe_saas_api.py
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_APP
+        value: smartsafe_saas_api.py
+      - key: PORT
+        value: 5000
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: CUDA_VISIBLE_DEVICES
+        value: ""
+    disk:
+      name: smartsafe-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    
+  - type: redis
+    name: smartsafe-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
+    
+databases:
+  - name: smartsafe-db
+    databaseName: smartsafe_ppe
+    user: smartsafe_user
+    region: oregon
+    plan: free 

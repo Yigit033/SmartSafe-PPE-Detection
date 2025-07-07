@@ -1,0 +1,206 @@
+# Industrial PPE Detection System Configuration
+# Professional-grade configuration for industrial environments
+
+system:
+  name: "Industrial PPE Detection System"
+  version: "1.0.0"
+  environment: "production"
+  max_cameras: 16
+  log_level: "INFO"
+  
+# Camera Configuration
+cameras:
+  CAM_001:
+    name: "Production Line A - Entry"
+    rtsp_url: "rtsp://192.168.1.100:554/stream1"
+    backup_rtsp_url: "rtsp://192.168.1.101:554/stream1"
+    location: "Production Area A"
+    priority: 1  # 1=Critical, 2=Important, 3=Normal
+    enabled: true
+    resolution: [1280, 720]
+    fps: 25
+    detection_zones:
+      - [100, 100, 800, 600]  # Entry zone
+    
+  CAM_002:
+    name: "Production Line A - Exit"
+    rtsp_url: "rtsp://192.168.1.102:554/stream1"
+    backup_rtsp_url: "rtsp://192.168.1.103:554/stream1"
+    location: "Production Area A"
+    priority: 1
+    enabled: true
+    resolution: [1280, 720]
+    fps: 25
+    
+  CAM_003:
+    name: "Production Line B - Entry"
+    rtsp_url: "rtsp://192.168.1.104:554/stream1"
+    location: "Production Area B"
+    priority: 2
+    enabled: true
+    resolution: [1280, 720]
+    fps: 25
+    
+  CAM_004:
+    name: "Warehouse - Loading Bay"
+    rtsp_url: "rtsp://192.168.1.105:554/stream1"
+    location: "Warehouse"
+    priority: 2
+    enabled: true
+    resolution: [1280, 720]
+    fps: 25
+    
+  CAM_005:
+    name: "Office Entry Point"
+    rtsp_url: "rtsp://192.168.1.106:554/stream1"
+    location: "Administration"
+    priority: 3
+    enabled: true
+    resolution: [1280, 720]
+    fps: 25
+
+# Detection Configuration
+detection:
+  model_path: "yolov8n.pt"
+  confidence_threshold: 0.3
+  nms_threshold: 0.45
+  input_size: [640, 640]
+  device: "cpu"  # or "cuda" for GPU
+  batch_size: 1
+  
+  # PPE Classes
+  ppe_classes:
+    - "helmet"
+    - "hard hat"
+    - "safety vest"
+    - "safety glasses"
+    - "gloves"
+    - "safety boots"
+    - "respirator"
+    - "harness"
+    
+  # Compliance Rules
+  compliance_rules:
+    production_area:
+      required_ppe: ["helmet", "safety vest"]
+      mandatory: true
+    warehouse:
+      required_ppe: ["helmet", "safety vest"]
+      mandatory: true
+    office:
+      required_ppe: []
+      mandatory: false
+
+# Performance Configuration
+performance:
+  frame_skip: 3  # Process every 3rd frame
+  max_queue_size: 10
+  processing_timeout: 5.0
+  thread_pool_size: 8
+  
+# Database Configuration
+database:
+  type: "sqlite"
+  path: "logs/industrial_ppe.db"
+  backup_enabled: true
+  backup_interval: 24  # hours
+  retention_days: 90
+  
+# Alert Configuration
+alerts:
+  enabled: true
+  channels:
+    - "email"
+    - "sms"
+    - "dashboard"
+    - "scada"
+    
+  email:
+    smtp_server: "smtp.company.com"
+    port: 587
+    username: "alerts@company.com"
+    recipients:
+      - "safety@company.com"
+      - "supervisor@company.com"
+      
+  sms:
+    provider: "twilio"
+    numbers:
+      - "+1234567890"
+      - "+1234567891"
+      
+  thresholds:
+    violation_rate: 0.1  # 10% violation rate triggers alert
+    consecutive_violations: 3
+    system_fps_low: 10
+    camera_offline_minutes: 5
+
+# System Health Monitoring
+health_monitoring:
+  enabled: true
+  check_interval: 10  # seconds
+  thresholds:
+    cpu_usage: 90  # %
+    memory_usage: 85  # %
+    disk_usage: 80  # %
+    temperature: 70  # °C
+    
+  auto_restart:
+    enabled: true
+    conditions:
+      - "cpu_usage > 95 for 300 seconds"
+      - "memory_usage > 95 for 300 seconds"
+      - "no_cameras_active for 60 seconds"
+
+# Network Configuration
+network:
+  rtsp_timeout: 10
+  rtsp_buffer_size: 1
+  max_reconnect_attempts: 5
+  reconnect_delay: 5
+  
+# Industrial Integration
+integration:
+  scada:
+    enabled: false
+    protocol: "modbus"
+    address: "192.168.1.200"
+    port: 502
+    
+  plc:
+    enabled: false
+    protocol: "ethernet_ip"
+    address: "192.168.1.201"
+    
+  rest_api:
+    enabled: true
+    port: 8080
+    host: "0.0.0.0"
+    auth_required: true
+    
+  mqtt:
+    enabled: false
+    broker: "192.168.1.202"
+    port: 1883
+    topic_prefix: "industrial/ppe"
+
+# Security Configuration
+security:
+  api_key_required: true
+  rate_limiting: true
+  max_requests_per_minute: 100
+  ip_whitelist:
+    - "192.168.1.0/24"
+    - "10.0.0.0/8"
+    
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  files:
+    system: "logs/industrial_system.log"
+    detection: "logs/detection.log"
+    alerts: "logs/alerts.log"
+    performance: "logs/performance.log"
+  max_size: "100MB"
+  backup_count: 5 

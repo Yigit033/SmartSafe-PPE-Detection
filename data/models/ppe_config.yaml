@@ -1,0 +1,12 @@
+names:
+  0: person
+  1: hard_hat
+  2: safety_vest
+  3: mask
+  4: no_hard_hat
+  5: no_safety_vest
+  6: no_mask
+nc: 7
+test: data/raw/images/test
+train: data/raw/images/train
+val: data/raw/images/val

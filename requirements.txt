@@ -1,0 +1,50 @@
+# SmartSafe AI PPE Detection - Render.com Optimized
+# Core Computer Vision
+opencv-python-headless>=4.8.0
+numpy>=1.21.0
+Pillow>=9.0.0
+
+# Deep Learning Framework (CPU optimized)
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0
+
+# Web Framework
+flask>=2.3.0
+flask-cors>=4.0.0
+flask-limiter>=3.5.0
+waitress>=2.1.2
+gunicorn>=21.2.0
+
+# Data Processing
+pandas>=1.5.0
+scipy>=1.9.0
+
+# Configuration & Environment
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# Security
+werkzeug>=2.3.7
+PyJWT>=2.8.0
+cryptography>=41.0.7
+
+# Monitoring & Health
+psutil>=5.9.0
+
+# Development & Progress
+tqdm>=4.64.0
+
+# Export Functionality
+openpyxl>=3.1.0
+
+# Advanced Validation
+email-validator>=2.0.0
+
+# Logging
+loguru>=0.7.2
+
+# Enterprise Features
+APScheduler>=3.10.4
+redis>=5.0.1
+prometheus-client>=0.19.0 

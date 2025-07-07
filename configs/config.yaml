@@ -1,0 +1,142 @@
+# PPE Detection System Configuration
+# Modern Computer Vision Pipeline Settings
+
+# Model Configuration - SH17 Dataset + YOLOv9-e
+model:
+  name: "yolov8n"           # Changed from yolo9e to yolov8n for speed
+  model_path: "yolov8n.pt"  # Lightweight model for real-time
+  input_size: [640, 640]  # Standard YOLO input resolution
+  confidence_threshold: 0.5
+  iou_threshold: 0.45
+  max_detections: 100
+  device: "cpu"             # Force CPU until CUDA fixed
+
+# SH17 Dataset PPE Classes Configuration (17 classes)
+classes:
+  person: 0
+  head: 1
+  face: 2
+  glasses: 3
+  face_mask_medical: 4
+  face_guard: 5
+  ear: 6
+  earmuffs: 7
+  hands: 8
+  gloves: 9
+  foot: 10
+  shoes: 11
+  safety_vest: 12
+  tools: 13
+  helmet: 14
+  medical_suit: 15
+  safety_suit: 16
+
+# Detection Thresholds
+detection:
+  min_confidence: 0.3  # Düşürüldü - daha fazla detection
+  violation_duration: 5.0  # seconds before alert
+  tracking_enabled: true
+  max_tracks: 50
+
+# Video/Camera Settings
+video:
+  source: 0  # 0=webcam, "http://10.106.1.201:8080/video"=phone
+  fps: 30 # 30 fps şu demek: 1 saniyede 30 frame gönderilecek
+  resolution: [1280, 720]
+  buffer_size: 1
+
+# Alert System
+alerts:
+  enabled: true
+  audio_enabled: true
+  email_enabled: false
+  violation_cooldown: 10  # seconds between repeated alerts for same person
+  
+  # Audio Settings
+  audio:
+    alert_sound: "assets/alert.wav"
+    volume: 0.7
+  
+  # Email Settings  
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    sender_email: ""
+    sender_password: ""
+    recipient_emails: []
+
+# Tracking Configuration
+tracking:
+  algorithm: "deepsort"  # deepsort, sort, kalman
+  max_age: 30
+  min_hits: 3
+  iou_threshold: 0.3
+  
+  # DeepSORT specific
+  deepsort:
+    model_path: "models/deep_sort_model.pb"
+    max_cosine_distance: 0.2
+    nn_budget: 100
+
+# Database Configuration
+database:
+  type: "sqlite"
+  path: "logs/ppe_detection.db"
+  backup_enabled: true
+  retention_days: 30
+
+# Dashboard Configuration
+dashboard:
+  title: "PPE Detection Dashboard"
+  refresh_rate: 1  # seconds
+  show_confidence: true
+  show_tracking_ids: true
+  
+  # UI Theme
+  theme:
+    primary_color: "#FF6B35"
+    background_color: "#FFFFFF"
+    text_color: "#262626"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file_path: "logs/ppe_detection.log"
+  max_file_size: "10MB"
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Performance Settings
+performance:
+  multiprocessing: true
+  num_workers: 2
+  batch_processing: false
+  gpu_memory_fraction: 0.9  # Optimized for RTX 4060
+  
+# Data Paths
+paths:
+  dataset: "data/raw/"
+  processed_data: "data/processed/"
+  models: "data/models/"
+  logs: "logs/"
+  assets: "assets/"
+
+# Training Configuration (for model fine-tuning)
+training:
+  epochs: 100
+  batch_size: 32  # Increased for GPU performance
+  learning_rate: 0.001
+  optimizer: "AdamW"
+  scheduler: "CosineAnnealingLR"
+  early_stopping: true
+  patience: 10
+  
+  # Data Augmentation
+  augmentation:
+    enabled: true
+    mosaic: true
+    mixup: true
+    flip_horizontal: 0.5
+    rotation: 10
+    brightness: 0.2
+    contrast: 0.2 

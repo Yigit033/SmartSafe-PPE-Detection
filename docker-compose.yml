@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  # SmartSafe AI Web Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smartsafe-ai:latest
+    container_name: smartsafe-web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///data/smartsafe_saas.db
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./static/uploads:/app/static/uploads
+      - ./smartsafe_saas.db:/app/smartsafe_saas.db
+      - ./smartsafe_multitenant.db:/app/smartsafe_multitenant.db
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - smartsafe-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: smartsafe-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-smartsafe2024}
+    networks:
+      - smartsafe-network
+
+  # PostgreSQL Database (Production Alternative)
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartsafe-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=smartsafe_saas
+      - POSTGRES_USER=smartsafe
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-smartsafe2024}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      - "5432:5432"
+    networks:
+      - smartsafe-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: smartsafe-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./static:/var/www/static
+    depends_on:
+      - web
+    networks:
+      - smartsafe-network
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smartsafe-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - smartsafe-network
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smartsafe-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-smartsafe2024}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - smartsafe-network
+
+  # Backup Service
+  backup:
+    image: alpine:latest
+    container_name: smartsafe-backup
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh
+    command: sh -c "chmod +x /backup.sh && crond -f"
+    depends_on:
+      - postgres
+    networks:
+      - smartsafe-network
+
+volumes:
+  redis_data:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  smartsafe_database:  # KALICI DATABASE VOLUME
+
+networks:
+  smartsafe-network:
+    driver: bridge 

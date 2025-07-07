@@ -1,0 +1,305 @@
+# 🔐 Enterprise Authentication Configuration
+# Industrial PPE Detection System v3.0.0 - Enterprise Edition
+
+# Authentication Settings
+auth:
+  # JWT Configuration
+  secret_key: "your-secret-key-here-change-in-production"
+  jwt_secret: "your-jwt-secret-key-here-change-in-production"
+  jwt_expiry_hours: 24
+  
+  # Session Settings
+  session_timeout_minutes: 60
+  max_concurrent_sessions: 5
+  
+  # Password Policy
+  password_min_length: 8
+  password_require_uppercase: true
+  password_require_lowercase: true
+  password_require_numbers: true
+  password_require_symbols: true
+  password_history_count: 5
+
+# Database Configuration
+database:
+  path: "data/enterprise_auth.db"
+  backup_interval_hours: 24
+  backup_retention_days: 30
+  max_connections: 10
+
+# Security Settings
+security:
+  # CORS Configuration
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+    - "http://localhost:9000"
+    - "https://your-domain.com"
+  
+  # Rate Limiting
+  rate_limit_requests: 100
+  rate_limit_window_minutes: 15
+  
+  # Account Lockout
+  max_login_attempts: 5
+  lockout_duration_minutes: 30
+  lockout_exponential_backoff: true
+  
+  # IP Restrictions
+  whitelist_ips: []
+  blacklist_ips: []
+  
+  # MFA Settings
+  require_mfa: true
+  mfa_issuer: "PPE Detection System"
+  mfa_backup_codes: 5
+  
+  # Session Security
+  secure_cookies: true
+  httponly_cookies: true
+  samesite_cookies: "Strict"
+
+# Email Configuration (for notifications)
+email:
+  enabled: true
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  use_tls: true
+  username: "your-email@gmail.com"
+  password: "your-app-password"
+  from_email: "noreply@ppesystem.com"
+  from_name: "PPE Detection System"
+
+# Notification Settings
+notifications:
+  # Login Notifications
+  notify_successful_login: true
+  notify_failed_login: true
+  notify_account_locked: true
+  notify_password_changed: true
+  
+  # Admin Notifications
+  notify_new_user: true
+  notify_role_changed: true
+  notify_system_events: true
+  
+  # Recipients
+  admin_emails:
+    - "admin@ppesystem.com"
+    - "security@ppesystem.com"
+
+# Audit Settings
+audit:
+  enabled: true
+  log_successful_logins: true
+  log_failed_logins: true
+  log_user_actions: true
+  log_admin_actions: true
+  
+  # Audit Retention
+  retention_days: 90
+  archive_old_logs: true
+  
+  # Audit Alerts
+  alert_on_suspicious_activity: true
+  alert_on_privilege_escalation: true
+  alert_on_multiple_failures: true
+
+# Role-Based Access Control (RBAC)
+rbac:
+  # Default Role
+  default_role: "operator"
+  
+  # Role Hierarchy
+  role_hierarchy:
+    admin: 4
+    supervisor: 3
+    operator: 2
+    viewer: 1
+  
+  # Permissions
+  permissions:
+    system:
+      - "read"
+      - "write"
+      - "delete"
+      - "admin"
+    
+    users:
+      - "read"
+      - "write"
+      - "delete"
+      - "manage"
+    
+    cameras:
+      - "read"
+      - "write"
+      - "delete"
+      - "configure"
+    
+    detections:
+      - "read"
+      - "write"
+      - "delete"
+      - "export"
+    
+    analytics:
+      - "read"
+      - "write"
+      - "advanced"
+    
+    alerts:
+      - "read"
+      - "write"
+      - "delete"
+      - "configure"
+
+# Enterprise Integration
+enterprise:
+  # LDAP/Active Directory Integration
+  ldap:
+    enabled: false
+    server: "ldap://your-ldap-server.com"
+    port: 389
+    use_ssl: false
+    bind_dn: "cn=admin,dc=company,dc=com"
+    bind_password: "your-ldap-password"
+    search_base: "ou=users,dc=company,dc=com"
+    search_filter: "(uid={username})"
+    
+  # SAML Integration
+  saml:
+    enabled: false
+    entity_id: "ppe-detection-system"
+    sso_url: "https://your-idp.com/sso"
+    sls_url: "https://your-idp.com/sls"
+    x509_cert: "path/to/cert.pem"
+    
+  # OAuth2 Integration
+  oauth2:
+    enabled: false
+    providers:
+      google:
+        client_id: "your-google-client-id"
+        client_secret: "your-google-client-secret"
+        scope: "openid email profile"
+      
+      microsoft:
+        client_id: "your-microsoft-client-id"
+        client_secret: "your-microsoft-client-secret"
+        tenant_id: "your-tenant-id"
+
+# API Configuration
+api:
+  # Server Settings
+  host: "0.0.0.0"
+  port: 9000
+  debug: false
+  
+  # Request Limits
+  max_content_length: 16777216  # 16MB
+  max_json_payload: 1048576     # 1MB
+  
+  # Timeouts
+  request_timeout: 30
+  keepalive_timeout: 5
+  
+  # Headers
+  custom_headers:
+    X-Frame-Options: "DENY"
+    X-Content-Type-Options: "nosniff"
+    X-XSS-Protection: "1; mode=block"
+    Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # File Logging
+  file:
+    enabled: true
+    path: "logs/enterprise_auth.log"
+    max_size: 10485760  # 10MB
+    backup_count: 5
+    
+  # Console Logging
+  console:
+    enabled: true
+    format: "%(asctime)s - %(levelname)s - %(message)s"
+    
+  # Syslog
+  syslog:
+    enabled: false
+    facility: "LOCAL0"
+    address: "localhost"
+    port: 514
+
+# Monitoring & Health
+monitoring:
+  enabled: true
+  health_check_interval: 60
+  
+  # Metrics Collection
+  metrics:
+    enabled: true
+    collection_interval: 300
+    retention_days: 30
+    
+  # Performance Monitoring
+  performance:
+    track_response_times: true
+    track_memory_usage: true
+    track_database_queries: true
+    
+  # Alerts
+  alerts:
+    high_cpu_threshold: 80
+    high_memory_threshold: 90
+    slow_query_threshold: 1000
+    error_rate_threshold: 5
+
+# Backup & Recovery
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 30
+  
+  # Backup Destinations
+  destinations:
+    local:
+      enabled: true
+      path: "backups/auth/"
+      
+    s3:
+      enabled: false
+      bucket: "ppe-system-backups"
+      region: "us-west-2"
+      access_key: "your-access-key"
+      secret_key: "your-secret-key"
+      
+    ftp:
+      enabled: false
+      host: "backup.company.com"
+      port: 21
+      username: "backup_user"
+      password: "backup_password"
+      path: "/auth_backups/"
+
+# Development Settings
+development:
+  # Debug Mode
+  debug: false
+  testing: false
+  
+  # Mock Data
+  create_test_users: false
+  test_user_count: 10
+  
+  # Profiling
+  enable_profiling: false
+  profile_dir: "profiles/"
+  
+  # Development Server
+  auto_reload: false
+  use_reloader: false 
