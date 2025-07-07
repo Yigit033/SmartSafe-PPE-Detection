@@ -16,7 +16,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import os
+from dotenv import load_dotenv
 from smartsafe_multitenant_system import MultiTenantDatabase
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +31,7 @@ class SmartSafeSaaSAPI:
     
     def __init__(self):
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'smartsafe-saas-2024-secure-key'
+        self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
         # Enable CORS
         CORS(self.app)

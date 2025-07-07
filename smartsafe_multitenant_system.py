@@ -13,9 +13,15 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 import json
 import logging
+import os
 from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string
 from flask_cors import CORS
 import bcrypt
+from dotenv import load_dotenv
+from database_adapter import get_db_adapter
+
+# Load environment variables
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -72,17 +78,26 @@ class MultiTenantDatabase:
     
     def __init__(self, db_path: str = "smartsafe_saas.db"):
         self.db_path = db_path
+        self.db_adapter = get_db_adapter()
         self.init_database()
     
     def get_connection(self, timeout: int = 30):
         """Database connection with timeout"""
-        conn = sqlite3.connect(self.db_path, timeout=timeout)
-        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
-        conn.execute("PRAGMA synchronous=NORMAL")
-        return conn
+        return self.db_adapter.get_connection(timeout)
     
     def init_database(self):
         """Multi-tenant veritabanı tablolarını oluştur"""
+        try:
+            # Use database adapter for initialization
+            self.db_adapter.init_database()
+            logger.info("✅ Multi-tenant database initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Database initialization failed: {e}")
+            # Fallback to original SQLite initialization
+            self._init_sqlite_database()
+    
+    def _init_sqlite_database(self):
+        """Fallback SQLite database initialization"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -220,6 +235,31 @@ class MultiTenantDatabase:
         ''')
         
         conn.commit()
+        
+        # Migration: Add required_ppe column if it doesn't exist
+        try:
+            cursor.execute("PRAGMA table_info(companies)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'required_ppe' not in columns:
+                logger.info("🔧 Adding required_ppe column to companies table...")
+                cursor.execute('''
+                    ALTER TABLE companies 
+                    ADD COLUMN required_ppe TEXT
+                ''')
+                
+                # Set default PPE for existing companies
+                cursor.execute('''
+                    UPDATE companies 
+                    SET required_ppe = ? 
+                    WHERE required_ppe IS NULL
+                ''', (json.dumps(['helmet', 'vest']),))
+                
+                conn.commit()
+                logger.info("✅ Migration: required_ppe column added successfully")
+        except Exception as e:
+            logger.info(f"Migration info: {e}")
+        
         conn.close()
         logger.info("✅ Multi-tenant veritabanı oluşturuldu")
     
