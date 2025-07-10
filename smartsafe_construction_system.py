@@ -386,23 +386,124 @@ class ConstructionPPEDetector:
             
             cursor.execute('''
                 INSERT INTO violations 
-                (timestamp, worker_id, camera_id, missing_ppe, confidence_score, penalty_amount)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (timestamp, worker_id, camera_id, missing_ppe, confidence_score, image_path, penalty_amount)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 violation_data['timestamp'].isoformat(),
                 violation_data['worker_id'],
                 violation_data['camera_id'],
                 json.dumps(violation_data['missing_ppe']),
                 violation_data['confidence_score'],
-                violation_data['penalty_amount']
+                violation_data.get('image_path', ''),
+                violation_data.get('penalty_amount', 0.0)
+            ))
+            
+            # Çalışan ihlal sayısını güncelle
+            cursor.execute('''
+                UPDATE workers 
+                SET violation_count = violation_count + 1,
+                    total_penalty = total_penalty + ?,
+                    last_violation = ?
+                WHERE worker_id = ?
+            ''', (
+                violation_data.get('penalty_amount', 0.0),
+                violation_data['timestamp'].isoformat(),
+                violation_data['worker_id']
             ))
             
             conn.commit()
             conn.close()
+            
             logger.info(f"✅ İhlal kaydedildi: {violation_data['worker_id']}")
             
         except Exception as e:
             logger.error(f"❌ İhlal kaydetme hatası: {e}")
+    
+    def draw_detection_results(self, image: np.ndarray, detection_result: Dict) -> np.ndarray:
+        """Detection sonuçlarını görüntü üzerine çiz"""
+        try:
+            # Görüntüyü kopyala
+            annotated_image = image.copy()
+            height, width = annotated_image.shape[:2]
+            
+            # Başlık bilgileri
+            title_text = f"İnşaat Güvenlik İzleme - Kamera: {detection_result.get('camera_id', 'Unknown')}"
+            cv2.putText(annotated_image, title_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            
+            # Genel bilgiler
+            analysis = detection_result.get('analysis', {})
+            compliance_rate = analysis.get('compliance_rate', 0)
+            total_people = analysis.get('total_people', 0)
+            
+            # Uyum oranı
+            compliance_color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            cv2.putText(annotated_image, f"Uyum Oranı: {compliance_rate:.1f}%", 
+                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, compliance_color, 2)
+            
+            # Toplam kişi sayısı
+            cv2.putText(annotated_image, f"Toplam Kişi: {total_people}", 
+                       (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            # Detection sonuçları
+            detections = detection_result.get('detections', [])
+            
+            for i, detection in enumerate(detections):
+                # Kişi kutusunu çiz
+                person_box = detection.get('bbox')
+                if person_box:
+                    x1, y1, x2, y2 = person_box
+                    
+                    # PPE durumuna göre kutu rengi
+                    ppe_status = detection.get('ppe_status', {})
+                    is_compliant = detection.get('compliant', False)
+                    
+                    box_color = (0, 255, 0) if is_compliant else (0, 0, 255)
+                    cv2.rectangle(annotated_image, (x1, y1), (x2, y2), box_color, 2)
+                    
+                    # Worker ID
+                    worker_id = detection.get('worker_id', f'Person_{i+1}')
+                    cv2.putText(annotated_image, worker_id, (x1, y1-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
+                    
+                    # PPE durumu
+                    y_offset = y1 + 20
+                    for ppe_type, status in ppe_status.items():
+                        if ppe_type in ['helmet', 'safety_vest', 'safety_shoes']:
+                            ppe_name = {
+                                'helmet': 'Baret',
+                                'safety_vest': 'Yelek', 
+                                'safety_shoes': 'Ayakkabı'
+                            }.get(ppe_type, ppe_type)
+                            
+                            status_color = (0, 255, 0) if status else (0, 0, 255)
+                            status_text = "✓" if status else "✗"
+                            
+                            cv2.putText(annotated_image, f"{ppe_name}: {status_text}", 
+                                       (x1, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, status_color, 1)
+                            y_offset += 15
+            
+            # İhlal listesi (sağ üst köşe)
+            violations = analysis.get('individual_results', [])
+            if violations:
+                cv2.putText(annotated_image, "İHLALLER:", (width-200, 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                
+                for i, violation in enumerate(violations[:5]):  # Max 5 ihlal göster
+                    violation_text = f"• {violation.get('missing_ppe', ['Unknown'])[0]}"
+                    cv2.putText(annotated_image, violation_text, (width-200, 55 + i*20), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+            
+            # Timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cv2.putText(annotated_image, timestamp, (10, height-20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            return annotated_image
+            
+        except Exception as e:
+            logger.error(f"❌ Görüntü çizim hatası: {e}")
+            return image  # Hata durumunda orijinal görüntüyü döndür
     
     def generate_daily_report(self, date: str = None) -> Dict:
         """Günlük rapor oluştur"""
