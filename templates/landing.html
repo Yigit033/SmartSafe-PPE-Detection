@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSafe AI - Endüstriyel PPE Tespit Sistemi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <!-- Toastr CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1E3A8A;
+            --secondary: #0EA5E9;
+            --accent: #22C55E;
+            --warning: #EF4444;
+            --light: #F8FAFC;
+            --dark: #0F172A;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: var(--dark);
+            overflow-x: hidden;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            padding: 12px 32px;
+            border-radius: 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(14, 165, 233, 0.3);
+        }
+
+        .section {
+            padding: 100px 0;
+        }
+
+        .navbar {
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .hero-section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="rgba(255,255,255,0.05)" width="50" height="50" x="0" y="0"/></svg>');
+            animation: moveBackground 30s linear infinite;
+        }
+
+        @keyframes moveBackground {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(-50%, -50%); }
+        }
+
+        .sector-card {
+            border-radius: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .sector-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .performance-number {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .feature-list li {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-list li i {
+            color: var(--accent);
+            margin-right: 10px;
+        }
+
+        #particles-js {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Modern Section Backgrounds */
+        .section {
+            position: relative;
+            padding: 100px 0;
+            overflow: hidden;
+        }
+
+        /* Features Section - Teknoloji odaklı, dinamik */
+        .features-section {
+            background: linear-gradient(120deg, #071B2F 0%, #113255 100%);
+            color: white;
+        }
+
+        .features-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(29, 108, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(59, 178, 255, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .features-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .features-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Sectors Section - Endüstriyel ve profesyonel */
+        .sectors-section {
+            background: #f8f9fa;
+            position: relative;
+        }
+
+        .sectors-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                linear-gradient(120deg, rgba(0, 0, 0, 0.02) 0%, transparent 100%),
+                repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.02) 1px, transparent 1px, transparent 4px);
+            opacity: 0.5;
+        }
+
+        .sector-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+
+        .sector-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .sector-card img {
+            transition: all 0.4s ease;
+        }
+
+        .sector-card:hover img {
+            transform: scale(1.05);
+        }
+
+        /* Benefits Section - Güven verici ve profesyonel */
+        .benefits-section {
+            background: linear-gradient(135deg, #1a3b5d 0%, #2d5a8b 100%);
+            color: white;
+        }
+
+        .benefits-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 10% 90%, rgba(255, 255, 255, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 90% 10%, rgba(255, 255, 255, 0.03) 0%, transparent 40%);
+        }
+
+        .benefit-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .benefit-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-5px);
+        }
+
+        /* Contact Section - Modern ve güvenilir */
+        .contact-section {
+            background: linear-gradient(135deg, #0a192f 0%, #112a46 100%);
+            color: white;
+        }
+
+        .contact-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(255, 255, 255, 0.02) 0%, transparent 50%);
+        }
+
+        .contact-form {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .contact-form input,
+        .contact-form textarea {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            padding: 12px 20px;
+            transition: all 0.3s ease;
+        }
+
+        .contact-form input:focus,
+        .contact-form textarea:focus {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+        }
+
+        .contact-form input::placeholder,
+        .contact-form textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Section Title Styles */
+        .section-title {
+            position: relative;
+            margin-bottom: 60px;
+            text-align: center;
+        }
+
+        .section-title h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .section {
+                padding: 60px 0;
+            }
+
+            .section-title h2 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt"></i> SmartSafe AI
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Özellikler</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sectors">Sektörler</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#benefits">Faydalar</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#contact">İletişim</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-primary ms-lg-3" href="/app">Giriş Yap</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div id="particles-js"></div>
+        <div class="container content-wrapper">
+            <div class="row align-items-center">
+                <div class="col-lg-6" data-aos="fade-right">
+                    <h1 class="display-4 fw-bold mb-4">
+                        Yapay Zeka ile İş Güvenliği
+                    </h1>
+                    <p class="lead mb-4">
+                        Endüstriyel tesislerde kişisel koruyucu ekipman (PPE) kullanımını 
+                        gerçek zamanlı takip eden, iş kazalarını önleyen akıllı güvenlik sistemi.
+                    </p>
+                    <div class="d-flex gap-3">
+                        <a href="/app" class="btn btn-primary">
+                            Hemen Başla
+                        </a>
+                        
+                    </div>
+                </div>
+                <div class="col-lg-6" data-aos="fade-left">
+                    <div class="position-relative rounded-4 shadow-lg overflow-hidden">
+                        <video class="img-fluid w-100" autoplay loop muted playsinline poster="/static/images/hero-image.png">
+                            <source src="/static/videos/hero-video.webm" type="video/webm">
+                            <source src="/static/videos/hero-video.mp4" type="video/mp4">
+                            <!-- Fallback for browsers that don't support video -->
+                            <img src="/static/images/hero-image.png" alt="SmartSafe AI Demo" class="img-fluid">
+                        </video>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Performance Stats -->
+    <section class="section bg-light">
+        <div class="container">
+            <div class="row text-center">
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="0">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">24.7</div>
+                        <p class="text-muted">FPS Gerçek Zamanlı</p>
+                    </div>
+                </div>
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="100">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">37x</div>
+                        <p class="text-muted">Performans Artışı</p>
+                    </div>
+                </div>
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="200">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">16</div>
+                        <p class="text-muted">Eş Zamanlı Kamera</p>
+                    </div>
+                </div>
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="300">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">24/7</div>
+                        <p class="text-muted">Kesintisiz Çalışma</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="section">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-6 mx-auto text-center">
+                    <h2 class="display-5 fw-bold mb-3">Özellikler</h2>
+                    <p class="lead text-muted">
+                        En son teknolojilerle donatılmış güvenlik sistemi
+                    </p>
+                </div>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-4" data-aos="fade-up">
+                    <div class="glass-card p-4">
+                        <div class="feature-icon gradient-bg">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <h4>Yüksek Performans</h4>
+                        <p>Saniyede 24.7 kare işleme kapasitesi ile gerçek zamanlı tespit.</p>
+                        <ul class="feature-list list-unstyled">
+                            <li><i class="fas fa-check"></i> GPU Optimizasyonu</li>
+                            <li><i class="fas fa-check"></i> NVIDIA CUDA Desteği</li>
+                            <li><i class="fas fa-check"></i> Düşük Gecikme Süresi</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                    <div class="glass-card p-4">
+                        <div class="feature-icon gradient-bg">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <h4>Çoklu Kamera Desteği</h4>
+                        <p>16 kameraya kadar eş zamanlı izleme ve analiz kapasitesi.</p>
+                        <ul class="feature-list list-unstyled">
+                            <li><i class="fas fa-check"></i> IP Kamera Entegrasyonu</li>
+                            <li><i class="fas fa-check"></i> Otomatik Yük Dengeleme</li>
+                            <li><i class="fas fa-check"></i> Kesintisiz İzleme</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                    <div class="glass-card p-4">
+                        <div class="feature-icon gradient-bg">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h4>Yapay Zeka</h4>
+                        <p>Gelişmiş derin öğrenme modelleri ile hassas tespit.</p>
+                        <ul class="feature-list list-unstyled">
+                            <li><i class="fas fa-check"></i> Gerçek Zamanlı Analiz</li>
+                            <li><i class="fas fa-check"></i> Yüksek Doğruluk</li>
+                            <li><i class="fas fa-check"></i> Sürekli Öğrenme</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sectors -->
+    <section id="sectors" class="section gradient-bg">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-6 mx-auto text-center">
+                    <h2 class="display-5 fw-bold text-white mb-3">Sektörel Çözümler</h2>
+                    <p class="lead text-white-50">
+                        Her sektöre özel optimize edilmiş güvenlik çözümleri
+                    </p>
+                </div>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-3" data-aos="fade-up">
+                    <div class="sector-card glass-card">
+                        <img src="/static/images/insaat.jpg" alt="İnşaat Sektörü" class="img-fluid">
+                        <div class="p-4">
+                            <h4 class="mb-3">İnşaat Sektörü</h4>
+                            <p class="mb-0">Baret, yelek, güvenlik gözlüğü tespiti</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="100">
+                    <div class="sector-card glass-card">
+                        <img src="/static/images/kimya.jpg" alt="Kimya Endüstrisi" class="img-fluid">
+                        <div class="p-4">
+                            <h4 class="mb-3">Kimya Endüstrisi</h4>
+                            <p class="mb-0">Koruyucu maske ve eldiven kontrolü</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="200">
+                    <div class="sector-card glass-card">
+                        <img src="/static/images/gida.jpg" alt="Gıda Sektörü" class="img-fluid">
+                        <div class="p-4">
+                            <h4 class="mb-3">Gıda Sektörü</h4>
+                            <p class="mb-0">Hijyen ekipmanları takibi</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="300">
+                    <div class="sector-card glass-card">
+                        <img src="/static/images/uretim.jpg" alt="Üretim Tesisleri" class="img-fluid">
+                        <div class="p-4">
+                            <h4 class="mb-3">Üretim Tesisleri</h4>
+                            <p class="mb-0">Çoklu PPE kontrolü ve raporlama</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits -->
+    <section id="benefits" class="section">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-6 mx-auto text-center">
+                    <h2 class="display-5 fw-bold mb-3">Avantajlar</h2>
+                    <p class="lead text-muted">
+                        SmartSafe AI ile elde edeceğiniz kazanımlar
+                    </p>
+                </div>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-6" data-aos="fade-right">
+                    <div class="glass-card p-4">
+                        <h4 class="mb-4">Finansal Avantajlar</h4>
+                        <ul class="feature-list list-unstyled">
+                            <li><i class="fas fa-check"></i> İş kazası maliyetlerinin minimize edilmesi</li>
+                            <li><i class="fas fa-check"></i> Sigorta primlerinde potansiyel indirimler</li>
+                            <li><i class="fas fa-check"></i> Denetim maliyetlerinin azaltılması</li>
+                            <li><i class="fas fa-check"></i> Operasyonel verimliliğin artırılması</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-6" data-aos="fade-left">
+                    <div class="glass-card p-4">
+                        <h4 class="mb-4">Operasyonel Faydalar</h4>
+                        <ul class="feature-list list-unstyled">
+                            <li><i class="fas fa-check"></i> Gerçek zamanlı izleme ve uyarı sistemi</li>
+                            <li><i class="fas fa-check"></i> Otomatik raporlama ve dokümantasyon</li>
+                            <li><i class="fas fa-check"></i> Çalışan güvenliğinin artırılması</li>
+                            <li><i class="fas fa-check"></i> Denetim süreçlerinin kolaylaştırılması</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact" class="section gradient-bg">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-6 mx-auto">
+                    <div class="glass-card p-5">
+                        <h2 class="text-center mb-4">İletişime Geçin</h2>
+                        <form id="contactForm" action="/api/contact" method="POST">
+                            <div class="mb-3">
+                                <input type="text" name="name" class="form-control" placeholder="Adınız Soyadınız" required>
+                            </div>
+                            <div class="mb-3">
+                                <input type="email" name="email" class="form-control" placeholder="E-posta Adresiniz" required>
+                            </div>
+                            <div class="mb-3">
+                                <select name="sector" class="form-select" required>
+                                    <option value="" selected disabled>Sektörünüz</option>
+                                    <option value="construction">İnşaat</option>
+                                    <option value="chemical">Kimya</option>
+                                    <option value="food">Gıda</option>
+                                    <option value="manufacturing">Üretim</option>
+                                    <option value="other">Diğer</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <textarea name="message" class="form-control" rows="4" placeholder="Mesajınız" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-paper-plane me-2"></i>Gönder
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-section">
+        <div class="footer-top py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="footer-brand mb-4">
+                            <h3 class="text-white mb-2"><i class="fas fa-shield-alt"></i> SmartSafe AI</h3>
+                            <p class="text-white-50">
+                                Yapay zeka destekli endüstriyel güvenlik çözümleriyle iş yerinizi daha güvenli hale getiriyoruz.
+                            </p>
+                        </div>
+                        <div class="contact-info mb-4">
+                            <h5 class="text-white mb-3">İletişim</h5>
+                            <p class="text-white-50 mb-2">
+                                <i class="fas fa-envelope me-2"></i> yigittilaver2000@gmail.com
+                            </p>
+                            <p class="text-white-50 mb-2">
+                                <i class="fas fa-phone me-2"></i> +90 (505) 020 20 95
+                            </p>
+                            <p class="text-white-50 mb-0">
+                                <i class="fas fa-map-marker-alt me-2"></i> Maslak, İstanbul
+                            </p>
+                        </div>
+                        <div class="social-links">
+                            <a href="#" class="social-link"><i class="fab fa-linkedin"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-twitter"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-facebook"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <h5 class="text-white mb-4">Çözümlerimiz</h5>
+                        <ul class="footer-links">
+                            <li><a href="#features">Temel Özellikler</a></li>
+                            <li><a href="#sectors">Sektörel Çözümler</a></li>
+                            <li><a href="#benefits">İş Güvenliği Avantajları</a></li>
+                            <li><a href="#demo">Canlı Demo</a></li>
+                            <li><a href="/app">Şirket Kaydı</a></li>
+                        </ul>
+                    </div>
+                    <div class="col-lg-4">
+                        <h5 class="text-white mb-4">Destek</h5>
+                        <ul class="footer-links">
+                            <li><a href="#contact">Teknik Destek</a></li>
+                            <li><a href="#contact">Satış Öncesi Destek</a></li>
+                            <li><a href="#contact">Demo Talebi</a></li>
+                            <li><a href="#contact">Fiyatlandırma</a></li>
+                            <li><a href="#contact">Sektörel Danışmanlık</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom py-3">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <p class="text-white-50 mb-0">© 2025 SmartSafe AI. Tüm hakları saklıdır.</p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <a href="#" class="text-white-50 me-3">Gizlilik Politikası</a>
+                        <a href="#" class="text-white-50">Kullanım Şartları</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <style>
+        .footer-section {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .footer-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="rgba(255,255,255,0.03)" width="50" height="50" x="0" y="0"/></svg>');
+            opacity: 0.1;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .footer-links a:hover {
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .social-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .social-link {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .social-link:hover {
+            background: white;
+            color: var(--primary);
+            transform: translateY(-3px);
+        }
+
+        .newsletter-form .form-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 30px 0 0 30px;
+        }
+
+        .newsletter-form .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .newsletter-form .btn {
+            border-radius: 0 30px 30px 0;
+            padding: 12px 25px;
+        }
+
+        .footer-bottom {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .footer-bottom a {
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-bottom a:hover {
+            color: white !important;
+        }
+
+        .contact-info p {
+            display: flex;
+            align-items: center;
+        }
+
+        .contact-info i {
+            width: 20px;
+        }
+    </style>
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <!-- jQuery ve Toastr JS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script>
+        // Toastr ayarları
+        toastr.options = {
+            "closeButton": true,
+            "debug": false,
+            "newestOnTop": false,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "preventDuplicates": false,
+            "onclick": null,
+            "showDuration": "300",
+            "hideDuration": "1000",
+            "timeOut": "5000",
+            "extendedTimeOut": "1000",
+            "showEasing": "swing",
+            "hideEasing": "linear",
+            "showMethod": "fadeIn",
+            "hideMethod": "fadeOut"
+        };
+
+        // Contact form submit
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            fetch('/api/contact', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('Mesajınız başarıyla gönderildi!', 'Başarılı');
+                    this.reset();
+                } else {
+                    throw new Error(data.error || 'Bir hata oluştu');
+                }
+            })
+            .catch(error => {
+                toastr.error('Bir hata oluştu. Lütfen tekrar deneyin.', 'Hata');
+                console.error('Error:', error);
+            });
+        });
+
+        // Initialize AOS
+        AOS.init({
+            duration: 1000,
+            once: true
+        });
+
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            if (window.scrollY > 50) {
+                document.querySelector('.navbar').classList.add('scrolled');
+            } else {
+                document.querySelector('.navbar').classList.remove('scrolled');
+            }
+        });
+
+        // Initialize particles.js
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: '#ffffff' },
+                shape: { type: 'circle' },
+                opacity: { value: 0.5, random: false },
+                size: { value: 3, random: true },
+                line_linked: { enable: true, distance: 150, color: '#ffffff', opacity: 0.4, width: 1 },
+                move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
+            },
+            interactivity: {
+                detect_on: 'canvas',
+                events: {
+                    onhover: { enable: true, mode: 'repulse' },
+                    onclick: { enable: true, mode: 'push' },
+                    resize: true
+                }
+            },
+            retina_detect: true
+        });
+    </script>
+</body>
+</html> 

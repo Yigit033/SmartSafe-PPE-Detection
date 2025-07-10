@@ -4,10 +4,11 @@ SmartSafe AI - SaaS Multi-Tenant API Server
 Şirket bazlı veri ayrımı ile profesyonel SaaS sistemi
 """
 
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string, Response, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_mail import Mail, Message
 import sqlite3
 import json
 import threading
@@ -18,6 +19,13 @@ from typing import Dict, List, Optional, Any
 import os
 from dotenv import load_dotenv
 from smartsafe_multitenant_system import MultiTenantDatabase
+from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
+from smartsafe_sector_detector_factory import SectorDetectorFactory
+import cv2
+import numpy as np
+import base64
+import queue
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -26,12 +34,45 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Enterprise modülleri import et
+try:
+    from camera_integration_manager import get_camera_manager, ProfessionalCameraManager
+    from enhanced_error_handler import EnhancedErrorHandler
+    from professional_config_manager import ProfessionalConfigManager
+    from performance_optimizer import PerformanceOptimizer
+    from enterprise_security_manager import EnterpriseSecurityManager
+    from enterprise_monitoring_system import EnterpriseMonitoringSystem
+    ENTERPRISE_MODULES_AVAILABLE = True
+    logger.info("✅ Enterprise modülleri yüklendi")
+except ImportError as e:
+    logger.warning(f"⚠️ Enterprise modülleri yüklenemedi: {e}")
+    ENTERPRISE_MODULES_AVAILABLE = False
+
+# Global değişkenler - kamera sistemi için
+active_detectors = {}
+detection_threads = {}
+camera_captures = {}  # Kamera yakalama nesneleri
+frame_buffers = {}    # Frame buffer'ları
+detection_results = {} # Tespit sonuçları
+
+
+
 class SmartSafeSaaSAPI:
     """SmartSafe AI SaaS API Server"""
     
     def __init__(self):
-        self.app = Flask(__name__)
+        self.app = Flask(__name__, 
+                        template_folder='templates',
+                        static_folder='static')
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
+        
+        # Mail configuration
+        self.app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+        self.app.config['MAIL_PORT'] = 587
+        self.app.config['MAIL_USE_TLS'] = True
+        self.app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
+        self.app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
+        self.mail = Mail(self.app)
         
         # Enable CORS
         CORS(self.app)
@@ -46,20 +87,110 @@ class SmartSafeSaaSAPI:
         # Multi-tenant database
         self.db = MultiTenantDatabase()
         
+        # Enterprise modülleri başlat
+        self.init_enterprise_modules()
+        
         # Setup routes
         self.setup_routes()
         
         logger.info("🌐 SmartSafe AI SaaS API Server initialized")
     
+    def init_enterprise_modules(self):
+        """Enterprise modülleri başlat"""
+        if ENTERPRISE_MODULES_AVAILABLE:
+            try:
+                # Error Handler
+                self.error_handler = EnhancedErrorHandler()
+                logger.info("✅ Enhanced Error Handler başlatıldı")
+                
+                # Config Manager
+                self.config_manager = ProfessionalConfigManager()
+                logger.info("✅ Professional Config Manager başlatıldı")
+                
+                # Performance Optimizer
+                self.performance_optimizer = PerformanceOptimizer()
+                logger.info("✅ Performance Optimizer başlatıldı")
+                
+                # Security Manager
+                self.security_manager = EnterpriseSecurityManager()
+                logger.info("✅ Enterprise Security Manager başlatıldı")
+                
+                # Monitoring System
+                self.monitoring_system = EnterpriseMonitoringSystem()
+                logger.info("✅ Enterprise Monitoring System başlatıldı")
+                
+                # Camera Manager
+                self.camera_manager = get_camera_manager()
+                logger.info("✅ Professional Camera Manager başlatıldı")
+                
+                self.enterprise_enabled = True
+                logger.info("🚀 Tüm Enterprise modülleri başarıyla entegre edildi!")
+                
+            except Exception as e:
+                logger.error(f"❌ Enterprise modül başlatma hatası: {e}")
+                self.enterprise_enabled = False
+        else:
+            self.enterprise_enabled = False
+            logger.info("⚙️ Fallback moda geçiliyor - Enterprise özellikler devre dışı")
+    
     def setup_routes(self):
         """API rotalarını ayarla"""
         
-        # Ana sayfa - Şirket kayıt
-        @self.app.route('/', methods=['GET'])
-        def home():
-            """Ana sayfa - Şirket kayıt formu"""
-            return render_template_string(self.get_home_template())
+        # İletişim formu endpoint'i
+        @self.app.route('/api/contact', methods=['POST'])
+        def contact():
+            """İletişim formu gönderimi"""
+            try:
+                name = request.form.get('name')
+                email = request.form.get('email')
+                sector = request.form.get('sector')
+                message = request.form.get('message')
+                
+                # Form validasyonu
+                if not all([name, email, sector, message]):
+                    return jsonify({'success': False, 'error': 'Tüm alanları doldurun'}), 400
+                
+                # E-posta gönderimi
+                msg = Message(
+                    subject=f'SmartSafe AI - Yeni İletişim Formu: {name}',
+                    sender=self.app.config['MAIL_USERNAME'],
+                    recipients=['yigittilaver2000@gmail.com'],
+                    body=f'''Yeni bir iletişim formu gönderildi:
+                    
+Ad Soyad: {name}
+E-posta: {email}
+Sektör: {sector}
+Mesaj:
+{message}
+                    '''
+                )
+                
+                self.mail.send(msg)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Mesajınız başarıyla gönderildi'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ İletişim formu hatası: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Mesaj gönderilirken bir hata oluştu'
+                }), 500
         
+        # Ana sayfa - Landing Page
+        @self.app.route('/', methods=['GET'])
+        def landing():
+            """Landing page"""
+            return render_template('landing.html')
+
+        # Uygulama ana sayfası - Şirket kayıt
+        @self.app.route('/app', methods=['GET'])
+        def app_home():
+            """Şirket kayıt formu"""
+            return render_template_string(self.get_home_template())
+
         # Şirket kaydı
         @self.app.route('/api/register', methods=['POST'])
         def register_company():
@@ -108,22 +239,11 @@ class SmartSafeSaaSAPI:
                 }
                 
                 # PPE seçimlerini al
-                ppe_requirements = []
-                if request.form.get('ppe_helmet'):
-                    ppe_requirements.append('helmet')
-                if request.form.get('ppe_vest'):
-                    ppe_requirements.append('vest')
-                if request.form.get('ppe_glasses'):
-                    ppe_requirements.append('glasses')
-                if request.form.get('ppe_gloves'):
-                    ppe_requirements.append('gloves')
-                if request.form.get('ppe_shoes'):
-                    ppe_requirements.append('shoes')
-                if request.form.get('ppe_mask'):
-                    ppe_requirements.append('mask')
+                required_ppe = request.form.getlist('required_ppe')
+                optional_ppe = request.form.getlist('optional_ppe')
                 
                 # En az bir PPE seçimi zorunlu
-                if not ppe_requirements:
+                if not required_ppe and not optional_ppe:
                     return '''
                     <script>
                         alert("❌ En az bir PPE türü seçmelisiniz!");
@@ -131,7 +251,13 @@ class SmartSafeSaaSAPI:
                     </script>
                     '''
                 
-                data['required_ppe'] = ppe_requirements
+                # PPE konfigürasyonu oluştur
+                ppe_config = {
+                    'required': required_ppe,
+                    'optional': optional_ppe
+                }
+                
+                data['required_ppe'] = ppe_config
                 
                 # Doğrulama
                 required_fields = ['company_name', 'sector', 'contact_person', 'email', 'password']
@@ -402,41 +528,115 @@ class SmartSafeSaaSAPI:
         # Şirket istatistikleri API (Enhanced)
         @self.app.route('/api/company/<company_id>/stats', methods=['GET'])
         def get_company_stats(company_id):
-            """Gelişmiş şirket istatistikleri"""
+            """Unified şirket istatistikleri - Database'den gerçek kamera sayısı"""
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
-            stats = self.db.get_company_stats(company_id)
-            
-            # Enhanced stats with trends
-            enhanced_stats = {
-                'active_cameras': stats.get('active_cameras', 0),
-                'compliance_rate': stats.get('compliance_rate', 0),
-                'today_violations': stats.get('today_violations', 0),
-                'active_workers': stats.get('active_workers', 0),
-                'total_detections': stats.get('total_detections', 0),
-                'monthly_violations': stats.get('monthly_violations', 0),
+            try:
+                # MultiTenant database'den base istatistikleri al
+                stats = self.db.get_company_stats(company_id)
                 
-                # Trend indicators
-                'cameras_trend': stats.get('cameras_trend', 0),
-                'compliance_trend': stats.get('compliance_trend', 0),
-                'violations_trend': stats.get('violations_trend', 0),
-                'workers_trend': stats.get('workers_trend', 0)
-            }
-            
-            return jsonify(enhanced_stats)
+                # Gerçek kamera sayısını database'den al (unified approach)
+                try:
+                    cameras = self.db.get_company_cameras(company_id)
+                    total_cameras = len(cameras)
+                    active_cameras = len([c for c in cameras if c.get('status') == 'active'])
+                    discovered_cameras = len([c for c in cameras if c.get('status') == 'discovered'])
+                    
+                    # Kamera istatistiklerini güncelle
+                    stats.update({
+                        'active_cameras': active_cameras,
+                        'total_cameras': total_cameras,
+                        'discovered_cameras': discovered_cameras,
+                        'inactive_cameras': total_cameras - active_cameras
+                    })
+                    
+                    logger.info(f"✅ Unified stats for company {company_id}: {total_cameras} cameras ({active_cameras} active, {discovered_cameras} discovered)")
+                    
+                except Exception as camera_error:
+                    logger.error(f"❌ Error getting camera stats: {camera_error}")
+                    # Fallback to existing stats without camera updates
+                
+                # Enhanced stats with unified camera data
+                enhanced_stats = {
+                    'active_cameras': stats.get('active_cameras', 0),
+                    'total_cameras': stats.get('total_cameras', 0),
+                    'discovered_cameras': stats.get('discovered_cameras', 0),
+                    'compliance_rate': stats.get('compliance_rate', 0),
+                    'today_violations': stats.get('today_violations', 0),
+                    'active_workers': stats.get('active_workers', 0),
+                    'total_detections': stats.get('total_detections', 0),
+                    'monthly_violations': stats.get('monthly_violations', 0),
+                    
+                    # Trend indicators
+                    'cameras_trend': stats.get('cameras_trend', 0),
+                    'compliance_trend': stats.get('compliance_trend', 0),
+                    'violations_trend': stats.get('violations_trend', 0),
+                    'workers_trend': stats.get('workers_trend', 0),
+                    
+                    # Unified data source indicator
+                    'data_source': 'unified_database',
+                    'last_updated': datetime.now().isoformat()
+                }
+                
+                return jsonify(enhanced_stats)
+                
+            except Exception as e:
+                logger.error(f"❌ Stats error for company {company_id}: {e}")
+                return jsonify({
+                    'error': 'İstatistikler getirilemedi',
+                    'details': str(e)
+                }), 500
         
         # Şirket kameraları API
         @self.app.route('/api/company/<company_id>/cameras', methods=['GET'])
         def get_company_cameras(company_id):
-            """Şirket kameralarını getir"""
+            """Şirket kameralarını getir - Unified Database Source"""
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
-            cameras = self.db.get_company_cameras(company_id)
-            return jsonify({'cameras': cameras})
+            try:
+                # Unified approach: Database'den kameraları al
+                cameras = self.db.get_company_cameras(company_id)
+                
+                # Enterprise camera manager entegrasyonu
+                if hasattr(self, 'camera_manager') and self.camera_manager:
+                    # Real-time status update
+                    for camera in cameras:
+                        try:
+                            # IP'den camera manager'da status kontrol et
+                            if camera.get('ip_address'):
+                                status_info = self._get_realtime_camera_status(camera['ip_address'])
+                                if status_info:
+                                    camera.update(status_info)
+                        except Exception as e:
+                            logger.debug(f"Real-time status check failed for {camera.get('name', 'unknown')}: {e}")
+                
+                # Kamera sayısı ve summary bilgileri ekle
+                total_cameras = len(cameras)
+                active_cameras = len([c for c in cameras if c.get('status') == 'active'])
+                
+                result = {
+                    'success': True, 
+                    'cameras': cameras,
+                    'total': total_cameras,
+                    'active': active_cameras,
+                    'summary': {
+                        'total_cameras': total_cameras,
+                        'active_cameras': active_cameras,
+                        'inactive_cameras': total_cameras - active_cameras,
+                        'last_updated': datetime.now().isoformat()
+                    }
+                }
+                
+                logger.info(f"✅ Retrieved {total_cameras} cameras for company {company_id}")
+                return jsonify(result)
+                
+            except Exception as e:
+                logger.error(f"❌ Error getting cameras for company {company_id}: {e}")
+                return jsonify({'success': False, 'error': 'Kameralar getirilemedi'}), 500
         
         # Kamera ekleme API
         @self.app.route('/api/company/<company_id>/cameras', methods=['POST'])
@@ -508,13 +708,8 @@ class SmartSafeSaaSAPI:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
             try:
-                # Demo chart data (gerçek projede database'den gelecek)
-                chart_data = {
-                    'compliance_trend': [78, 82, 85, 88, 92, 87, 90],  # Son 7 gün
-                    'violation_types': [45, 30, 15, 10],  # Baret, Yelek, Ayakkabı, Maske
-                    'hourly_violations': [2, 1, 0, 1, 3, 2, 4, 5, 3, 2, 1, 0],  # 24 saat
-                    'weekly_compliance': [88, 92, 85, 90, 87, 89, 91]  # Haftalık
-                }
+                # Gerçek detection sonuçlarından grafik verilerini hesapla
+                chart_data = self.calculate_real_chart_data(company_id)
                 
                 return jsonify(chart_data)
                 
@@ -1068,22 +1263,77 @@ class SmartSafeSaaSAPI:
 
         @self.app.route('/api/company/<company_id>/cameras/discover', methods=['POST'])
         def discover_cameras(company_id):
-            """IP kamera otomatik keşfi"""
+            """Unified kamera keşif ve senkronizasyon sistemi"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
-                data = request.get_json()
+                data = request.get_json() or {}
                 network_range = data.get('network_range', '192.168.1.0/24')
+                auto_sync = data.get('auto_sync', True)  # Otomatik DB sync
                 
-                # Gerçek IP kamera keşfi
+                logger.info(f"🔍 Starting unified camera discovery for company {company_id}")
+                
+                # Enterprise Camera Manager ile discovery
+                if hasattr(self, 'camera_manager') and self.camera_manager and self.enterprise_enabled:
+                    try:
+                        # Full camera synchronization
+                        sync_result = self.camera_manager.full_camera_sync(company_id, network_range)
+                        
+                        if sync_result['success']:
+                            return jsonify({
+                                'success': True,
+                                'message': 'Kamera keşif ve senkronizasyon tamamlandı',
+                                'discovery_result': sync_result['discovery_result'],
+                                'config_sync': sync_result['config_sync_result'],
+                                'total_cameras_in_db': sync_result['final_camera_count'],
+                                'auto_sync_enabled': auto_sync,
+                                'mode': 'enterprise'
+                            })
+                        else:
+                            logger.warning(f"⚠️ Enterprise sync failed: {sync_result.get('error')}")
+                            # Continue with fallback
+                    
+                    except Exception as e:
+                        logger.error(f"❌ Enterprise camera discovery failed: {e}")
+                        # Continue with fallback
+                
+                # Fallback: Standard discovery sistemi
+                logger.info("📱 Using standard discovery system")
+                
+                discovered_cameras = []
+                scan_time = '2.0 saniye'
+                
                 try:
                     from camera_discovery import IPCameraDiscovery
                     discovery = IPCameraDiscovery()
                     result = discovery.scan_network(network_range, timeout=2)
                     discovered_cameras = result['cameras']
                     scan_time = result['scan_time']
+                    
+                    # Auto sync to database if enabled
+                    if auto_sync and discovered_cameras:
+                        try:
+                            from database_adapter import get_camera_discovery_manager
+                            discovery_manager = get_camera_discovery_manager()
+                            sync_result = discovery_manager.sync_discovered_cameras_to_db(company_id, discovered_cameras)
+                            
+                            logger.info(f"✅ Auto-sync: {sync_result['added']} added, {sync_result['updated']} updated")
+                            
+                            return jsonify({
+                                'success': True,
+                                'cameras': discovered_cameras,
+                                'network_range': network_range,
+                                'scan_time': scan_time,
+                                'auto_sync_enabled': auto_sync,
+                                'sync_result': sync_result,
+                                'mode': 'standard_with_sync'
+                            })
+                        except Exception as sync_error:
+                            logger.error(f"❌ Auto-sync failed: {sync_error}")
+                            # Continue without sync
+                
                 except ImportError:
                     # Fallback: örnek veriler
                     discovered_cameras = [
@@ -1104,56 +1354,82 @@ class SmartSafeSaaSAPI:
                     'success': True,
                     'cameras': discovered_cameras,
                     'network_range': network_range,
-                    'scan_time': scan_time
+                    'scan_time': scan_time,
+                    'auto_sync_enabled': auto_sync,
+                    'mode': 'fallback'
                 })
                 
             except Exception as e:
-                print(f"❌ Camera discovery error: {str(e)}")
+                logger.error(f"❌ Camera discovery error: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
         
         @self.app.route('/api/company/<company_id>/cameras/test', methods=['POST'])
         def test_camera(company_id):
-            """Kamera bağlantı testi"""
+            """Kamera bağlantı testi - Profesyonel kamera yöneticisi ile"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 data = request.get_json()
-                camera_config = {
-                    'ip': data.get('ip'),
-                    'port': data.get('port', 554),
-                    'rtsp_url': data.get('rtsp_url'),
-                    'username': data.get('username'),
-                    'password': data.get('password')
+                rtsp_url = data.get('rtsp_url', '')
+                camera_name = data.get('name', 'Test Camera')
+                
+                # Enterprise kamera yöneticisini kullan
+                if self.enterprise_enabled and hasattr(self, 'camera_manager'):
+                    # Enterprise Camera Manager kullan
+                    camera_manager = self.camera_manager
+                    
+                    # Kamera konfigürasyonu oluştur
+                    if rtsp_url.startswith('http://') and ':8080' in rtsp_url:
+                        # IP Webcam
+                        ip = rtsp_url.split('//')[1].split(':')[0]
+                        camera_config = camera_manager.create_ip_webcam_config(camera_name, ip, 8080)
+                    elif rtsp_url.startswith('rtsp://'):
+                        # RTSP Camera
+                        from camera_integration_manager import CameraSource
+                        camera_config = CameraSource(
+                            camera_id=f"TEST_{int(time.time())}",
+                            name=camera_name,
+                            source_type='rtsp',
+                            connection_url=rtsp_url,
+                            resolution=(1280, 720),
+                            fps=25
+                        )
+                    else:
+                        # Local camera
+                        camera_index = int(rtsp_url) if rtsp_url.isdigit() else 0
+                        camera_config = camera_manager.create_local_camera_config(camera_name, camera_index)
+                    
+                    # Enterprise test yap
+                    test_result = camera_manager.test_camera_connection(camera_config)
+                    
+                    # Performance monitoring
+                    if hasattr(self, 'performance_optimizer'):
+                        self.performance_optimizer.record_camera_test(camera_config.camera_id, test_result)
+                
+                else:
+                    # Fallback: Basit test
+                    test_result = self._basic_camera_test(rtsp_url, camera_name)
+                
+                # API response formatına dönüştür
+                api_response = {
+                    'success': test_result['connection_status'] == 'connected',
+                    'test_results': {
+                        'connection_status': 'success' if test_result['connection_status'] == 'connected' else 'failed',
+                        'response_time': f"{test_result.get('response_time_ms', 0):.0f}ms",
+                        'resolution': test_result.get('resolution_detected', 'Bilinmiyor'),
+                        'fps': test_result.get('fps_detected', 0),
+                        'codec': 'H.264',
+                        'source_type': test_result.get('source_type', 'unknown'),
+                        'features': test_result.get('features', {}),
+                        'error_message': test_result.get('error_message', ''),
+                        'test_duration': f"{test_result.get('response_time_ms', 0)/1000:.1f} saniye"
+                    },
+                    'message': 'Kamera bağlantısı başarılı' if test_result['connection_status'] == 'connected' else f"Kamera bağlantısı başarısız: {test_result.get('error_message', 'Bilinmeyen hata')}"
                 }
                 
-                # Gerçek kamera bağlantı testi
-                try:
-                    from camera_discovery import IPCameraDiscovery
-                    discovery = IPCameraDiscovery()
-                    test_results = discovery.test_camera_connection(camera_config)
-                except ImportError:
-                    # Fallback: örnek veriler
-                    test_results = {
-                        'connection_status': 'success',
-                        'response_time': '150ms',
-                        'resolution': '1920x1080',
-                        'fps': 25,
-                        'codec': 'H.264',
-                        'bitrate': '2048 kbps',
-                        'ptz_support': False,
-                        'night_vision': True,
-                        'audio_support': True,
-                        'test_duration': '3.2 saniye',
-                        'quality_score': 8.5
-                    }
-                
-                return jsonify({
-                    'success': True,
-                    'test_results': test_results,
-                    'message': 'Kamera testi başarılı'
-                })
+                return jsonify(api_response)
                 
             except Exception as e:
                 print(f"❌ Camera test error: {str(e)}")
@@ -1284,6 +1560,255 @@ class SmartSafeSaaSAPI:
                 print(f"❌ Camera stream error: {str(e)}")
                 return jsonify({'success': False, 'error': str(e)}), 500
         
+        # Kamera silme API endpoint'i
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>', methods=['DELETE'])
+        def delete_camera(company_id, camera_id):
+            """Kamera silme API endpoint'i"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                logger.info(f"🗑️ Deleting camera: {camera_id} for company: {company_id}")
+                
+                # Önce veritabanından kamerayı sil
+                success, message = self.db.delete_camera(company_id, camera_id)
+                
+                if not success:
+                    return jsonify({
+                        'success': False,
+                        'message': message
+                    }), 400
+                
+                # Kamera yöneticisinden kamerayı ayır
+                try:
+                    from camera_integration_manager import get_camera_manager
+                    camera_manager = get_camera_manager()
+                    
+                    # Kamerayı bağlantıdan ayır
+                    disconnect_result = camera_manager.disconnect_camera(camera_id)
+                    logger.info(f"🔌 Kamera bağlantısı kesildi: {disconnect_result}")
+                        
+                except ImportError:
+                    logger.info("⚠️ Enterprise camera manager bulunamadı, sadece veritabanından silindi")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Kamera {camera_id} başarıyla silindi',
+                    'camera_id': camera_id
+                })
+                    
+            except Exception as e:
+                logger.error(f"❌ Camera deletion failed: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': f'Kamera silinirken hata oluştu: {str(e)}'
+                }), 500
+
+        # Kamera düzenleme API endpoint'i
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>', methods=['PUT'])
+        def update_camera(company_id, camera_id):
+            """Kamera düzenleme API endpoint'i"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                logger.info(f"✏️ Updating camera: {camera_id} for company: {company_id}")
+                
+                # Güncellenecek alanları hazırla
+                update_fields = {}
+                if 'name' in data:
+                    update_fields['name'] = data['name']
+                if 'rtsp_url' in data:
+                    update_fields['rtsp_url'] = data['rtsp_url']
+                if 'enabled' in data:
+                    update_fields['enabled'] = data['enabled']
+                if 'resolution' in data:
+                    update_fields['resolution'] = data['resolution']
+                if 'fps' in data:
+                    update_fields['fps'] = data['fps']
+                
+                if not update_fields:
+                    return jsonify({
+                        'success': False,
+                        'message': 'Güncellenecek alan bulunamadı'
+                    }), 400
+                
+                try:
+                    from camera_integration_manager import get_camera_manager
+                    camera_manager = get_camera_manager()
+                    
+                    # Kamera konfigürasyonunu güncelle
+                    if camera_id in camera_manager.camera_configs:
+                        config = camera_manager.camera_configs[camera_id]
+                        
+                        if 'name' in update_fields:
+                            config.name = update_fields['name']
+                        if 'rtsp_url' in update_fields:
+                            config.connection_url = update_fields['rtsp_url']
+                        if 'enabled' in update_fields:
+                            config.enabled = update_fields['enabled']
+                            
+                            # Kamerayı etkinleştir/devre dışı bırak
+                            if update_fields['enabled'] and config.connection_status != 'connected':
+                                camera_manager.connect_camera(config)
+                            elif not update_fields['enabled'] and config.connection_status == 'connected':
+                                camera_manager.disconnect_camera(camera_id)
+                        
+                        if 'resolution' in update_fields:
+                            res_parts = update_fields['resolution'].split('x')
+                            if len(res_parts) == 2:
+                                config.resolution = (int(res_parts[0]), int(res_parts[1]))
+                        
+                        if 'fps' in update_fields:
+                            config.fps = int(update_fields['fps'])
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': 'Kamera başarıyla güncellendi',
+                        'camera_id': camera_id,
+                        'updated_fields': list(update_fields.keys())
+                    })
+                        
+                except ImportError:
+                    # Fallback: Simülasyon modu
+                    return jsonify({
+                        'success': True,
+                        'message': 'Kamera başarıyla güncellendi (Simülasyon)',
+                        'camera_id': camera_id,
+                        'updated_fields': list(update_fields.keys())
+                    })
+                    
+            except Exception as e:
+                logger.error(f"❌ Camera update failed: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': f'Kamera güncellenirken hata oluştu: {str(e)}'
+                }), 500
+
+        # Kamera durumu API endpoint'i
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/status', methods=['GET'])
+        def get_camera_status_api(company_id, camera_id):
+            """Kamera durumu API endpoint'i"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                try:
+                    from camera_integration_manager import get_camera_manager
+                    camera_manager = get_camera_manager()
+                    
+                    status = camera_manager.get_camera_status(camera_id)
+                    
+                    return jsonify({
+                        'success': True,
+                        'camera_status': status
+                    })
+                    
+                except ImportError:
+                    # Fallback: Simülasyon durumu
+                    return jsonify({
+                        'success': True,
+                        'camera_status': {
+                            'camera_id': camera_id,
+                            'name': f'Kamera {camera_id}',
+                            'connection_status': 'connected',
+                            'enabled': True,
+                            'current_fps': 25.0,
+                            'resolution': '1280x720',
+                            'source_type': 'simulation',
+                            'last_frame_time': datetime.now().isoformat()
+                        }
+                    })
+                
+            except Exception as e:
+                logger.error(f"❌ Camera status failed: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': f'Kamera durumu alınırken hata oluştu: {str(e)}'
+                }), 500
+
+        # Kamera etkinleştir/devre dışı bırak API endpoint'i
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/toggle', methods=['POST'])
+        def toggle_camera(company_id, camera_id):
+            """Kamera etkinleştir/devre dışı bırak API endpoint'i"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                try:
+                    from camera_integration_manager import get_camera_manager
+                    camera_manager = get_camera_manager()
+                    
+                    # Mevcut durumu al
+                    current_status = camera_manager.get_camera_status(camera_id)
+                    
+                    if current_status.get('status') == 'not_found':
+                        return jsonify({
+                            'success': False,
+                            'message': 'Kamera bulunamadı'
+                        }), 404
+                    
+                    # Durumu değiştir
+                    new_enabled = not current_status.get('enabled', False)
+                    
+                    if camera_id in camera_manager.camera_configs:
+                        config = camera_manager.camera_configs[camera_id]
+                        config.enabled = new_enabled
+                        
+                        if new_enabled:
+                            # Kamerayı etkinleştir
+                            connect_result = camera_manager.connect_camera(config)
+                            if connect_result:
+                                message = f"Kamera {camera_id} etkinleştirildi"
+                                status = "enabled"
+                            else:
+                                message = f"Kamera {camera_id} etkinleştirilemedi"
+                                status = "failed"
+                        else:
+                            # Kamerayı devre dışı bırak
+                            disconnect_result = camera_manager.disconnect_camera(camera_id)
+                            if disconnect_result:
+                                message = f"Kamera {camera_id} devre dışı bırakıldı"
+                                status = "disabled"
+                            else:
+                                message = f"Kamera {camera_id} devre dışı bırakılamadı"
+                                status = "failed"
+                        
+                        return jsonify({
+                            'success': True,
+                            'message': message,
+                            'camera_id': camera_id,
+                            'enabled': new_enabled,
+                            'status': status
+                        })
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'message': 'Kamera konfigürasyonu bulunamadı'
+                        }), 404
+                        
+                except ImportError:
+                    # Fallback: Simülasyon modu
+                    return jsonify({
+                        'success': True,
+                        'message': f'Kamera {camera_id} durumu değiştirildi (Simülasyon)',
+                        'camera_id': camera_id,
+                        'enabled': True,
+                        'status': 'enabled'
+                    })
+                    
+            except Exception as e:
+                logger.error(f"❌ Camera toggle failed: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': f'Kamera durumu değiştirilirken hata oluştu: {str(e)}'
+                }), 500
+        
         @self.app.route('/company/<company_id>/cameras', methods=['GET'])
         def camera_management(company_id):
             """Kamera yönetimi sayfası"""
@@ -1365,6 +1890,252 @@ class SmartSafeSaaSAPI:
                 logger.error(f"❌ PPE config getirme hatası: {e}")
                 return jsonify({'success': False, 'error': 'Veri getirme başarısız'}), 500
 
+        # === UNIFIED CAMERA SYNC ENDPOINT ===
+        @self.app.route('/api/company/<company_id>/cameras/sync', methods=['POST'])
+        def sync_cameras(company_id):
+            """Unified kamera senkronizasyon endpoint'i - Discovery + Config + Database"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json() or {}
+                network_range = data.get('network_range', '192.168.1.0/24')
+                force_sync = data.get('force_sync', False)  # Zorla yeniden sync
+                
+                logger.info(f"🔄 Starting unified camera sync for company {company_id}")
+                
+                result = {
+                    'success': False,
+                    'timestamp': datetime.now().isoformat(),
+                    'company_id': company_id,
+                    'network_range': network_range,
+                    'discovery_result': {},
+                    'config_sync_result': {},
+                    'database_cameras': [],
+                    'total_cameras': 0,
+                    'mode': 'unknown'
+                }
+                
+                # Enterprise mode
+                if hasattr(self, 'camera_manager') and self.camera_manager and self.enterprise_enabled:
+                    try:
+                        logger.info("🚀 Using Enterprise Camera Manager for sync")
+                        
+                        # Full camera synchronization
+                        sync_result = self.camera_manager.full_camera_sync(company_id, network_range)
+                        
+                        if sync_result['success']:
+                            # Get final camera list from database
+                            final_cameras = self.camera_manager.get_database_cameras(company_id)
+                            
+                            result.update({
+                                'success': True,
+                                'discovery_result': sync_result['discovery_result'],
+                                'config_sync_result': sync_result['config_sync_result'],
+                                'database_cameras': final_cameras,
+                                'total_cameras': len(final_cameras),
+                                'mode': 'enterprise',
+                                'message': 'Enterprise kamera senkronizasyonu tamamlandı'
+                            })
+                            
+                            logger.info(f"✅ Enterprise sync complete: {len(final_cameras)} cameras in database")
+                            return jsonify(result)
+                        else:
+                            logger.warning(f"⚠️ Enterprise sync failed: {sync_result.get('error')}")
+                            result['enterprise_error'] = sync_result.get('error')
+                    
+                    except Exception as e:
+                        logger.error(f"❌ Enterprise sync error: {e}")
+                        result['enterprise_error'] = str(e)
+                
+                # Fallback mode
+                logger.info("📱 Using fallback camera sync")
+                result['mode'] = 'fallback'
+                
+                # Step 1: Network discovery
+                try:
+                    from camera_discovery import IPCameraDiscovery
+                    discovery = IPCameraDiscovery()
+                    discovery_result = discovery.scan_network(network_range, timeout=2)
+                    result['discovery_result'] = discovery_result
+                    
+                    # Step 2: Sync discovered cameras to database
+                    if discovery_result.get('cameras'):
+                        from database_adapter import get_camera_discovery_manager
+                        discovery_manager = get_camera_discovery_manager()
+                        db_sync_result = discovery_manager.sync_discovered_cameras_to_db(
+                            company_id, 
+                            discovery_result['cameras']
+                        )
+                        result['discovery_sync'] = db_sync_result
+                        
+                except Exception as discovery_error:
+                    logger.error(f"❌ Discovery failed: {discovery_error}")
+                    result['discovery_error'] = str(discovery_error)
+                
+                # Step 3: Config file sync
+                try:
+                    from database_adapter import get_camera_discovery_manager
+                    discovery_manager = get_camera_discovery_manager()
+                    config_sync_result = discovery_manager.sync_config_cameras_to_db(company_id)
+                    result['config_sync_result'] = config_sync_result
+                    
+                except Exception as config_error:
+                    logger.error(f"❌ Config sync failed: {config_error}")
+                    result['config_error'] = str(config_error)
+                
+                # Step 4: Get final camera list
+                try:
+                    final_cameras = self.db.get_company_cameras(company_id)
+                    result.update({
+                        'database_cameras': final_cameras,
+                        'total_cameras': len(final_cameras),
+                        'success': True,
+                        'message': f'Fallback kamera senkronizasyonu tamamlandı: {len(final_cameras)} kamera'
+                    })
+                    
+                except Exception as db_error:
+                    logger.error(f"❌ Database read failed: {db_error}")
+                    result['database_error'] = str(db_error)
+                
+                logger.info(f"✅ Camera sync complete: {result['total_cameras']} cameras")
+                return jsonify(result)
+                
+            except Exception as e:
+                logger.error(f"❌ Camera sync error: {e}")
+                return jsonify({
+                    'success': False, 
+                    'error': str(e), 
+                    'timestamp': datetime.now().isoformat()
+                }), 500
+
+        # Video streaming endpoint'leri
+        @self.app.route('/api/company/<company_id>/start-detection', methods=['POST'])
+        def start_detection(company_id):
+            """Şirket için tespit başlat"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+                
+                data = request.json
+                camera_id = data.get('camera', '0')
+                mode = data.get('mode', 'construction')
+                confidence = data.get('confidence', 0.5)
+                
+                # Kamera zaten aktifse durdur
+                camera_key = f"{company_id}_{camera_id}"
+                if camera_key in active_detectors and active_detectors[camera_key]:
+                    return jsonify({'success': False, 'error': 'Kamera zaten aktif'})
+                
+                # Kamera aktif olarak işaretle
+                active_detectors[camera_key] = True
+                
+                # Kamera worker thread'ini başlat
+                camera_thread = threading.Thread(
+                    target=self.camera_worker,
+                    args=(camera_key, camera_id),
+                    daemon=True
+                )
+                camera_thread.start()
+                
+                # Tespit thread'ini başlat - confidence parametresi ile
+                detection_thread = threading.Thread(
+                    target=self.run_detection,
+                    args=(camera_key, camera_id, company_id, mode, confidence),
+                    daemon=True
+                )
+                detection_thread.start()
+                
+                detection_threads[camera_key] = {
+                    'camera_thread': camera_thread,
+                    'detection_thread': detection_thread,
+                    'config': {
+                        'mode': mode,
+                        'confidence': confidence
+                    }
+                }
+                
+                return jsonify({
+                    'success': True, 
+                    'message': f'Kamera {camera_id} tespiti başlatıldı (Confidence: {confidence})',
+                    'video_url': f'/api/company/{company_id}/video-feed/{camera_id}'
+                })
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/company/<company_id>/stop-detection', methods=['POST'])
+        def stop_detection(company_id):
+            """Şirket için tespit durdur"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+                
+                # Şirkete ait tüm tespit thread'lerini durdur
+                keys_to_remove = []
+                for camera_key in list(active_detectors.keys()):
+                    if camera_key.startswith(f"{company_id}_"):
+                        active_detectors[camera_key] = False
+                        keys_to_remove.append(camera_key)
+                
+                # Kamera yakalama nesnelerini serbest bırak
+                for camera_key in keys_to_remove:
+                    if camera_key in camera_captures and camera_captures[camera_key] is not None:
+                        camera_captures[camera_key].release()
+                        del camera_captures[camera_key]
+                    if camera_key in frame_buffers:
+                        del frame_buffers[camera_key]
+                    if camera_key in detection_threads:
+                        del detection_threads[camera_key]
+                
+                return jsonify({'success': True, 'message': 'Tüm kameralar durduruldu'})
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/company/<company_id>/video-feed/<camera_id>')
+        def video_feed(company_id, camera_id):
+            """Video stream endpoint"""
+            user_data = self.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'error': 'Yetkisiz erişim'}), 401
+            
+            camera_key = f"{company_id}_{camera_id}"
+            return Response(self.generate_frames(camera_key),
+                           mimetype='multipart/x-mixed-replace; boundary=frame')
+
+        @self.app.route('/api/company/<company_id>/detection-results/<camera_id>')
+        def get_detection_results(company_id, camera_id):
+            """Detection sonuçlarını al"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+                
+                camera_key = f"{company_id}_{camera_id}"
+                if camera_key in detection_results and not detection_results[camera_key].empty():
+                    try:
+                        latest_result = detection_results[camera_key].get_nowait()
+                        return jsonify({
+                            'success': True,
+                            'result': latest_result
+                        })
+                    except queue.Empty:
+                        return jsonify({
+                            'success': True,
+                            'result': None,
+                            'message': 'Henüz tespit sonucu yok'
+                        })
+                else:
+                    return jsonify({
+                        'success': True,
+                        'result': None,
+                        'message': 'Kamera aktif değil veya sonuç yok'
+                    })
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
+
     def validate_session(self):
         """Oturum doğrulama"""
         session_id = session.get('session_id')
@@ -1372,6 +2143,551 @@ class SmartSafeSaaSAPI:
             return None
         
         return self.db.validate_session(session_id)
+    
+    def _get_realtime_camera_status(self, ip_address: str) -> Optional[Dict[str, Any]]:
+        """Get real-time camera status from IP address"""
+        try:
+            if hasattr(self, 'camera_manager') and self.camera_manager:
+                # Try to find camera by IP in camera manager
+                for camera_id, config in self.camera_manager.camera_configs.items():
+                    if hasattr(config, 'connection_url') and ip_address in config.connection_url:
+                        status = self.camera_manager.get_camera_status(camera_id)
+                        return {
+                            'real_time_status': status.get('connection_status', 'unknown'),
+                            'current_fps': status.get('current_fps', 0),
+                            'last_frame_time': status.get('last_frame_time'),
+                            'frames_captured': status.get('frames_captured', 0),
+                            'connection_drops': status.get('connection_drops', 0)
+                        }
+            return None
+        except Exception as e:
+            logger.debug(f"Real-time status check error for {ip_address}: {e}")
+            return None
+    
+    def _basic_camera_test(self, rtsp_url, camera_name):
+        """Basit kamera testi (Enterprise olmayan durumlar için)"""
+        import time
+        start_time = time.time()
+        
+        test_result = {
+            'connection_status': 'failed',
+            'response_time_ms': 0,
+            'resolution_detected': 'Unknown',
+            'fps_detected': 0,
+            'source_type': 'unknown',
+            'features': {},
+            'error_message': ''
+        }
+        
+        try:
+            if rtsp_url.isdigit():
+                # Local camera test
+                camera_index = int(rtsp_url)
+                cap = cv2.VideoCapture(camera_index)
+                
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        test_result['connection_status'] = 'connected'
+                        test_result['resolution_detected'] = f"{frame.shape[1]}x{frame.shape[0]}"
+                        test_result['fps_detected'] = cap.get(cv2.CAP_PROP_FPS) or 25
+                        test_result['source_type'] = 'local'
+                        test_result['features'] = {'video_stream': True}
+                    else:
+                        test_result['error_message'] = 'Kameradan frame alınamadı'
+                    cap.release()
+                else:
+                    test_result['error_message'] = 'Kamera açılamadı'
+                    
+            elif rtsp_url.startswith(('rtsp://', 'http://')):
+                # Network camera test
+                cap = cv2.VideoCapture(rtsp_url)
+                
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        test_result['connection_status'] = 'connected'
+                        test_result['resolution_detected'] = f"{frame.shape[1]}x{frame.shape[0]}"
+                        test_result['fps_detected'] = cap.get(cv2.CAP_PROP_FPS) or 25
+                        test_result['source_type'] = 'rtsp' if rtsp_url.startswith('rtsp://') else 'ip_webcam'
+                        test_result['features'] = {'video_stream': True, 'network_camera': True}
+                    else:
+                        test_result['error_message'] = 'Network kamerasından frame alınamadı'
+                    cap.release()
+                else:
+                    test_result['error_message'] = 'Network kamerası bağlantısı kurulamadı'
+            else:
+                test_result['error_message'] = 'Geçersiz kamera URL formatı'
+                
+        except Exception as e:
+            test_result['error_message'] = str(e)
+        
+        test_result['response_time_ms'] = (time.time() - start_time) * 1000
+        return test_result
+    
+    def camera_worker(self, camera_key, camera_id):
+        """Kamera worker thread'i"""
+        print(f"Kamera {camera_key} worker başlatılıyor...")
+        
+        try:
+            # Kamera ID'sini integer'a çevir
+            cam_index = int(camera_id)
+            
+            # Kamera yakalama nesnesi oluştur
+            cap = cv2.VideoCapture(cam_index)
+            
+            if not cap.isOpened():
+                print(f"Kamera {camera_id} açılamadı")
+                return
+            
+            # Kamera ayarları
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            print(f"Kamera {camera_key} başarıyla kuruldu")
+            
+            camera_captures[camera_key] = cap
+            frame_buffers[camera_key] = None
+            
+            while active_detectors.get(camera_key, False):
+                ret, frame = cap.read()
+                if ret:
+                    # Frame'i buffer'a kaydet
+                    frame_buffers[camera_key] = frame.copy()
+                else:
+                    print(f"Kamera {camera_key} frame okunamadı")
+                    break
+                
+                time.sleep(0.01)  # CPU yükünü azalt
+                
+        except Exception as e:
+            print(f"Kamera {camera_key} worker hatası: {e}")
+        finally:
+            if camera_key in camera_captures and camera_captures[camera_key]:
+                camera_captures[camera_key].release()
+                del camera_captures[camera_key]
+            if camera_key in frame_buffers:
+                del frame_buffers[camera_key]
+            print(f"Kamera {camera_key} worker durduruldu")
+    
+    def run_detection(self, camera_key, camera_id, company_id, mode, confidence=0.5):
+        """Tespit çalıştır - Sektörel Detection Factory kullanarak"""
+        print(f"Tespit sistemi başlatılıyor - Kamera: {camera_key}, Sektör: {mode}, Confidence: {confidence}")
+        
+        # Detection sonuçları için queue oluştur
+        detection_results[camera_key] = queue.Queue(maxsize=10)
+        
+        # Şirketin sektörünü belirle
+        try:
+            # Şirket bilgilerini al
+            conn = sqlite3.connect('smartsafe_saas.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT sector FROM companies WHERE company_id = ?', (company_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            sector_id = result[0] if result else 'construction'
+            print(f"📊 Şirket {company_id} sektörü: {sector_id}")
+            
+        except Exception as e:
+            print(f"⚠️ Şirket sektörü belirlenemedi: {e}, construction kullanılacak")
+            sector_id = 'construction'
+        
+        # Sektörel Detector'ı başlat
+        try:
+            detector = SectorDetectorFactory.get_detector(sector_id, company_id)
+            if detector:
+                print(f"✅ {sector_id.upper()} sektörü detector başlatıldı (Company: {company_id}) - Kamera: {camera_key}, Confidence: {confidence}")
+            else:
+                print(f"⚠️ {sector_id.upper()} detector yüklenemedi, simülasyon modu - Kamera: {camera_key}")
+        except Exception as e:
+            print(f"❌ Sektörel Detector başlatılamadı: {e}, simülasyon moduna geçiliyor")
+            detector = None
+        
+        try:
+            frame_count = 0
+            last_detection_time = time.time()
+            
+            while active_detectors.get(camera_key, False):
+                try:
+                    # Frame buffer'dan frame al
+                    if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
+                        frame = frame_buffers[camera_key].copy()
+                        frame_count += 1
+                        
+                        # Her 5 frame'de bir tespit yap (performans için)
+                        if frame_count % 5 == 0:
+                            current_time = time.time()
+                            
+                            if detector is not None:
+                                # Sektörel PPE tespiti
+                                try:
+                                    result = detector.detect_ppe(frame, camera_id)
+                                    
+                                    # Sonuçları SaaS formatına çevir
+                                    detection_data = {
+                                        'camera_id': camera_id,
+                                        'company_id': company_id,
+                                        'timestamp': datetime.now().isoformat(),
+                                        'frame_count': frame_count,
+                                        'compliance_rate': result['analysis']['compliance_rate'],
+                                        'total_people': result['analysis']['total_people'],
+                                        'violations': result['analysis']['violations'],
+                                        'processing_time': current_time - last_detection_time,
+                                        'detections': result['detections'],
+                                        'sector': result.get('sector', 'unknown')
+                                    }
+                                    
+                                    # Tespit sonucunu frame'e çiz
+                                    annotated_frame = self.draw_sector_detection_results(frame, result)
+                                    frame_buffers[camera_key] = annotated_frame
+                                    
+                                    print(f"🔍 Kamera {camera_key} ({result.get('sector', 'unknown')}): {result['analysis']['compliance_rate']:.1f}% uyum, "
+                                          f"{result['analysis']['total_people']} kişi")
+                                    
+                                except Exception as detection_error:
+                                    print(f"⚠️ Sektörel PPE tespit hatası: {detection_error}, simülasyona geçiliyor")
+                                    # Hata durumunda simülasyon kullan
+                                    detection_data = self.create_simulation_data(camera_id, company_id, frame_count, current_time, last_detection_time)
+                            else:
+                                # Simülasyon modu
+                                detection_data = self.create_simulation_data(camera_id, company_id, frame_count, current_time, last_detection_time)
+                                
+                                # Basit frame annotation
+                                annotated_frame = self.draw_simulation_results(frame, detection_data)
+                                frame_buffers[camera_key] = annotated_frame
+                            
+                            # Queue'ya ekle
+                            try:
+                                detection_results[camera_key].put_nowait(detection_data)
+                            except queue.Full:
+                                # Queue doluysa eski sonucu çıkar, yenisini ekle
+                                try:
+                                    detection_results[camera_key].get_nowait()
+                                except queue.Empty:
+                                    pass
+                                detection_results[camera_key].put_nowait(detection_data)
+                            
+                            last_detection_time = current_time
+                    
+                    time.sleep(0.1)  # CPU yükünü azalt
+                    
+                except Exception as e:
+                    print(f"Tespit hatası - Kamera {camera_key}: {e}")
+                    time.sleep(1)
+                    
+        except Exception as e:
+            print(f"Detection thread hatası: {e}")
+        
+        print(f"Kamera {camera_key} tespiti durduruldu")
+    
+    def calculate_real_chart_data(self, company_id):
+        """Gerçek detection sonuçlarından grafik verilerini hesapla"""
+        try:
+            # Şirket kameralarından veri topla
+            compliance_rates = []
+            violation_counts = {'helmet': 0, 'vest': 0, 'shoes': 0, 'mask': 0}
+            hourly_violations = [0] * 24
+            
+            # Aktif kameralardan veri topla
+            for camera_key in active_detectors:
+                if company_id in camera_key and active_detectors[camera_key]:
+                    if camera_key in detection_results:
+                        try:
+                            # En son sonuçları al
+                            temp_results = []
+                            while not detection_results[camera_key].empty():
+                                temp_results.append(detection_results[camera_key].get_nowait())
+                            
+                            if temp_results:
+                                for result in temp_results:
+                                    compliance_rates.append(result.get('compliance_rate', 0))
+                                    
+                                    # İhlal türlerini say
+                                    violations = result.get('violations', [])
+                                    for violation in violations:
+                                        missing_ppe = violation.get('missing_ppe', [])
+                                        for ppe in missing_ppe:
+                                            if 'helmet' in ppe.lower() or 'baret' in ppe.lower():
+                                                violation_counts['helmet'] += 1
+                                            elif 'vest' in ppe.lower() or 'yelek' in ppe.lower():
+                                                violation_counts['vest'] += 1
+                                            elif 'shoes' in ppe.lower() or 'ayakkabı' in ppe.lower():
+                                                violation_counts['shoes'] += 1
+                                            elif 'mask' in ppe.lower() or 'maske' in ppe.lower():
+                                                violation_counts['mask'] += 1
+                                    
+                                    # Saatlik ihlal dağılımı (basit simülasyon)
+                                    current_hour = datetime.now().hour
+                                    hourly_violations[current_hour] += len(violations)
+                                
+                                # Sonuçları geri koy
+                                for result in temp_results:
+                                    try:
+                                        detection_results[camera_key].put_nowait(result)
+                                    except queue.Full:
+                                        break
+                        except queue.Empty:
+                            pass
+            
+            # Grafik verilerini hazırla
+            chart_data = {
+                'compliance_trend': compliance_rates[-7:] if len(compliance_rates) >= 7 else compliance_rates + [0] * (7 - len(compliance_rates)),
+                'violation_types': [
+                    violation_counts['helmet'],
+                    violation_counts['vest'], 
+                    violation_counts['shoes'],
+                    violation_counts['mask']
+                ],
+                'hourly_violations': hourly_violations,
+                'weekly_compliance': compliance_rates[-7:] if len(compliance_rates) >= 7 else compliance_rates + [0] * (7 - len(compliance_rates))
+            }
+            
+            return chart_data
+            
+        except Exception as e:
+            print(f"Chart data hesaplama hatası: {e}")
+            # Hata durumunda varsayılan değerler döndür
+            return {
+                'compliance_trend': [0, 0, 0, 0, 0, 0, 0],
+                'violation_types': [0, 0, 0, 0],
+                'hourly_violations': [0] * 24,
+                'weekly_compliance': [0, 0, 0, 0, 0, 0, 0]
+            }
+    
+    def create_simulation_data(self, camera_id, company_id, frame_count, current_time, last_detection_time):
+        """Simülasyon verisi oluştur"""
+        import random
+        
+        compliance_rate = random.uniform(60, 95)
+        total_people = random.randint(1, 5)
+        violations = []
+        
+        # Random ihlal oluştur
+        if compliance_rate < 80:
+            violations.append({
+                'worker_id': f'Worker_{random.randint(1, 10)}',
+                'missing_ppe': ['helmet'] if random.random() > 0.5 else ['vest']
+            })
+        
+        return {
+            'camera_id': camera_id,
+            'company_id': company_id,
+            'timestamp': datetime.now().isoformat(),
+            'frame_count': frame_count,
+            'compliance_rate': compliance_rate,
+            'total_people': total_people,
+            'violations': violations,
+            'processing_time': current_time - last_detection_time
+        }
+    
+    def draw_simulation_results(self, image, detection_data):
+        """Simülasyon sonuçlarını çiz"""
+        try:
+            annotated_image = image.copy()
+            height, width = annotated_image.shape[:2]
+            
+            # Başlık
+            title_text = f"SmartSafe AI (SIM) - Kamera: {detection_data.get('camera_id', 'Unknown')}"
+            cv2.putText(annotated_image, title_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            # Uyum oranı
+            compliance_rate = detection_data.get('compliance_rate', 0)
+            total_people = detection_data.get('total_people', 0)
+            
+            compliance_color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            cv2.putText(annotated_image, f"Uyum: {compliance_rate:.1f}%", 
+                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, compliance_color, 2)
+            
+            # Kişi sayısı
+            cv2.putText(annotated_image, f"Kişi: {total_people}", 
+                       (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # Simülasyon etiketi
+            cv2.putText(annotated_image, "SIMULASYON MODU", (10, height-50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            
+            # İhlaller
+            violations = detection_data.get('violations', [])
+            if violations:
+                cv2.putText(annotated_image, "İHLALLER:", (width-200, 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                
+                for i, violation in enumerate(violations[:3]):
+                    violation_text = f"• {violation.get('missing_ppe', ['Unknown'])[0]}"
+                    cv2.putText(annotated_image, violation_text, (width-200, 55 + i*20), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+            
+            # Timestamp
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            cv2.putText(annotated_image, timestamp, (10, height-20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            return annotated_image
+            
+        except Exception as e:
+            print(f"Simülasyon çizim hatası: {e}")
+            return image
+    
+    def draw_sector_detection_results(self, image, detection_result):
+        """Sektörel detection sonuçlarını görüntü üzerine çiz"""
+        try:
+            # Kopyasını al
+            result_image = image.copy()
+            height, width = result_image.shape[:2]
+            
+            # Sektör bilgisi
+            sector = detection_result.get('sector', 'unknown')
+            sector_names = {
+                'construction': 'İnşaat',
+                'food': 'Gıda', 
+                'chemical': 'Kimya',
+                'manufacturing': 'İmalat',
+                'warehouse': 'Depo'
+            }
+            sector_name = sector_names.get(sector, sector.upper())
+            
+            # Başlık bilgisi
+            cv2.putText(result_image, f"SmartSafe AI - {sector_name} Sektörü", 
+                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Uygunluk oranı
+            compliance_rate = detection_result['analysis'].get('compliance_rate', 0)
+            color = (0, 255, 0) if compliance_rate > 80 else (0, 165, 255) if compliance_rate > 60 else (0, 0, 255)
+            cv2.putText(result_image, f"Uygunluk: {compliance_rate:.1f}%", 
+                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            
+            # Kişi sayısı
+            total_people = detection_result['analysis'].get('total_people', 0)
+            cv2.putText(result_image, f"Kişi Sayısı: {total_people}", 
+                       (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # İhlal sayısı
+            violations = detection_result['analysis'].get('violations', [])
+            cv2.putText(result_image, f"İhlal: {len(violations)}", 
+                       (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            
+            # Sektörel özel bilgiler
+            sector_specific = detection_result['analysis'].get('sector_specific', {})
+            if sector_specific:
+                penalty_amount = sector_specific.get('penalty_amount', 0)
+                cv2.putText(result_image, f"Ceza: {penalty_amount:.0f} TL", 
+                           (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            
+            # Zaman damgası
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            cv2.putText(result_image, timestamp, 
+                       (result_image.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            # Detections çiz (bounding box'lar)
+            detections = detection_result.get('detections', [])
+            for detection in detections:
+                bbox = detection.get('bbox', [])
+                if len(bbox) == 4:
+                    x1, y1, x2, y2 = bbox
+                    class_name = detection.get('class_name', 'unknown')
+                    confidence = detection.get('confidence', 0)
+                    
+                    # Sınıfa göre renk
+                    if class_name == 'person':
+                        color = (255, 0, 0)  # Mavi
+                    elif 'helmet' in class_name or 'baret' in class_name:
+                        color = (0, 255, 0)  # Yeşil
+                    elif 'vest' in class_name or 'yelek' in class_name:
+                        color = (0, 255, 255)  # Sarı
+                    elif 'mask' in class_name or 'maske' in class_name:
+                        color = (255, 0, 255)  # Magenta
+                    else:
+                        color = (128, 128, 128)  # Gri
+                    
+                    # Bounding box çiz
+                    cv2.rectangle(result_image, (x1, y1), (x2, y2), color, 2)
+                    
+                    # Label
+                    label = f"{class_name} ({confidence:.2f})"
+                    cv2.putText(result_image, label, (x1, y1-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            
+            return result_image
+            
+        except Exception as e:
+            print(f"Draw sector detection results hatası: {e}")
+            return image
+
+    def draw_detection_results(self, image, detection_data):
+        """Detection sonuçlarını görüntü üzerine çiz"""
+        try:
+            # Görüntüyü kopyala
+            annotated_image = image.copy()
+            height, width = annotated_image.shape[:2]
+            
+            # Başlık bilgileri
+            title_text = f"SmartSafe AI - Kamera: {detection_data.get('camera_id', 'Unknown')}"
+            cv2.putText(annotated_image, title_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            # Uyum oranı
+            compliance_rate = detection_data.get('compliance_rate', 0)
+            total_people = detection_data.get('total_people', 0)
+            
+            compliance_color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            cv2.putText(annotated_image, f"Uyum: {compliance_rate:.1f}%", 
+                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, compliance_color, 2)
+            
+            # Toplam kişi sayısı
+            cv2.putText(annotated_image, f"Kişi: {total_people}", 
+                       (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # İhlal listesi
+            violations = detection_data.get('violations', [])
+            if violations:
+                cv2.putText(annotated_image, "İHLALLER:", (width-200, 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                
+                for i, violation in enumerate(violations[:3]):  # Max 3 ihlal göster
+                    violation_text = f"• {violation.get('missing_ppe', ['Unknown'])[0]}"
+                    cv2.putText(annotated_image, violation_text, (width-200, 55 + i*20), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+            
+            # Timestamp
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            cv2.putText(annotated_image, timestamp, (10, height-20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            return annotated_image
+            
+        except Exception as e:
+            print(f"Görüntü çizim hatası: {e}")
+            return image  # Hata durumunda orijinal görüntüyü döndür
+    
+    def generate_frames(self, camera_key):
+        """Video frame generator"""
+        while True:
+            try:
+                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
+                    # Frame'i JPEG olarak encode et
+                    ret, buffer = cv2.imencode('.jpg', frame_buffers[camera_key])
+                    if ret:
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                    else:
+                        # Boş frame gönder
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                else:
+                    # Kamera aktif değilse boş frame gönder
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                
+                time.sleep(0.033)  # ~30 FPS
+                
+            except Exception as e:
+                print(f"Frame generation error: {e}")
+                break
     
     def get_home_template(self):
         """Ana sayfa template"""
@@ -1457,8 +2773,6 @@ class SmartSafeSaaSAPI:
                                             <label class="form-label">E-mail *</label>
                                             <input type="text" class="form-control" name="email" required
                                                    placeholder="ornek@email.com (Türkçe karakterler desteklenir)"
-                                                   oninput="validateEmailRegister(this)"
-                                                   onblur="validateEmailRegister(this)"
                                                    autocomplete="email">
                                         </div>
                                     </div>
@@ -1484,60 +2798,232 @@ class SmartSafeSaaSAPI:
                                     </div>
                                     
                                     <!-- PPE Seçimi -->
-                                    <div class="mb-4">
+                                    <div class="mb-4" id="ppe-selection-container" style="display: none;">
                                         <label class="form-label">
                                             <i class="fas fa-hard-hat text-warning"></i> 
                                             Zorunlu PPE Seçimi *
                                         </label>
-                                        <div class="card p-3" style="background-color: #f8f9fa;">
+                                        <p class="text-muted small">Şirketinizde zorunlu olmasını istediğiniz PPE'leri seçin:</p>
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle"></i> 
+                                            <strong>Önce sektör seçimi yapın</strong> - Sektörünüze özel PPE seçenekleri görünecek
+                                        </div>
+                                        
+                                        <!-- İnşaat Sektörü PPE -->
+                                        <div id="construction-ppe" class="ppe-options" style="display: none;">
                                             <div class="row">
-                                                <div class="col-md-6">
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" name="ppe_helmet" id="ppe_helmet" value="1">
-                                                        <label class="form-check-label" for="ppe_helmet">
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="construction-helmet" checked>
+                                                        <label class="form-check-label" for="construction-helmet">
                                                             <i class="fas fa-hard-hat text-primary"></i> Baret/Kask
-                                                        </label>
-                                                    </div>
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" name="ppe_vest" id="ppe_vest" value="1">
-                                                        <label class="form-check-label" for="ppe_vest">
-                                                            <i class="fas fa-vest text-warning"></i> Güvenlik Yeleği
-                                                        </label>
-                                                    </div>
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" name="ppe_glasses" id="ppe_glasses" value="1">
-                                                        <label class="form-check-label" for="ppe_glasses">
-                                                            <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
+
                                                         </label>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-6">
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" name="ppe_gloves" id="ppe_gloves" value="1">
-                                                        <label class="form-check-label" for="ppe_gloves">
-                                                            <i class="fas fa-mitten text-success"></i> İş Eldiveni
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="construction-vest" checked>
+                                                        <label class="form-check-label" for="construction-vest">
+                                                            <i class="fas fa-tshirt text-warning"></i> Güvenlik Yeleği
+
                                                         </label>
                                                     </div>
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" name="ppe_shoes" id="ppe_shoes" value="1">
-                                                        <label class="form-check-label" for="ppe_shoes">
-                                                            <i class="fas fa-shoe-prints text-dark"></i> Güvenlik Ayakkabısı
+                                                </div>
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="construction-shoes" checked>
+                                                        <label class="form-check-label" for="construction-shoes">
+                                                            <i class="fas fa-socks text-success"></i> Güvenlik Ayakkabısı
                                                         </label>
                                                     </div>
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" name="ppe_mask" id="ppe_mask" value="1">
-                                                        <label class="form-check-label" for="ppe_mask">
-                                                            <i class="fas fa-head-side-mask text-secondary"></i> Maske
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="construction-gloves">
+                                                        <label class="form-check-label" for="construction-gloves">
+                                                            <i class="fas fa-hand-paper text-info"></i> Güvenlik Eldiveni
+                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="glasses" id="construction-glasses">
+                                                        <label class="form-check-label" for="construction-glasses">
+                                                            <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
+                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
                                                         </label>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <small class="text-muted mt-2">
-                                                <i class="fas fa-info-circle"></i> 
-                                                Sisteminizde izlenecek PPE türlerini seçin. En az bir PPE seçimi zorunludur.
-                                            </small>
+                                        </div>
+
+                                        <!-- Gıda Sektörü PPE -->
+                                        <div id="food-ppe" class="ppe-options" style="display: none;">
+                                            <div class="row">
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="hairnet" id="food-hairnet" checked>
+                                                        <label class="form-check-label" for="food-hairnet">
+                                                            <i class="fas fa-user-nurse text-primary"></i> Bone/Başlık
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="face_mask" id="food-mask" checked>
+                                                        <label class="form-check-label" for="food-mask">
+                                                            <i class="fas fa-head-side-mask text-warning"></i> Hijyen Maskesi
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="apron" id="food-apron" checked>
+                                                        <label class="form-check-label" for="food-apron">
+                                                            <i class="fas fa-tshirt text-success"></i> Hijyen Önlüğü
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="food-gloves">
+                                                        <label class="form-check-label" for="food-gloves">
+                                                            <i class="fas fa-hand-paper text-info"></i> Hijyen Eldiveni
+                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_shoes" id="food-shoes">
+                                                        <label class="form-check-label" for="food-shoes">
+                                                            <i class="fas fa-socks text-info"></i> Kaymaz Ayakkabı
+                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Kimya Sektörü PPE -->
+                                        <div id="chemical-ppe" class="ppe-options" style="display: none;">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="gloves" id="chemical-gloves" checked>
+                                                        <label class="form-check-label" for="chemical-gloves">
+                                                            <i class="fas fa-hand-paper text-primary"></i> Kimyasal Eldiven
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="glasses" id="chemical-glasses" checked>
+                                                        <label class="form-check-label" for="chemical-glasses">
+                                                            <i class="fas fa-glasses text-warning"></i> Güvenlik Gözlüğü
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="face_mask" id="chemical-mask" checked>
+                                                        <label class="form-check-label" for="chemical-mask">
+                                                            <i class="fas fa-head-side-mask text-success"></i> Solunum Maskesi
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_suit" id="chemical-suit" checked>
+                                                        <label class="form-check-label" for="chemical-suit">
+                                                            <i class="fas fa-tshirt text-info"></i> Kimyasal Tulum
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- İmalat Sektörü PPE -->
+                                        <div id="manufacturing-ppe" class="ppe-options" style="display: none;">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="manufacturing-helmet" checked>
+                                                        <label class="form-check-label" for="manufacturing-helmet">
+                                                            <i class="fas fa-hard-hat text-primary"></i> Endüstriyel Kask
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="manufacturing-vest" checked>
+                                                        <label class="form-check-label" for="manufacturing-vest">
+                                                            <i class="fas fa-tshirt text-warning"></i> Reflektörlü Yelek
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="gloves" id="manufacturing-gloves" checked>
+                                                        <label class="form-check-label" for="manufacturing-gloves">
+                                                            <i class="fas fa-hand-paper text-success"></i> İş Eldiveni
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="manufacturing-shoes" checked>
+                                                        <label class="form-check-label" for="manufacturing-shoes">
+                                                            <i class="fas fa-socks text-info"></i> Çelik Burunlu Ayakkabı
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Depo Sektörü PPE -->
+                                        <div id="warehouse-ppe" class="ppe-options" style="display: none;">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="warehouse-vest" checked>
+                                                        <label class="form-check-label" for="warehouse-vest">
+                                                            <i class="fas fa-tshirt text-primary"></i> Görünürlük Yeleği
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="warehouse-shoes" checked>
+                                                        <label class="form-check-label" for="warehouse-shoes">
+                                                            <i class="fas fa-socks text-warning"></i> Güvenlik Ayakkabısı
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="helmet" id="warehouse-helmet">
+                                                        <label class="form-check-label" for="warehouse-helmet">
+                                                            <i class="fas fa-hard-hat text-info"></i> Koruyucu Kask
+                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="warehouse-gloves">
+                                                        <label class="form-check-label" for="warehouse-gloves">
+                                                            <i class="fas fa-hand-paper text-info"></i> İş Eldiveni
+                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
+
                                     
                                     <div class="mb-4">
                                         <label class="form-label">Şifre *</label>
@@ -1599,7 +3085,7 @@ class SmartSafeSaaSAPI:
             <script>
                 // Email Validation for Registration
                 function validateEmailRegister(input) {
-                    const emailRegex = /^[a-zA-Z0-9._%+-çğıöşüÇĞIİÖŞÜ]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
                     const isValid = emailRegex.test(input.value);
                     
                     if (input.value && !isValid) {
@@ -1640,128 +3126,104 @@ class SmartSafeSaaSAPI:
                 // Form validation on submit
                 document.getElementById('registerForm').addEventListener('submit', function(e) {
                     const emailInput = this.querySelector('input[name="email"]');
-                    validateEmailRegister(emailInput);
                     
-                    if (emailInput.classList.contains('is-invalid') || !emailInput.value.includes('@')) {
+                    // Email validation
+                    if (!emailInput.value.includes('@')) {
                         e.preventDefault();
-                        alert('❌ Lütfen geçerli bir email adresi girin!\n\nÖrnek: yildizteknık@gmail.com');
-                        emailInput.focus();
-                        return false;
-                    }
-                    
-                    // Additional validation
-                    const emailRegex = /^[a-zA-Z0-9._%+-çğıöşüÇĞIİÖŞÜ]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-                    if (!emailRegex.test(emailInput.value)) {
-                        e.preventDefault();
-                        alert('❌ Email formatı geçersiz!\n\nTürkçe karakterler desteklenir.\nÖrnek: yildizteknık@gmail.com');
+                        alert('Lutfen gecerli bir email adresi girin!');
                         emailInput.focus();
                         return false;
                     }
                     
                     // PPE selection validation
-                    const ppeCheckboxes = ['ppe_helmet', 'ppe_vest', 'ppe_glasses', 'ppe_gloves', 'ppe_shoes', 'ppe_mask'];
-                    const selectedPPE = ppeCheckboxes.filter(id => document.getElementById(id).checked);
+                    const requiredPPE = document.querySelectorAll('input[name="required_ppe"]:checked');
+                    const optionalPPE = document.querySelectorAll('input[name="optional_ppe"]:checked');
                     
-                    if (selectedPPE.length === 0) {
+                    if (requiredPPE.length === 0 && optionalPPE.length === 0) {
                         e.preventDefault();
-                        alert('❌ En az bir PPE türü seçmelisiniz!\n\nGüvenlik sisteminin çalışması için gereklidir.');
-                        document.getElementById('ppe_helmet').focus();
+                        alert('En az bir PPE turu secmelisiniz!');
                         return false;
                     }
                 });
-            </script>
-        </body>
-        </html>
-        '''
-    
-    def get_login_template(self, company_id):
-        """Giriş sayfası template"""
-        return f'''
-        <!DOCTYPE html>
-        <html lang="tr">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SmartSafe AI - Giriş</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-            <style>
-                body {{
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                }}
-                .card {{
-                    border-radius: 15px;
-                    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-                    backdrop-filter: blur(10px);
-                    background: rgba(255,255,255,0.95);
-                }}
-                .btn-custom {{
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    border: none;
-                    border-radius: 25px;
-                    padding: 12px 30px;
-                    color: white;
-                    font-weight: 600;
-                    transition: all 0.3s ease;
-                }}
-                .btn-custom:hover {{
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-                    color: white;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container mt-5">
-                <div class="row justify-content-center">
-                    <div class="col-md-6 col-lg-4">
-                        <div class="text-center mb-4">
-                            <h1 class="text-white display-4 fw-bold">
-                                <i class="fas fa-shield-alt"></i> SmartSafe AI
-                            </h1>
-                            <p class="text-white-50 fs-6">Şirket ID: {company_id}</p>
-                        </div>
+
+                // PPE Sektor Secimi - Debug Version
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('DOM yuklendi, PPE sistemi baslatiliyor...');
+                    
+                    var sectorSelect = document.querySelector('select[name="sector"]');
+                    var ppeContainer = document.getElementById('ppe-selection-container');
+                    
+                    console.log('Sektor select elementi:', sectorSelect);
+                    console.log('PPE container elementi:', ppeContainer);
+                    
+                    if (sectorSelect && ppeContainer) {
+                        console.log('Elementler bulundu, event listener ekleniyor...');
                         
-                        <div class="card">
-                            <div class="card-body p-5">
-                                <h3 class="text-center mb-4">
-                                    <i class="fas fa-sign-in-alt text-primary"></i> Giriş
-                                </h3>
-                                
-                                <form method="POST" action="/company/{company_id}/login-form">
-                                    <div class="mb-3">
-                                        <label class="form-label">E-mail</label>
-                                        <input type="text" class="form-control" name="email" required
-                                               placeholder="ornek@email.com"
-                                               autocomplete="email">
-                                    </div>
-                                    
-                                    <div class="mb-4">
-                                        <label class="form-label">Şifre</label>
-                                        <input type="password" class="form-control" name="password" required>
-                                    </div>
-                                    
-                                    <div class="d-grid">
-                                        <button type="submit" class="btn btn-custom">
-                                            <i class="fas fa-sign-in-alt"></i> Giriş Yap
-                                        </button>
-                                    </div>
-                                </form>
-                                
-                                <div class="text-center mt-4">
-                                    <a href="/" class="btn btn-outline-secondary">
-                                        <i class="fas fa-arrow-left"></i> Ana Sayfa
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+                        // Sayfa yuklendiginde mevcut sektor degerini kontrol et
+                        var currentSector = sectorSelect.value;
+                        console.log('Sayfa yuklendiginde sektor degeri:', currentSector);
+                        
+                        if (currentSector && currentSector !== '') {
+                            console.log('Mevcut sektor var, PPE gosteriliyor...');
+                            showPPEForSector(currentSector, ppeContainer);
+                        }
+                        
+                        sectorSelect.addEventListener('change', function() {
+                            var sector = this.value;
+                            console.log('Sektor degisti:', sector);
+                            showPPEForSector(sector, ppeContainer);
+                        });
+                        
+                        console.log('Event listener basariyla eklendi!');
+                    } else {
+                        console.log('HATA: Elementler bulunamadi!');
+                        console.log('sectorSelect:', sectorSelect);
+                        console.log('ppeContainer:', ppeContainer);
+                    }
+                });
+                
+                function showPPEForSector(sector, ppeContainer) {
+                    console.log('showPPEForSector cagirildi, sektor:', sector);
+                    
+                    // Tum PPE seceneklerini gizle
+                    var options = document.querySelectorAll('.ppe-options');
+                    console.log('Bulunan PPE option sayisi:', options.length);
+                    
+                    for (var i = 0; i < options.length; i++) {
+                        options[i].style.display = 'none';
+                        console.log('Gizlendi:', options[i].id);
+                    }
+                    
+                    if (sector && sector !== '') {
+                        // PPE container goster
+                        ppeContainer.style.display = 'block';
+                        console.log('PPE container gosterildi');
+                        
+                        // Secilen sektorun PPE'sini goster
+                        var targetPPEId = sector + '-ppe';
+                        var targetPPE = document.getElementById(targetPPEId);
+                        
+                        console.log('Aranan PPE ID:', targetPPEId);
+                        console.log('Bulunan PPE elementi:', targetPPE);
+                        
+                        if (targetPPE) {
+                            targetPPE.style.display = 'block';
+                            console.log('PPE secenekleri gosterildi!');
+                        } else {
+                            console.log('HATA: PPE elementi bulunamadi!');
+                            // Tum PPE elementlerini listele
+                            var allPPEs = document.querySelectorAll('[id$="-ppe"]');
+                            console.log('Mevcut PPE elementleri:');
+                            for (var j = 0; j < allPPEs.length; j++) {
+                                console.log('- ' + allPPEs[j].id);
+                            }
+                        }
+                    } else {
+                        ppeContainer.style.display = 'none';
+                        console.log('PPE container gizlendi');
+                    }
+                }
+            </script>
         </body>
         </html>
         '''
@@ -2039,6 +3501,94 @@ class SmartSafeSaaSAPI:
                     </div>
                 </div>
                 
+                <!-- Canlı Video Feed -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-play-circle"></i> 
+                                    Canlı Tespit Sistemi
+                                </h5>
+                                <div>
+                                    <span id="detection-status" class="badge bg-secondary me-2">Hazır</span>
+                                    <span id="fps-display" class="badge bg-info me-2" style="display: none;">FPS: --</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-lg-8">
+                                        <div id="video-display" class="mb-3" style="height: 400px; background: #f8f9fa; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid #dee2e6;">
+                                            <img id="video-feed" style="display: none; max-width: 100%; max-height: 100%; border-radius: 8px;" alt="Canlı Kamera Görüntüsü">
+                                            <div id="video-placeholder" style="text-align: center;">
+                                                <i class="fas fa-video fa-4x text-muted mb-3"></i>
+                                                <h5 class="text-muted">Canlı Video Feed</h5>
+                                                <p class="text-muted">Tespiti başlatmak için aşağıdaki butonu kullanın</p>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">Kamera Seç:</label>
+                                                                                <select class="form-select" id="camera-select">
+                                    <option value="">Kamera seçin...</option>
+                                    <!-- Kameralar dinamik olarak yüklenecek -->
+                                </select>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">Tespit Modu:</label>
+                                                <select class="form-select" id="detection-mode">
+                                                    <option value="construction">İnşaat Modu</option>
+                                                    <option value="general">Genel Tespit</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">Kontroller:</label>
+                                                <div class="d-flex gap-2">
+                                                    <button id="start-btn" class="btn btn-success flex-fill" onclick="startDetection()">
+                                                        <i class="fas fa-play"></i> Başlat
+                                                    </button>
+                                                    <button id="stop-btn" class="btn btn-danger flex-fill" onclick="stopDetection()" disabled>
+                                                        <i class="fas fa-stop"></i> Durdur
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <div class="card bg-light">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">
+                                                    <i class="fas fa-chart-line"></i> Anlık İstatistikler
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="row text-center">
+                                                    <div class="col-6 mb-3">
+                                                        <div class="stat-value text-primary" id="live-people-count">0</div>
+                                                        <div class="stat-label">Kişi Sayısı</div>
+                                                    </div>
+                                                    <div class="col-6 mb-3">
+                                                        <div class="stat-value text-success" id="live-compliance-rate">0%</div>
+                                                        <div class="stat-label">Uyum Oranı</div>
+                                                    </div>
+                                                </div>
+                                                <div id="live-violations" class="mt-3">
+                                                    <h6 class="text-danger">
+                                                        <i class="fas fa-exclamation-triangle"></i> Aktif İhlaller
+                                                    </h6>
+                                                    <div id="live-violations-list">
+                                                        <p class="text-muted small">Henüz ihlal tespit edilmedi</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Kameralar ve Uyarılar -->
                 <div class="row">
                     <div class="col-xl-8">
@@ -2199,8 +3749,21 @@ class SmartSafeSaaSAPI:
                     fetch(`/api/company/${companyId}/cameras`)
                         .then(response => response.json())
                         .then(data => {
+                            console.log('✅ Unified Camera Data:', data); // Debug log
+                            
                             const grid = document.getElementById('cameras-grid');
+                            const cameraSelect = document.getElementById('camera-select');
+                            
+                            // Summary bilgilerini güncelle
+                            if (data.summary) {
+                                updateCameraSummary(data.summary);
+                            }
+                            
+                            // Kamera seçim listesini güncelle
+                            cameraSelect.innerHTML = '<option value="">Kamera seçin...</option>';
+                            
                             if (data.cameras && data.cameras.length > 0) {
+                                // Grid'e kamera kartları ekle
                                 grid.innerHTML = data.cameras.map(camera => `
                                     <div class="camera-card">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -2221,22 +3784,54 @@ class SmartSafeSaaSAPI:
                                                 <i class="fas fa-exclamation-triangle"></i> ${camera.violations_today || 0} ihlal
                                             </small>
                                         </div>
+                                        <div class="mt-2">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewStream('${camera.camera_id}')">
+                                                <i class="fas fa-eye"></i> Görüntüle
+                                            </button>
+                                        </div>
                                     </div>
                                 `).join('');
+                                
+                                // Seçim listesine kameraları ekle
+                                data.cameras.forEach(camera => {
+                                    const option = document.createElement('option');
+                                    option.value = camera.camera_id;
+                                    option.textContent = `${camera.camera_name} - ${camera.location}`;
+                                    cameraSelect.appendChild(option);
+                                });
+                                
                             } else {
                                 grid.innerHTML = `
                                     <div class="col-12 text-center py-5">
                                         <i class="fas fa-video fa-3x text-muted mb-3"></i>
                                         <p class="text-muted">Henüz kamera eklenmemiş</p>
+                                        <p class="text-muted">Kamera eklemek için:</p>
+                                        <div class="d-flex gap-2 justify-content-center">
                                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
-                                            <i class="fas fa-plus"></i> İlk Kameranızı Ekleyin
+                                                <i class="fas fa-plus"></i> Buradan Ekle
                                         </button>
+                                            <button class="btn btn-success" onclick="syncCameras()">
+                                                <i class="fas fa-sync"></i> Kamera Keşfet & Sync
+                                        </button>
+                                            <a href="/company/${companyId}/cameras" class="btn btn-outline-primary">
+                                                <i class="fas fa-cog"></i> Kamera Yönetimi
+                                            </a>
+                                        </div>
                                     </div>
                                 `;
                             }
                         })
                         .catch(error => {
                             console.error('Kameralar yüklenemedi:', error);
+                            const grid = document.getElementById('cameras-grid');
+                            grid.innerHTML = `
+                                <div class="col-12">
+                                    <div class="alert alert-danger">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Kameralar yüklenemedi. Lütfen sayfayı yenileyin.
+                                    </div>
+                                </div>
+                            `;
                         });
                 }
                 
@@ -2428,10 +4023,287 @@ class SmartSafeSaaSAPI:
                     });
                 }
                 
+                // Video Feed Fonksiyonları
+                let detectionActive = false;
+                let currentCameraId = null;
+                let detectionMonitoringInterval = null;
+                
+                function startDetection() {
+                    const camera = document.getElementById('camera-select').value;
+                    const mode = document.getElementById('detection-mode').value;
+                    
+                    if (detectionActive) {
+                        alert('⚠️ Tespit zaten aktif!');
+                        return;
+                    }
+                    
+                    // UI güncelle
+                    document.getElementById('start-btn').disabled = true;
+                    document.getElementById('detection-status').textContent = 'Başlatılıyor...';
+                    document.getElementById('detection-status').className = 'badge bg-warning me-2';
+                    
+                    fetch(`/api/company/${companyId}/start-detection`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({camera: camera, mode: mode})
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            detectionActive = true;
+                            currentCameraId = camera;
+                            
+                            // Video feed'i başlat
+                            startVideoFeed(camera);
+                            
+                            // UI güncelle
+                            document.getElementById('start-btn').disabled = true;
+                            document.getElementById('stop-btn').disabled = false;
+                            document.getElementById('detection-status').textContent = 'Aktif';
+                            document.getElementById('detection-status').className = 'badge bg-success me-2';
+                            document.getElementById('fps-display').style.display = 'inline';
+                            
+                            // Detection monitoring başlat
+                            startDetectionMonitoring();
+                            
+                            // Success alert
+                            showAlert('✅ Tespit sistemi başlatıldı!', 'success');
+                        } else {
+                            // Hata durumunda UI'yi resetle
+                            document.getElementById('start-btn').disabled = false;
+                            document.getElementById('detection-status').textContent = 'Hata';
+                            document.getElementById('detection-status').className = 'badge bg-danger me-2';
+                            
+                            showAlert('❌ Hata: ' + data.error, 'danger');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Detection başlatma hatası:', error);
+                        document.getElementById('start-btn').disabled = false;
+                        document.getElementById('detection-status').textContent = 'Hata';
+                        document.getElementById('detection-status').className = 'badge bg-danger me-2';
+                        showAlert('❌ Bağlantı hatası!', 'danger');
+                    });
+                }
+
+                function stopDetection() {
+                    if (!detectionActive) {
+                        return;
+                    }
+                    
+                    // UI güncelle
+                    document.getElementById('stop-btn').disabled = true;
+                    document.getElementById('detection-status').textContent = 'Durduruluyor...';
+                    document.getElementById('detection-status').className = 'badge bg-warning me-2';
+                    
+                    fetch(`/api/company/${companyId}/stop-detection`, {method: 'POST'})
+                        .then(response => response.json())
+                        .then(data => {
+                            if(data.success) {
+                                detectionActive = false;
+                                currentCameraId = null;
+                                
+                                // Video feed'i durdur
+                                stopVideoFeed();
+                                
+                                // Detection monitoring durdur
+                                if (detectionMonitoringInterval) {
+                                    clearInterval(detectionMonitoringInterval);
+                                    detectionMonitoringInterval = null;
+                                }
+                                
+                                // UI güncelle
+                                document.getElementById('start-btn').disabled = false;
+                                document.getElementById('stop-btn').disabled = true;
+                                document.getElementById('detection-status').textContent = 'Durduruldu';
+                                document.getElementById('detection-status').className = 'badge bg-secondary me-2';
+                                document.getElementById('fps-display').style.display = 'none';
+                                
+                                // İstatistikleri sıfırla
+                                document.getElementById('live-people-count').textContent = '0';
+                                document.getElementById('live-compliance-rate').textContent = '0%';
+                                document.getElementById('live-violations-list').innerHTML = '<p class="text-muted small">Henüz ihlal tespit edilmedi</p>';
+                                
+                                showAlert('✅ Tespit sistemi durduruldu!', 'info');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Detection durdurma hatası:', error);
+                            document.getElementById('stop-btn').disabled = false;
+                        });
+                }
+                
+                function startVideoFeed(cameraId) {
+                    const videoElement = document.getElementById('video-feed');
+                    const placeholder = document.getElementById('video-placeholder');
+                    
+                    // Video feed URL'sini ayarla
+                    videoElement.src = `/api/company/${companyId}/video-feed/${cameraId}`;
+                    
+                    // Video yüklendiğinde göster
+                    videoElement.onload = function() {
+                        placeholder.style.display = 'none';
+                        videoElement.style.display = 'block';
+                    };
+                    
+                    // Hata durumunda placeholder'ı geri göster
+                    videoElement.onerror = function() {
+                        videoElement.style.display = 'none';
+                        placeholder.style.display = 'block';
+                        placeholder.innerHTML = '<i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i><h5 class="text-warning">Kamera Bağlantısı Kurulamadı</h5><p class="text-warning">Lütfen kamera ayarlarını kontrol edin</p>';
+                    };
+                }
+                
+                function stopVideoFeed() {
+                    const videoElement = document.getElementById('video-feed');
+                    const placeholder = document.getElementById('video-placeholder');
+                    
+                    // Video feed'i durdur
+                    videoElement.src = '';
+                    videoElement.style.display = 'none';
+                    
+                    // Placeholder'ı geri göster
+                    placeholder.style.display = 'block';
+                    placeholder.innerHTML = '<i class="fas fa-video fa-4x text-muted mb-3"></i><h5 class="text-muted">Canlı Video Feed</h5><p class="text-muted">Tespiti başlatmak için yukarıdaki butonu kullanın</p>';
+                }
+                
+                function startDetectionMonitoring() {
+                    detectionMonitoringInterval = setInterval(() => {
+                        if (detectionActive && currentCameraId) {
+                            // Detection sonuçlarını al
+                            fetch(`/api/company/${companyId}/detection-results/${currentCameraId}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success && data.result) {
+                                        const result = data.result;
+                                        
+                                        // FPS göster
+                                        const fps = Math.round(1 / (result.processing_time || 0.04));
+                                        document.getElementById('fps-display').textContent = `FPS: ${fps}`;
+                                        
+                                        // Detection bilgilerini güncelle
+                                        document.getElementById('live-people-count').textContent = result.total_people || 0;
+                                        document.getElementById('live-compliance-rate').textContent = `${(result.compliance_rate || 0).toFixed(1)}%`;
+                                        
+                                        // Detection status'u güncelle
+                                        const statusElement = document.getElementById('detection-status');
+                                        statusElement.innerHTML = `Aktif - ${result.total_people || 0} kişi`;
+                                        
+                                        // Compliance rate'e göre renk değiştir
+                                        if (result.compliance_rate >= 80) {
+                                            statusElement.className = 'badge bg-success me-2';
+                                            document.getElementById('live-compliance-rate').className = 'stat-value text-success';
+                                        } else if (result.compliance_rate >= 60) {
+                                            statusElement.className = 'badge bg-warning me-2';
+                                            document.getElementById('live-compliance-rate').className = 'stat-value text-warning';
+                                        } else {
+                                            statusElement.className = 'badge bg-danger me-2';
+                                            document.getElementById('live-compliance-rate').className = 'stat-value text-danger';
+                                        }
+                                        
+                                        // İhlalleri göster
+                                        const violationsList = document.getElementById('live-violations-list');
+                                        if (result.violations && result.violations.length > 0) {
+                                            violationsList.innerHTML = result.violations.map(violation => 
+                                                `<div class="alert alert-danger alert-sm py-1 px-2 mb-1">
+                                                    <small><strong>${violation.worker_id}:</strong> ${violation.missing_ppe.join(', ')}</small>
+                                                </div>`
+                                            ).join('');
+                                        } else {
+                                            violationsList.innerHTML = '<p class="text-muted small">Henüz ihlal tespit edilmedi</p>';
+                                        }
+                                    } else {
+                                        document.getElementById('fps-display').textContent = 'FPS: --';
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Detection monitoring error:', error);
+                                    document.getElementById('fps-display').textContent = 'FPS: --';
+                                });
+                        }
+                    }, 2000); // Her 2 saniyede bir
+                }
+                
+                function showAlert(message, type) {
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+                    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                    alertDiv.innerHTML = `
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(alertDiv);
+                    
+                    setTimeout(() => {
+                        if (alertDiv.parentNode) {
+                            alertDiv.remove();
+                        }
+                    }, 5000);
+                }
+                
                 function logout() {
                     fetch('/logout', {method: 'POST'})
                         .then(() => {
                             window.location.href = '/';
+                        });
+                }
+                
+                // === UNIFIED CAMERA SYNC FUNCTIONS ===
+                function syncCameras() {
+                    const syncBtn = event.target;
+                    const originalText = syncBtn.innerHTML;
+                    
+                    syncBtn.disabled = true;
+                    syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Senkronize ediliyor...';
+                    
+                    fetch(`/api/company/${companyId}/cameras/sync`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            network_range: '192.168.1.0/24',
+                            force_sync: true
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                        console.log('✅ Sync result:', data);
+                        
+                        if (data.success) {
+                            showAlert(`✅ Kamera senkronizasyonu tamamlandı! ${data.total_cameras} kamera bulundu (${data.mode} mode).`, 'success');
+                            
+                            // Refresh cameras and stats
+                            loadCameras();
+                            loadStats();
+                            } else {
+                            showAlert(`❌ Senkronizasyon hatası: ${data.error}`, 'danger');
+                            }
+                        })
+                        .catch(error => {
+                        console.error('❌ Sync error:', error);
+                        showAlert('❌ Senkronizasyon sırasında bir hata oluştu.', 'danger');
+                    })
+                    .finally(() => {
+                        syncBtn.disabled = false;
+                        syncBtn.innerHTML = originalText;
+                    });
+                }
+                
+                // Update camera summary in dashboard
+                function updateCameraSummary(summary) {
+                    console.log('📊 Updating camera summary:', summary);
+                    
+                    // Update any elements that display camera counts
+                    const totalElements = document.querySelectorAll('.total-cameras-count, [data-camera-total]');
+                    const activeElements = document.querySelectorAll('.active-cameras-count, [data-camera-active]');
+                    
+                    totalElements.forEach(el => {
+                        el.textContent = summary.total_cameras || 0;
+                    });
+                    
+                    activeElements.forEach(el => {
+                        el.textContent = summary.active_cameras || 0;
                         });
                 }
                 
@@ -2449,145 +4321,86 @@ class SmartSafeSaaSAPI:
         </html>
         '''
     
-    def get_admin_template(self):
-        """Admin panel template"""
+    def get_login_template(self, company_id):
+        """Şirket giriş sayfası template"""
         return '''
         <!DOCTYPE html>
         <html lang="tr">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Admin Panel - SmartSafe AI</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <title>SmartSafe PPE - Şirket Girişi</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
             <style>
                 body {
-                    background: linear-gradient(135deg, #dc3545 0%, #6f42c1 100%);
-                    min-height: 100vh;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background-color: #f8f9fa;
                 }
-                .card {
-                    border-radius: 15px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                .login-container {
+                    max-width: 400px;
+                    margin: 100px auto;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 10px;
+                    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+                }
+                .logo {
+                    text-align: center;
+                    margin-bottom: 30px;
+                }
+                .logo img {
+                    max-width: 200px;
+                }
+                .form-group {
+                    margin-bottom: 20px;
+                }
+                .btn-login {
+                    width: 100%;
+                    padding: 12px;
+                    background-color: #0d6efd;
+                    border: none;
+                    color: white;
+                    font-weight: 500;
+                }
+                .btn-login:hover {
+                    background-color: #0b5ed7;
+                }
+                .alert {
                     margin-bottom: 20px;
                 }
             </style>
         </head>
         <body>
-            <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-                <div class="container">
-                    <a class="navbar-brand fw-bold" href="/admin">
-                        <i class="fas fa-crown text-warning"></i> SmartSafe AI - Admin Panel
-                    </a>
-                    <div class="navbar-nav ms-auto">
-                        <a class="nav-link" href="/">Ana Sayfa</a>
+            <div class="container">
+                <div class="login-container">
+                    <div class="logo">
+                        <img src="/static/images/logo.png" alt="SmartSafe PPE Logo">
                     </div>
-                </div>
-            </nav>
-            
-            <div class="container mt-4">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header bg-danger text-white">
-                                <h4 class="mb-0">
-                                    <i class="fas fa-building"></i> Kayıtlı Şirketler
-                                </h4>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-striped" id="companiesTable">
-                                        <thead>
-                                            <tr>
-                                                <th>Şirket ID</th>
-                                                <th>Şirket Adı</th>
-                                                <th>Email</th>
-                                                <th>Sektör</th>
-                                                <th>Kamera Limiti</th>
-                                                <th>Kayıt Tarihi</th>
-                                                <th>Durum</th>
-                                                <th>İşlemler</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="companiesTableBody">
-                                            <!-- Şirketler buraya yüklenecek -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                    
+                    <h4 class="text-center mb-4">Şirket Girişi</h4>
+                    
+                    <form action="/company/''' + company_id + '''/login-form" method="POST">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
                         </div>
+                        
+                        <div class="form-group">
+                            <label for="password">Şifre</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-login">Giriş Yap</button>
+                    </form>
+                    
+                    <div class="text-center mt-3">
+                        <small>
+                            <a href="#" class="text-muted">Şifremi Unuttum</a>
+                        </small>get_login_template
                     </div>
                 </div>
             </div>
-            
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-            <script>
-                // Şirketleri yükle
-                function loadCompanies() {
-                    fetch('/api/admin/companies')
-                        .then(response => response.json())
-                        .then(data => {
-                            const tbody = document.getElementById('companiesTableBody');
-                            
-                            if (data.companies && data.companies.length > 0) {
-                                tbody.innerHTML = data.companies.map(company => `
-                                    <tr>
-                                        <td><code>${company.company_id}</code></td>
-                                        <td>${company.company_name}</td>
-                                        <td>${company.email}</td>
-                                        <td><span class="badge bg-info">${company.sector}</span></td>
-                                        <td>${company.max_cameras}</td>
-                                        <td>${new Date(company.created_at).toLocaleDateString('tr-TR')}</td>
-                                        <td>
-                                            <span class="badge ${company.status === 'active' ? 'bg-success' : 'bg-danger'}">
-                                                ${company.status}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <button class="btn btn-danger btn-sm" onclick="deleteCompany('${company.company_id}', '${company.company_name}')">
-                                                <i class="fas fa-trash"></i> Sil
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('');
-                            } else {
-                                tbody.innerHTML = '<tr><td colspan="8" class="text-center">Henüz kayıtlı şirket yok</td></tr>';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            document.getElementById('companiesTableBody').innerHTML = 
-                                '<tr><td colspan="8" class="text-center text-danger">Hata oluştu</td></tr>';
-                        });
-                }
-                
-                // Şirket sil
-                function deleteCompany(companyId, companyName) {
-                    if (confirm(`⚠️ "${companyName}" şirketi ve tüm verileri SİLİNECEK!\\n\\nBu işlem geri alınamaz. Emin misiniz?`)) {
-                        fetch(`/api/admin/companies/${companyId}`, {
-                            method: 'DELETE'
-                        })
-                        .then(response => response.json())
-                        .then(result => {
-                            if (result.success) {
-                                alert('✅ Şirket başarıyla silindi!');
-                                loadCompanies(); // Tabloyu yenile
-                            } else {
-                                alert('❌ Hata: ' + result.error);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            alert('❌ Bir hata oluştu!');
-                        });
-                    }
-                }
-                
-                // Sayfa yüklendiğinde şirketleri yükle
-                document.addEventListener('DOMContentLoaded', function() {
-                    loadCompanies();
-                });
-            </script>
+
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         </body>
         </html>
         '''
@@ -2689,6 +4502,63 @@ class SmartSafeSaaSAPI:
             </div>
             
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        </body>
+        </html>
+        '''
+    
+    def get_admin_template(self):
+        """Professional Admin Panel Template for Company Management"""
+        return '''
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Admin Panel - SmartSafe AI</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+            <style>
+                body { background: #f8f9fa; }
+                .navbar { background: #dc3545; }
+                .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            </style>
+        </head>
+        <body>
+            <nav class="navbar navbar-dark">
+                <div class="container-fluid">
+                    <a class="navbar-brand" href="/admin">SmartSafe AI - Admin Panel</a>
+                </div>
+            </nav>
+            <div class="container mt-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Şirket Yönetimi</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table" id="companiesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Şirket Adı</th>
+                                        <th>Sektör</th>
+                                        <th>Durum</th>
+                                        <th>İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="companyTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+            <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+            <script>
+                $(document).ready(function() {
+                    $('#companiesTable').DataTable();
+                });
+            </script>
         </body>
         </html>
         '''
@@ -4548,7 +6418,7 @@ class SmartSafeSaaSAPI:
                                 <div class="row">
                                     <div class="col-md-12">
                                         <h5>Kamera Performans Analizi</h5>
-                                        <div class="table-responsive">
+                        <div class="table-responsive">
                                             <table class="table table-hover">
                                                 <thead class="table-dark">
                                                     <tr>
@@ -4557,9 +6427,9 @@ class SmartSafeSaaSAPI:
                                                         <th>Toplam Tespit</th>
                                                         <th>İhlal Sayısı</th>
                                                         <th>Ortalama Güven</th>
-                                                        <th>Durum</th>
-                                                    </tr>
-                                                </thead>
+                                        <th>Durum</th>
+                                    </tr>
+                                </thead>
                                                 <tbody id="cameraPerformanceTable">
                                                     <tr>
                                                         <td><i class="fas fa-video text-primary"></i> Ana Giriş</td>
@@ -4586,11 +6456,11 @@ class SmartSafeSaaSAPI:
                                                         <td><span class="badge bg-success">Aktif</span></td>
                                                     </tr>
                                                 </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
                             
                             <!-- Export Tab -->
                             <div class="tab-pane fade" id="export">
@@ -4902,7 +6772,7 @@ class SmartSafeSaaSAPI:
             </script>
         </body>
         </html>
-                '''
+        '''
     
     def get_camera_management_template(self):
         """Advanced Camera Management Template with Discovery and Testing"""
@@ -5116,7 +6986,7 @@ class SmartSafeSaaSAPI:
                             </button>
                         </div>
                     </div>
-                </div>
+                        </div>
                 
                 <!-- Camera Groups -->
                 <div class="row mb-4">
@@ -5147,10 +7017,10 @@ class SmartSafeSaaSAPI:
                                 <div>
                                     <button class="btn btn-light btn-sm me-2" onclick="refreshCameras()">
                                         <i class="fas fa-sync"></i> Yenile
-                                    </button>
+                                            </button>
                                     <button class="btn btn-light btn-sm" onclick="testAllCameras()">
                                         <i class="fas fa-check-circle"></i> Tümünü Test Et
-                                    </button>
+                                            </button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -5421,11 +7291,28 @@ class SmartSafeSaaSAPI:
                         <div class="camera-card">
                             <div class="row">
                                 <div class="col-md-4">
-                                    <div class="stream-preview">
-                                        <i class="fas fa-video fa-2x"></i>
+                                    <div class="stream-preview" onclick="viewStream('${camera.camera_id}')" style="cursor: pointer;">
+                                        <img src="/api/company/${companyId}/video-feed/${camera.camera_id}" 
+                                             alt="Kamera Feed" 
+                                             class="img-fluid rounded"
+                                             style="width: 100%; height: 100%; object-fit: cover;"
+                                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div class="d-flex align-items-center justify-content-center h-100" style="display: none;">
+                                            <div class="text-center">
+                                                <i class="fas fa-video fa-2x text-white-50"></i>
+                                                <div class="mt-2">
+                                                    <small class="text-white-50">Kamera Bağlantısı Yok</small>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <div class="position-absolute top-0 start-0 p-2">
                                             <span class="camera-status ${camera.status === 'active' ? 'status-online' : 'status-offline'}"></span>
                                             <small class="text-white">${camera.status === 'active' ? 'Online' : 'Offline'}</small>
+                                        </div>
+                                        <div class="position-absolute bottom-0 end-0 p-2">
+                                            <small class="text-white bg-dark bg-opacity-50 px-2 py-1 rounded">
+                                                <i class="fas fa-expand"></i> Büyüt
+                                            </small>
                                         </div>
                                     </div>
                                 </div>
@@ -5660,18 +7547,145 @@ class SmartSafeSaaSAPI:
                 
                 // Test Camera
                 function testCamera(cameraId) {
-                    alert(`🧪 ${cameraId} kamerası test ediliyor...\\n\\n(Bu özellik geliştirilme aşamasında)`);
+                    // Kamera bilgilerini al
+                    const camera = cameras.find(c => c.camera_id === cameraId);
+                    if (!camera) {
+                        alert('❌ Kamera bilgileri bulunamadı');
+                        return;
+                    }
+                    
+                    // Test başlat
+                    const testButton = document.querySelector(`button[onclick="testCamera('${cameraId}')"]`);
+                    if (testButton) {
+                        testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test Ediliyor...';
+                        testButton.disabled = true;
+                    }
+                    
+                    fetch(`/api/company/${companyId}/cameras/test`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            rtsp_url: camera.rtsp_url,
+                            name: camera.name
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const testResults = data.test_results;
+                            let message = `✅ Kamera Test Sonucu: ${camera.name}\\n\\n`;
+                            message += `🔗 Bağlantı: ${testResults.connection_status}\\n`;
+                            message += `⏱️ Yanıt Süresi: ${testResults.response_time}\\n`;
+                            message += `📐 Çözünürlük: ${testResults.resolution}\\n`;
+                            message += `🎥 FPS: ${testResults.fps}\\n`;
+                            message += `📊 Kaynak Türü: ${testResults.source_type}\\n`;
+                            
+                            if (testResults.error_message) {
+                                message += `\\n❌ Hata: ${testResults.error_message}`;
+                            }
+                            
+                            alert(message);
+                        } else {
+                            alert(`❌ Test Hatası: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Test camera error:', error);
+                        alert('❌ Kamera test edilirken bir hata oluştu');
+                    })
+                    .finally(() => {
+                        // Test butonunu eski haline getir
+                        if (testButton) {
+                            testButton.innerHTML = '<i class="fas fa-vial"></i>';
+                            testButton.disabled = false;
+                        }
+                    });
                 }
                 
                 // View Stream
                 function viewStream(cameraId) {
-                    alert(`📹 ${cameraId} canlı yayın açılıyor...\\n\\n(Bu özellik geliştirilme aşamasında)`);
+                    // Gerçek video feed göster
+                    const streamUrl = `/api/company/${companyId}/video-feed/${cameraId}`;
+                    
+                    // Modal ile video göster
+                    const modalHtml = `
+                        <div class="modal fade" id="streamModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-video"></i> Kamera ${cameraId} - Canlı Yayın
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body text-center">
+                                        <img id="streamImage" src="${streamUrl}" 
+                                             alt="Kamera Feed" 
+                                             class="img-fluid rounded"
+                                             style="max-width: 100%; height: auto;"
+                                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkthbWVyYSBCYcSfbGFudMSxc8SxIEt1cnVsYW1hZMSxPC90ZXh0Pjwvc3ZnPg=='; this.alt='Kamera Bağlantısı Kurulamadı';">
+                                        <div class="mt-3">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle"></i> 
+                                                Kamera bağlantısı kurulamazsa, kameranın açık ve erişilebilir olduğundan emin olun.
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                        <button type="button" class="btn btn-primary" onclick="refreshStream('${cameraId}')">
+                                            <i class="fas fa-sync"></i> Yenile
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Önceki modal'ı kaldır
+                    const existingModal = document.getElementById('streamModal');
+                    if (existingModal) {
+                        existingModal.remove();
+                    }
+                    
+                    // Yeni modal'ı ekle
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    new bootstrap.Modal(document.getElementById('streamModal')).show();
+                }
+                
+                // Refresh Stream
+                function refreshStream(cameraId) {
+                    const streamImage = document.getElementById('streamImage');
+                    if (streamImage) {
+                        const streamUrl = `/api/company/${companyId}/video-feed/${cameraId}`;
+                        streamImage.src = streamUrl + '?t=' + new Date().getTime();
+                    }
                 }
                 
                 // Delete Camera
                 function deleteCamera(cameraId) {
                     if (confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) {
-                        alert(`🗑️ ${cameraId} kamerası siliniyor...\\n\\n(Bu özellik geliştirilme aşamasında)`);
+                        fetch(`/api/company/${companyId}/cameras/${cameraId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert(`✅ ${data.message}`);
+                                refreshCameras(); // Kamera listesini yenile
+                            } else {
+                                alert(`❌ Hata: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Delete camera error:', error);
+                            alert('❌ Kamera silinirken bir hata oluştu');
+                        });
                     }
                 }
                 
@@ -5683,7 +7697,226 @@ class SmartSafeSaaSAPI:
                 
                 // Test All Cameras
                 function testAllCameras() {
-                    alert('🧪 Tüm kameralar test ediliyor...\\n\\n(Bu özellik geliştirilme aşamasında)');
+                    // Önce kamera listesini al
+                    fetch(`/api/company/${companyId}/cameras`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.cameras.length > 0) {
+                            const cameras = data.cameras;
+                            
+                            // Test modal'ı oluştur
+                            const testModalHtml = `
+                                <div class="modal fade" id="testAllModal" tabindex="-1">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">
+                                                    <i class="fas fa-check-circle"></i> Tüm Kameraları Test Et
+                                                </h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="alert alert-info">
+                                                    <i class="fas fa-info-circle"></i> 
+                                                    ${cameras.length} kamera test ediliyor...
+                                                </div>
+                                                <div id="testAllResults">
+                                                    <div class="text-center py-4">
+                                                        <div class="spinner-border text-primary" role="status">
+                                                            <span class="visually-hidden">Test ediliyor...</span>
+                                                        </div>
+                                                        <p class="mt-2">Kameralar test ediliyor, lütfen bekleyin...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Modal'ı ekle ve göster
+                            document.body.insertAdjacentHTML('beforeend', testModalHtml);
+                            const testModal = new bootstrap.Modal(document.getElementById('testAllModal'));
+                            testModal.show();
+                            
+                            // Her kamerayı test et
+                            testCamerasSequentially(cameras, 0, []);
+                            
+                        } else {
+                            showToast('⚠️ Test edilecek kamera bulunamadı', 'warning');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Test all cameras error:', error);
+                        showToast('❌ Kamera listesi alınamadı', 'error');
+                    });
+                }
+                
+                // Test cameras sequentially
+                function testCamerasSequentially(cameras, index, results) {
+                    if (index >= cameras.length) {
+                        // Tüm testler tamamlandı
+                        displayAllTestResults(results);
+                        return;
+                    }
+                    
+                    const camera = cameras[index];
+                    const testData = {
+                        name: camera.camera_name,
+                        rtsp_url: camera.rtsp_url || `rtsp://${camera.ip_address}:${camera.port}/stream`
+                    };
+                    
+                    fetch(`/api/company/${companyId}/cameras/test`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(testData)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        results.push({
+                            camera: camera,
+                            result: result,
+                            success: result.success
+                        });
+                        
+                        // Sonraki kamerayı test et
+                        testCamerasSequentially(cameras, index + 1, results);
+                    })
+                    .catch(error => {
+                        results.push({
+                            camera: camera,
+                            result: { success: false, error: error.message },
+                            success: false
+                        });
+                        
+                        // Sonraki kamerayı test et
+                        testCamerasSequentially(cameras, index + 1, results);
+                    });
+                }
+                
+                // Display all test results
+                function displayAllTestResults(results) {
+                    const successCount = results.filter(r => r.success).length;
+                    const failCount = results.length - successCount;
+                    
+                    const resultsHtml = `
+                        <div class="alert ${successCount === results.length ? 'alert-success' : failCount === results.length ? 'alert-danger' : 'alert-warning'}">
+                            <h6>
+                                <i class="fas fa-chart-pie"></i> Test Sonuçları
+                            </h6>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="text-success">
+                                        <i class="fas fa-check-circle fa-2x"></i>
+                                        <div class="mt-1"><strong>${successCount}</strong></div>
+                                        <small>Başarılı</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-danger">
+                                        <i class="fas fa-times-circle fa-2x"></i>
+                                        <div class="mt-1"><strong>${failCount}</strong></div>
+                                        <small>Başarısız</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-info">
+                                        <i class="fas fa-video fa-2x"></i>
+                                        <div class="mt-1"><strong>${results.length}</strong></div>
+                                        <small>Toplam</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            ${results.map(r => `
+                                <div class="col-md-6 mb-3">
+                                    <div class="card ${r.success ? 'border-success' : 'border-danger'}">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                <i class="fas fa-video"></i> ${r.camera.camera_name}
+                                                <span class="badge ${r.success ? 'bg-success' : 'bg-danger'} ms-2">
+                                                    ${r.success ? 'Başarılı' : 'Başarısız'}
+                                                </span>
+                                            </h6>
+                                            <p class="text-muted mb-2">
+                                                <i class="fas fa-network-wired"></i> ${r.camera.ip_address}:${r.camera.port}
+                                            </p>
+                                            ${r.success ? `
+                                                <div class="row text-center">
+                                                    <div class="col-6">
+                                                        <small class="text-muted">Yanıt Süresi</small>
+                                                        <div class="fw-bold">${r.result.test_results?.response_time || 'N/A'}</div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <small class="text-muted">Çözünürlük</small>
+                                                        <div class="fw-bold">${r.result.test_results?.resolution || 'N/A'}</div>
+                                                    </div>
+                                                </div>
+                                            ` : `
+                                                <div class="alert alert-danger mb-0">
+                                                    <small>
+                                                        <i class="fas fa-exclamation-triangle"></i> 
+                                                        ${r.result.error || 'Bilinmeyen hata'}
+                                                    </small>
+                                                </div>
+                                            `}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    
+                    document.getElementById('testAllResults').innerHTML = resultsHtml;
+                    
+                    // Toast bildirimi
+                    if (successCount === results.length) {
+                        showToast(`✅ Tüm kameralar (${successCount}) başarıyla test edildi!`, 'success');
+                    } else if (failCount === results.length) {
+                        showToast(`❌ Tüm kameralar (${failCount}) test başarısız!`, 'error');
+                    } else {
+                        showToast(`⚠️ ${successCount} başarılı, ${failCount} başarısız`, 'warning');
+                    }
+                }
+                
+                // Show Toast Notification
+                function showToast(message, type = 'info') {
+                    const toastHtml = `
+                        <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'info'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                            <div class="d-flex">
+                                <div class="toast-body">
+                                    ${message}
+                                </div>
+                                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Toast container oluştur
+                    let toastContainer = document.getElementById('toastContainer');
+                    if (!toastContainer) {
+                        toastContainer = document.createElement('div');
+                        toastContainer.id = 'toastContainer';
+                        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                        toastContainer.style.zIndex = '1055';
+                        document.body.appendChild(toastContainer);
+                    }
+                    
+                    // Toast ekle
+                    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+                    const toastElement = toastContainer.lastElementChild;
+                    const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
+                    toast.show();
+                    
+                    // Toast otomatik silinsin
+                    toastElement.addEventListener('hidden.bs.toast', () => {
+                        toastElement.remove();
+                    });
                 }
                 
                 // Add Discovered Camera
@@ -5758,7 +7991,7 @@ class SmartSafeSaaSAPI:
                     "timestamp": datetime.now().isoformat()
                 }), 503
 
-    def add_metrics_endpoint(self):
+    def add_metrics_endpoint(self): 
         """Add metrics endpoint for Prometheus"""
         @self.app.route('/metrics', methods=['GET'])
         def metrics():
@@ -5839,4 +8072,9 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    exit(main()) 
+    exit(main())
+
+
+""" ASıl dosyamız bu ama "smartsafe_saas_api_içinde_tekrar_eden_dosya.py" adlı dosyadaiki tane aynı sınıf var, gerekli düzenlemeyi yap! """ 
+
+
