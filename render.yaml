@@ -7,8 +7,10 @@ services:
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
+      mkdir -p /tmp/Ultralytics
+      chmod 777 /tmp/Ultralytics
       python download_models.py
-    startCommand: python smartsafe_saas_api.py
+    startCommand: gunicorn smartsafe_saas_api:app
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
@@ -16,11 +18,15 @@ services:
       - key: FLASK_APP
         value: smartsafe_saas_api.py
       - key: PORT
-        value: 5000
+        value: 8000
       - key: PYTHONPATH
         value: /opt/render/project/src
       - key: CUDA_VISIBLE_DEVICES
         value: ""
+      - key: YOLO_CONFIG_DIR
+        value: /tmp/Ultralytics
+      - key: GUNICORN_CMD_ARGS
+        value: "--bind=0.0.0.0:8000 --workers=2 --threads=4 --timeout=120"
     disk:
       name: smartsafe-data
       mountPath: /opt/render/project/src/data
