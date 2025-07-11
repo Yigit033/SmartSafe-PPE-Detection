@@ -4372,9 +4372,9 @@ Mesaj:
         <body>
             <div class="container">
                 <div class="login-container">
-                    <div class="logo">
-                        <img src="/static/images/logo.png" alt="SmartSafe PPE Logo">
-                    </div>
+                    <a class="navbar-brand" href="/login">
+                        <i class="fas fa-shield-alt"></i> SmartSafe AI
+                    </a>
                     
                     <h4 class="text-center mb-4">Şirket Girişi</h4>
                     
