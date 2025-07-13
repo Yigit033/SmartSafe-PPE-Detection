@@ -1,6 +1,6 @@
 """
 Alert utilities for PPE Detection System
-Modern notification system with email, audio, and logging
+Modern notification system with email, and logging
 """
 
 import smtplib
@@ -13,10 +13,17 @@ from email.mime.image import MIMEImage
 from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
-import pygame
 import numpy as np
 from datetime import datetime
 import cv2
+
+# Try to import pygame for audio support
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+    logging.warning("pygame not available - audio alerts will be disabled")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +57,7 @@ class AlertManager:
     def setup_audio(self):
         """Setup audio alert system"""
         try:
-            if self.config.get('alerts', {}).get('audio_enabled', False):
+            if self.config.get('alerts', {}).get('audio_enabled', False) and PYGAME_AVAILABLE:
                 pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
                 self.audio_enabled = True
                 logger.info("Audio system initialized")
@@ -252,7 +259,7 @@ PPE Detection System
             self.last_alert_times[track_id] = current_time
             
             # Audio alert
-            if self.config.get('alerts', {}).get('audio_enabled', False):
+            if self.config.get('alerts', {}).get('audio_enabled', False) and PYGAME_AVAILABLE:
                 threading.Thread(target=self.play_audio_alert, 
                                args=("violation",), daemon=True).start()
             
