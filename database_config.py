@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 import sqlite3
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import certifi
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class DatabaseConfig:
         self.database_url = os.getenv('DATABASE_URL')
         self.is_railway = os.getenv('RAILWAY_ENVIRONMENT_NAME') is not None
         self.is_production = os.getenv('FLASK_ENV') == 'production'
+        self.ssl_cert_path = os.path.join(os.path.dirname(__file__), 'ssl', 'supabase.crt')
         
         # Database configuration
         if self.database_url:
@@ -53,7 +55,12 @@ class DatabaseConfig:
         if self.db_type == 'sqlite':
             return f'sqlite:///{self.database_name}'
         elif self.db_type == 'postgresql':
-            return f'postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database_name}'
+            ssl_mode = 'verify-full' if os.path.exists(self.ssl_cert_path) else 'require'
+            ssl_params = f"?sslmode={ssl_mode}"
+            if ssl_mode == 'verify-full':
+                ssl_params += f"&sslcert={self.ssl_cert_path}"
+            
+            return f'postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database_name}{ssl_params}'
         else:
             raise ValueError(f"Unsupported database type: {self.db_type}")
     
@@ -69,10 +76,18 @@ class DatabaseConfig:
                 echo=False
             )
         elif self.db_type == 'postgresql':
+            connect_args = {}
+            if os.path.exists(self.ssl_cert_path):
+                connect_args['sslmode'] = 'verify-full'
+                connect_args['sslcert'] = self.ssl_cert_path
+            else:
+                connect_args['sslmode'] = 'require'
+            
             return create_engine(
                 connection_string,
                 pool_pre_ping=True,
                 pool_recycle=300,
+                connect_args=connect_args,
                 echo=False
             )
         else:
@@ -83,14 +98,22 @@ class DatabaseConfig:
         if self.db_type == 'sqlite':
             return sqlite3.connect(self.database_name)
         elif self.db_type == 'postgresql':
-            return psycopg2.connect(
-                host=self.host,
-                port=self.port,
-                user=self.username,
-                password=self.password,
-                database=self.database_name,
-                cursor_factory=RealDictCursor
-            )
+            connect_args = {
+                'host': self.host,
+                'port': self.port,
+                'user': self.username,
+                'password': self.password,
+                'database': self.database_name,
+                'cursor_factory': RealDictCursor
+            }
+            
+            if os.path.exists(self.ssl_cert_path):
+                connect_args['sslmode'] = 'verify-full'
+                connect_args['sslcert'] = self.ssl_cert_path
+            else:
+                connect_args['sslmode'] = 'require'
+            
+            return psycopg2.connect(**connect_args)
         else:
             raise ValueError(f"Unsupported database type: {self.db_type}")
     
@@ -119,7 +142,8 @@ class DatabaseConfig:
             'database': self.database_name,
             'is_railway': self.is_railway,
             'is_production': self.is_production,
-            'connection_available': self.test_connection()
+            'connection_available': self.test_connection(),
+            'ssl_enabled': os.path.exists(self.ssl_cert_path)
         }
 
 # Global database config instance
@@ -210,6 +234,7 @@ if __name__ == "__main__":
     print(f"Railway Environment: {info['is_railway']}")
     print(f"Production Mode: {info['is_production']}")
     print(f"Connection Test: {'✅ Success' if info['connection_available'] else '❌ Failed'}")
+    print(f"SSL Enabled: {info['ssl_enabled']}")
     
     if info['connection_available']:
         print("\n🚀 Database ready for Railway deployment!")

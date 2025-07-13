@@ -10,6 +10,14 @@ services:
       mkdir -p /tmp/Ultralytics
       chmod 777 /tmp/Ultralytics
       python download_models.py
+      # Create SSL directory and set permissions
+      mkdir -p /opt/render/project/src/ssl
+      chmod 700 /opt/render/project/src/ssl
+      # Copy SSL certificate if exists
+      if [ -f ssl/supabase.crt ]; then
+        cp ssl/supabase.crt /opt/render/project/src/ssl/
+        chmod 600 /opt/render/project/src/ssl/supabase.crt
+      fi
     startCommand: gunicorn smartsafe_saas_api:app
     healthCheckPath: /health
     envVars:
@@ -27,10 +35,42 @@ services:
         value: /tmp/Ultralytics
       - key: GUNICORN_CMD_ARGS
         value: "--bind=0.0.0.0:8000 --workers=2 --threads=4 --timeout=120"
-    disk:
-      name: smartsafe-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartsafe-db
+          property: connectionString
+      - key: SUPABASE_URL
+        value: "db.nbxntohihcwruwlnthfb.supabase.co"
+      - key: SUPABASE_PORT
+        value: "5432"
+      - key: SUPABASE_DB_NAME
+        value: "postgres"
+      - key: SUPABASE_USER
+        value: "postgres"
+      - key: SUPABASE_PASSWORD
+        sync: false
+      - key: SSL_CERT_PATH
+        value: "/opt/render/project/src/ssl/supabase.crt"
+    disks:
+      - name: smartsafe-data
+        mountPath: /opt/render/project/src/data
+        sizeGB: 1
+      - name: smartsafe-ssl
+        mountPath: /opt/render/project/src/ssl
+        sizeGB: 1
+    healthCheck:
+      path: /health
+      interval: 30s
+      timeout: 10s
+      gracePeriod: 30s
+      startPeriod: 40s
+    network:
+      - type: private
+        name: smartsafe-network
+      - type: public
+        ports:
+          - port: 8000
+            protocol: TCP
     
   - type: redis
     name: smartsafe-redis
@@ -43,4 +83,7 @@ databases:
     databaseName: smartsafe_ppe
     user: smartsafe_user
     region: oregon
-    plan: free 
+    plan: starter # Changed from free to starter for better reliability
+    ipAllowList: # Add Supabase IP range
+      - source: 0.0.0.0/0
+        description: everywhere 
