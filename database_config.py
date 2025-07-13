@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SmartSafe AI - Database Configuration Manager
-Railway PostgreSQL Support
+Supabase PostgreSQL Support
 """
 
 import os
@@ -21,23 +21,34 @@ import certifi
 logger = logging.getLogger(__name__)
 
 class DatabaseConfig:
-    """Database configuration for Railway deployment"""
+    """Database configuration for Supabase deployment"""
     
     def __init__(self):
-        self.database_url = os.getenv('DATABASE_URL')
-        self.is_railway = os.getenv('RAILWAY_ENVIRONMENT_NAME') is not None
+        # Check for render.com environment
+        self.is_render = os.getenv('RENDER') == 'true'
         self.is_production = os.getenv('FLASK_ENV') == 'production'
-        self.ssl_cert_path = os.path.join(os.path.dirname(__file__), 'ssl', 'supabase.crt')
+        
+        # Set SSL certificate path based on environment
+        if self.is_render:
+            self.ssl_cert_path = '/opt/render/project/src/ssl/supabase.crt'
+        else:
+            self.ssl_cert_path = os.path.join(os.path.dirname(__file__), 'ssl', 'supabase.crt')
+        
+        # Supabase configuration
+        self.supabase_url = os.getenv('SUPABASE_URL')
+        self.supabase_port = os.getenv('SUPABASE_PORT', '5432')
+        self.supabase_db = os.getenv('SUPABASE_DB_NAME', 'postgres')
+        self.supabase_user = os.getenv('SUPABASE_USER')
+        self.supabase_password = os.getenv('SUPABASE_PASSWORD')
         
         # Database configuration
-        if self.database_url:
-            parsed = urlparse(self.database_url)
-            self.db_type = parsed.scheme
-            self.host = parsed.hostname
-            self.port = parsed.port
-            self.username = parsed.username
-            self.password = parsed.password
-            self.database_name = parsed.path.lstrip('/')
+        if self.supabase_url and self.supabase_user and self.supabase_password:
+            self.db_type = 'postgresql'
+            self.host = self.supabase_url
+            self.port = int(self.supabase_port)
+            self.username = self.supabase_user
+            self.password = self.supabase_password
+            self.database_name = self.supabase_db
         else:
             # Default to SQLite for development
             self.db_type = 'sqlite'
@@ -49,9 +60,6 @@ class DatabaseConfig:
     
     def get_connection_string(self) -> str:
         """Get database connection string"""
-        if self.database_url:
-            return self.database_url
-        
         if self.db_type == 'sqlite':
             return f'sqlite:///{self.database_name}'
         elif self.db_type == 'postgresql':
@@ -140,7 +148,7 @@ class DatabaseConfig:
             'host': self.host,
             'port': self.port,
             'database': self.database_name,
-            'is_railway': self.is_railway,
+            'is_railway': self.is_render, # Assuming is_railway is based on RENDER env
             'is_production': self.is_production,
             'connection_available': self.test_connection(),
             'ssl_enabled': os.path.exists(self.ssl_cert_path)
