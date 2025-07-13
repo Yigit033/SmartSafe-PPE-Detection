@@ -90,5 +90,5 @@ python-dotenv>=1.0.0
 # Additional Python Standard Library Extensions
 pathlib2>=2.3.0
 
-# Audio Support (Headless)
-pygame-headless>=2.1.3 
+# Audio Support
+pygame==2.5.2 

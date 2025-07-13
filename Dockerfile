@@ -26,6 +26,11 @@ RUN apt-get update && apt-get install -y \
     python3-opencv \
     wget \
     curl \
+    # Dependencies for pygame
+    libsdl2-dev \
+    libsdl2-mixer-dev \
+    libsdl2-image-dev \
+    libsdl2-ttf-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first (for better caching)
