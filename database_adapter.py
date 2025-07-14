@@ -94,12 +94,16 @@ class DatabaseAdapter:
                 
         except Exception as e:
             logger.error(f"❌ Database connection failed: {e}")
-            raise
+            # Don't re-raise immediately, let the caller handle it
+            return None
     
     def init_database(self):
         """Initialize database tables"""
         try:
             conn = self.get_connection()
+            if conn is None:
+                logger.error("❌ Database initialization failed: No connection available")
+                return False
             cursor = conn.cursor()
             
             logger.info("🔧 Creating database tables...")

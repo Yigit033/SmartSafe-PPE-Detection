@@ -23,6 +23,7 @@ SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.0
 redis>=5.0.1
 dnspython>=2.4.0  # Added for DNS resolution
+certifi>=2023.7.22  # SSL certificate verification
 
 # Security & Authentication
 PyJWT>=2.8.0

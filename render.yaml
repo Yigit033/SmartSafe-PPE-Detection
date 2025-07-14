@@ -18,15 +18,12 @@ services:
       # Download models
       python download_models.py
       
-      # Copy SSL certificates if they exist
-      if [ -f ssl/supabase.crt ]; then
-        cp ssl/supabase.crt /opt/render/project/src/ssl/
-        chmod 600 /opt/render/project/src/ssl/supabase.crt
-      fi
-      if [ -f ssl/root.crt ]; then
-        cp ssl/root.crt /opt/render/project/src/ssl/
-        chmod 600 /opt/render/project/src/ssl/root.crt
-      fi
+      # Test network connectivity
+      echo "Testing network connectivity..."
+      ping -c 3 db.nbxntohihcwruwlnthfb.supabase.co || echo "Ping failed but continuing..."
+      
+      # Test DNS resolution
+      nslookup db.nbxntohihcwruwlnthfb.supabase.co || echo "DNS lookup failed but continuing..."
     startCommand: |
       export RENDER=1 && \
       gunicorn -c gunicorn.conf.py smartsafe_saas_api:app
@@ -45,9 +42,19 @@ services:
       - key: YOLO_CONFIG_DIR
         value: /tmp/Ultralytics
       - key: DATABASE_URL
-        fromDatabase:
-          name: smartsafe-db
-          property: connectionString
+        value: postgresql://postgres:6818.yigit.98@db.nbxntohihcwruwlnthfb.supabase.co:5432/postgres?sslmode=prefer
+      - key: SUPABASE_URL
+        value: db.nbxntohihcwruwlnthfb.supabase.co
+      - key: SUPABASE_PORT
+        value: "5432"
+      - key: SUPABASE_DB_NAME
+        value: postgres
+      - key: SUPABASE_USER
+        value: postgres
+      - key: SUPABASE_PASSWORD
+        value: 6818.yigit.98
+      - key: SSL_MODE
+        value: prefer
       - key: SUPABASE_URL
         value: "db.nbxntohihcwruwlnthfb.supabase.co"
       - key: SUPABASE_PORT

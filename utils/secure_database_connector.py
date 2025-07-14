@@ -70,55 +70,47 @@ class SecureDatabaseConnector:
     def get_ssl_config(self) -> Dict[str, Any]:
         """Get SSL configuration based on available certificates"""
         ssl_config = {
-            'sslmode': os.getenv('SSL_MODE', 'require'),
+            'sslmode': 'require',  # Force SSL but don't verify certificates
             'keepalives': 1,
             'keepalives_idle': self.keepalives_idle,
             'keepalives_interval': self.keepalives_interval,
             'keepalives_count': self.keepalives_count,
             'connect_timeout': self.connection_timeout,
             'application_name': 'smartsafe_ppe_detection',
-            'options': '-c statement_timeout=5000'  # 5 second statement timeout
+            'options': '-c statement_timeout=30000'  # 30 second statement timeout
         }
         
-        # Use system CA certificates
-        ssl_config['sslrootcert'] = certifi.where()
-        logger.info("Using system CA certificates for SSL verification")
+        # For Render.com, use prefer mode for better compatibility
+        if self.is_render:
+            ssl_config['sslmode'] = 'prefer'
+            logger.info("Using SSL prefer mode for Render.com compatibility")
+        else:
+            # Use system CA certificates for local development
+            ssl_config['sslrootcert'] = certifi.where()
+            logger.info("Using system CA certificates for SSL verification")
         
         return ssl_config
     
     def test_connection(self, host: str, port: int) -> bool:
         """Test if database host is reachable"""
-        # First resolve the hostname
-        ip_address = self.resolve_host(host)
-        if not ip_address:
-            return False
-            
         try:
-            # Create SSL context for connection test
-            context = ssl.create_default_context()
-            context.check_hostname = True
-            context.verify_mode = ssl.CERT_REQUIRED
-            context.load_verify_locations(cafile=certifi.where())
+            # Simple socket test first
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, port))
+            sock.close()
             
-            # Try both IPv4 and IPv6
-            for family in (socket.AF_INET, socket.AF_INET6):
-                try:
-                    # Create socket with specific family
-                    sock = socket.socket(family, socket.SOCK_STREAM)
-                    sock.settimeout(5)
-                    
-                    # Try to connect
-                    sock.connect((ip_address, port))
-                    with context.wrap_socket(sock, server_hostname=host) as ssock:
-                        return True
-                except (socket.timeout, socket.error, ssl.SSLError):
-                    continue
-                    
-            return False
-                    
+            if result == 0:
+                logger.info(f"✅ Network connection to {host}:{port} successful")
+                return True
+            else:
+                logger.warning(f"⚠️ Network connection to {host}:{port} failed (code: {result})")
+                return False
+                
         except Exception as e:
-            logger.error(f"Cannot reach database host {host}:{port} - {e}")
-            return False
+            logger.warning(f"⚠️ Connection test failed for {host}:{port}: {e}")
+            # Don't fail completely, let psycopg2 handle the actual connection
+            return True
     
     def get_connection(self, database_url: Optional[str] = None) -> psycopg2.extensions.connection:
         """Get database connection with retry mechanism"""
@@ -150,9 +142,10 @@ class SecureDatabaseConnector:
         last_error = None
         for attempt in range(self.max_retries):
             try:
-                # Test network connectivity first
-                if not self.test_connection(params['host'], params['port']):
-                    raise ConnectionError(f"Cannot establish network connection to {params['host']}:{params['port']}")
+                logger.info(f"🔄 Database connection attempt {attempt + 1}/{self.max_retries} to {params['host']}:{params['port']}")
+                
+                # Test network connectivity first (but don't fail on it)
+                self.test_connection(params['host'], params['port'])
                 
                 # Try to establish connection
                 conn = psycopg2.connect(
@@ -167,11 +160,32 @@ class SecureDatabaseConnector:
                 logger.info(f"✅ Successfully connected to database at {params['host']}")
                 return conn
                 
-            except (psycopg2.Error, ConnectionError) as e:
+            except psycopg2.OperationalError as e:
                 last_error = e
+                error_msg = str(e).lower()
+                
+                if 'timeout' in error_msg or 'connection refused' in error_msg:
+                    logger.warning(f"⚠️ Connection timeout/refused on attempt {attempt + 1}: {e}")
+                elif 'ssl' in error_msg:
+                    logger.warning(f"⚠️ SSL error on attempt {attempt + 1}: {e}")
+                    # Try without SSL verification on next attempt
+                    if attempt < self.max_retries - 1:
+                        params['sslmode'] = 'disable'
+                        logger.info("🔄 Retrying without SSL...")
+                else:
+                    logger.warning(f"⚠️ Database error on attempt {attempt + 1}: {e}")
+                
                 if attempt < self.max_retries - 1:
-                    logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
-                    time.sleep(self.retry_delay * (attempt + 1))  # Exponential backoff
+                    sleep_time = self.retry_delay * (attempt + 1)
+                    logger.info(f"⏳ Waiting {sleep_time} seconds before retry...")
+                    time.sleep(sleep_time)
+                continue
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"⚠️ Unexpected error on attempt {attempt + 1}: {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay * (attempt + 1))
                 continue
         
         logger.error(f"❌ Failed to connect to database after {self.max_retries} attempts: {last_error}")

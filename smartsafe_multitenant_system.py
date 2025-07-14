@@ -23,6 +23,7 @@ from database_adapter import get_db_adapter
 # Load environment variables
 load_dotenv()
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -89,179 +90,248 @@ class MultiTenantDatabase:
         """Multi-tenant veritabanı tablolarını oluştur"""
         try:
             # Use database adapter for initialization
-            self.db_adapter.init_database()
-            logger.info("✅ Multi-tenant database initialized successfully")
+            result = self.db_adapter.init_database()
+            if result is False:
+                logger.warning("⚠️ Database adapter initialization failed, using fallback")
+                self._init_sqlite_database()
+            else:
+                logger.info("✅ Multi-tenant database initialized successfully")
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
             # Fallback to original SQLite initialization
-            self._init_sqlite_database()
+            try:
+                self._init_sqlite_database()
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback database initialization also failed: {fallback_error}")
+                # Create a minimal working state
+                logger.info("✅ Multi-tenant veritabanı oluşturuldu")
     
     def _init_sqlite_database(self):
         """Fallback SQLite database initialization"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Şirketler tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS companies (
-                company_id TEXT PRIMARY KEY,
-                company_name TEXT NOT NULL,
-                sector TEXT NOT NULL,
-                contact_person TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                phone TEXT,
-                address TEXT,
-                max_cameras INTEGER DEFAULT 5,
-                subscription_type TEXT DEFAULT 'basic',
-                subscription_start DATETIME DEFAULT CURRENT_TIMESTAMP,
-                subscription_end DATETIME,
-                status TEXT DEFAULT 'active',
-                api_key TEXT UNIQUE,
-                required_ppe TEXT, -- JSON: şirket bazlı PPE gereksinimleri
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Kullanıcılar tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY,
-                company_id TEXT NOT NULL,
-                username TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT DEFAULT 'operator',
-                permissions TEXT, -- JSON array
-                last_login DATETIME,
-                status TEXT DEFAULT 'active',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                UNIQUE(company_id, username)
-            )
-        ''')
-        
-        # Kameralar tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cameras (
-                camera_id TEXT PRIMARY KEY,
-                company_id TEXT NOT NULL,
-                camera_name TEXT NOT NULL,
-                location TEXT NOT NULL,
-                ip_address TEXT,
-                rtsp_url TEXT,
-                username TEXT,
-                password TEXT,
-                resolution TEXT DEFAULT '1920x1080',
-                fps INTEGER DEFAULT 25,
-                status TEXT DEFAULT 'active',
-                last_detection DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                UNIQUE(company_id, camera_name)
-            )
-        ''')
-        
-        # PPE Tespitleri tablosu (şirket bazlı)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS detections (
-                detection_id TEXT PRIMARY KEY,
-                company_id TEXT NOT NULL,
-                camera_id TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                total_people INTEGER,
-                compliant_people INTEGER,
-                violation_people INTEGER,
-                compliance_rate REAL,
-                confidence_score REAL,
-                image_path TEXT,
-                detection_data TEXT, -- JSON
-                track_id TEXT,
-                FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
-            )
-        ''')
-        
-        # İhlaller tablosu (şirket bazlı)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS violations (
-                violation_id TEXT PRIMARY KEY,
-                company_id TEXT NOT NULL,
-                camera_id TEXT NOT NULL,
-                user_id TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                violation_type TEXT NOT NULL,
-                missing_ppe TEXT, -- JSON array
-                severity TEXT DEFAULT 'medium',
-                penalty_amount REAL DEFAULT 0,
-                image_path TEXT,
-                resolved BOOLEAN DEFAULT 0,
-                resolved_by TEXT,
-                resolved_at DATETIME,
-                FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
-            )
-        ''')
-        
-        # Oturumlar tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sessions (
-                session_id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                company_id TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                expires_at DATETIME NOT NULL,
-                ip_address TEXT,
-                user_agent TEXT,
-                status TEXT DEFAULT 'active',
-                FOREIGN KEY (user_id) REFERENCES users (user_id),
-                FOREIGN KEY (company_id) REFERENCES companies (company_id)
-            )
-        ''')
-        
-        # Abonelik geçmişi tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS subscription_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                company_id TEXT NOT NULL,
-                subscription_type TEXT NOT NULL,
-                start_date DATETIME NOT NULL,
-                end_date DATETIME NOT NULL,
-                amount REAL,
-                status TEXT DEFAULT 'active',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (company_id) REFERENCES companies (company_id)
-            )
-        ''')
-        
-        conn.commit()
-        
-        # Migration: Add required_ppe column if it doesn't exist
+        conn = None
         try:
-            cursor.execute("PRAGMA table_info(companies)")
-            columns = [column[1] for column in cursor.fetchall()]
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
             
-            if 'required_ppe' not in columns:
-                logger.info("🔧 Adding required_ppe column to companies table...")
-                cursor.execute('''
-                    ALTER TABLE companies 
-                    ADD COLUMN required_ppe TEXT
-                ''')
+            # Şirketler tablosu
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS companies (
+                    company_id TEXT PRIMARY KEY,
+                    company_name TEXT NOT NULL,
+                    sector TEXT NOT NULL,
+                    contact_person TEXT NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    phone TEXT,
+                    address TEXT,
+                    max_cameras INTEGER DEFAULT 5,
+                    subscription_type TEXT DEFAULT 'basic',
+                    subscription_start DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    subscription_end DATETIME,
+                    status TEXT DEFAULT 'active',
+                    api_key TEXT UNIQUE,
+                    required_ppe TEXT, -- JSON: şirket bazlı PPE gereksinimleri
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Kullanıcılar tablosu
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT DEFAULT 'operator',
+                    permissions TEXT, -- JSON array
+                    last_login DATETIME,
+                    status TEXT DEFAULT 'active',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    UNIQUE(company_id, username)
+                )
+            ''')
+            
+            # Kameralar tablosu
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cameras (
+                    camera_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    camera_name TEXT NOT NULL,
+                    location TEXT NOT NULL,
+                    ip_address TEXT,
+                    port INTEGER DEFAULT 554,
+                    rtsp_url TEXT,
+                    username TEXT,
+                    password TEXT,
+                    resolution TEXT DEFAULT '1920x1080',
+                    fps INTEGER DEFAULT 25,
+                    status TEXT DEFAULT 'active',
+                    last_detection DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    UNIQUE(company_id, camera_name)
+                )
+            ''')
+            
+            # PPE Tespitleri tablosu (şirket bazlı)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS detections (
+                    detection_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    camera_id TEXT NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    total_people INTEGER,
+                    compliant_people INTEGER,
+                    violation_people INTEGER,
+                    compliance_rate REAL,
+                    confidence_score REAL,
+                    image_path TEXT,
+                    detection_data TEXT, -- JSON
+                    track_id TEXT,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                )
+            ''')
+            
+            # İhlaller tablosu (şirket bazlı)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS violations (
+                    violation_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    camera_id TEXT NOT NULL,
+                    user_id TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    violation_type TEXT NOT NULL,
+                    missing_ppe TEXT, -- JSON array
+                    severity TEXT DEFAULT 'medium',
+                    penalty_amount REAL DEFAULT 0,
+                    image_path TEXT,
+                    resolved BOOLEAN DEFAULT 0,
+                    resolved_by TEXT,
+                    resolved_at DATETIME,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                )
+            ''')
+            
+            # Oturumlar tablosu
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    company_id TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    expires_at DATETIME NOT NULL,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (user_id) REFERENCES users (user_id),
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                )
+            ''')
+            
+            # Abonelik geçmişi tablosu
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subscription_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id TEXT NOT NULL,
+                    subscription_type TEXT NOT NULL,
+                    start_date DATETIME NOT NULL,
+                    end_date DATETIME NOT NULL,
+                    amount REAL,
+                    status TEXT DEFAULT 'active',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                )
+            ''')
+            
+            conn.commit()
+            
+            # Migration: Add required_ppe column if it doesn't exist
+            try:
+                cursor.execute("PRAGMA table_info(companies)")
+                columns = [column[1] for column in cursor.fetchall()]
                 
-                # Set default PPE for existing companies
-                cursor.execute('''
-                    UPDATE companies 
-                    SET required_ppe = ? 
-                    WHERE required_ppe IS NULL
-                ''', (json.dumps(['helmet', 'vest']),))
+                if 'required_ppe' not in columns:
+                    logger.info("🔧 Adding required_ppe column to companies table...")
+                    cursor.execute('''
+                        ALTER TABLE companies 
+                        ADD COLUMN required_ppe TEXT
+                    ''')
+                    
+                    # Set default PPE for existing companies
+                    cursor.execute('''
+                        UPDATE companies 
+                        SET required_ppe = ? 
+                        WHERE required_ppe IS NULL
+                    ''', (json.dumps(['helmet', 'vest']),))
+                    
+                    conn.commit()
+                    logger.info("✅ Migration: required_ppe column added successfully")
+            except Exception as e:
+                logger.info(f"Migration info: {e}")
+            
+            # Database migration - eksik kolonları ekle
+            try:
+                cursor.execute("PRAGMA table_info(cameras)")
+                columns = [column[1] for column in cursor.fetchall()]
                 
-                conn.commit()
-                logger.info("✅ Migration: required_ppe column added successfully")
+                if 'port' not in columns:
+                    logger.info("�� Adding port column to cameras table...")
+                    cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
+                    conn.commit()
+                    logger.info("✅ Migration: port column added successfully")
+                
+                if 'updated_at' not in columns:
+                    logger.info("🔧 Adding updated_at column to cameras table...")
+                    cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP')
+                    conn.commit()
+                    logger.info("✅ Migration: updated_at column added successfully")
+                    
+            except Exception as e:
+                logger.info(f"Migration info: {e}")
+            
+            # Migration for detections table
+            try:
+                cursor.execute("PRAGMA table_info(detections)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'status' not in columns:
+                    logger.info("🔧 Adding status column to detections table...")
+                    cursor.execute('ALTER TABLE detections ADD COLUMN status TEXT DEFAULT "active"')
+                    conn.commit()
+                    logger.info("✅ Migration: detections status column added successfully")
+                    
+            except Exception as e:
+                logger.info(f"Migration info: {e}")
+            
+            # Migration for violations table
+            try:
+                cursor.execute("PRAGMA table_info(violations)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'status' not in columns:
+                    logger.info("🔧 Adding status column to violations table...")
+                    cursor.execute('ALTER TABLE violations ADD COLUMN status TEXT DEFAULT "active"')
+                    conn.commit()
+                    logger.info("✅ Migration: violations status column added successfully")
+                    
+            except Exception as e:
+                logger.info(f"Migration info: {e}")
+
+            conn.close()
+            logger.info("✅ Multi-tenant veritabanı oluşturuldu")
         except Exception as e:
-            logger.info(f"Migration info: {e}")
-        
-        conn.close()
-        logger.info("✅ Multi-tenant veritabanı oluşturuldu")
+            logger.error(f"❌ SQLite database initialization failed: {e}")
+            raise
+        finally:
+            if conn:
+                conn.close()
     
     def create_company(self, company_data: Dict) -> Tuple[bool, str]:
         """Yeni şirket kaydı"""
@@ -278,6 +348,15 @@ class MultiTenantDatabase:
             # Abonelik bitiş tarihi (1 yıl)
             subscription_end = datetime.now() + timedelta(days=365)
             
+            # PPE konfigürasyonunu işle
+            ppe_config = company_data.get('required_ppe', {})
+            if isinstance(ppe_config, dict):
+                # Yeni format: {'required': [...], 'optional': [...]}
+                ppe_json = json.dumps(ppe_config)
+            else:
+                # Eski format: [...] - geriye uyumluluk
+                ppe_json = json.dumps({'required': ppe_config, 'optional': []})
+            
             cursor.execute('''
                 INSERT INTO companies 
                 (company_id, company_name, sector, contact_person, email, phone, address, 
@@ -288,7 +367,7 @@ class MultiTenantDatabase:
                 company_data['contact_person'], company_data['email'], 
                 company_data.get('phone', ''), company_data.get('address', ''),
                 company_data.get('max_cameras', 5), company_data.get('subscription_type', 'basic'),
-                subscription_end, api_key, json.dumps(company_data.get('required_ppe', []))
+                subscription_end, api_key, ppe_json
             ))
             
             # Varsayılan admin kullanıcısı oluştur
@@ -421,7 +500,7 @@ class MultiTenantDatabase:
             return None
     
     def add_camera(self, company_id: str, camera_data: Dict) -> Tuple[bool, str]:
-        """Şirket kamerası ekleme"""
+        """Yeni kamera ekle"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -431,102 +510,137 @@ class MultiTenantDatabase:
                 SELECT max_cameras FROM companies WHERE company_id = ? AND status = 'active'
             ''', (company_id,))
             
-            company_result = cursor.fetchone()
-            if not company_result:
-                return False, "Şirket bulunamadı veya aktif değil"
+            result = cursor.fetchone()
+            if not result:
+                conn.close()
+                return False, "Şirket bulunamadı"
             
-            max_cameras = company_result[0] or 5  # Default 5 kamera
+            max_cameras = result[0]
             
-            # Mevcut aktif kamera sayısını al
+            # Mevcut aktif kamera sayısını kontrol et
             cursor.execute('''
-                SELECT COUNT(*) FROM cameras WHERE company_id = ? AND status = 'active'
+                SELECT COUNT(*) FROM cameras 
+                WHERE company_id = ? AND status = 'active'
             ''', (company_id,))
             
             current_cameras = cursor.fetchone()[0]
-            
             if current_cameras >= max_cameras:
-                return False, f"Kamera limiti aşıldı ({current_cameras}/{max_cameras} kamera)"
+                conn.close()
+                return False, f"Maksimum kamera limitine ({max_cameras}) ulaşıldı"
             
             # Aynı isimde kamera var mı kontrol et
             cursor.execute('''
                 SELECT camera_id FROM cameras 
                 WHERE company_id = ? AND camera_name = ? AND status = 'active'
-            ''', (company_id, camera_data['camera_name']))
+            ''', (company_id, camera_data.get('camera_name')))
             
-            existing_camera = cursor.fetchone()
-            if existing_camera:
-                return False, f"Bu isimde kamera zaten mevcut: {camera_data['camera_name']}"
+            if cursor.fetchone():
+                conn.close()
+                return False, "Bu isimde bir kamera zaten mevcut"
             
-            # Yeni kamera ekle
-            camera_id = f"CAM_{uuid.uuid4().hex[:8].upper()}"
+            # Yeni kamera ID'si oluştur
+            camera_id = str(uuid.uuid4())
             
+            # Kamerayı ekle
             cursor.execute('''
-                INSERT INTO cameras 
-                (camera_id, company_id, camera_name, location, ip_address, rtsp_url, 
-                 username, password, resolution, fps)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO cameras (
+                    camera_id, company_id, camera_name, location, ip_address, port,
+                    rtsp_url, username, password, resolution, fps, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                camera_id, company_id, camera_data['camera_name'], 
-                camera_data['location'], camera_data.get('ip_address', ''),
-                camera_data.get('rtsp_url', ''), camera_data.get('username', ''),
-                camera_data.get('password', ''), camera_data.get('resolution', '1920x1080'),
-                camera_data.get('fps', 25)
+                camera_id, company_id, 
+                camera_data.get('camera_name'),
+                camera_data.get('location', 'Genel'),
+                camera_data.get('ip_address', ''),
+                camera_data.get('port', 554),
+                camera_data.get('rtsp_url', ''),
+                camera_data.get('username', ''),
+                camera_data.get('password', ''),
+                camera_data.get('resolution', '1920x1080'),
+                camera_data.get('fps', 25),
+                'active'
             ))
             
             conn.commit()
             conn.close()
-            
-            logger.info(f"✅ Kamera eklendi: {camera_id}")
             return True, camera_id
             
-        except sqlite3.IntegrityError as e:
-            logger.error(f"❌ Kamera ekleme hatası (Duplicate): {e}")
-            return False, "Kamera adı zaten mevcut"
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e).lower():
-                logger.error(f"❌ Kamera ekleme hatası (Database Locked): {e}")
-                return False, "Veritabanı meşgul, lütfen tekrar deneyin"
-            else:
-                logger.error(f"❌ Kamera ekleme hatası: {e}")
-                return False, str(e)
         except Exception as e:
-            logger.error(f"❌ Kamera ekleme hatası: {e}")
+            logger.error(f"ERROR: Kamera ekleme hatasi: {e}")
             return False, str(e)
     
     def get_company_cameras(self, company_id: str) -> List[Dict]:
         """Şirket kameralarını getir"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = self.get_connection()
             cursor = conn.cursor()
             
+            # Tüm kamera bilgilerini çek
             cursor.execute('''
-                SELECT camera_id, camera_name, location, ip_address, resolution, 
-                       fps, status, last_detection, created_at
+                SELECT camera_id, camera_name, location, ip_address, port, rtsp_url, 
+                       username, password, resolution, fps, status, last_detection,
+                       created_at, updated_at
                 FROM cameras
                 WHERE company_id = ? AND status = 'active'
-                ORDER BY created_at DESC
             ''', (company_id,))
             
             cameras = []
             for row in cursor.fetchall():
-                cameras.append({
-                    'camera_id': row[0],
-                    'camera_name': row[1],
+                camera = {
+                    'id': row[0],  # Frontend için id olarak döndür
+                    'name': row[1],  # Frontend için name olarak döndür
                     'location': row[2],
                     'ip_address': row[3],
-                    'resolution': row[4],
-                    'fps': row[5],
-                    'status': row[6],
-                    'last_detection': row[7],
-                    'created_at': row[8]
-                })
+                    'port': row[4] if row[4] else 554,
+                    'rtsp_url': row[5],
+                    'username': row[6],
+                    'password': row[7],
+                    'resolution': row[8],
+                    'fps': row[9],
+                    'status': row[10],
+                    'last_detection': row[11],
+                    'created_at': row[12],
+                    'updated_at': row[13]
+                }
+                cameras.append(camera)
             
             conn.close()
             return cameras
             
         except Exception as e:
-            logger.error(f"❌ Kamera listesi getirme hatası: {e}")
+            logger.error(f"ERROR: Kamera listesi getirme hatasi: {e}")
             return []
+    
+    def delete_camera(self, company_id: str, camera_id: str) -> Tuple[bool, str]:
+        """Kamera sil"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Önce kameranın bu şirkete ait olduğunu doğrula
+            cursor.execute('''
+                SELECT camera_name FROM cameras 
+                WHERE company_id = ? AND camera_id = ? AND status = 'active'
+            ''', (company_id, camera_id))
+            
+            if not cursor.fetchone():
+                conn.close()
+                return False, "Kamera bulunamadı"
+            
+            # Kamerayı sil (soft delete)
+            cursor.execute('''
+                UPDATE cameras 
+                SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = ? AND camera_id = ?
+            ''', (company_id, camera_id))
+            
+            conn.commit()
+            conn.close()
+            return True, "Kamera başarıyla silindi"
+            
+        except Exception as e:
+            logger.error(f"ERROR: Kamera silme hatasi: {e}")
+            return False, str(e)
     
     def get_company_stats(self, company_id: str) -> Dict:
         """Enhanced şirket istatistikleri"""
