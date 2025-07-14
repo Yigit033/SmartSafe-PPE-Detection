@@ -20,10 +20,13 @@ services:
       
       # Test network connectivity
       echo "Testing network connectivity..."
-      ping -c 3 db.nbxntohihcwruwlnthfb.supabase.co || echo "Ping failed but continuing..."
+      ping -c 3 aws-0-us-west-1.pooler.supabase.com || echo "Ping failed but continuing..."
       
       # Test DNS resolution
-      nslookup db.nbxntohihcwruwlnthfb.supabase.co || echo "DNS lookup failed but continuing..."
+      nslookup aws-0-us-west-1.pooler.supabase.com || echo "DNS lookup failed but continuing..."
+      
+      # Test connection pooling port
+      nc -zv aws-0-us-west-1.pooler.supabase.com 6543 || echo "Connection pooling port test failed but continuing..."
     startCommand: |
       export RENDER=1 && \
       gunicorn -c gunicorn.conf.py smartsafe_saas_api:app
@@ -42,11 +45,11 @@ services:
       - key: YOLO_CONFIG_DIR
         value: /tmp/Ultralytics
       - key: DATABASE_URL
-        value: postgresql://postgres:6818.yigit.98@db.nbxntohihcwruwlnthfb.supabase.co:5432/postgres?sslmode=disable
+        value: postgresql://postgres.nbxntohihcwruwlnthfb:6818.yigit.98@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require
       - key: SUPABASE_URL
-        value: db.nbxntohihcwruwlnthfb.supabase.co
+        value: aws-0-us-west-1.pooler.supabase.com
       - key: SUPABASE_PORT
-        value: "5432"
+        value: "6543"
       - key: SUPABASE_DB_NAME
         value: postgres
       - key: SUPABASE_USER
@@ -54,7 +57,7 @@ services:
       - key: SUPABASE_PASSWORD
         value: 6818.yigit.98
       - key: SSL_MODE
-        value: disable
+        value: require
       - key: GUNICORN_CMD_ARGS
         value: "--access-logfile - --error-logfile - --capture-output"
     disks:
