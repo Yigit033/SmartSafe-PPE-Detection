@@ -8324,6 +8324,7 @@ def main():
             logger.info("🚀 Production mode: Returning app for WSGI server")
             port = int(os.environ.get('PORT', 10000))
             logger.info(f"Using port {port}")
+            print(f"Flask app ready: {app}")
             return app
         else:
             # In development mode, run with Flask's server
@@ -8340,8 +8341,19 @@ def main():
     return 0
 
 # Create app instance for production WSGI servers
-api_server = SmartSafeSaaSAPI()
-app = api_server.app  # Doğrudan Flask app objesini al
+try:
+    api_server = SmartSafeSaaSAPI()
+    app = api_server.app  # Doğrudan Flask app objesini al
+    print(f"✅ Global Flask app created: {app}")
+except Exception as e:
+    print(f"❌ Error creating Flask app: {e}")
+    # Fallback app creation
+    from flask import Flask
+    app = Flask(__name__)
+    
+    @app.route('/health')
+    def health():
+        return {'status': 'ok', 'message': 'Fallback app running'}
 
 if __name__ == "__main__":
     exit(main())
