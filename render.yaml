@@ -42,7 +42,7 @@ services:
       - key: YOLO_CONFIG_DIR
         value: /tmp/Ultralytics
       - key: DATABASE_URL
-        value: postgresql://postgres:6818.yigit.98@db.nbxntohihcwruwlnthfb.supabase.co:5432/postgres?sslmode=prefer
+        value: postgresql://postgres:6818.yigit.98@db.nbxntohihcwruwlnthfb.supabase.co:5432/postgres?sslmode=disable
       - key: SUPABASE_URL
         value: db.nbxntohihcwruwlnthfb.supabase.co
       - key: SUPABASE_PORT
@@ -54,7 +54,7 @@ services:
       - key: SUPABASE_PASSWORD
         value: 6818.yigit.98
       - key: SSL_MODE
-        value: prefer
+        value: disable
       - key: GUNICORN_CMD_ARGS
         value: "--access-logfile - --error-logfile - --capture-output"
     disks:
