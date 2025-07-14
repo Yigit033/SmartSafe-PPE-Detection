@@ -8314,7 +8314,7 @@ def main():
     
     try:
         api_server = SmartSafeSaaSAPI()
-        app = api_server.run()
+        app = api_server.app  # Doğrudan Flask app objesini al
         
         # Production mode check
         is_production = os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEROKU_APP_NAME')
@@ -8341,7 +8341,7 @@ def main():
 
 # Create app instance for production WSGI servers
 api_server = SmartSafeSaaSAPI()
-app = api_server.run()
+app = api_server.app  # Doğrudan Flask app objesini al
 
 if __name__ == "__main__":
     exit(main())
