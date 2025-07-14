@@ -69,6 +69,15 @@ services:
         ports:
           - port: 8000
             protocol: TCP
+        allowedSources:
+          - source: 0.0.0.0/0
+            description: Allow all inbound traffic
+        outboundRules:
+          - type: tcp
+            port: 5432
+            destinations:
+              - "db.nbxntohihcwruwlnthfb.supabase.co"
+            description: Allow outbound traffic to Supabase
     
   - type: redis
     name: smartsafe-redis

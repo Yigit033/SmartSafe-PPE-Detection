@@ -21,15 +21,23 @@ class SecureDatabaseConnector:
     """Manages secure database connections with SSL/TLS"""
     
     def __init__(self):
-        self.ssl_dir = Path(__file__).parent.parent / 'ssl'
+        # Check for render.com environment
+        self.is_render = os.getenv('RENDER') == 'true'
+        
+        # Set SSL paths based on environment
+        if self.is_render:
+            self.ssl_dir = Path('/opt/render/project/src/ssl')
+        else:
+            self.ssl_dir = Path(__file__).parent.parent / 'ssl'
+            
         self.ssl_dir.mkdir(exist_ok=True)
         self.cert_path = self.ssl_dir / 'supabase.crt'
         self.root_cert_path = self.ssl_dir / 'root.crt'
         
         # Connection settings
-        self.max_retries = 3
-        self.retry_delay = 5
-        self.connection_timeout = 30
+        self.max_retries = 5  # Increased retries
+        self.retry_delay = 10  # Increased delay
+        self.connection_timeout = 60  # Increased timeout
         self.keepalives_idle = 30
         self.keepalives_interval = 10
         self.keepalives_count = 5
@@ -42,7 +50,8 @@ class SecureDatabaseConnector:
             'keepalives_idle': self.keepalives_idle,
             'keepalives_interval': self.keepalives_interval,
             'keepalives_count': self.keepalives_count,
-            'connect_timeout': self.connection_timeout
+            'connect_timeout': self.connection_timeout,
+            'application_name': 'smartsafe_ppe_detection'  # Add application name
         }
         
         # If we have certificates, use them
@@ -52,16 +61,33 @@ class SecureDatabaseConnector:
             
             if self.root_cert_path.exists():
                 ssl_config['sslrootcert'] = str(self.root_cert_path)
+            else:
+                # Use system CA certificates as fallback
+                ssl_config['sslrootcert'] = certifi.where()
         
         return ssl_config
     
     def test_connection(self, host: str, port: int) -> bool:
         """Test if database host is reachable"""
         try:
-            sock = socket.create_connection((host, port), timeout=5)
-            sock.close()
-            return True
-        except (socket.timeout, socket.error) as e:
+            # Create SSL context for connection test
+            context = ssl.create_default_context()
+            context.check_hostname = True
+            context.verify_mode = ssl.CERT_REQUIRED
+            
+            # Try both direct and SSL connection
+            try:
+                # Try SSL connection first
+                with socket.create_connection((host, port), timeout=5) as sock:
+                    with context.wrap_socket(sock, server_hostname=host) as ssock:
+                        return True
+            except ssl.SSLError:
+                # If SSL fails, try direct connection
+                sock = socket.create_connection((host, port), timeout=5)
+                sock.close()
+                return True
+                
+        except (socket.timeout, socket.error, ssl.SSLError) as e:
             logger.error(f"Cannot reach database host {host}:{port} - {e}")
             return False
     
@@ -110,7 +136,7 @@ class SecureDatabaseConnector:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
-                    time.sleep(self.retry_delay)
+                    time.sleep(self.retry_delay * (attempt + 1))  # Exponential backoff
                 continue
         
         logger.error(f"❌ Failed to connect to database after {self.max_retries} attempts: {last_error}")
