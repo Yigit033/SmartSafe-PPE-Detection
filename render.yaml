@@ -27,14 +27,23 @@ services:
         cp ssl/root.crt /opt/render/project/src/ssl/
         chmod 600 /opt/render/project/src/ssl/root.crt
       fi
-    startCommand: gunicorn smartsafe_saas_api:app --bind 0.0.0.0:10000 --workers 2 --threads 4 --timeout 120
+    startCommand: |
+      gunicorn smartsafe_saas_api:app \
+        --bind=0.0.0.0:$PORT \
+        --workers=2 \
+        --threads=4 \
+        --timeout=120 \
+        --log-level=info \
+        --access-logfile=- \
+        --error-logfile=- \
+        --capture-output
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
         value: production
       - key: FLASK_APP
         value: smartsafe_saas_api.py
-      - key: PORT
+      - key: PORT  # This will be set by Render
         value: "10000"
       - key: PYTHONPATH
         value: /opt/render/project/src
@@ -65,6 +74,8 @@ services:
           name: smartsafe-redis
           type: redis
           property: connectionString
+      - key: GUNICORN_CMD_ARGS  # Add explicit Gunicorn arguments
+        value: "--access-logfile - --error-logfile - --capture-output"
     disks:
       - name: smartsafe-data
         mountPath: /opt/render/project/src/data
@@ -81,9 +92,6 @@ services:
     autoDeploy: true
     domains:
       - smartsafe-api.onrender.com
-    ports:
-      - port: 10000
-        protocol: TCP
     
   - type: redis
     name: smartsafe-redis

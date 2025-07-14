@@ -8025,23 +8025,18 @@ smartsafe_requests_total 100
         
         # Add health check and metrics endpoints
         self.add_health_check()
-        self.add_metrics_endpoint()
+        if self.enterprise_enabled:
+            self.add_metrics_endpoint()
         
-        try:
-            # Get port from environment (Render.com compatibility)
-            port = int(os.environ.get('PORT', 8000))
-            logger.info(f"Using port {port}")
-            
-            # In production, we use gunicorn which handles the port binding
-            if os.getenv('FLASK_ENV') == 'production':
-                # Just return the app, let gunicorn handle the serving
-                return self.app
-            else:
-                # In development, use Flask's built-in server
-                self.app.run(host='0.0.0.0', port=port, debug=True)
-        except Exception as e:
-            logger.error(f"Failed to start SaaS API server: {e}")
-            raise
+        # Get port from environment (Render.com compatibility)
+        port = int(os.environ.get('PORT', 10000))
+        logger.info(f"Using port {port}")
+        
+        # Set the port in app config
+        self.app.config['PORT'] = port
+        
+        # Return the app instance for gunicorn to handle
+        return self.app
 
 def main():
     """Ana fonksiyon"""
@@ -8059,15 +8054,15 @@ def main():
         api_server = SmartSafeSaaSAPI()
         app = api_server.run()
         
-        # In production, return the app for gunicorn
-        if os.getenv('FLASK_ENV') == 'production':
+        # In development mode, run with Flask's server
+        if __name__ == "__main__":
+            port = int(os.environ.get('PORT', 10000))
+            app.run(host='0.0.0.0', port=port, debug=True)
+            print(f"📱 Local URL: http://localhost:{port}")
+        else:
+            # In production, return the app for gunicorn
             return app
             
-        # In development, show local URLs
-        port = int(os.environ.get('PORT', 8000))
-        print(f"📱 Ana Sayfa: http://localhost:{port}")
-        print(f"🏢 Şirket Kayıt: http://localhost:{port}")
-        
     except KeyboardInterrupt:
         logger.info("🛑 SaaS API Server stopped by user")
     except Exception as e:
