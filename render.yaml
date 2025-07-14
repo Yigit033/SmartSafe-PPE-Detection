@@ -27,7 +27,7 @@ services:
         cp ssl/root.crt /opt/render/project/src/ssl/
         chmod 600 /opt/render/project/src/ssl/root.crt
       fi
-    startCommand: python -m gunicorn smartsafe_saas_api:app
+    startCommand: gunicorn smartsafe_saas_api:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
@@ -35,17 +35,17 @@ services:
       - key: FLASK_APP
         value: smartsafe_saas_api.py
       - key: PORT
-        value: 8000
+        value: 10000
       - key: PYTHONPATH
         value: /opt/render/project/src
       - key: CUDA_VISIBLE_DEVICES
         value: ""
       - key: YOLO_CONFIG_DIR
         value: /tmp/Ultralytics
-      - key: GUNICORN_CMD_ARGS
-        value: "--bind=0.0.0.0:$PORT --workers=2 --threads=4 --timeout=120"
-      - key: RENDER
-        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartsafe-db
+          property: connectionString
       - key: SUPABASE_URL
         value: "db.nbxntohihcwruwlnthfb.supabase.co"
       - key: SUPABASE_PORT
@@ -58,6 +58,13 @@ services:
         sync: false
       - key: SSL_CERT_PATH
         value: "/opt/render/project/src/ssl/supabase.crt"
+      - key: SSL_MODE
+        value: "require"
+      - key: REDIS_URL
+        fromService:
+          name: smartsafe-redis
+          type: redis
+          property: connectionString
     disks:
       - name: smartsafe-data
         mountPath: /opt/render/project/src/data
@@ -71,22 +78,12 @@ services:
       timeout: 10s
       gracePeriod: 30s
       startPeriod: 40s
-    network:
-      - type: private
-        name: smartsafe-network
-      - type: public
-        ports:
-          - port: 8000
-            protocol: TCP
-        allowedSources:
-          - source: 0.0.0.0/0
-            description: Allow all inbound traffic
-        outboundRules:
-          - type: tcp
-            port: 5432
-            destinations:
-              - "db.nbxntohihcwruwlnthfb.supabase.co"
-            description: Allow outbound traffic to Supabase
+    autoDeploy: false
+    domains:
+      - smartsafe-api.onrender.com
+    ports:
+      - port: 10000
+        protocol: TCP
     
   - type: redis
     name: smartsafe-redis
