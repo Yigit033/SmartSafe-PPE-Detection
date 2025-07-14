@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartSafe AI - Endüstriyel PPE Tespit Sistemi</title>
+    <title data-translate="page_title">SmartSafe AI - Industrial PPE Detection System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
@@ -1061,7 +1061,144 @@
         .custom-dropdown-menu {
             z-index: 3000;
         }
+
+        /* Hero video dimensions */
+        .hero-video {
+            width: 720px !important;
+            height: 380px !important;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .hero-video {
+                width: 100% !important;
+                height: auto !important;
+            }
+        }
+
+        /* Language Selector Styles */
+        .language-selector {
+            position: relative;
+            margin-left: 15px;
+            z-index: 9999;
+        }
+
+        .language-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+        }
+
+        .language-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .language-btn img {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .language-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 5px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 150px;
+            z-index: 9999;
+        }
+
+        .language-selector.active .language-dropdown {
+            display: block;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .language-option {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .language-option:hover {
+            background: #f8f9fa;
+        }
+
+        .language-option img {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .language-option .fa-check {
+            margin-left: auto;
+            color: #22C55E;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .language-option.active .fa-check {
+            opacity: 1;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Ensure dropdown is above other elements */
+        .language-dropdown {
+            z-index: 10000;
+        }
+
+        /* Navbar specific styles for language selector */
+        .navbar.scrolled .language-btn {
+            border-color: rgba(0, 0, 0, 0.1);
+            color: var(--dark);
+        }
+
+        .navbar.scrolled .language-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        @media (max-width: 991px) {
+            .language-selector {
+                margin: 10px 0;
+            }
+            
+            .language-dropdown {
+                position: absolute;
+                width: 100%;
+                box-shadow: none;
+                border: 1px solid #ddd;
+                margin-top: 10px;
+            }
+        }
     </style>
+    <script src="/static/js/translations.js" defer></script>
 </head>
 <body>
     <!-- Navbar -->
@@ -1074,21 +1211,39 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto align-items-center">
                     <li class="nav-item">
-                        <a class="nav-link" href="#features">Özellikler</a>
+                        <a class="nav-link" href="#features" data-translate="features">Features</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#sectors">Sektörler</a>
+                        <a class="nav-link" href="#sectors" data-translate="sectors">Sectors</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#benefits">Faydalar</a>
+                        <a class="nav-link" href="#benefits" data-translate="benefits">Benefits</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#contact">İletişim</a>
+                        <a class="nav-link" href="#contact" data-translate="contact">Contact</a>
                     </li>
                     <li class="nav-item">
-                        <a class="btn btn-primary ms-lg-3" href="/app">Giriş Yap</a>
+                        <a class="btn btn-primary ms-lg-3" href="/app" data-translate="login">Giriş Yap</a>
+                    </li>
+                    <li class="nav-item language-selector">
+                        <button type="button" class="language-btn" aria-label="Select Language">
+                            <img src="/static/images/flags/tr.png" alt="TR" id="currentFlag">
+                            <span id="currentLang">TR</span>
+                        </button>
+                        <div class="language-dropdown">
+                            <div class="language-option" data-lang="tr">
+                                <img src="/static/images/flags/tr.png" alt="TR">
+                                <span>Türkçe</span>
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="language-option" data-lang="en">
+                                <img src="/static/images/flags/en.png" alt="EN">
+                                <span>English</span>
+                                <i class="fas fa-check"></i>
+                            </div>
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -1101,23 +1256,22 @@
         <div class="container content-wrapper">
             <div class="row align-items-center">
                 <div class="col-lg-6" data-aos="fade-right">
-                    <h1 class="display-4 fw-bold mb-4">
-                        Yapay Zeka ile İş Güvenliği
+                    <h1 class="display-4 fw-bold mb-4" data-translate="hero_title">
+                        Workplace Safety with AI
                     </h1>
-                    <p class="lead mb-4">
-                        Endüstriyel tesislerde kişisel koruyucu ekipman (PPE) kullanımını 
-                        gerçek zamanlı takip eden, iş kazalarını önleyen akıllı güvenlik sistemi.
+                    <p class="lead mb-4" data-translate="hero_description">
+                        Smart security system that monitors personal protective equipment (PPE) usage 
+                        in real-time and prevents workplace accidents in industrial facilities.
                     </p>
                     <div class="d-flex gap-3">
-                        <a href="/app" class="btn btn-primary">
-                            Hemen Başla
+                        <a href="/app" class="btn btn-primary" data-translate="get_started">
+                            Get Started
                         </a>
-                        
                     </div>
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
                     <div class="position-relative rounded-4 shadow-lg overflow-hidden">
-                        <video class="img-fluid w-100" autoplay loop muted playsinline poster="/static/images/hero-image.png">
+                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png">
                             <source src="/static/videos/hero-video.webm" type="video/webm">
                             <source src="/static/videos/hero-video.mp4" type="video/mp4">
                             <!-- Fallback for browsers that don't support video -->
@@ -1136,25 +1290,25 @@
                 <div class="col-md-3" data-aos="fade-up" data-aos-delay="0">
                     <div class="glass-card p-4 stat-card">
                         <div class="performance-number">24.7</div>
-                        <p class="text-muted">FPS Gerçek Zamanlı</p>
+                        <p class="text-muted" data-translate="fps_realtime">FPS Real-time</p>
                     </div>
                 </div>
                 <div class="col-md-3" data-aos="fade-up" data-aos-delay="100">
                     <div class="glass-card p-4 stat-card">
                         <div class="performance-number">37x</div>
-                        <p class="text-muted">Performans Artışı</p>
+                        <p class="text-muted" data-translate="performance_increase">Performance Increase</p>
                     </div>
                 </div>
                 <div class="col-md-3" data-aos="fade-up" data-aos-delay="200">
                     <div class="glass-card p-4 stat-card">
                         <div class="performance-number">16</div>
-                        <p class="text-muted">Eş Zamanlı Kamera</p>
+                        <p class="text-muted" data-translate="concurrent_cameras">Concurrent Cameras</p>
                     </div>
                 </div>
                 <div class="col-md-3" data-aos="fade-up" data-aos-delay="300">
                     <div class="glass-card p-4 stat-card">
                         <div class="performance-number">24/7</div>
-                        <p class="text-muted">Kesintisiz Çalışma</p>
+                        <p class="text-muted" data-translate="continuous_operation">Continuous Operation</p>
                     </div>
                 </div>
             </div>
@@ -1166,9 +1320,9 @@
         <div class="container">
             <div class="row mb-5">
                 <div class="col-lg-6 mx-auto text-center">
-                    <h2 class="display-5 fw-bold mb-3">Özellikler</h2>
-                    <p class="lead text-muted">
-                        En son teknolojilerle donatılmış güvenlik sistemi
+                    <h2 class="display-5 fw-bold mb-3" data-translate="features_title">Features</h2>
+                    <p class="lead text-muted" data-translate="features_subtitle">
+                        Security system equipped with the latest technologies
                     </p>
                 </div>
             </div>
@@ -1178,27 +1332,27 @@
                 <ul class="nav nav-pills justify-content-center gap-2 mb-4" id="featuresTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="performance-tab" data-bs-toggle="pill" data-bs-target="#performance" type="button" role="tab">
-                            <i class="fas fa-tachometer-alt me-2"></i>Performans
+                            <i class="fas fa-tachometer-alt me-2"></i><span data-translate="performance">Performance</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="ai-tab" data-bs-toggle="pill" data-bs-target="#ai" type="button" role="tab">
-                            <i class="fas fa-brain me-2"></i>Yapay Zeka
+                            <i class="fas fa-brain me-2"></i><span data-translate="ai">AI</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="monitoring-tab" data-bs-toggle="pill" data-bs-target="#monitoring" type="button" role="tab">
-                            <i class="fas fa-desktop me-2"></i>İzleme
+                            <i class="fas fa-desktop me-2"></i><span data-translate="monitoring">Monitoring</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="integration-tab" data-bs-toggle="pill" data-bs-target="#integration" type="button" role="tab">
-                            <i class="fas fa-plug me-2"></i>Entegrasyon
+                            <i class="fas fa-plug me-2"></i><span data-translate="integration">Integration</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="security-tab" data-bs-toggle="pill" data-bs-target="#security" type="button" role="tab">
-                            <i class="fas fa-shield-alt me-2"></i>Güvenlik
+                            <i class="fas fa-shield-alt me-2"></i><span data-translate="security">Security</span>
                         </button>
                     </li>
                 </ul>
@@ -1213,12 +1367,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-tachometer-alt"></i>
                                     </div>
-                                    <h4>Yüksek Performans</h4>
-                                    <p>Saniyede 24.7 kare işleme kapasitesi ile gerçek zamanlı tespit.</p>
+                                    <h4 data-translate="high_performance">High Performance</h4>
+                                    <p data-translate="high_performance_desc">Real-time detection with 24.7 frames per second processing capacity.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> GPU Optimizasyonu</li>
-                                        <li><i class="fas fa-check"></i> NVIDIA CUDA Desteği</li>
-                                        <li><i class="fas fa-check"></i> Düşük Gecikme Süresi</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="gpu_optimization">GPU Optimization</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="nvidia_cuda">NVIDIA CUDA Support</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="low_latency">Low Latency</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1227,12 +1381,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-expand-arrows-alt"></i>
                                     </div>
-                                    <h4>Ölçeklenebilirlik</h4>
-                                    <p>İhtiyaca göre büyüyebilen esnek sistem mimarisi.</p>
+                                    <h4 data-translate="scalability">Scalability</h4>
+                                    <p data-translate="scalability_desc">Flexible system architecture that can grow according to needs.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Yatay/Dikey Ölçekleme</li>
-                                        <li><i class="fas fa-check"></i> Çoklu Lokasyon Desteği</li>
-                                        <li><i class="fas fa-check"></i> Yük Dengeleme</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="horizontal_vertical">Horizontal/Vertical Scaling</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="multi_location">Multi-location Support</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="load_balancing">Load Balancing</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1241,12 +1395,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-server"></i>
                                     </div>
-                                    <h4>Sistem Kararlılığı</h4>
-                                    <p>Kesintisiz çalışma ve yüksek uptime garantisi.</p>
+                                    <h4 data-translate="system_stability">System Stability</h4>
+                                    <p data-translate="system_stability_desc">Uninterrupted operation and high uptime guarantee.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Otomatik Yedekleme</li>
-                                        <li><i class="fas fa-check"></i> Hata Toleransı</li>
-                                        <li><i class="fas fa-check"></i> 24/7 Çalışma</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="auto_backup">Automatic Backup</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="fault_tolerance">Fault Tolerance</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="continuous_work">24/7 Operation</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1261,12 +1415,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-brain"></i>
                                     </div>
-                                    <h4>Yapay Zeka</h4>
-                                    <p>Gelişmiş derin öğrenme modelleri ile hassas tespit.</p>
+                                    <h4 data-translate="ai_title">Yapay Zeka</h4>
+                                    <p data-translate="ai_desc">Gelişmiş derin öğrenme modelleri ile hassas tespit.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Gerçek Zamanlı Analiz</li>
-                                        <li><i class="fas fa-check"></i> Yüksek Doğruluk</li>
-                                        <li><i class="fas fa-check"></i> Sürekli Öğrenme</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="realtime_analysis">Gerçek Zamanlı Analiz</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="high_accuracy">Yüksek Doğruluk</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="continuous_learning">Sürekli Öğrenme</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1275,12 +1429,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-chart-line"></i>
                                     </div>
-                                    <h4>Akıllı Analitik</h4>
-                                    <p>İleri seviye veri analizi ve tahminleme.</p>
+                                    <h4 data-translate="smart_analytics">Akıllı Analitik</h4>
+                                    <p data-translate="smart_analytics_desc">İleri seviye veri analizi ve tahminleme.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Anomali Tespiti</li>
-                                        <li><i class="fas fa-check"></i> Davranış Analizi</li>
-                                        <li><i class="fas fa-check"></i> Tahminsel Bakım</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="anomaly_detection">Anomali Tespiti</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="behavior_analysis">Davranış Analizi</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="predictive_maintenance">Tahminsel Bakım</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1289,12 +1443,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-robot"></i>
                                     </div>
-                                    <h4>Otomasyon</h4>
-                                    <p>Akıllı iş akışları ve otomatik aksiyonlar.</p>
+                                    <h4 data-translate="automation">Otomasyon</h4>
+                                    <p data-translate="automation_desc">Akıllı iş akışları ve otomatik aksiyonlar.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Olay Tetikleme</li>
-                                        <li><i class="fas fa-check"></i> Akıllı Alarmlar</li>
-                                        <li><i class="fas fa-check"></i> Otomatik Raporlama</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="event_triggering">Olay Tetikleme</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="smart_alerts">Akıllı Alarmlar</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="auto_reporting">Otomatik Raporlama</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1309,12 +1463,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-camera"></i>
                                     </div>
-                                    <h4>Çoklu Kamera Desteği</h4>
-                                    <p>16 kameraya kadar eş zamanlı izleme ve analiz kapasitesi.</p>
+                                    <h4 data-translate="multi_camera_support">Çoklu Kamera Desteği</h4>
+                                    <p data-translate="multi_camera_desc">16 kameraya kadar eş zamanlı izleme ve analiz kapasitesi.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> IP Kamera Entegrasyonu</li>
-                                        <li><i class="fas fa-check"></i> Otomatik Yük Dengeleme</li>
-                                        <li><i class="fas fa-check"></i> Kesintisiz İzleme</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="ip_camera_integration">IP Kamera Entegrasyonu</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="auto_load_balancing">Otomatik Yük Dengeleme</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="continuous_monitoring">Kesintisiz İzleme</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1323,12 +1477,11 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-bell"></i>
                                     </div>
-                                    <h4>Akıllı Uyarı Sistemi</h4>
-                                    <p>Anlık bildirimler ve özelleştirilebilir uyarı mekanizması.</p>
+                                    <h4 data-translate="smart_alert_system">Akıllı Uyarı Sistemi</h4>
+                                    <p data-translate="alert_system_desc">Anlık bildirimler ve özelleştirilebilir uyarı mekanizması.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> E-posta Bildirimleri</li>
-                                        <li><i class="fas fa-check"></i> SMS Uyarıları</li>
-                                        <li><i class="fas fa-check"></i> Mobil Bildirimler</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="email_notifications">E-posta Bildirimleri</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="mobile_notifications">Mobil Bildirimler</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1337,12 +1490,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-chart-bar"></i>
                                     </div>
-                                    <h4>Raporlama ve Analitik</h4>
-                                    <p>Detaylı istatistikler ve özelleştirilebilir raporlama sistemi.</p>
+                                    <h4 data-translate="reporting_analytics">Raporlama ve Analitik</h4>
+                                    <p data-translate="reporting_desc">Detaylı istatistikler ve özelleştirilebilir raporlama sistemi.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Özelleştirilebilir Dashboardlar</li>
-                                        <li><i class="fas fa-check"></i> Excel/PDF Export</li>
-                                        <li><i class="fas fa-check"></i> Trend Analizi</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="custom_dashboards">Özelleştirilebilir Dashboardlar</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="excel_pdf_export">Excel/PDF Export</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="trend_analysis">Trend Analizi</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1357,12 +1510,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-plug"></i>
                                     </div>
-                                    <h4>Kolay Entegrasyon</h4>
-                                    <p>Mevcut sistemlerle sorunsuz entegrasyon imkanı.</p>
+                                    <h4 data-translate="easy_integration">Kolay Entegrasyon</h4>
+                                    <p data-translate="easy_integration_desc">Mevcut sistemlerle sorunsuz entegrasyon imkanı.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> REST API Desteği</li>
-                                        <li><i class="fas fa-check"></i> ERP Entegrasyonu</li>
-                                        <li><i class="fas fa-check"></i> Özel Entegrasyon Desteği</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="rest_api_support">REST API Desteği</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="erp_integration">ERP Entegrasyonu</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="custom_integration">Özel Entegrasyon Desteği</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1371,12 +1524,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-cloud"></i>
                                     </div>
-                                    <h4>Bulut Desteği</h4>
-                                    <p>Esnek bulut altyapısı ve hibrit çözümler.</p>
+                                    <h4 data-translate="cloud_support">Bulut Desteği</h4>
+                                    <p data-translate="cloud_support_desc">Esnek bulut altyapısı ve hibrit çözümler.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> AWS/Azure/GCP Desteği</li>
-                                        <li><i class="fas fa-check"></i> Özel Bulut Çözümleri</li>
-                                        <li><i class="fas fa-check"></i> Hibrit Yapılandırma</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="aws_azure_gcp">AWS/Azure/GCP Desteği</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="private_cloud">Özel Bulut Çözümleri</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="hybrid_configuration">Hibrit Yapılandırma</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1385,12 +1538,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-headset"></i>
                                     </div>
-                                    <h4>7/24 Destek</h4>
-                                    <p>Kesintisiz teknik destek ve bakım hizmetleri.</p>
+                                    <h4 data-translate="support_247">7/24 Destek</h4>
+                                    <p data-translate="support_247_desc">Kesintisiz teknik destek ve bakım hizmetleri.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Canlı Destek</li>
-                                        <li><i class="fas fa-check"></i> Uzaktan Müdahale</li>
-                                        <li><i class="fas fa-check"></i> Periyodik Bakım</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="live_support">Canlı Destek</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="remote_intervention">Uzaktan Müdahale</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="periodic_maintenance">Periyodik Bakım</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1405,12 +1558,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-shield-alt"></i>
                                     </div>
-                                    <h4>Gelişmiş Güvenlik</h4>
-                                    <p>En üst düzey güvenlik standartları ile veri koruma.</p>
+                                    <h4 data-translate="advanced_security">Gelişmiş Güvenlik</h4>
+                                    <p data-translate="advanced_security_desc">En üst düzey güvenlik standartları ile veri koruma.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> SSL/TLS Şifreleme</li>
-                                        <li><i class="fas fa-check"></i> Rol Tabanlı Erişim</li>
-                                        <li><i class="fas fa-check"></i> Veri Yedekleme</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="ssl_tls_encryption">SSL/TLS Şifreleme</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="role_based_access">Rol Tabanlı Erişim</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="data_backup">Veri Yedekleme</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1419,12 +1572,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-user-shield"></i>
                                     </div>
-                                    <h4>Kullanıcı Yönetimi</h4>
-                                    <p>Detaylı yetkilendirme ve kullanıcı kontrolü.</p>
+                                    <h4 data-translate="user_management">Kullanıcı Yönetimi</h4>
+                                    <p data-translate="user_management_desc">Detaylı yetkilendirme ve kullanıcı kontrolü.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> Çok Seviyeli Yetkilendirme</li>
-                                        <li><i class="fas fa-check"></i> Aktivite Logları</li>
-                                        <li><i class="fas fa-check"></i> SSO Desteği</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="multi_level_auth">Çok Seviyeli Yetkilendirme</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="activity_logs">Aktivite Logları</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="sso_support">SSO Desteği</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1433,12 +1586,12 @@
                                     <div class="feature-icon gradient-bg">
                                         <i class="fas fa-lock"></i>
                                     </div>
-                                    <h4>Veri Güvenliği</h4>
-                                    <p>Uçtan uca veri güvenliği ve uyumluluk.</p>
+                                    <h4 data-translate="data_security">Veri Güvenliği</h4>
+                                    <p data-translate="data_security_desc">Uçtan uca veri güvenliği ve uyumluluk.</p>
                                     <ul class="feature-list list-unstyled">
-                                        <li><i class="fas fa-check"></i> KVKK Uyumluluğu</li>
-                                        <li><i class="fas fa-check"></i> Veri Şifreleme</li>
-                                        <li><i class="fas fa-check"></i> Güvenli Depolama</li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="gdpr_compliance">KVKK Uyumluluğu</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="data_encryption">Veri Şifreleme</span></li>
+                                        <li><i class="fas fa-check"></i> <span data-translate="secure_storage">Güvenli Depolama</span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -1454,9 +1607,9 @@
         <div class="container">
             <div class="row mb-5">
                 <div class="col-lg-6 mx-auto text-center">
-                    <h2 class="display-5 fw-bold mb-3">Sektörel Çözümler</h2>
-                    <p class="lead text-muted">
-                        Her sektöre özel optimize edilmiş güvenlik çözümleri
+                    <h2 class="display-5 fw-bold mb-3" data-translate="sectors_title">Sector Solutions</h2>
+                    <p class="lead text-muted" data-translate="sectors_subtitle">
+                        Security solutions optimized for each sector
                     </p>
                 </div>
             </div>
@@ -1469,16 +1622,15 @@
                                 <i class="fas fa-hard-hat"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>İnşaat Sektörü</h4>
+                                <h4 data-translate="construction">Construction Sector</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Baret Tespiti</li>
-                                    <li><i class="fas fa-check"></i> Yelek Kontrolü</li>
-                                    <li><i class="fas fa-check"></i> Güvenlik Gözlüğü</li>
-                                    <li><i class="fas fa-check"></i> Çelik Burunlu Ayakkabı</li>
-                                    <li><i class="fas fa-check"></i> İş Eldiveni</li>
-                                    <li><i class="fas fa-check"></i> Emniyet Kemeri</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="helmet_detection">Helmet Detection</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="vest_control">Vest Control</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="safety_glasses">Safety Glasses</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="steel_toe_boots">Steel Toe Boots</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="work_gloves">Work Gloves</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="safety_harness">Safety Harness</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1490,17 +1642,16 @@
                                 <i class="fas fa-ship"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Denizcilik & Tersane</h4>
+                                <h4 data-translate="maritime">Denizcilik & Tersane</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Can Yeleği</li>
-                                    <li><i class="fas fa-check"></i> Su Geçirmez PPE</li>
-                                    <li><i class="fas fa-check"></i> Yüksek Koruma</li>
-                                    <li><i class="fas fa-check"></i> Baret</li>
-                                    <li><i class="fas fa-check"></i> Çelik Burunlu Ayakkabı</li>
-                                    <li><i class="fas fa-check"></i> İş Eldiveni</li>
-                                    <li><i class="fas fa-check"></i> Emniyet Kemeri</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_life_jacket">Can Yeleği</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_waterproof">Su Geçirmez KKD</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_high_protection">Yüksek Koruma</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_helmet">Baret</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_steel_toe">Çelik Burunlu Ayakkabı</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_gloves">İş Eldiveni</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="maritime_harness">Emniyet Kemeri</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1512,13 +1663,12 @@
                                 <i class="fas fa-flask"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Kimya Endüstrisi</h4>
+                                <h4 data-translate="chemical">Chemical Industry</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Maske Kontrolü</li>
-                                    <li><i class="fas fa-check"></i> Eldiven Tespiti</li>
-                                    <li><i class="fas fa-check"></i> Koruyucu Giysi</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="mask_control">Mask Control</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="glove_detection">Glove Detection</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="protective_clothing">Protective Clothing</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1531,13 +1681,12 @@
                                 <i class="fas fa-industry"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Üretim Tesisleri</h4>
+                                <h4 data-translate="manufacturing">Manufacturing</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Çoklu PPE Tespiti</li>
-                                    <li><i class="fas fa-check"></i> Anlık Raporlama</li>
-                                    <li><i class="fas fa-check"></i> Vardiya Takibi</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="multi_ppe">Multi-PPE Detection</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="instant_reporting">Instant Reporting</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="shift_tracking">Shift Tracking</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1549,13 +1698,12 @@
                                 <i class="fas fa-bolt"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Enerji Sektörü</h4>
+                                <h4 data-translate="energy">Energy</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Yalıtımlı Ekipman</li>
-                                    <li><i class="fas fa-check"></i> Ark Flash Koruması</li>
-                                    <li><i class="fas fa-check"></i> Dielektrik PPE</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="insulated_equipment">Insulated Equipment</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="arc_flash_protection">Arc Flash Protection</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="dielectric_ppe">Dielectric PPE</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1567,13 +1715,12 @@
                                 <i class="fas fa-gas-pump"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Petrokimya</h4>
+                                <h4 data-translate="petrochemical">Petrochemical</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Gaz Maskesi</li>
-                                    <li><i class="fas fa-check"></i> Kimyasal Tulum</li>
-                                    <li><i class="fas fa-check"></i> Özel Ekipman</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="gas_mask">Gas Mask</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="chemical_hazard">Chemical Hazard</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="special_equipment">Special Equipment</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1586,13 +1733,12 @@
                                 <i class="fas fa-plane"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Havacılık</h4>
+                                <h4 data-translate="aviation">Aviation</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Kulaklık Kontrolü</li>
-                                    <li><i class="fas fa-check"></i> Anti-statik PPE</li>
-                                    <li><i class="fas fa-check"></i> Özel Ekipman</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="headset_control">Headset Control</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="antistatic_ppe">Antistatic PPE</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="special_equipment">Special Equipment</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1604,13 +1750,12 @@
                                 <i class="fas fa-utensils"></i>
                             </div>
                             <div class="sector-content">
-                                <h4>Gıda Sektörü</h4>
+                                <h4 data-translate="food">Food Industry</h4>
                                 <ul class="sector-features">
-                                    <li><i class="fas fa-check"></i> Bone Kontrolü</li>
-                                    <li><i class="fas fa-check"></i> Hijyen Eldiveni</li>
-                                    <li><i class="fas fa-check"></i> Önlük Tespiti</li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="hairnet_control">Hairnet Control</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="hygiene_gloves">Hygiene Gloves</span></li>
+                                    <li><i class="fas fa-check"></i> <span data-translate="apron_detection">Apron Detection</span></li>
                                 </ul>
-                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -1627,37 +1772,35 @@
         <div class="container">
             <div class="row mb-5">
                 <div class="col-lg-6 mx-auto text-center">
-                    <h2 class="display-5 fw-bold mb-3">Avantajlar</h2>
-                    <p class="lead text-muted">
-                        SmartSafe AI ile elde edeceğiniz kazanımlar
-                    </p>
+                    <h2 class="display-5 fw-bold mb-3" data-translate="benefits_title">Avantajlar</h2>
+                    <p class="lead text-muted" data-translate="benefits_subtitle">SmartSafe AI ile elde edeceğiniz kazanımlar</p>
                 </div>
             </div>
             <div class="features-tabs mb-4">
                 <ul class="nav nav-pills justify-content-center gap-2 mb-4" id="benefitsTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="finansal-tab" data-bs-toggle="pill" data-bs-target="#finansal" type="button" role="tab">
-                            <i class="fas fa-coins me-2"></i>Finansal
+                            <i class="fas fa-coins me-2"></i><span data-translate="financial">Finansal</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="operasyonel-tab" data-bs-toggle="pill" data-bs-target="#operasyonel" type="button" role="tab">
-                            <i class="fas fa-cogs me-2"></i>Operasyonel
+                            <i class="fas fa-cogs me-2"></i><span data-translate="operational">Operasyonel</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="guvenlik-tab" data-bs-toggle="pill" data-bs-target="#guvenlik" type="button" role="tab">
-                            <i class="fas fa-user-shield me-2"></i>İş Güvenliği
+                            <i class="fas fa-user-shield me-2"></i><span data-translate="safety">İş Güvenliği</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="teknolojik-tab" data-bs-toggle="pill" data-bs-target="#teknolojik" type="button" role="tab">
-                            <i class="fas fa-microchip me-2"></i>Teknolojik
+                            <i class="fas fa-microchip me-2"></i><span data-translate="technological">Teknolojik</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="yasal-tab" data-bs-toggle="pill" data-bs-target="#yasal" type="button" role="tab">
-                            <i class="fas fa-balance-scale me-2"></i>Yasal
+                            <i class="fas fa-balance-scale me-2"></i><span data-translate="legal">Yasal</span>
                         </button>
                     </li>
                 </ul>
@@ -1671,29 +1814,24 @@
                                         <div class="benefit-icon gradient-bg mb-3">
                                             <i class="fas fa-coins"></i>
                                         </div>
-                                        <h3 class="mb-3">Finansal Avantajlar</h3>
-                                        <p class="text-muted mb-4">İş güvenliği yatırımınızın hızlı geri dönüşü ve uzun vadeli finansal faydaları</p>
+                                        <h3 class="mb-3" data-translate="financial_benefits">Finansal Avantajlar</h3>
+                                        <p class="text-muted mb-4" data-translate="financial_desc">İş güvenliği yatırımınızın hızlı geri dönüşü ve uzun vadeli finansal faydaları</p>
                                     </div>
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> İş kazası maliyetlerinin minimize edilmesi</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sigorta primlerinde potansiyel indirimler</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Denetim maliyetlerinin azaltılması</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Operasyonel verimliliğin artırılması</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="accident_cost_reduction">İş kazası maliyetlerinin minimize edilmesi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="insurance_premium_reduction">Sigorta primi indirimi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="compliance_cost_reduction">Uyum maliyetlerinin azaltılması</span></li>
                                             </ul>
                                         </div>
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> İş gücü kaybının önlenmesi</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Ekipman bakım maliyetlerinin optimizasyonu</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yasal yükümlülük risklerinin azaltılması</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> ROI odaklı güvenlik yatırımı</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="productivity_increase">Verimlilik artışı</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="operational_efficiency">Operasyonel verimlilik</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="resource_optimization">Kaynak optimizasyonu</span></li>
                                             </ul>
                                         </div>
-                                    </div>
-                                    <div class="benefit-watermark">
-                                        <i class="fas fa-chart-line"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1708,29 +1846,26 @@
                                         <div class="benefit-icon gradient-bg mb-3">
                                             <i class="fas fa-cogs"></i>
                                         </div>
-                                        <h3 class="mb-3">Operasyonel Faydalar</h3>
-                                        <p class="text-muted mb-4">Süreçlerinizi optimize eden ve verimliliği artıran akıllı çözümler</p>
+                                        <h3 class="mb-3" data-translate="operational_benefits">Operasyonel Faydalar</h3>
+                                        <p class="text-muted mb-4" data-translate="operational_desc">Süreçlerinizi optimize eden ve verimliliği artıran akıllı çözümler</p>
                                     </div>
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Gerçek zamanlı izleme ve uyarı sistemi</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Otomatik raporlama ve dokümantasyon</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Çalışan güvenliğinin artırılması</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Denetim süreçlerinin kolaylaştırılması</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="realtime_monitoring">Gerçek zamanlı izleme ve uyarı sistemi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="automatic_documentation">Otomatik raporlama ve dokümantasyon</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="employee_safety">Çalışan güvenliğinin artırılması</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="audit_simplification">Denetim süreçlerinin kolaylaştırılması</span></li>
                                             </ul>
                                         </div>
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sektöre özel optimize edilmiş çözümler</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> 7/24 kesintisiz izleme</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Mobil uygulama ile uzaktan erişim</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Akıllı iş akışı otomasyonu</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="sector_optimized">Sektöre özel optimize edilmiş çözümler</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="continuous_monitoring_247">7/24 kesintisiz izleme</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="mobile_access">Mobil uygulama ile uzaktan erişim</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="smart_workflow">Akıllı iş akışı otomasyonu</span></li>
                                             </ul>
                                         </div>
-                                    </div>
-                                    <div class="benefit-watermark">
-                                        <i class="fas fa-rocket"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1745,29 +1880,26 @@
                                         <div class="benefit-icon gradient-bg mb-3">
                                             <i class="fas fa-user-shield"></i>
                                         </div>
-                                        <h3 class="mb-3">İş Güvenliği Avantajları</h3>
-                                        <p class="text-muted mb-4">Proaktif yaklaşımla çalışan güvenliğini maksimum seviyeye çıkaran teknoloji</p>
+                                        <h3 class="mb-3" data-translate="safety_benefits">İş Güvenliği Avantajları</h3>
+                                        <p class="text-muted mb-4" data-translate="safety_desc">Kapsamlı iş güvenliği avantajları</p>
                                     </div>
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Proaktif risk yönetimi</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Anlık ihlal tespiti ve müdahale</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Çalışan güvenlik bilincinin artırılması</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Kaza önleme oranında artış</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="proactive_risk">Proaktif risk yönetimi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="violation_detection">Anlık ihlal tespiti ve müdahale</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="safety_awareness">Çalışan güvenlik bilincinin artırılması</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="accident_prevention">Kaza önleme oranında artış</span></li>
                                             </ul>
                                         </div>
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Erken uyarı sistemleri</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Güvenlik kültürü geliştirme</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sıfır kaza hedefi desteği</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sürekli güvenlik iyileştirme</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="compliance_management">Uyum yönetimi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="safety_culture">Güvenlik kültürünün geliştirilmesi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="risk_analysis">Gelişmiş risk analizi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="emergency_response">Hızlı acil durum müdahalesi</span></li>
                                             </ul>
                                         </div>
-                                    </div>
-                                    <div class="benefit-watermark">
-                                        <i class="fas fa-shield-alt"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1782,29 +1914,26 @@
                                         <div class="benefit-icon gradient-bg mb-3">
                                             <i class="fas fa-microchip"></i>
                                         </div>
-                                        <h3 class="mb-3">Teknolojik Üstünlükler</h3>
-                                        <p class="text-muted mb-4">En son yapay zeka teknolojileri ile donatılmış gelecek odaklı çözümler</p>
+                                        <h3 class="mb-3" data-translate="tech_benefits">Teknolojik Üstünlükler</h3>
+                                        <p class="text-muted mb-4" data-translate="tech_desc">En son yapay zeka teknolojileri ile donatılmış gelecek odaklı çözümler</p>
                                     </div>
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yapay zeka destekli hassas tespit</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sürekli öğrenen ve gelişen sistem</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Kolay entegrasyon ve ölçeklenebilirlik</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Özelleştirilebilir uyarı mekanizmaları</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="ai_detection">Yapay zeka destekli hassas tespit</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="learning_system">Sürekli öğrenen ve gelişen sistem</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="easy_integration">Kolay entegrasyon ve ölçeklenebilirlik</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="custom_alerts">Özelleştirilebilir uyarı mekanizmaları</span></li>
                                             </ul>
                                         </div>
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Gerçek zamanlı AI analizi</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Gelişmiş görüntü işleme</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Bulut tabanlı işlem gücü</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> IoT cihaz entegrasyonu</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="realtime_ai">Gerçek zamanlı AI analizi</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="cloud_integration">Bulut entegrasyonu</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="api_support">API desteği</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="mobile_compatibility">Mobil uyumluluk</span></li>
                                             </ul>
                                         </div>
-                                    </div>
-                                    <div class="benefit-watermark">
-                                        <i class="fas fa-brain"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1819,29 +1948,26 @@
                                         <div class="benefit-icon gradient-bg mb-3">
                                             <i class="fas fa-balance-scale"></i>
                                         </div>
-                                        <h3 class="mb-3">Yasal Uyumluluk</h3>
-                                        <p class="text-muted mb-4">Mevzuata tam uyumluluk ve yasal süreçlerde kolaylık sağlayan çözümler</p>
+                                        <h3 class="mb-3" data-translate="legal_benefits">Yasal Uyumluluk</h3>
+                                        <p class="text-muted mb-4" data-translate="legal_desc">Mevzuata tam uyumluluk ve yasal süreçlerde kolaylık sağlayan çözümler</p>
                                     </div>
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> İSG mevzuatına tam uyumluluk</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Otomatik denetim raporları</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yasal dokümantasyon desteği</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sertifikasyon süreçlerinde kolaylık</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_ohs_compliance">İSG mevzuatına tam uyumluluk</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_audit_reports">Otomatik denetim raporları</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_documentation">Yasal dokümantasyon desteği</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_certification">Sertifikasyon süreçlerinde kolaylık</span></li>
                                             </ul>
                                         </div>
                                         <div class="col-md-6">
                                             <ul class="feature-list list-unstyled">
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> KVKK uyumlu veri işleme</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Denetim hazırlık desteği</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yasal raporlama otomasyonu</li>
-                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Uyumluluk takip sistemi</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_data_processing">KVKK uyumlu veri işleme</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_audit_prep">Denetim hazırlık desteği</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_reporting">Yasal raporlama otomasyonu</span></li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> <span data-translate="legal_compliance_tracking">Uyumluluk takip sistemi</span></li>
                                             </ul>
                                         </div>
-                                    </div>
-                                    <div class="benefit-watermark">
-                                        <i class="fas fa-gavel"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1853,7 +1979,7 @@
     </section>
 
     <!-- Contact -->
-    <section id="contact" class="section contact-section position-relative">
+    <section id="contact" class="section contact-section">
         <div class="container">
             <div class="row justify-content-center align-items-center g-5">
                 <!-- Left: Contact Info -->
@@ -1862,20 +1988,20 @@
                         <div class="contact-icon gradient-bg mb-4 mx-auto mx-lg-0">
                             <i class="fas fa-envelope-open-text"></i>
                         </div>
-                        <h2 class="fw-bold mb-3">İletişime Geçin</h2>
-                        <p class="text-muted mb-4">Her türlü soru, teklif veya iş birliği için bize ulaşabilirsiniz. Size en kısa sürede dönüş yapacağız.</p>
+                        <h2 class="fw-bold mb-3" data-translate="contact_title">İletişime Geçin</h2>
+                        <p class="text-muted mb-4" data-translate="contact_subtitle">Her türlü soru, teklif veya iş birliği için bize ulaşabilirsiniz. Size en kısa sürede dönüş yapacağız.</p>
                         <div class="mb-4">
                             <div class="d-flex align-items-center mb-3">
                                 <div class="contact-info-icon"><i class="fas fa-envelope"></i></div>
-                                <span class="ms-2">yigittilaver2000@gmail.com</span>
+                                <span class="ms-2" data-translate="contact_email">yigittilaver2000@gmail.com</span>
                             </div>
                             <div class="d-flex align-items-center mb-3">
                                 <div class="contact-info-icon"><i class="fas fa-phone"></i></div>
-                                <span class="ms-2">+90 (505) 020 20 95</span>
+                                <span class="ms-2" data-translate="contact_phone">+90 (505) 020 20 95</span>
                             </div>
                             <div class="d-flex align-items-center">
                                 <div class="contact-info-icon"><i class="fas fa-map-marker-alt"></i></div>
-                                <span class="ms-2">Maslak, İstanbul</span>
+                                <span class="ms-2" data-translate="contact_address">Maslak, İstanbul</span>
                             </div>
                         </div>
                         <div class="social-links justify-content-center justify-content-lg-start mt-4 gap-3">
@@ -1894,45 +2020,51 @@
                                 <div class="col-12 col-md-6">
                                     <div class="input-group">
                                         <span class="input-group-text bg-transparent border-0"><i class="fas fa-user"></i></span>
-                                        <input type="text" name="name" class="form-control" placeholder="Adınız Soyadınız" required>
+                                        <input type="text" name="name" class="form-control" data-translate-placeholder="name_placeholder" required>
                                     </div>
                                 </div>
                                 <div class="col-12 col-md-6">
                                     <div class="input-group">
                                         <span class="input-group-text bg-transparent border-0"><i class="fas fa-envelope"></i></span>
-                                        <input type="email" name="email" class="form-control" placeholder="E-posta Adresiniz" required>
+                                        <input type="email" name="email" class="form-control" data-translate-placeholder="email_placeholder" required>
                                     </div>
                                 </div>
                                 <div class="col-12 col-md-6">
                                     <div class="custom-dropdown" id="sectorDropdown">
                                         <button type="button" class="custom-dropdown-toggle" id="sectorDropdownToggle" tabindex="0">
                                             <span class="dropdown-icon"><i class="fas fa-industry"></i></span>
-                                            <span class="custom-dropdown-selected custom-dropdown-placeholder">Sektörünüz</span>
+                                            <span class="custom-dropdown-selected custom-dropdown-placeholder" data-translate="sector_placeholder">Sektörünüz</span>
                                             <span class="dropdown-arrow"><i class="fas fa-chevron-down"></i></span>
                                         </button>
                                         <div class="custom-dropdown-menu" id="sectorDropdownMenu">
-                                            <div class="custom-dropdown-option" data-value="construction"><span class="option-check"><i class="fas fa-check"></i></span>İnşaat</div>
-                                            <div class="custom-dropdown-option" data-value="chemical"><span class="option-check"><i class="fas fa-check"></i></span>Kimya</div>
-                                            <div class="custom-dropdown-option" data-value="food"><span class="option-check"><i class="fas fa-check"></i></span>Gıda</div>
-                                            <div class="custom-dropdown-option" data-value="manufacturing"><span class="option-check"><i class="fas fa-check"></i></span>Üretim</div>
-                                            <div class="custom-dropdown-option" data-value="energy"><span class="option-check"><i class="fas fa-check"></i></span>Enerji</div>
-                                            <div class="custom-dropdown-option" data-value="petrochemical"><span class="option-check"><i class="fas fa-check"></i></span>Petrokimya</div>
-                                            <div class="custom-dropdown-option" data-value="marine"><span class="option-check"><i class="fas fa-check"></i></span>Denizcilik & Tersane</div>
-                                            <div class="custom-dropdown-option" data-value="aviation"><span class="option-check"><i class="fas fa-check"></i></span>Havacılık</div>
-                                            <div class="custom-dropdown-option" data-value="other"><span class="option-check"><i class="fas fa-check"></i></span>Diğer</div>
+                                            <div class="custom-dropdown-option" data-value="construction"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_construction">İnşaat</span></div>
+                                            <div class="custom-dropdown-option" data-value="chemical"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_chemical">Kimya</span></div>
+                                            <div class="custom-dropdown-option" data-value="food"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_food">Gıda</span></div>
+                                            <div class="custom-dropdown-option" data-value="manufacturing"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_manufacturing">Üretim</span></div>
+                                            <div class="custom-dropdown-option" data-value="energy"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_energy">Enerji</span></div>
+                                            <div class="custom-dropdown-option" data-value="petrochemical"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_petrochemical">Petrokimya</span></div>
+                                            <div class="custom-dropdown-option" data-value="marine"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_marine">Denizcilik & Tersane</span></div>
+                                            <div class="custom-dropdown-option" data-value="aviation"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_aviation">Havacılık</span></div>
+                                            <div class="custom-dropdown-option" data-value="other"><span class="option-check"><i class="fas fa-check"></i></span><span data-translate="sector_other">Diğer</span></div>
                                         </div>
                                         <input type="hidden" name="sector" id="sectorInput" required>
                                     </div>
                                 </div>
                                 <div class="col-12 col-md-6">
                                     <div class="input-group">
+                                        <span class="input-group-text bg-transparent border-0"><i class="fas fa-phone"></i></span>
+                                        <input type="tel" name="phone" class="form-control" data-translate-placeholder="phone_placeholder" required>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="input-group">
                                         <span class="input-group-text bg-transparent border-0"><i class="fas fa-comment-dots"></i></span>
-                                        <textarea name="message" class="form-control" rows="1" placeholder="Mesajınız" required></textarea>
+                                        <textarea name="message" class="form-control" rows="4" data-translate-placeholder="message_placeholder" required></textarea>
                                     </div>
                                 </div>
                                 <div class="col-12 mt-3">
                                     <button type="submit" class="btn btn-gradient w-100 py-3 fw-bold">
-                                        <i class="fas fa-paper-plane me-2"></i>Gönder
+                                        <i class="fas fa-paper-plane me-2"></i><span data-translate="send">Send</span>
                                     </button>
                                 </div>
                             </div>
@@ -2068,20 +2200,20 @@
                     <div class="col-lg-4">
                         <div class="footer-brand mb-4">
                             <h3 class="text-white mb-2"><i class="fas fa-shield-alt"></i> SmartSafe AI</h3>
-                            <p class="text-white-50">
+                            <p class="text-white-50" data-translate="footer_description">
                                 Yapay zeka destekli endüstriyel güvenlik çözümleriyle iş yerinizi daha güvenli hale getiriyoruz.
                             </p>
                         </div>
                         <div class="contact-info mb-4">
-                            <h5 class="text-white mb-3">İletişim</h5>
+                            <h5 class="text-white mb-3" data-translate="footer_contact">İletişim</h5>
                             <p class="text-white-50 mb-2">
-                                <i class="fas fa-envelope me-2"></i> yigittilaver2000@gmail.com
+                                <i class="fas fa-envelope me-2"></i> <span data-translate="contact_email">yigittilaver2000@gmail.com</span>
                             </p>
                             <p class="text-white-50 mb-2">
-                                <i class="fas fa-phone me-2"></i> +90 (505) 020 20 95
+                                <i class="fas fa-phone me-2"></i> <span data-translate="contact_phone">+90 (505) 020 20 95</span>
                             </p>
                             <p class="text-white-50 mb-0">
-                                <i class="fas fa-map-marker-alt me-2"></i> Maslak, İstanbul
+                                <i class="fas fa-map-marker-alt me-2"></i> <span data-translate="contact_address">Maslak, İstanbul</span>
                             </p>
                         </div>
                         <div class="social-links">
@@ -2092,23 +2224,23 @@
                         </div>
                     </div>
                     <div class="col-lg-4">
-                        <h5 class="text-white mb-4">Çözümlerimiz</h5>
+                        <h5 class="text-white mb-4" data-translate="footer_solutions">Çözümlerimiz</h5>
                         <ul class="footer-links">
-                            <li><a href="#features">Temel Özellikler</a></li>
-                            <li><a href="#sectors">Sektörel Çözümler</a></li>
-                            <li><a href="#benefits">İş Güvenliği Avantajları</a></li>
-                            <li><a href="#demo">Canlı Demo</a></li>
-                            <li><a href="/app">Şirket Kaydı</a></li>
+                            <li><a href="#features" data-translate="footer_features">Temel Özellikler</a></li>
+                            <li><a href="#sectors" data-translate="footer_sector_solutions">Sektörel Çözümler</a></li>
+                            <li><a href="#benefits" data-translate="footer_safety_benefits">İş Güvenliği Avantajları</a></li>
+                            <li><a href="#demo" data-translate="footer_live_demo">Canlı Demo</a></li>
+                            <li><a href="/app" data-translate="footer_company_register">Şirket Kaydı</a></li>
                         </ul>
                     </div>
                     <div class="col-lg-4">
-                        <h5 class="text-white mb-4">Destek</h5>
+                        <h5 class="text-white mb-4" data-translate="footer_support">Destek</h5>
                         <ul class="footer-links">
-                            <li><a href="#contact">Teknik Destek</a></li>
-                            <li><a href="#contact">Satış Öncesi Destek</a></li>
-                            <li><a href="#contact">Demo Talebi</a></li>
-                            <li><a href="#contact">Fiyatlandırma</a></li>
-                            <li><a href="#contact">Sektörel Danışmanlık</a></li>
+                            <li><a href="#contact" data-translate="footer_technical_support">Teknik Destek</a></li>
+                            <li><a href="#contact" data-translate="footer_presales_support">Satış Öncesi Destek</a></li>
+                            <li><a href="#contact" data-translate="footer_demo_request">Demo Talebi</a></li>
+                            <li><a href="#contact" data-translate="footer_pricing">Fiyatlandırma</a></li>
+                            <li><a href="#contact" data-translate="footer_sector_consulting">Sektörel Danışmanlık</a></li>
                         </ul>
                     </div>
                 </div>
@@ -2118,11 +2250,11 @@
             <div class="container">
                 <div class="row align-items-center">
                     <div class="col-md-6">
-                        <p class="text-white-50 mb-0">© 2025 SmartSafe AI. Tüm hakları saklıdır.</p>
+                        <p class="text-white-50 mb-0" data-translate="all_rights_reserved">© 2025 SmartSafe AI. All rights reserved.</p>
                     </div>
                     <div class="col-md-6 text-md-end">
-                        <a href="#" class="text-white-50 me-3">Gizlilik Politikası</a>
-                        <a href="#" class="text-white-50">Kullanım Şartları</a>
+                        <a href="#" class="text-white-50 me-3" data-translate="privacy_policy">Privacy Policy</a>
+                        <a href="#" class="text-white-50" data-translate="terms_of_use">Terms of Use</a>
                     </div>
                 </div>
             </div>
@@ -2237,9 +2369,9 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
-    <!-- jQuery ve Toastr JS -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script src="/static/js/translations.js"></script>
     <script>
         // Toastr ayarları
         toastr.options = {
@@ -2273,14 +2405,20 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    toastr.success('Mesajınız başarıyla gönderildi!', 'Başarılı');
+                    const lang = localStorage.getItem('preferredLanguage') || 'tr';
+                    const successMessage = lang === 'tr' ? 'Mesajınız başarıyla gönderildi!' : 'Your message has been sent successfully!';
+                    const successTitle = lang === 'tr' ? 'Başarılı' : 'Success';
+                    toastr.success(successMessage, successTitle);
                     this.reset();
                 } else {
                     throw new Error(data.error || 'Bir hata oluştu');
                 }
             })
             .catch(error => {
-                toastr.error('Bir hata oluştu. Lütfen tekrar deneyin.', 'Hata');
+                const lang = localStorage.getItem('preferredLanguage') || 'tr';
+                const errorMessage = lang === 'tr' ? 'Bir hata oluştu. Lütfen tekrar deneyin.' : 'An error occurred. Please try again.';
+                const errorTitle = lang === 'tr' ? 'Hata' : 'Error';
+                toastr.error(errorMessage, errorTitle);
                 console.error('Error:', error);
             });
         });
@@ -2320,6 +2458,48 @@
                 }
             },
             retina_detect: true
+        });
+
+        // Custom Dropdown Functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropdowns = document.querySelectorAll('.custom-dropdown');
+            
+            dropdowns.forEach(dropdown => {
+                const toggle = dropdown.querySelector('.custom-dropdown-toggle');
+                const menu = dropdown.querySelector('.custom-dropdown-menu');
+                const options = dropdown.querySelectorAll('.custom-dropdown-option');
+                const input = dropdown.querySelector('input[type="hidden"]');
+                const placeholder = dropdown.querySelector('.custom-dropdown-placeholder');
+                
+                toggle.addEventListener('click', () => {
+                    dropdown.classList.toggle('open');
+                });
+
+                options.forEach(option => {
+                    option.addEventListener('click', () => {
+                        const value = option.getAttribute('data-value');
+                        const text = option.textContent;
+                        
+                        if (input) input.value = value;
+                        if (placeholder) placeholder.textContent = text;
+                        placeholder.classList.remove('custom-dropdown-placeholder');
+                        
+                        options.forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                        
+                        dropdown.classList.remove('open');
+                    });
+                });
+            });
+
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', (e) => {
+                dropdowns.forEach(dropdown => {
+                    if (!dropdown.contains(e.target)) {
+                        dropdown.classList.remove('open');
+                    }
+                });
+            });
         });
     </script>
     <style>
@@ -2574,6 +2754,116 @@
                 e.preventDefault();
                 open = !open;
                 dropdown.classList.toggle('open', open);
+            }
+        });
+    </script>
+    <script>
+        // Initialize AOS
+        AOS.init({
+            duration: 800,
+            once: true
+        });
+
+        // Language switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const languageBtn = document.getElementById('languageBtn');
+            const languageSelector = document.querySelector('.language-selector');
+            const languageOptions = document.querySelectorAll('.language-option');
+            const currentFlag = document.getElementById('currentFlag');
+            const currentLang = document.getElementById('currentLang');
+
+            // Language translations
+            const translations = {
+                en: {
+                    features: "Features",
+                    sectors: "Sectors",
+                    benefits: "Benefits",
+                    contact: "Contact",
+                    login: "Login",
+                    hero_title: "Workplace Safety with AI",
+                    hero_description: "Smart security system that monitors personal protective equipment (PPE) usage in real-time and prevents workplace accidents in industrial facilities.",
+                    get_started: "Get Started",
+                    // Add more translations as needed
+                },
+                tr: {
+                    features: "Özellikler",
+                    sectors: "Sektörler",
+                    benefits: "Faydalar",
+                    contact: "İletişim",
+                    login: "Giriş Yap",
+                    hero_title: "Yapay Zeka ile İş Güvenliği",
+                    hero_description: "Endüstriyel tesislerde kişisel koruyucu ekipman (PPE) kullanımını gerçek zamanlı takip eden, iş kazalarını önleyen akıllı güvenlik sistemi.",
+                    get_started: "Hemen Başla",
+                    // Add more translations as needed
+                }
+            };
+
+            // Toggle language dropdown
+            languageBtn.addEventListener('click', function() {
+                languageSelector.classList.toggle('active');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!languageSelector.contains(e.target)) {
+                    languageSelector.classList.remove('active');
+                }
+            });
+
+            // Handle language selection
+            languageOptions.forEach(option => {
+                option.addEventListener('click', function() {
+                    const lang = this.dataset.lang;
+                    const flagSrc = this.querySelector('img').src;
+                    
+                    // Update active state
+                    languageOptions.forEach(opt => opt.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update button
+                    currentFlag.src = flagSrc;
+                    currentLang.textContent = lang.toUpperCase();
+                    
+                    // Update HTML lang attribute
+                    document.documentElement.lang = lang;
+                    
+                    // Update content
+                    updateContent(lang);
+                    
+                    // Close dropdown
+                    languageSelector.classList.remove('active');
+                    
+                    // Save language preference
+                    localStorage.setItem('preferred_language', lang);
+                });
+            });
+
+            // Function to update content
+            function updateContent(lang) {
+                const trans = translations[lang];
+                
+                // Update navigation
+                document.querySelector('a[href="#features"]').textContent = trans.features;
+                document.querySelector('a[href="#sectors"]').textContent = trans.sectors;
+                document.querySelector('a[href="#benefits"]').textContent = trans.benefits;
+                document.querySelector('a[href="#contact"]').textContent = trans.contact;
+                document.querySelector('a.btn.btn-primary[href="/app"]').textContent = trans.login;
+                
+                // Update hero section
+                document.querySelector('.hero-section h1').textContent = trans.hero_title;
+                document.querySelector('.hero-section .lead').textContent = trans.hero_description;
+                document.querySelector('.hero-section .btn-primary').textContent = trans.get_started;
+                
+                // Add more content updates as needed
+            }
+
+            // Load saved language preference
+            const savedLang = localStorage.getItem('preferred_language');
+            if (savedLang) {
+                const option = document.querySelector(`.language-option[data-lang="${savedLang}"]`);
+                if (option) {
+                    option.click();
+                }
             }
         });
     </script>

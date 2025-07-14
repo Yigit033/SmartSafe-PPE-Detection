@@ -45,9 +45,9 @@ class SecureDatabaseConnector:
             self.root_cert_path = None
         
         # Connection settings
-        self.max_retries = 5
-        self.retry_delay = 2  # Reduced from 5 to 2 seconds
-        self.connection_timeout = 15  # Reduced from 30 to 15 seconds
+        self.max_retries = 3  # Reduced retries for faster failure
+        self.retry_delay = 1  # Reduced delay
+        self.connection_timeout = 10  # Reduced timeout
         self.keepalives_idle = 30
         self.keepalives_interval = 10
         self.keepalives_count = 5
