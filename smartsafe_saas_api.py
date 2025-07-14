@@ -2701,30 +2701,126 @@ Mesaj:
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
             <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
             <style>
+                :root {
+                    --primary: #1E3A8A;
+                    --secondary: #0EA5E9;
+                    --accent: #22C55E;
+                    --warning: #EF4444;
+                    --light: #F8FAFC;
+                    --dark: #0F172A;
+                }
+
                 body {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
                     min-height: 100vh;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                    color: var(--dark);
+                    overflow-x: hidden;
                 }
-                .card {
-                    border-radius: 15px;
-                    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+
+                .gradient-bg {
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+                }
+
+                .glass-card {
+                    background: rgba(255, 255, 255, 0.95);
                     backdrop-filter: blur(10px);
-                    background: rgba(255,255,255,0.95);
+                    border-radius: 20px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
                 }
-                .btn-custom {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    border: none;
-                    border-radius: 25px;
-                    padding: 12px 30px;
+
+                .feature-icon {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
                     color: white;
+                    margin-bottom: 20px;
+                }
+
+                .btn-primary {
+                    background: var(--primary);
+                    border: none;
+                    padding: 12px 32px;
+                    border-radius: 30px;
                     font-weight: 600;
                     transition: all 0.3s ease;
                 }
-                .btn-custom:hover {
+
+                .btn-primary:hover {
+                    background: var(--secondary);
                     transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-                    color: white;
+                    box-shadow: 0 5px 15px rgba(14, 165, 233, 0.3);
+                }
+
+                .form-control, .form-select {
+                    border-radius: 15px;
+                    border: 2px solid #e2e8f0;
+                    padding: 12px 15px;
+                    transition: all 0.3s ease;
+                    font-size: 16px;
+                }
+
+                .form-control:focus, .form-select:focus {
+                    border-color: var(--primary);
+                    box-shadow: 0 0 0 0.2rem rgba(30, 58, 138, 0.25);
+                }
+
+                .form-check-input:checked {
+                    background-color: var(--primary);
+                    border-color: var(--primary);
+                }
+
+                .alert {
+                    border-radius: 15px;
+                    border: none;
+                }
+
+                .ppe-options {
+                    animation: fadeIn 0.5s ease-in-out;
+                }
+
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
+                .form-check-label {
+                    font-weight: 500;
+                    cursor: pointer;
+                }
+
+                .form-check-input {
+                    margin-top: 0.4em;
+                }
+
+                .badge {
+                    font-size: 0.7em;
+                }
+
+                .btn-outline-primary {
+                    border: 2px solid var(--primary);
+                    color: var(--primary);
+                    transition: all 0.3s ease;
+                }
+
+                .btn-outline-primary:hover {
+                    background: var(--primary);
+                    border-color: var(--primary);
+                    transform: translateY(-2px);
+                }
+
+                .container {
+                    animation: slideUp 0.6s ease-out;
+                }
+
+                @keyframes slideUp {
+                    from { opacity: 0; transform: translateY(30px); }
+                    to { opacity: 1; transform: translateY(0); }
                 }
             </style>
         </head>
@@ -2732,112 +2828,140 @@ Mesaj:
             <div class="container mt-5">
                 <div class="row justify-content-center">
                     <div class="col-md-8 col-lg-6">
-                        <div class="text-center mb-4">
-                            <h1 class="text-white display-4 fw-bold">
-                                <i class="fas fa-shield-alt"></i> SmartSafe AI
+                        <div class="text-center mb-5">
+                            <h1 class="text-white display-4 fw-bold mb-3" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                                <i class="fas fa-shield-alt me-3"></i> SmartSafe AI
                             </h1>
                             <p class="text-white-50 fs-5">Güvenlik İzleme SaaS Sistemi</p>
                         </div>
                         
-                        <div class="card">
+                        <div class="glass-card">
                             <div class="card-body p-5">
-                                <h3 class="text-center mb-4">
-                                    <i class="fas fa-building text-primary"></i> Şirket Kaydı
-                                </h3>
+                                <div class="text-center mb-5">
+                                    <div class="feature-icon mx-auto gradient-bg">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <h2 class="fw-bold mb-2">Şirket Kaydı</h2>
+                                    <p class="text-muted">SmartSafe AI ile güvenli çalışma alanları oluşturun</p>
+                                </div>
                                 
                                 <form id="registerForm" method="POST" action="/api/register-form">
                                     <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Şirket Adı *</label>
-                                            <input type="text" class="form-control" name="company_name" required>
+                                        <div class="col-md-6 mb-4">
+                                            <label class="form-label fw-semibold">
+                                                <i class="fas fa-building text-primary me-2"></i>Şirket Adı *
+                                            </label>
+                                            <input type="text" class="form-control form-control-lg" name="company_name" 
+                                                   placeholder="Şirket adınızı girin" required 
+                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Sektör *</label>
-                                            <select class="form-select" name="sector" required>
-                                                <option value="">Seçiniz</option>
-                                                <option value="construction">İnşaat</option>
-                                                <option value="manufacturing">İmalat</option>
-                                                <option value="chemical">Kimya</option>
-                                                <option value="food">Gıda</option>
-                                                <option value="warehouse">Depo/Lojistik</option>
+                                        <div class="col-md-6 mb-4">
+                                            <label class="form-label fw-semibold">
+                                                <i class="fas fa-industry text-primary me-2"></i>Sektör *
+                                            </label>
+                                            <select class="form-select form-select-lg" name="sector" required
+                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
+                                                <option value="">Sektörünüzü seçin</option>
+                                                <option value="construction">🏗️ İnşaat</option>
+                                                <option value="manufacturing">🏭 İmalat</option>
+                                                <option value="chemical">⚗️ Kimya</option>
+                                                <option value="food">🍕 Gıda</option>
+                                                <option value="warehouse">📦 Depo/Lojistik</option>
                                             </select>
                                         </div>
                                     </div>
                                     
                                     <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">İletişim Kişisi *</label>
-                                            <input type="text" class="form-control" name="contact_person" required>
+                                        <div class="col-md-6 mb-4">
+                                            <label class="form-label fw-semibold">
+                                                <i class="fas fa-user text-primary me-2"></i>İletişim Kişisi *
+                                            </label>
+                                            <input type="text" class="form-control form-control-lg" name="contact_person" 
+                                                   placeholder="Ad Soyad" required
+                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">E-mail *</label>
-                                            <input type="text" class="form-control" name="email" required
-                                                   placeholder="ornek@email.com (Türkçe karakterler desteklenir)"
-                                                   autocomplete="email">
+                                        <div class="col-md-6 mb-4">
+                                            <label class="form-label fw-semibold">
+                                                <i class="fas fa-envelope text-primary me-2"></i>E-mail *
+                                            </label>
+                                            <input type="email" class="form-control form-control-lg" name="email" required
+                                                   placeholder="ornek@email.com"
+                                                   autocomplete="email"
+                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
                                     </div>
                                     
                                     <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Telefon</label>
-                                            <input type="tel" class="form-control" name="phone">
+                                        <div class="col-md-6 mb-4">
+                                            <label class="form-label fw-semibold">
+                                                <i class="fas fa-phone text-primary me-2"></i>Telefon
+                                            </label>
+                                            <input type="tel" class="form-control form-control-lg" name="phone"
+                                                   placeholder="+90 555 123 45 67"
+                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Kamera Sayısı</label>
-                                            <select class="form-select" name="max_cameras">
-                                                <option value="5">5 Kamera (Basic)</option>
-                                                <option value="10">10 Kamera (Professional)</option>
-                                                <option value="16">16 Kamera (Enterprise)</option>
+                                        <div class="col-md-6 mb-4">
+                                            <label class="form-label fw-semibold">
+                                                <i class="fas fa-video text-primary me-2"></i>Kamera Sayısı
+                                            </label>
+                                            <select class="form-select form-select-lg" name="max_cameras"
+                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
+                                                <option value="5">📹 5 Kamera (Basic)</option>
+                                                <option value="10">📹 10 Kamera (Professional)</option>
+                                                <option value="16">📹 16 Kamera (Enterprise)</option>
                                             </select>
                                         </div>
                                     </div>
                                     
-                                    <div class="mb-3">
-                                        <label class="form-label">Adres</label>
-                                        <textarea class="form-control" name="address" rows="2"></textarea>
+                                    <div class="mb-4">
+                                        <label class="form-label fw-semibold">
+                                            <i class="fas fa-map-marker-alt text-primary me-2"></i>Adres
+                                        </label>
+                                        <textarea class="form-control form-control-lg" name="address" rows="3"
+                                                  placeholder="Şirket adresinizi girin"
+                                                  style="border-radius: 15px; border: 2px solid #e2e8f0;"></textarea>
                                     </div>
                                     
                                     <!-- PPE Seçimi -->
-                                    <div class="mb-4" id="ppe-selection-container" style="display: none;">
-                                        <label class="form-label">
-                                            <i class="fas fa-hard-hat text-warning"></i> 
-                                            Zorunlu PPE Seçimi *
-                                        </label>
-                                        <p class="text-muted small">Şirketinizde zorunlu olmasını istediğiniz PPE'leri seçin:</p>
-                                        <div class="alert alert-info">
-                                            <i class="fas fa-info-circle"></i> 
-                                            <strong>Önce sektör seçimi yapın</strong> - Sektörünüze özel PPE seçenekleri görünecek
-                                        </div>
+                                    <div class="mb-5" id="ppe-selection-container" style="display: none;">
+                                        <div class="glass-card p-4" style="background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.1);">
+                                            <label class="form-label fw-bold fs-5 mb-3">
+                                                <i class="fas fa-hard-hat text-warning me-2"></i> 
+                                                Zorunlu PPE Seçimi *
+                                            </label>
+                                            <p class="text-muted mb-3">Şirketinizde zorunlu olmasını istediğiniz PPE'leri seçin:</p>
+                                            <div class="alert alert-info border-0" style="background: rgba(59, 130, 246, 0.1);">
+                                                <i class="fas fa-info-circle me-2"></i> 
+                                                <strong>Önce sektör seçimi yapın</strong> - Sektörünüze özel PPE seçenekleri görünecek
+                                            </div>
                                         
-                                        <!-- İnşaat Sektörü PPE -->
-                                        <div id="construction-ppe" class="ppe-options" style="display: none;">
-                                            <div class="row">
-                                                <div class="col-md-4 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="construction-helmet" checked>
-                                                        <label class="form-check-label" for="construction-helmet">
-                                                            <i class="fas fa-hard-hat text-primary"></i> Baret/Kask
-
-                                                        </label>
+                                            <!-- İnşaat Sektörü PPE -->
+                                            <div id="construction-ppe" class="ppe-options" style="display: none;">
+                                                <div class="row">
+                                                    <div class="col-md-4 mb-3">
+                                                        <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                            <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="construction-helmet" checked>
+                                                            <label class="form-check-label fw-semibold" for="construction-helmet">
+                                                                <i class="fas fa-hard-hat text-primary me-2"></i> Baret/Kask
+                                                            </label>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="col-md-4 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="construction-vest" checked>
-                                                        <label class="form-check-label" for="construction-vest">
-                                                            <i class="fas fa-tshirt text-warning"></i> Güvenlik Yeleği
-
-                                                        </label>
+                                                    <div class="col-md-4 mb-3">
+                                                        <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                            <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="construction-vest" checked>
+                                                            <label class="form-check-label fw-semibold" for="construction-vest">
+                                                                <i class="fas fa-tshirt text-warning me-2"></i> Güvenlik Yeleği
+                                                            </label>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="col-md-4 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="construction-shoes" checked>
-                                                        <label class="form-check-label" for="construction-shoes">
-                                                            <i class="fas fa-socks text-success"></i> Güvenlik Ayakkabısı
-                                                        </label>
+                                                    <div class="col-md-4 mb-3">
+                                                        <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                            <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="construction-shoes" checked>
+                                                            <label class="form-check-label fw-semibold" for="construction-shoes">
+                                                                <i class="fas fa-socks text-success me-2"></i> Güvenlik Ayakkabısı
+                                                            </label>
+                                                        </div>
                                                     </div>
-                                                </div>
                                                 <div class="col-md-6 mb-2">
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="construction-gloves">
@@ -3025,55 +3149,73 @@ Mesaj:
                                     </div>
 
                                     
+                                        </div>
+                                    
                                     <div class="mb-4">
-                                        <label class="form-label">Şifre *</label>
-                                        <input type="password" class="form-control" name="password" required>
+                                        <label class="form-label fw-semibold">
+                                            <i class="fas fa-lock text-primary me-2"></i>Şifre *
+                                        </label>
+                                        <input type="password" class="form-control form-control-lg" name="password" required
+                                               placeholder="Güvenli bir şifre oluşturun"
+                                               style="border-radius: 15px; border: 2px solid #e2e8f0;">
+                                    </div>
+                                    
+                                    <div class="text-center mb-4">
+                                        <div class="alert alert-success border-0" style="background: rgba(34, 197, 94, 0.1); border-radius: 15px;">
+                                            <i class="fas fa-gift text-success me-2"></i> 
+                                            <strong>İlk ay ücretsiz!</strong> Anında kurulum.
+                                        </div>
                                     </div>
                                     
                                     <div class="d-grid">
-                                        <button type="submit" class="btn btn-custom">
-                                            <i class="fas fa-rocket"></i> Kayıt Ol & Hemen Başla
+                                        <button type="submit" class="btn btn-primary btn-lg" 
+                                                style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
+                                            <i class="fas fa-rocket me-2"></i> Kayıt Ol & Hemen Başla
                                         </button>
                                     </div>
                                 </form>
                                 
-                                <div class="text-center mt-4">
-                                    <p class="text-muted">
-                                        <i class="fas fa-gift text-success"></i> 
-                                        İlk ay ücretsiz! Anında kurulum.
-                                    </p>
-                                </div>
+                                <hr class="my-5" style="border-color: rgba(0,0,0,0.1); border-width: 2px;">
                                 
-                                <hr class="my-4">
-                                
-                                <div class="text-center">
-                                    <h5 class="mb-3">
-                                        <i class="fas fa-sign-in-alt text-secondary"></i> 
-                                        Kayıtlı Şirket Girişi
-                                    </h5>
+                                <div class="glass-card p-4 mt-4" style="background: rgba(248, 250, 252, 0.8); border: 2px solid rgba(30, 58, 138, 0.1);">
+                                    <div class="text-center mb-4">
+                                        <div class="feature-icon mx-auto" style="width: 48px; height: 48px; background: linear-gradient(135deg, #64748b 0%, #475569 100%);">
+                                            <i class="fas fa-sign-in-alt" style="font-size: 20px;"></i>
+                                        </div>
+                                        <h5 class="mt-3 mb-2 fw-bold">Kayıtlı Şirket Girişi</h5>
+                                        <p class="text-muted small">Mevcut şirket hesabınızla giriş yapın</p>
+                                    </div>
                                     
                                     <form method="POST" action="/api/company-login-redirect">
-                                        <div class="row">
-                                            <div class="col-md-8 mb-2">
+                                        <div class="row align-items-end">
+                                            <div class="col-md-8 mb-3">
+                                                <label class="form-label fw-semibold small">
+                                                    <i class="fas fa-id-card text-primary me-2"></i>Şirket ID
+                                                </label>
                                                 <input type="text" 
-                                                       class="form-control" 
+                                                       class="form-control form-control-lg" 
                                                        name="company_id" 
-                                                       placeholder="Şirket ID'nizi girin (örn: COMP_ABC123)"
-                                                       style="border-radius: 25px;"
+                                                       placeholder="COMP_ABC123"
+                                                       style="border-radius: 15px; border: 2px solid #e2e8f0;"
                                                        required>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label small text-transparent">.</label>
                                                 <button type="submit" 
-                                                        class="btn btn-outline-primary w-100" 
-                                                        style="border-radius: 25px;">
-                                                    <i class="fas fa-arrow-right"></i> Giriş Yap
+                                                        class="btn btn-outline-primary btn-lg w-100" 
+                                                        style="border-radius: 15px; border: 2px solid #1E3A8A; font-weight: 600;">
+                                                    <i class="fas fa-arrow-right me-2"></i> Giriş
                                                 </button>
                                             </div>
                                         </div>
-                                        <small class="text-muted">
-                                            Şirket ID'niz COMP_ ile başlayan benzersiz kodunuzdur.
-                                        </small>
+                                        <div class="alert alert-info border-0 mt-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 10px;">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                Şirket ID'niz kayıt sonrası size verilen COMP_ ile başlayan kodunuzdur.
+                                            </small>
+                                        </div>
                                     </form>
+                                </div>
                                 </div>
                             </div>
                         </div>
@@ -4329,73 +4471,189 @@ Mesaj:
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SmartSafe PPE - Şirket Girişi</title>
+            <title>SmartSafe AI - Şirket Girişi</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
             <style>
+                :root {
+                    --primary: #1E3A8A;
+                    --secondary: #0EA5E9;
+                    --accent: #22C55E;
+                    --warning: #EF4444;
+                    --light: #F8FAFC;
+                    --dark: #0F172A;
+                }
+
                 body {
-                    background-color: #f8f9fa;
-                }
-                .login-container {
-                    max-width: 400px;
-                    margin: 100px auto;
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                    color: var(--dark);
+                    overflow-x: hidden;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0;
                     padding: 20px;
-                    background: white;
-                    border-radius: 10px;
-                    box-shadow: 0 0 20px rgba(0,0,0,0.1);
                 }
-                .logo {
-                    text-align: center;
-                    margin-bottom: 30px;
+
+                .gradient-bg {
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
                 }
-                .logo img {
-                    max-width: 200px;
-                }
-                .form-group {
-                    margin-bottom: 20px;
-                }
-                .btn-login {
+
+                .glass-card {
+                    background: rgba(255, 255, 255, 0.95);
+                    backdrop-filter: blur(10px);
+                    border-radius: 20px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                    max-width: 450px;
                     width: 100%;
-                    padding: 12px;
-                    background-color: #0d6efd;
-                    border: none;
+                    margin: 0 auto;
+                }
+
+                .feature-icon {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
                     color: white;
-                    font-weight: 500;
-                }
-                .btn-login:hover {
-                    background-color: #0b5ed7;
-                }
-                .alert {
                     margin-bottom: 20px;
+                }
+
+                .btn-primary {
+                    background: var(--primary);
+                    border: none;
+                    padding: 12px 32px;
+                    border-radius: 30px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                }
+
+                .btn-primary:hover {
+                    background: var(--secondary);
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(14, 165, 233, 0.3);
+                }
+
+                .form-control {
+                    border-radius: 15px;
+                    border: 2px solid #e2e8f0;
+                    padding: 12px 15px;
+                    transition: all 0.3s ease;
+                    font-size: 16px;
+                }
+
+                .form-control:focus {
+                    border-color: var(--primary);
+                    box-shadow: 0 0 0 0.2rem rgba(30, 58, 138, 0.25);
+                }
+
+                .alert {
+                    border-radius: 15px;
+                    border: none;
+                }
+
+                .container {
+                    animation: slideUp 0.6s ease-out;
+                }
+
+                @keyframes slideUp {
+                    from { opacity: 0; transform: translateY(30px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
+                .btn-outline-primary {
+                    border: 2px solid var(--primary);
+                    color: var(--primary);
+                    transition: all 0.3s ease;
+                }
+
+                .btn-outline-primary:hover {
+                    background: var(--primary);
+                    border-color: var(--primary);
+                    transform: translateY(-2px);
+                }
+
+                .login-header {
+                    text-align: center;
+                    margin-bottom: 2rem;
+                }
+
+                .company-badge {
+                    background: rgba(30, 58, 138, 0.1);
+                    color: var(--primary);
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    border: 1px solid rgba(30, 58, 138, 0.2);
                 }
             </style>
         </head>
         <body>
-            <div class="container">
-                <div class="login-container">
-                    <a class="navbar-brand" href="/login">
-                        <i class="fas fa-shield-alt"></i> SmartSafe AI
-                    </a>
-                    
-                    <h4 class="text-center mb-4">Şirket Girişi</h4>
+            <div class="container-fluid d-flex justify-content-center align-items-center min-vh-100">
+                <div class="glass-card p-5">
+                    <div class="login-header">
+                        <div class="feature-icon mx-auto gradient-bg">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h2 class="fw-bold mb-3">SmartSafe AI</h2>
+                        <div class="company-badge mb-3">
+                            <i class="fas fa-building me-2"></i>
+                            Şirket ID: ''' + company_id + '''
+                        </div>
+                        <p class="text-muted">Güvenli giriş yapın</p>
+                    </div>
                     
                     <form action="/company/''' + company_id + '''/login-form" method="POST">
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" class="form-control" id="email" name="email" required>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-envelope text-primary me-2"></i>Email Adresiniz
+                            </label>
+                            <input type="email" class="form-control form-control-lg" id="email" name="email" 
+                                   placeholder="ornek@sirketiniz.com" required>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="password">Şifre</label>
-                            <input type="password" class="form-control" id="password" name="password" required>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-lock text-primary me-2"></i>Şifreniz
+                            </label>
+                            <input type="password" class="form-control form-control-lg" id="password" name="password" 
+                                   placeholder="Şifrenizi girin" required>
                         </div>
                         
-                        <button type="submit" class="btn btn-login">Giriş Yap</button>
+                        <div class="d-grid mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg" 
+                                    style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
+                                <i class="fas fa-sign-in-alt me-2"></i>Giriş Yap
+                            </button>
+                        </div>
                     </form>
                     
-                    <div class="text-center mt-3">
-                        <small>
-                            <a href="#" class="text-muted">Şifremi Unuttum</a>
-                        </small>get_login_template
+                    <div class="text-center">
+                        <div class="alert alert-info border-0 mb-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 15px;">
+                            <small>
+                                <i class="fas fa-info-circle me-2"></i>
+                                Şirket kaydı sırasında verilen email ve şifrenizi kullanın
+                            </small>
+                        </div>
+                        
+                                                 <div class="row">
+                             <div class="col-6">
+                                 <a href="/#contact" class="btn btn-outline-secondary btn-sm w-100" style="border-radius: 20px;">
+                                     <i class="fas fa-key me-1"></i>Şifremi Unuttum
+                                 </a>
+                             </div>
+                             <div class="col-6">
+                                 <a href="/app" class="btn btn-outline-primary btn-sm w-100" style="border-radius: 20px;">
+                                     <i class="fas fa-user-plus me-1"></i>Yeni Kayıt
+                                 </a>
+                             </div>
+                         </div>
                     </div>
                 </div>
             </div>
