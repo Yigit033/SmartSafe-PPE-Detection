@@ -14,6 +14,7 @@ import socket
 import ssl
 import time
 import certifi
+import dns.resolver
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +46,26 @@ class SecureDatabaseConnector:
         
         # Connection settings
         self.max_retries = 5
-        self.retry_delay = 5
-        self.connection_timeout = 30
+        self.retry_delay = 2  # Reduced from 5 to 2 seconds
+        self.connection_timeout = 15  # Reduced from 30 to 15 seconds
         self.keepalives_idle = 30
         self.keepalives_interval = 10
         self.keepalives_count = 5
+
+    def resolve_host(self, host: str) -> Optional[str]:
+        """Resolve hostname to IP address"""
+        try:
+            # Try IPv4 first
+            answers = dns.resolver.resolve(host, 'A')
+            return str(answers[0])
+        except Exception:
+            try:
+                # Try IPv6 if IPv4 fails
+                answers = dns.resolver.resolve(host, 'AAAA')
+                return str(answers[0])
+            except Exception as e:
+                logger.warning(f"Could not resolve host {host}: {e}")
+                return None
     
     def get_ssl_config(self) -> Dict[str, Any]:
         """Get SSL configuration based on available certificates"""
@@ -60,7 +76,8 @@ class SecureDatabaseConnector:
             'keepalives_interval': self.keepalives_interval,
             'keepalives_count': self.keepalives_count,
             'connect_timeout': self.connection_timeout,
-            'application_name': 'smartsafe_ppe_detection'
+            'application_name': 'smartsafe_ppe_detection',
+            'options': '-c statement_timeout=5000'  # 5 second statement timeout
         }
         
         # Use system CA certificates
@@ -71,6 +88,11 @@ class SecureDatabaseConnector:
     
     def test_connection(self, host: str, port: int) -> bool:
         """Test if database host is reachable"""
+        # First resolve the hostname
+        ip_address = self.resolve_host(host)
+        if not ip_address:
+            return False
+            
         try:
             # Create SSL context for connection test
             context = ssl.create_default_context()
@@ -78,12 +100,23 @@ class SecureDatabaseConnector:
             context.verify_mode = ssl.CERT_REQUIRED
             context.load_verify_locations(cafile=certifi.where())
             
-            # Try SSL connection
-            with socket.create_connection((host, port), timeout=5) as sock:
-                with context.wrap_socket(sock, server_hostname=host) as ssock:
-                    return True
+            # Try both IPv4 and IPv6
+            for family in (socket.AF_INET, socket.AF_INET6):
+                try:
+                    # Create socket with specific family
+                    sock = socket.socket(family, socket.SOCK_STREAM)
+                    sock.settimeout(5)
                     
-        except (socket.timeout, socket.error, ssl.SSLError) as e:
+                    # Try to connect
+                    sock.connect((ip_address, port))
+                    with context.wrap_socket(sock, server_hostname=host) as ssock:
+                        return True
+                except (socket.timeout, socket.error, ssl.SSLError):
+                    continue
+                    
+            return False
+                    
+        except Exception as e:
             logger.error(f"Cannot reach database host {host}:{port} - {e}")
             return False
     
@@ -117,6 +150,10 @@ class SecureDatabaseConnector:
         last_error = None
         for attempt in range(self.max_retries):
             try:
+                # Test network connectivity first
+                if not self.test_connection(params['host'], params['port']):
+                    raise ConnectionError(f"Cannot establish network connection to {params['host']}:{params['port']}")
+                
                 # Try to establish connection
                 conn = psycopg2.connect(
                     **params,
