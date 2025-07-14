@@ -102,8 +102,15 @@ class DatabaseAdapter:
         try:
             conn = self.get_connection()
             if conn is None:
-                logger.error("❌ Database initialization failed: No connection available")
-                return False
+                logger.warning("⚠️ Primary database connection failed, falling back to SQLite")
+                # Force fallback to SQLite
+                self.config = self._get_sqlite_config()
+                self.db_type = self.config.database_type
+                logger.info(f"🔄 Switched to SQLite: {self.db_type}")
+                conn = self.get_connection()
+                if conn is None:
+                    logger.error("❌ Database initialization failed: No connection available")
+                    return False
             cursor = conn.cursor()
             
             logger.info("🔧 Creating database tables...")

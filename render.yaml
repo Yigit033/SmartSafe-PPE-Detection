@@ -33,7 +33,7 @@ services:
         value: production
       - key: FLASK_APP
         value: smartsafe_saas_api.py
-      - key: PORT  # This will be set by Render
+      - key: PORT
         value: "10000"
       - key: PYTHONPATH
         value: /opt/render/project/src
@@ -55,26 +55,7 @@ services:
         value: 6818.yigit.98
       - key: SSL_MODE
         value: prefer
-      - key: SUPABASE_URL
-        value: "db.nbxntohihcwruwlnthfb.supabase.co"
-      - key: SUPABASE_PORT
-        value: "5432"
-      - key: SUPABASE_DB_NAME
-        value: "postgres"
-      - key: SUPABASE_USER
-        value: "postgres"
-      - key: SUPABASE_PASSWORD
-        sync: false
-      - key: SSL_CERT_PATH
-        value: "/opt/render/project/src/ssl/supabase.crt"
-      - key: SSL_MODE
-        value: "require"
-      - key: REDIS_URL
-        fromService:
-          name: smartsafe-redis
-          type: redis
-          property: connectionString
-      - key: GUNICORN_CMD_ARGS  # Add explicit Gunicorn arguments
+      - key: GUNICORN_CMD_ARGS
         value: "--access-logfile - --error-logfile - --capture-output"
     disks:
       - name: smartsafe-data
@@ -92,12 +73,6 @@ services:
     autoDeploy: true
     domains:
       - smartsafe-api.onrender.com
-    
-  - type: redis
-    name: smartsafe-redis
-    plan: free
-    region: oregon
-    ipAllowList: []
     
 databases:
   - name: smartsafe-db
