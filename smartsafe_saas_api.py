@@ -8029,18 +8029,16 @@ smartsafe_requests_total 100
         
         try:
             # Get port from environment (Render.com compatibility)
-            port = int(os.environ.get('PORT', 5000))
+            port = int(os.environ.get('PORT', 8000))
+            logger.info(f"Using port {port}")
             
-            # Use production WSGI server or development server
+            # In production, we use gunicorn which handles the port binding
             if os.getenv('FLASK_ENV') == 'production':
-                try:
-                    from waitress import serve
-                    serve(self.app, host='0.0.0.0', port=port, threads=4)
-                except ImportError:
-                    logger.warning("Waitress not installed, using development server")
-                    self.app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+                # Just return the app, let gunicorn handle the serving
+                return self.app
             else:
-                self.app.run(host='0.0.0.0', port=port, debug=True, threaded=True)
+                # In development, use Flask's built-in server
+                self.app.run(host='0.0.0.0', port=port, debug=True)
         except Exception as e:
             logger.error(f"Failed to start SaaS API server: {e}")
             raise
@@ -8056,12 +8054,19 @@ def main():
     print("✅ Responsive web arayüzü")
     print("=" * 60)
     print("🚀 Server başlatılıyor...")
-    print("📱 Ana Sayfa: http://localhost:5000")
-    print("🏢 Şirket Kayıt: http://localhost:5000")
     
     try:
         api_server = SmartSafeSaaSAPI()
-        api_server.run()
+        app = api_server.run()
+        
+        # In production, return the app for gunicorn
+        if os.getenv('FLASK_ENV') == 'production':
+            return app
+            
+        # In development, show local URLs
+        port = int(os.environ.get('PORT', 8000))
+        print(f"📱 Ana Sayfa: http://localhost:{port}")
+        print(f"🏢 Şirket Kayıt: http://localhost:{port}")
         
     except KeyboardInterrupt:
         logger.info("🛑 SaaS API Server stopped by user")

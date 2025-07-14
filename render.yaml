@@ -5,20 +5,29 @@ services:
     region: oregon
     plan: free
     buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
+      # Create required directories
+      mkdir -p /opt/render/project/src/ssl
+      chmod 755 /opt/render/project/src/ssl
       mkdir -p /tmp/Ultralytics
       chmod 777 /tmp/Ultralytics
+      
+      # Install dependencies
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      
+      # Download models
       python download_models.py
-      # Create SSL directory and set permissions
-      mkdir -p /opt/render/project/src/ssl
-      chmod 700 /opt/render/project/src/ssl
-      # Copy SSL certificate if exists
+      
+      # Copy SSL certificates if they exist
       if [ -f ssl/supabase.crt ]; then
         cp ssl/supabase.crt /opt/render/project/src/ssl/
         chmod 600 /opt/render/project/src/ssl/supabase.crt
       fi
-    startCommand: gunicorn smartsafe_saas_api:app
+      if [ -f ssl/root.crt ]; then
+        cp ssl/root.crt /opt/render/project/src/ssl/
+        chmod 600 /opt/render/project/src/ssl/root.crt
+      fi
+    startCommand: python -m gunicorn smartsafe_saas_api:app
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
@@ -34,7 +43,7 @@ services:
       - key: YOLO_CONFIG_DIR
         value: /tmp/Ultralytics
       - key: GUNICORN_CMD_ARGS
-        value: "--bind=0.0.0.0:8000 --workers=2 --threads=4 --timeout=120"
+        value: "--bind=0.0.0.0:$PORT --workers=2 --threads=4 --timeout=120"
       - key: RENDER
         value: "true"
       - key: SUPABASE_URL
@@ -90,7 +99,7 @@ databases:
     databaseName: smartsafe_ppe
     user: smartsafe_user
     region: oregon
-    plan: starter # Changed from free to starter for better reliability
-    ipAllowList: # Add Supabase IP range
+    plan: starter
+    ipAllowList:
       - source: 0.0.0.0/0
         description: everywhere 

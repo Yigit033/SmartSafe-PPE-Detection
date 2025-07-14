@@ -29,10 +29,23 @@ class SecureDatabaseConnector:
             self.ssl_dir = Path('/opt/render/project/src/ssl')
         else:
             self.ssl_dir = Path(__file__).parent.parent / 'ssl'
+        
+        # Create SSL directory if it doesn't exist
+        try:
+            self.ssl_dir.mkdir(parents=True, exist_ok=True)
+            if self.is_render:
+                os.chmod(str(self.ssl_dir), 0o755)  # Ensure directory is accessible
+        except Exception as e:
+            logger.warning(f"Could not create SSL directory: {e}. Will use system CA certificates.")
+            self.ssl_dir = None
             
-        self.ssl_dir.mkdir(exist_ok=True)
-        self.cert_path = self.ssl_dir / 'supabase.crt'
-        self.root_cert_path = self.ssl_dir / 'root.crt'
+        # Set certificate paths
+        if self.ssl_dir:
+            self.cert_path = self.ssl_dir / 'supabase.crt'
+            self.root_cert_path = self.ssl_dir / 'root.crt'
+        else:
+            self.cert_path = None
+            self.root_cert_path = None
         
         # Connection settings
         self.max_retries = 5  # Increased retries
@@ -54,16 +67,20 @@ class SecureDatabaseConnector:
             'application_name': 'smartsafe_ppe_detection'  # Add application name
         }
         
-        # If we have certificates, use them
-        if self.cert_path.exists():
+        # If we have certificates and SSL directory exists, use them
+        if self.ssl_dir and self.cert_path and self.cert_path.exists():
             ssl_config['sslmode'] = 'verify-full'
             ssl_config['sslcert'] = str(self.cert_path)
             
-            if self.root_cert_path.exists():
+            if self.root_cert_path and self.root_cert_path.exists():
                 ssl_config['sslrootcert'] = str(self.root_cert_path)
             else:
                 # Use system CA certificates as fallback
                 ssl_config['sslrootcert'] = certifi.where()
+        else:
+            # Fallback to system CA certificates
+            ssl_config['sslrootcert'] = certifi.where()
+            logger.info("Using system CA certificates for SSL verification")
         
         return ssl_config
     
