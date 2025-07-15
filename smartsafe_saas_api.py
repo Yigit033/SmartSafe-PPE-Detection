@@ -8338,7 +8338,7 @@ try:
     app = api_server.app
     print(f"✅ Global Flask app created successfully: {app}")
     print(f"📍 App name: {app.name}")
-    print(f"📍 Environment: {app.env}")
+    print(f"📍 Environment: {app.config.get('ENV', 'production')}")
     print("🚀 Ready for WSGI server (Gunicorn)")
     print("📌 Gunicorn will use this 'app' object directly")
 except Exception as e:
@@ -8363,8 +8363,12 @@ except Exception as e:
 if __name__ == "__main__":
     # Bu blok sadece development mode'da çalışır
     # Production'da Gunicorn global 'app' objesini kullanır
-    print("🔧 Development mode detected - starting Flask dev server...")
-    main()
+    import os
+    if not os.environ.get('RENDER'):
+        print("🔧 Development mode detected - starting Flask dev server...")
+        main()
+    else:
+        print("🚀 Production mode - Gunicorn will handle the app")
 
 
 
