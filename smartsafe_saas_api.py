@@ -8430,17 +8430,24 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    # Bu blok sadece development mode'da çalışır
-    # Production'da Gunicorn global 'app' objesini kullanır
-    import os
-    is_production = os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEROKU_APP_NAME')
+    # RENDER.COM İÇİN ZORLA FLASK DEV SERVER
+    print("🚀 RENDER.COM - Starting Flask development server...")
     
-    if not is_production:
-        print("🔧 Development mode detected - starting Flask dev server...")
-        main()
-    else:
-        print("🚀 Production mode - Gunicorn will handle the app")
-        print("📌 Flask app ready for WSGI server")
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        
+        # Get port from environment
+        port = int(os.environ.get('PORT', 10000))
+        print(f"🌐 Starting server on 0.0.0.0:{port}")
+        
+        # ZORLA FLASK DEV SERVER - RENDER.COM İÇİN
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+        
+    except Exception as e:
+        print(f"❌ Server start error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 
