@@ -19,7 +19,7 @@ def quick_test():
     # Test 1: App Import
     print("\n1. Testing App Import...")
     try:
-        os.environ['RENDER'] = '1'
+        os.environ['RAILWAY_ENVIRONMENT'] = 'production'
         from smartsafe_saas_api import app
         if app:
             print("OK App import successful")
@@ -69,7 +69,7 @@ def quick_test():
     # Test 5: Port Binding
     print("\n5. Testing Port Binding...")
     try:
-        port = os.environ.get('PORT', '10000')
+        port = os.environ.get('PORT', '8080')
         if port and port.isdigit():
             print(f"OK Port configured: {port}")
             tests_passed += 1

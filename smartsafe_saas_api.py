@@ -59,12 +59,18 @@ class SmartSafeSaaSAPI:
                         static_folder='static')
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
-        # Force production mode settings
-        is_production = os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEROKU_APP_NAME')
+        # Force production mode settings - Railway.app optimized
+        is_production = (os.environ.get('RAILWAY_ENVIRONMENT') or 
+                        os.environ.get('RENDER') or 
+                        os.environ.get('HEROKU_APP_NAME'))
+        
         if is_production:
             self.app.config['DEBUG'] = False
             self.app.config['TESTING'] = False
             self.app.config['ENV'] = 'production'
+            # Railway.app specific optimizations
+            self.app.config['PROPAGATE_EXCEPTIONS'] = True
+            self.app.config['PREFERRED_URL_SCHEME'] = 'https'
         
         # Mail configuration
         self.app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -8430,24 +8436,41 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    # RENDER.COM İÇİN ZORLA FLASK DEV SERVER
-    print("🚀 RENDER.COM - Starting Flask development server...")
+    # RAILWAY.APP OPTIMIZED FLASK SERVER
+    print("🚀 RAILWAY.APP - Starting optimized Flask server...")
     
     try:
         api_server = SmartSafeSaaSAPI()
         app = api_server.app
         
-        # Get port from environment
-        port = int(os.environ.get('PORT', 10000))
-        print(f"🌐 Starting server on 0.0.0.0:{port}")
+        # Railway.app automatic port detection
+        port = int(os.environ.get('PORT', 8080))  # Railway default port
+        host = '0.0.0.0'
         
-        # ZORLA FLASK DEV SERVER - RENDER.COM İÇİN
-        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+        # Platform detection
+        platform = "Railway.app" if os.environ.get('RAILWAY_ENVIRONMENT') else "Local"
+        print(f"🌐 Platform: {platform}")
+        print(f"🌐 Starting server on {host}:{port}")
+        print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
+        print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
+        
+        # RAILWAY.APP OPTIMIZED FLASK SERVER
+        app.run(
+            host=host, 
+            port=port, 
+            debug=False, 
+            threaded=True,
+            use_reloader=False,  # Railway.app optimization
+            use_debugger=False   # Production safety
+        )
         
     except Exception as e:
         print(f"❌ Server start error: {e}")
         import traceback
         traceback.print_exc()
+        # Exit with error code for Railway.app
+        import sys
+        sys.exit(1)
 
 
 
