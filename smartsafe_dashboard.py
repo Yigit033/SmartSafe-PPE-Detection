@@ -4,7 +4,7 @@ SmartSafe AI - Profesyonel Web Dashboard
 İnşaat ve diğer sektörler için kaliteli dashboard sistemi
 """
 
-from flask import Flask, render_template, jsonify, request, redirect, url_for, session, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session, flash, Response
 from flask_cors import CORS
 import sqlite3
 import json
@@ -13,9 +13,13 @@ import os
 import cv2
 import numpy as np
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
+from smartsafe_sector_detector_factory import SectorDetectorFactory
 from smartsafe_sector_manager import SmartSafeSectorManager
 import threading
 import time
+import base64
+from io import BytesIO
+import queue
 
 app = Flask(__name__)
 app.secret_key = 'smartsafe_ai_2024_secure_key'
@@ -25,6 +29,9 @@ CORS(app)
 sector_manager = SmartSafeSectorManager()
 active_detectors = {}
 detection_threads = {}
+camera_captures = {}  # Kamera yakalama nesneleri
+frame_buffers = {}    # Frame buffer'ları
+detection_results = {} # Tespit sonuçları
 
 class DashboardManager:
     """Dashboard yönetim sistemi"""
@@ -439,51 +446,170 @@ dashboard_manager.create_dashboard_template()
 @app.route('/')
 def index():
     """Ana sayfa"""
-    # Demo verileri
-    stats = {
-        'total_workers': 12,
-        'compliance_rate': 78,
-        'violations_today': 5,
-        'total_penalty': 425
-    }
+    # Gerçek detection sonuçlarından istatistikleri hesapla
+    stats = calculate_real_stats()
     
-    recent_violations = [
-        {
-            'worker_name': 'Ahmet Yılmaz',
-            'time': '14:30',
-            'missing_ppe': ['Baret', 'Güvenlik Yeleği'],
-            'penalty': 175
-        },
-        {
-            'worker_name': 'Mehmet Kaya',
-            'time': '13:45',
-            'missing_ppe': ['Güvenlik Ayakkabısı'],
-            'penalty': 50
-        },
-        {
-            'worker_name': 'Ali Demir',
-            'time': '12:20',
-            'missing_ppe': ['Baret'],
-            'penalty': 100
-        }
-    ]
+    # Gerçek ihlal verilerini al
+    recent_violations = get_recent_violations()
     
     return render_template('dashboard.html', stats=stats, recent_violations=recent_violations)
+
+def calculate_real_stats():
+    """Gerçek detection sonuçlarından istatistikleri hesapla"""
+    try:
+        total_workers = 0
+        total_violations = 0
+        total_detections = 0
+        compliance_rates = []
+        
+        # Aktif kameralardan veri topla
+        for camera_id in active_detectors:
+            if active_detectors[camera_id] and camera_id in detection_results:
+                try:
+                    # En son sonucu al (queue'yu boşaltmadan)
+                    temp_results = []
+                    while not detection_results[camera_id].empty():
+                        temp_results.append(detection_results[camera_id].get_nowait())
+                    
+                    if temp_results:
+                        # En son sonucu kullan
+                        latest_result = temp_results[-1]
+                        total_workers += latest_result.get('total_people', 0)
+                        total_violations += len(latest_result.get('violations', []))
+                        total_detections += 1
+                        compliance_rates.append(latest_result.get('compliance_rate', 0))
+                        
+                        # Sonuçları geri koy
+                        for result in temp_results:
+                            try:
+                                detection_results[camera_id].put_nowait(result)
+                            except queue.Full:
+                                break
+                except queue.Empty:
+                    pass
+        
+        # İstatistikleri hesapla
+        avg_compliance_rate = sum(compliance_rates) / len(compliance_rates) if compliance_rates else 0
+        
+        # Ceza hesapla (basit hesaplama)
+        total_penalty = total_violations * 75
+        
+        return {
+            'total_workers': total_workers,
+            'compliance_rate': round(avg_compliance_rate, 1),
+            'violations_today': total_violations,
+            'total_penalty': total_penalty
+        }
+    except Exception as e:
+        print(f"İstatistik hesaplama hatası: {e}")
+        # Hata durumunda varsayılan değerler döndür
+        return {
+            'total_workers': 0,
+            'compliance_rate': 0,
+            'violations_today': 0,
+            'total_penalty': 0
+        }
+
+def get_recent_violations():
+    """Gerçek ihlal verilerini al"""
+    try:
+        recent_violations = []
+        
+        # Aktif kameralardan ihlal verilerini topla
+        for camera_id in active_detectors:
+            if active_detectors[camera_id] and camera_id in detection_results:
+                try:
+                    # En son sonucu al
+                    temp_results = []
+                    while not detection_results[camera_id].empty():
+                        temp_results.append(detection_results[camera_id].get_nowait())
+                    
+                    if temp_results:
+                        latest_result = temp_results[-1]
+                        violations = latest_result.get('violations', [])
+                        
+                        for violation in violations:
+                            recent_violations.append({
+                                'worker_name': violation.get('worker_id', 'Bilinmeyen Çalışan'),
+                                'time': datetime.now().strftime('%H:%M'),
+                                'missing_ppe': violation.get('missing_ppe', ['Bilinmeyen']),
+                                'penalty': len(violation.get('missing_ppe', [])) * 75
+                            })
+                        
+                        # Sonuçları geri koy
+                        for result in temp_results:
+                            try:
+                                detection_results[camera_id].put_nowait(result)
+                            except queue.Full:
+                                break
+                except queue.Empty:
+                    pass
+        
+        # En son 5 ihlali döndür
+        return recent_violations[-5:] if recent_violations else []
+        
+    except Exception as e:
+        print(f"İhlal verisi alma hatası: {e}")
+        return []
 
 @app.route('/api/stats')
 def get_stats():
     """İstatistikleri getir"""
     try:
-        # Gerçek veri burada hesaplanacak
+        # Gerçek detection sonuçlarından istatistik hesapla
+        total_workers = 0
+        total_violations = 0
+        total_detections = 0
+        compliance_rates = []
+        
+        # Aktif kameralardan veri topla
+        for camera_id in active_detectors:
+            if active_detectors[camera_id] and camera_id in detection_results:
+                try:
+                    # En son sonucu al (queue'yu boşaltmadan)
+                    temp_results = []
+                    while not detection_results[camera_id].empty():
+                        temp_results.append(detection_results[camera_id].get_nowait())
+                    
+                    if temp_results:
+                        # En son sonucu kullan
+                        latest_result = temp_results[-1]
+                        total_workers += latest_result.get('total_people', 0)
+                        total_violations += len(latest_result.get('violations', []))
+                        total_detections += 1
+                        compliance_rates.append(latest_result.get('compliance_rate', 0))
+                        
+                        # Sonuçları geri koy
+                        for result in temp_results:
+                            try:
+                                detection_results[camera_id].put_nowait(result)
+                            except queue.Full:
+                                break
+                except queue.Empty:
+                    pass
+        
+        # İstatistikleri hesapla
+        avg_compliance_rate = sum(compliance_rates) / len(compliance_rates) if compliance_rates else 0
+        
+        # Ceza hesapla (basit hesaplama)
+        total_penalty = total_violations * 75  # Ortalama ceza miktarı
+        
         stats = {
-            'total_workers': 12,
-            'compliance_rate': 78,
-            'violations_today': 5,
-            'total_penalty': 425
+            'total_workers': total_workers,
+            'compliance_rate': round(avg_compliance_rate, 1),
+            'violations_today': total_violations,
+            'total_penalty': total_penalty
         }
+        
         return jsonify(stats)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Hata durumunda varsayılan değerler döndür
+        return jsonify({
+            'total_workers': 0,
+            'compliance_rate': 0,
+            'violations_today': 0,
+            'total_penalty': 0
+        })
 
 @app.route('/api/start-detection', methods=['POST'])
 def start_detection():
@@ -492,17 +618,45 @@ def start_detection():
         data = request.json
         camera_id = data.get('camera', '0')
         mode = data.get('mode', 'construction')
+        confidence = data.get('confidence', 0.5)
         
-        # Tespit thread'i başlat
-        if camera_id not in detection_threads:
-            detection_threads[camera_id] = threading.Thread(
+        # Kamera zaten aktifse durdur
+        if camera_id in active_detectors and active_detectors[camera_id]:
+            return jsonify({'success': False, 'error': 'Kamera zaten aktif'})
+        
+        # Kamera aktif olarak işaretle
+        active_detectors[camera_id] = True
+        
+        # Kamera worker thread'ini başlat
+        camera_thread = threading.Thread(
+            target=camera_worker,
+            args=(camera_id,),
+            daemon=True
+        )
+        camera_thread.start()
+        
+        # Tespit thread'ini başlat - confidence parametresi ile
+        detection_thread = threading.Thread(
                 target=run_detection,
-                args=(camera_id, mode),
+            args=(camera_id, mode, confidence),
                 daemon=True
             )
-            detection_threads[camera_id].start()
+        detection_thread.start()
         
-        return jsonify({'success': True, 'message': 'Tespit başlatıldı'})
+        detection_threads[camera_id] = {
+            'camera_thread': camera_thread,
+            'detection_thread': detection_thread,
+            'config': {
+                'mode': mode,
+                'confidence': confidence
+            }
+        }
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Kamera {camera_id} tespiti başlatıldı (Confidence: {confidence})',
+            'video_url': f'/api/video-feed/{camera_id}'
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -516,9 +670,153 @@ def stop_detection():
                 active_detectors[camera_id] = False
                 del detection_threads[camera_id]
         
+        # Kamera yakalama nesnelerini serbest bırak
+        for camera_id in list(camera_captures.keys()):
+            if camera_captures[camera_id] is not None:
+                camera_captures[camera_id].release()
+                del camera_captures[camera_id]
+        
         return jsonify({'success': True, 'message': 'Tespit durduruldu'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/video-feed/<camera_id>')
+def video_feed(camera_id):
+    """Video stream endpoint"""
+    return Response(generate_frames(camera_id),
+                   mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/api/camera-frame/<camera_id>')
+def get_camera_frame(camera_id):
+    """Tek frame al - MJPEG için"""
+    try:
+        if camera_id in frame_buffers and frame_buffers[camera_id] is not None:
+            # Frame'i base64 encode et
+            _, buffer = cv2.imencode('.jpg', frame_buffers[camera_id])
+            frame_base64 = base64.b64encode(buffer).decode('utf-8')
+            
+            return jsonify({
+                'success': True,
+                'frame': frame_base64,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Kamera aktif değil'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/detection-results/<camera_id>')
+def get_detection_results(camera_id):
+    """Detection sonuçlarını al"""
+    try:
+        if camera_id in detection_results and not detection_results[camera_id].empty():
+            # En son detection sonucunu al
+            try:
+                latest_result = detection_results[camera_id].get_nowait()
+                return jsonify({
+                    'success': True,
+                    'result': latest_result
+                })
+            except queue.Empty:
+                return jsonify({
+                    'success': True,
+                    'result': None,
+                    'message': 'Henüz tespit sonucu yok'
+                })
+        else:
+            return jsonify({
+                'success': True,
+                'result': None,
+                'message': 'Kamera aktif değil veya sonuç yok'
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def generate_frames(camera_id):
+    """Video frame generator"""
+    while True:
+        try:
+            if camera_id in frame_buffers and frame_buffers[camera_id] is not None:
+                # Frame'i JPEG olarak encode et
+                ret, buffer = cv2.imencode('.jpg', frame_buffers[camera_id])
+                if ret:
+                    frame_bytes = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                else:
+                    # Boş frame gönder
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+            else:
+                # Kamera aktif değilse boş frame gönder
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+            
+            time.sleep(0.033)  # ~30 FPS
+            
+        except Exception as e:
+            print(f"Frame generation error: {e}")
+            break
+
+def setup_camera(camera_id):
+    """Kamera kurulumu"""
+    try:
+        # Kamera ID'sini integer'a çevir
+        cam_index = int(camera_id)
+        
+        # Kamera yakalama nesnesi oluştur
+        cap = cv2.VideoCapture(cam_index)
+        
+        if not cap.isOpened():
+            print(f"Kamera {camera_id} açılamadı")
+            return None
+        
+        # Kamera ayarları
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        
+        print(f"Kamera {camera_id} başarıyla kuruldu")
+        return cap
+        
+    except Exception as e:
+        print(f"Kamera kurulum hatası: {e}")
+        return None
+
+def camera_worker(camera_id):
+    """Kamera worker thread'i"""
+    print(f"Kamera {camera_id} worker başlatılıyor...")
+    
+    cap = setup_camera(camera_id)
+    if cap is None:
+        return
+    
+    camera_captures[camera_id] = cap
+    frame_buffers[camera_id] = None
+    
+    try:
+        while active_detectors.get(camera_id, False):
+            ret, frame = cap.read()
+            if ret:
+                # Frame'i buffer'a kaydet
+                frame_buffers[camera_id] = frame.copy()
+            else:
+                print(f"Kamera {camera_id} frame okunamadı")
+                break
+            
+            time.sleep(0.01)  # CPU yükünü azalt
+            
+    except Exception as e:
+        print(f"Kamera {camera_id} worker hatası: {e}")
+    finally:
+        if cap:
+            cap.release()
+        if camera_id in camera_captures:
+            del camera_captures[camera_id]
+        if camera_id in frame_buffers:
+            del frame_buffers[camera_id]
+        print(f"Kamera {camera_id} worker durduruldu")
 
 @app.route('/construction')
 def construction_dashboard():
@@ -548,32 +846,138 @@ def reports_dashboard():
     """Raporlar dashboard"""
     return render_template('reports.html')
 
-def run_detection(camera_id, mode):
-    """Tespit çalıştır"""
-    active_detectors[camera_id] = True
+def run_detection(camera_id, mode, confidence=0.5):
+    """Sektörel tespit çalıştır"""
+    print(f"Tespit sistemi başlatılıyor - Kamera: {camera_id}, Sektör: {mode}, Confidence: {confidence}")
     
-    if mode == 'construction':
-        config = ConstructionPPEConfig()
-        detector = ConstructionPPEDetector(config)
-        
-        # Demo image testleri
-        test_images = ['people1.jpg', 'people2.jpg', 'people3.jpg']
+    # Detection sonuçları için queue oluştur
+    detection_results[camera_id] = queue.Queue(maxsize=10)
+    
+    # Sektörel detector al
+    try:
+        detector = SectorDetectorFactory.get_detector(mode)
+        if detector:
+            print(f"✅ {mode.upper()} sektörü detector başlatıldı - Kamera: {camera_id}")
+        else:
+            print(f"⚠️ {mode.upper()} detector yüklenemedi, construction kullanılacak")
+            detector = SectorDetectorFactory.get_detector('construction')
+    except Exception as e:
+        print(f"❌ Sektörel detector hatası: {e}, construction kullanılacak")
+        detector = SectorDetectorFactory.get_detector('construction')
+    
+    if detector:
+        frame_count = 0
+        last_detection_time = time.time()
         
         while active_detectors.get(camera_id, False):
-            for image_path in test_images:
-                if not active_detectors.get(camera_id, False):
-                    break
+            try:
+                # Frame buffer'dan frame al
+                if camera_id in frame_buffers and frame_buffers[camera_id] is not None:
+                    frame = frame_buffers[camera_id].copy()
+                    frame_count += 1
+                    
+                    # Her 5 frame'de bir tespit yap (performans için)
+                    if frame_count % 5 == 0:
+                        current_time = time.time()
+                        
+                        # Sektörel PPE tespiti yap
+                        result = detector.detect_ppe(frame, camera_id)
+                        
+                        # Sonuçları kaydet
+                        detection_data = {
+                            'camera_id': camera_id,
+                            'timestamp': datetime.now().isoformat(),
+                            'frame_count': frame_count,
+                            'compliance_rate': result['analysis']['compliance_rate'],
+                            'total_people': result['analysis']['total_people'],
+                            'violations': result['analysis']['violations'],
+                            'processing_time': current_time - last_detection_time,
+                            'sector': result.get('sector', mode)
+                        }
+                        
+                        # Queue'ya ekle
+                        try:
+                            detection_results[camera_id].put_nowait(detection_data)
+                        except queue.Full:
+                            # Queue doluysa eski sonucu çıkar, yenisini ekle
+                            try:
+                                detection_results[camera_id].get_nowait()
+                            except queue.Empty:
+                                pass
+                            detection_results[camera_id].put_nowait(detection_data)
+                        
+                        # Tespit sonucunu frame'e çiz
+                        annotated_frame = draw_sector_detection_results(frame, result)
+                        frame_buffers[camera_id] = annotated_frame
+                        
+                        last_detection_time = current_time
+                        
+                        print(f"Kamera {camera_id} ({result.get('sector', mode)}): {result['analysis']['compliance_rate']:.1f}% uyum, "
+                              f"{result['analysis']['total_people']} kişi")
                 
-                if os.path.exists(image_path):
-                    image = cv2.imread(image_path)
-                    if image is not None:
-                        result = detector.detect_construction_ppe(image, camera_id)
-                        # Sonuçları işle
-                        print(f"Kamera {camera_id}: {result['analysis']['compliance_rate']:.1f}% uyum")
+                time.sleep(0.1)  # CPU yükünü azalt
                 
-                time.sleep(5)  # 5 saniye bekle
+            except Exception as e:
+                print(f"Tespit hatası - Kamera {camera_id}: {e}")
+                time.sleep(1)
     
     print(f"Kamera {camera_id} tespiti durduruldu")
+
+def draw_sector_detection_results(image, detection_result):
+    """Sektörel detection sonuçlarını görüntü üzerine çiz"""
+    try:
+        # Kopyasını al
+        result_image = image.copy()
+        height, width = result_image.shape[:2]
+        
+        # Sektör bilgisi
+        sector = detection_result.get('sector', 'unknown')
+        sector_names = {
+            'construction': 'İnşaat',
+            'food': 'Gıda', 
+            'chemical': 'Kimya',
+            'manufacturing': 'İmalat',
+            'warehouse': 'Depo'
+        }
+        sector_name = sector_names.get(sector, sector.upper())
+        
+        # Başlık bilgisi
+        cv2.putText(result_image, f"SmartSafe AI - {sector_name} Sektörü", 
+                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        
+        # Uygunluk oranı
+        compliance_rate = detection_result['analysis'].get('compliance_rate', 0)
+        color = (0, 255, 0) if compliance_rate > 80 else (0, 165, 255) if compliance_rate > 60 else (0, 0, 255)
+        cv2.putText(result_image, f"Uygunluk: {compliance_rate:.1f}%", 
+                   (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        
+        # Kişi sayısı
+        total_people = detection_result['analysis'].get('total_people', 0)
+        cv2.putText(result_image, f"Kişi: {total_people}", 
+                   (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # İhlal sayısı
+        violations = detection_result['analysis'].get('violations', [])
+        cv2.putText(result_image, f"İhlal: {len(violations)}", 
+                   (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        
+        # Sektörel özel bilgiler
+        sector_specific = detection_result['analysis'].get('sector_specific', {})
+        if sector_specific:
+            penalty_amount = sector_specific.get('penalty_amount', 0)
+            cv2.putText(result_image, f"Ceza: {penalty_amount:.0f} TL", 
+                       (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        
+        # Zaman damgası
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        cv2.putText(result_image, timestamp, 
+                   (width - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        return result_image
+        
+    except Exception as e:
+        print(f"Draw sector detection results hatası: {e}")
+        return image
 
 if __name__ == '__main__':
     print("🌐 SmartSafe AI - Professional Web Dashboard")

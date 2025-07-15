@@ -1,0 +1,16 @@
+camera:
+  auto_discovery: true
+  connection_timeout: 10
+  use_real_cameras: false
+database:
+  database: smartsafe_ai
+  host: localhost
+  password: ''
+  port: 5432
+  username: postgres
+debug: true
+detection:
+  confidence_threshold: 0.5
+  use_gpu: true
+host: 0.0.0.0
+port: 5000

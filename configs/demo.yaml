@@ -1,0 +1,7 @@
+camera:
+  fallback_to_simulation: true
+  use_real_cameras: false
+features:
+  analytics: true
+  real_time_detection: true
+  reporting: true

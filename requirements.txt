@@ -90,7 +90,7 @@ psycopg2-binary>=2.9.0
 python-dotenv>=1.0.0
 
 # Additional Python Standard Library Extensions
-pathlib2>=2.3.0
+pathlib2>=2.3.0 
 
 # Audio Support
 pygame==2.5.2 

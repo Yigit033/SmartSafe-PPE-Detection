@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -210,12 +209,10 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Kamera Seç:</label>
-                                    <select class="form-select" id="camera-select">
-                                        <option value="0">Kamera 1 - Ana Giriş</option>
-                                        <option value="1">Kamera 2 - İnşaat Sahası</option>
-                                        <option value="2">Kamera 3 - Depo Alanı</option>
+                                <div class="form-group">
+                                    <label for="cameraSelect">Kamera Seç:</label>
+                                    <select class="form-control" id="cameraSelect" onchange="viewStream()">
+                                        <option value="">Kamera seçin...</option>
                                     </select>
                                 </div>
                             </div>
@@ -229,8 +226,30 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Confidence Threshold:</label>
+                                    <input type="range" class="form-range" id="confidence-slider" min="0.1" max="0.9" step="0.1" value="0.5">
+                                    <div class="d-flex justify-content-between">
+                                        <small>0.1</small>
+                                        <small id="confidence-value">0.5</small>
+                                        <small>0.9</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Sistem Durumu:</label>
+                                    <div class="form-control-plaintext">
+                                        <span class="badge bg-secondary" id="system-status">Hazır</span>
+                                        <span class="badge bg-info ms-2" id="active-cameras">Aktif Kamera: 0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="text-center">
-                            <div id="camera-display" class="mb-3" style="height: 300px; background: #f8f9fa; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                            <div id="streamContainer" class="mb-3" style="height: 300px; background: #f8f9fa; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-camera fa-3x text-muted"></i>
                                 <p class="text-muted ms-3">Kamera görüntüsü burada görünecek</p>
                             </div>
@@ -335,20 +354,34 @@
 
         // Tespit fonksiyonları
         function startDetection() {
-            const camera = document.getElementById('camera-select').value;
+            const camera = document.getElementById('cameraSelect').value;
             const mode = document.getElementById('detection-mode').value;
+            const confidence = parseFloat(document.getElementById('confidence-slider').value);
+            
+            // Sistem durumunu güncelle
+            document.getElementById('system-status').className = 'badge bg-warning';
+            document.getElementById('system-status').textContent = 'Başlatılıyor...';
             
             fetch('/api/start-detection', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({camera: camera, mode: mode})
+                body: JSON.stringify({camera: camera, mode: mode, confidence: confidence})
             })
             .then(response => response.json())
             .then(data => {
                 if(data.success) {
                     showAlert('Tespit başlatıldı!', 'success');
+                    startVideoFeed(camera);
+                    startDetectionMonitoring(camera);
+                    
+                    // Sistem durumunu güncelle
+                    document.getElementById('system-status').className = 'badge bg-success';
+                    document.getElementById('system-status').textContent = 'Aktif';
+                    document.getElementById('active-cameras').textContent = `Aktif Kamera: ${camera}`;
                 } else {
                     showAlert('Hata: ' + data.error, 'danger');
+                    document.getElementById('system-status').className = 'badge bg-danger';
+                    document.getElementById('system-status').textContent = 'Hata';
                 }
             });
         }
@@ -359,6 +392,13 @@
                 .then(data => {
                     if(data.success) {
                         showAlert('Tespit durduruldu!', 'info');
+                        stopVideoFeed();
+                        stopDetectionMonitoring();
+                        
+                        // Sistem durumunu güncelle
+                        document.getElementById('system-status').className = 'badge bg-secondary';
+                        document.getElementById('system-status').textContent = 'Durduruldu';
+                        document.getElementById('active-cameras').textContent = 'Aktif Kamera: 0';
                     }
                 });
         }
@@ -377,11 +417,92 @@
             }, 5000);
         }
 
-        // Sayfa yüklendiğinde
+        // Kameraları yükle
+        const loadCameras = () => {
+            const companyId = {{ company_id }};  // Flask'tan gelen company_id
+            fetch(`/api/company/${companyId}/cameras`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('cameraSelect');
+                        select.innerHTML = '<option value="">Kamera seçin...</option>';
+                        
+                        data.cameras.forEach(camera => {
+                            const option = document.createElement('option');
+                            option.value = camera.id;
+                            option.textContent = camera.name;
+                            select.appendChild(option);
+                        });
+
+                        // Kamera durumu kartını güncelle
+                        updateCameraStatusCard(data.total);
+                    } else {
+                        console.error('Kamera listesi alınamadı:', data.error);
+                        showToast('error', 'Kamera listesi alınamadı: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Kamera listesi API hatası:', error);
+                    showToast('error', 'Kamera listesi API hatası: ' + error);
+                });
+        };
+
+        // Kamera durumu kartını güncelle
+        const updateCameraStatusCard = (totalCameras) => {
+            const activeElement = document.getElementById('active-cameras');
+            if (activeElement) {
+                activeElement.textContent = `Aktif Kamera: ${totalCameras}`;
+            }
+        };
+
+        // Sayfa yüklendiğinde kameraları yükle
         document.addEventListener('DOMContentLoaded', function() {
             updateStats();
             setInterval(updateStats, 5000); // Her 5 saniyede bir güncelle
+            
+            // Confidence slider event listener
+            const confidenceSlider = document.getElementById('confidence-slider');
+            const confidenceValue = document.getElementById('confidence-value');
+            
+            confidenceSlider.addEventListener('input', function() {
+                confidenceValue.textContent = this.value;
+            });
+
+            loadCameras();
         });
+
+        // Video stream'i görüntüle
+        const viewStream = () => {
+            const cameraId = document.getElementById('cameraSelect').value;
+            if (!cameraId) {
+                showToast('warning', 'Lütfen bir kamera seçin');
+                return;
+            }
+
+            const companyId = {{ company_id }};
+            fetch(`/api/company/${companyId}/cameras/${cameraId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.camera) {
+                        const streamUrl = data.camera.rtsp_url || 
+                            `rtsp://${data.camera.ip_address}:${data.camera.port}/stream`;
+                        
+                        // Stream container'ı güncelle
+                        const container = document.getElementById('streamContainer');
+                        container.innerHTML = `
+                            <h4>${data.camera.name}</h4>
+                            <div class="video-container">
+                                <img src="/video_feed/${cameraId}" alt="Live Stream" />
+                            </div>`;
+                    } else {
+                        showToast('error', 'Kamera bilgisi alınamadı');
+                    }
+                })
+                .catch(error => {
+                    console.error('Stream başlatma hatası:', error);
+                    showToast('error', 'Stream başlatma hatası: ' + error);
+                });
+        };
     </script>
 </body>
 </html>

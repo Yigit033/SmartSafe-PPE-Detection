@@ -1,0 +1,2596 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSafe AI - Endüstriyel PPE Tespit Sistemi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <!-- Toastr CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1E3A8A;
+            --secondary: #0EA5E9;
+            --accent: #22C55E;
+            --warning: #EF4444;
+            --light: #F8FAFC;
+            --dark: #0F172A;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: var(--dark);
+            overflow-x: hidden;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            padding: 12px 32px;
+            border-radius: 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(14, 165, 233, 0.3);
+        }
+
+        .section {
+            padding: 100px 0;
+        }
+
+        .navbar {
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .hero-section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="rgba(255,255,255,0.05)" width="50" height="50" x="0" y="0"/></svg>');
+            animation: moveBackground 30s linear infinite;
+        }
+
+        @keyframes moveBackground {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(-50%, -50%); }
+        }
+
+        .sector-card {
+            border-radius: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .sector-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .performance-number {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .feature-list li {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-list li i {
+            color: var(--accent);
+            margin-right: 10px;
+        }
+
+        #particles-js {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Modern Section Backgrounds */
+        .section {
+            position: relative;
+            padding: 100px 0;
+            overflow: hidden;
+        }
+
+        /* Features Section - Teknoloji odaklı, dinamik */
+        .features-section {
+            background: linear-gradient(120deg, #071B2F 0%, #113255 100%);
+            color: white;
+        }
+
+        .features-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(29, 108, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(59, 178, 255, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .features-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .features-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Sectors Section - Endüstriyel ve profesyonel */
+        .sectors-section {
+            background: #f8f9fa;
+            position: relative;
+        }
+
+        .sectors-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                linear-gradient(120deg, rgba(0, 0, 0, 0.02) 0%, transparent 100%),
+                repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.02) 1px, transparent 1px, transparent 4px);
+            opacity: 0.5;
+        }
+
+        .sector-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+
+        .sector-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .sector-card img {
+            transition: all 0.4s ease;
+        }
+
+        .sector-card:hover img {
+            transform: scale(1.05);
+        }
+
+        /* Benefits Section - Güven verici ve profesyonel */
+        .benefits-section {
+            background: linear-gradient(135deg, #1a3b5d 0%, #2d5a8b 100%);
+            color: white;
+        }
+
+        .benefits-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 10% 90%, rgba(255, 255, 255, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 90% 10%, rgba(255, 255, 255, 0.03) 0%, transparent 40%);
+        }
+
+        .benefit-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .benefit-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-5px);
+        }
+
+        /* Contact Section - Modern ve güvenilir */
+        .contact-section {
+            background: linear-gradient(135deg, #0a192f 0%, #112a46 100%);
+            color: white;
+        }
+
+        .contact-section::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(255, 255, 255, 0.02) 0%, transparent 50%);
+        }
+
+        .contact-form {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .contact-form input,
+        .contact-form textarea {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            padding: 12px 20px;
+            transition: all 0.3s ease;
+        }
+
+        .contact-form input:focus,
+        .contact-form textarea:focus {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+        }
+
+        .contact-form input::placeholder,
+        .contact-form textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Section Title Styles */
+        .section-title {
+            position: relative;
+            margin-bottom: 60px;
+            text-align: center;
+        }
+
+        .section-title h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .section {
+                padding: 60px 0;
+            }
+
+            .section-title h2 {
+                font-size: 2rem;
+            }
+        }
+
+        /* Modern Sector Cards */
+        .modern-sector-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            height: 100%;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .modern-sector-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 30px rgba(0, 0, 0, 0.1);
+            border-color: var(--secondary);
+        }
+
+        .modern-sector-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modern-sector-card:hover::before {
+            opacity: 1;
+        }
+
+        .sector-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .sector-icon i {
+            font-size: 24px;
+            color: white;
+        }
+
+        .modern-sector-card:hover .sector-icon {
+            transform: scale(1.1) rotate(-5deg);
+        }
+
+        .sector-content h4 {
+            color: var(--dark);
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .sector-features {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+
+        .sector-features li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            color: #4B5563;
+        }
+
+        .sector-features li i {
+            color: var(--accent);
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .sector-link {
+            color: var(--primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .sector-link i {
+            margin-left: 8px;
+            transition: transform 0.3s ease;
+        }
+
+        .sector-link:hover {
+            color: var(--secondary);
+        }
+
+        .sector-link:hover i {
+            transform: translateX(5px);
+        }
+
+        /* Scroll Dots Styles */
+        .scroll-dots {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 30px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .scroll-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 6px;
+            background: #E2E8F0;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            border: 2px solid transparent;
+        }
+
+        .scroll-dot:hover {
+            background: #CBD5E1;
+            transform: scale(1.1);
+        }
+
+        .scroll-dot.active {
+            width: 36px;
+            background: var(--primary);
+            border-color: rgba(30, 58, 138, 0.2);
+            box-shadow: 0 0 10px rgba(30, 58, 138, 0.2);
+        }
+
+        .scroll-dot::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            right: -8px;
+            bottom: -8px;
+            border-radius: 12px;
+            background: transparent;
+            transition: all 0.3s ease;
+            z-index: -1;
+        }
+
+        .scroll-dot:hover::after {
+            background: rgba(30, 58, 138, 0.05);
+        }
+
+        .scroll-dot.active::after {
+            background: rgba(30, 58, 138, 0.1);
+        }
+
+        /* Tooltip for dots */
+        .scroll-dot-tooltip {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .scroll-dot-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .scroll-dot:hover .scroll-dot-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        @media (max-width: 768px) {
+            .scroll-dots {
+                gap: 10px;
+                padding: 8px;
+                margin-top: 20px;
+            }
+
+            .scroll-dot {
+                width: 10px;
+                height: 10px;
+            }
+            
+            .scroll-dot.active {
+                width: 30px;
+            }
+
+            .scroll-dot-tooltip {
+                display: none;
+            }
+        }
+
+        /* Update sectors container to add space for dots */
+        .sectors-scroll-container {
+            padding-bottom: 40px;
+        }
+
+        /* Features Tab Styles */
+        .features-tabs .nav-pills {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 10px;
+            border-radius: 50px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            position: relative;
+        }
+
+        .features-tabs .nav-link {
+            color: var(--dark);
+            padding: 10px 20px;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Pulse effect for inactive tabs */
+        .features-tabs .nav-link:not(.active)::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 120%;
+            height: 120%;
+            background: radial-gradient(circle, rgba(30, 58, 138, 0.1) 0%, transparent 70%);
+            transform: translate(-50%, -50%) scale(0);
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        /* Explore hint */
+        .features-tabs .nav-link:not(.active):hover::before {
+            content: 'Keşfet';
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            animation: fadeInOut 1s ease-in-out;
+        }
+
+        .features-tabs .nav-link:not(.active):hover::before {
+            opacity: 1;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0.5;
+            }
+            50% {
+                opacity: 0;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, 0); }
+            20% { opacity: 1; transform: translate(-50%, -30px); }
+            80% { opacity: 1; transform: translate(-50%, -30px); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+
+        /* Add subtle arrow indicators */
+        .features-tabs .nav-item:not(:first-child) .nav-link:not(.active)::after {
+            content: '→';
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.3;
+            font-size: 14px;
+            animation: slideRight 1.5s infinite;
+        }
+
+        @keyframes slideRight {
+            0% { transform: translate(0, -50%); }
+            50% { transform: translate(5px, -50%); }
+            100% { transform: translate(0, -50%); }
+        }
+
+        /* Update existing styles... */
+        .features-tabs .nav-link:hover {
+            background: rgba(30, 58, 138, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .features-tabs .nav-link.active {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
+        }
+
+        /* Add a subtle glow effect to cards on tab change */
+        .tab-pane.fade.show {
+            animation: tabFadeIn 0.5s ease-out;
+        }
+
+        @keyframes tabFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Make cards interactive */
+        .glass-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-card:hover .feature-icon {
+            transform: scale(1.1) rotate(-5deg);
+        }
+
+        /* Benefits Section Styles */
+        .benefit-header {
+            position: relative;
+            z-index: 2;
+        }
+
+        .benefit-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+        }
+
+        .benefit-icon i {
+            font-size: 32px;
+            color: white;
+        }
+
+        .benefit-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .benefit-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .benefit-item i {
+            color: var(--accent);
+            margin-right: 12px;
+            font-size: 16px;
+            min-width: 20px;
+        }
+
+        .benefit-watermark {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 120px;
+            opacity: 0.03;
+            color: var(--primary);
+            z-index: 1;
+        }
+
+        /* Enhanced glass card for benefits */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .glass-card:hover::before {
+            opacity: 1;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .features-tabs .nav-pills {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding: 8px;
+                gap: 8px;
+                justify-content: start;
+            }
+
+            .features-tabs .nav-item {
+                flex: 0 0 auto;
+            }
+
+            .features-tabs .nav-link {
+                white-space: nowrap;
+                padding: 8px 16px;
+            }
+
+            .features-tabs .nav-link:not(.active):hover::before {
+                display: none;
+            }
+
+            .benefit-watermark {
+                display: none;
+            }
+
+            .benefit-icon {
+                width: 60px;
+                height: 60px;
+            }
+
+            .benefit-icon i {
+                font-size: 24px;
+            }
+        }
+
+        .contact-info-card span, .contact-info-card .contact-info-icon {
+            color: var(--primary) !important;
+        }
+        .contact-info-icon {
+            background: #e6edfa !important;
+            color: var(--primary) !important;
+        }
+        .contact-info-card .d-flex.align-items-center {
+            color: var(--primary) !important;
+            font-weight: 500;
+        }
+        .social-link {
+            background: #e6edfa !important;
+            color: var(--primary) !important;
+            opacity: 1 !important;
+            transition: all 0.3s;
+        }
+        .social-link:hover {
+            background: var(--primary) !important;
+            color: #fff !important;
+            opacity: 1 !important;
+            transform: translateY(-3px) scale(1.08);
+        }
+
+        /* Modern background placeholder for contact form */
+        .contact-form .form-group {
+            position: relative;
+        }
+        .contact-form .form-control::placeholder,
+        .contact-form textarea::placeholder {
+            color: #b6c6e3;
+            opacity: 1;
+            font-size: 1.1rem;
+            transition: opacity 0.2s;
+        }
+        .contact-form .form-control:focus::placeholder,
+        .contact-form textarea:focus::placeholder {
+            opacity: 0;
+        }
+        .contact-form .form-control,
+        .contact-form textarea {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            font-size: 1.1rem;
+            color: var(--dark);
+            padding: 14px 12px;
+        }
+        .contact-form textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        /* For input-group, ensure placeholder is visible */
+        .contact-form .input-group .form-control,
+        .contact-form .input-group textarea {
+            background: transparent;
+        }
+        /* Modern select for sector */
+        .contact-form .input-group .form-select {
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            font-size: 1.1rem;
+            color: var(--dark);
+            padding: 14px 12px 14px 0;
+            border-radius: 12px;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%231E3A8A" height="20" viewBox="0 0 20 20" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M7.293 7.293a1 1 0 011.414 0L10 8.586l1.293-1.293a1 1 0 111.414 1.414l-2 2a1 1 0 01-1.414 0l-2-2a1 1 0 010-1.414z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 20px 20px;
+            transition: border 0.2s, box-shadow 0.2s;
+        }
+        .contact-form .input-group .form-select:focus {
+            outline: none;
+            border: none;
+            box-shadow: 0 0 0 2px #b6c6e3;
+        }
+        .contact-form .input-group .form-select option[disabled][selected] {
+            color: #b6c6e3;
+        }
+        .contact-form .input-group {
+            position: relative;
+        }
+        .contact-form .input-group .input-group-text {
+            color: var(--primary);
+            font-size: 18px;
+            background: transparent;
+            border: none;
+        }
+        /* Remove default arrow for select */
+        .contact-form .input-group .form-select::-ms-expand {
+            display: none;
+        }
+        /* For better dropdown look */
+        .contact-form .input-group .form-select {
+            box-shadow: 0 2px 8px rgba(30,58,138,0.03);
+        }
+        /* On mobile, make sure select is full width */
+        @media (max-width: 768px) {
+            .contact-form .input-group .form-select {
+                width: 100%;
+            }
+        }
+        /* Replace the select with a custom dropdown in the contact form */
+        /* Add this just above </form> in the contact form */
+        .custom-dropdown {
+            position: relative;
+            width: 100%;
+            margin-bottom: 0;
+            z-index: 1050;
+        }
+        .custom-dropdown-toggle {
+            width: 100%;
+            background: #f1f5f9;
+            border: 1.5px solid #e0e7ef;
+            border-radius: 12px;
+            padding: 14px 44px 14px 44px;
+            font-size: 1.1rem;
+            color: var(--dark);
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            position: relative;
+            transition: box-shadow 0.2s;
+            box-shadow: 0 2px 8px rgba(30,58,138,0.03);
+        }
+        .custom-dropdown-toggle:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #b6c6e3, 0 2px 8px rgba(30,58,138,0.06);
+        }
+        .custom-dropdown-toggle .dropdown-icon {
+            position: absolute;
+            left: 16px;
+            font-size: 20px;
+            color: var(--primary);
+        }
+        .custom-dropdown-toggle .dropdown-arrow {
+            position: absolute;
+            right: 16px;
+            font-size: 18px;
+            color: #b6c6e3;
+            transition: transform 0.2s;
+        }
+        .custom-dropdown.open .custom-dropdown-toggle .dropdown-arrow {
+            transform: rotate(180deg);
+        }
+        .custom-dropdown-menu {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            width: 100%;
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(30,58,138,0.10);
+            z-index: 2000;
+            padding: 8px 0;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: opacity 0.2s, transform 0.2s;
+            max-height: 320px;
+            overflow-y: auto;
+            min-width: 220px;
+        }
+        .custom-dropdown.open .custom-dropdown-menu {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+        .custom-dropdown-option {
+            padding: 14px 44px 14px 44px;
+            font-size: 1.08rem;
+            color: var(--dark);
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+        .custom-dropdown-option:not(:last-child) {
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .custom-dropdown-option:hover, .custom-dropdown-option.active {
+            background: #e6edfa;
+            color: var(--primary);
+        }
+        .custom-dropdown-option .option-check {
+            position: absolute;
+            left: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .custom-dropdown-option.active .option-check {
+            opacity: 1;
+        }
+        .custom-dropdown-placeholder {
+            color: #b6c6e3;
+        }
+        @media (max-width: 768px) {
+            .custom-dropdown-toggle, .custom-dropdown-option {
+                padding-left: 36px;
+                padding-right: 36px;
+            }
+            .custom-dropdown-menu {
+                min-width: 0;
+                max-height: 220px;
+            }
+        }
+        .glass-card,
+        .contact-form,
+        .container,
+        .row {
+            overflow: visible !important;
+        }
+        /* For dropdown menu, allow it to overflow all parents */
+        .custom-dropdown-menu {
+            z-index: 3000;
+        }
+
+        /* Hero video dimensions */
+        .hero-video {
+            width: 720px !important;
+            height: 380px !important;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .hero-video {
+                width: 100% !important;
+                height: auto !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt"></i> SmartSafe AI
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Özellikler</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sectors">Sektörler</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#benefits">Faydalar</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#contact">İletişim</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-primary ms-lg-3" href="/app">Giriş Yap</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div id="particles-js"></div>
+        <div class="container content-wrapper">
+            <div class="row align-items-center">
+                <div class="col-lg-6" data-aos="fade-right">
+                    <h1 class="display-4 fw-bold mb-4">
+                        Yapay Zeka ile İş Güvenliği
+                    </h1>
+                    <p class="lead mb-4">
+                        Endüstriyel tesislerde kişisel koruyucu ekipman (PPE) kullanımını 
+                        gerçek zamanlı takip eden, iş kazalarını önleyen akıllı güvenlik sistemi.
+                    </p>
+                    <div class="d-flex gap-3">
+                        <a href="/app" class="btn btn-primary">
+                            Hemen Başla
+                        </a>
+                        
+                    </div>
+                </div>
+                <div class="col-lg-6" data-aos="fade-left">
+                    <div class="position-relative rounded-4 shadow-lg overflow-hidden">
+                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png">
+                            <source src="/static/videos/hero-video.webm" type="video/webm">
+                            <source src="/static/videos/hero-video.mp4" type="video/mp4">
+                            <!-- Fallback for browsers that don't support video -->
+                            <img src="/static/images/hero-image.png" alt="SmartSafe AI Demo" class="img-fluid">
+                        </video>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Performance Stats -->
+    <section class="section bg-light">
+        <div class="container">
+            <div class="row text-center">
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="0">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">24.7</div>
+                        <p class="text-muted">FPS Gerçek Zamanlı</p>
+                    </div>
+                </div>
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="100">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">37x</div>
+                        <p class="text-muted">Performans Artışı</p>
+                    </div>
+                </div>
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="200">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">16</div>
+                        <p class="text-muted">Eş Zamanlı Kamera</p>
+                    </div>
+                </div>
+                <div class="col-md-3" data-aos="fade-up" data-aos-delay="300">
+                    <div class="glass-card p-4 stat-card">
+                        <div class="performance-number">24/7</div>
+                        <p class="text-muted">Kesintisiz Çalışma</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="section">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-6 mx-auto text-center">
+                    <h2 class="display-5 fw-bold mb-3">Özellikler</h2>
+                    <p class="lead text-muted">
+                        En son teknolojilerle donatılmış güvenlik sistemi
+                    </p>
+                </div>
+            </div>
+
+            <!-- Features Tab Navigation -->
+            <div class="features-tabs mb-4">
+                <ul class="nav nav-pills justify-content-center gap-2 mb-4" id="featuresTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="performance-tab" data-bs-toggle="pill" data-bs-target="#performance" type="button" role="tab">
+                            <i class="fas fa-tachometer-alt me-2"></i>Performans
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ai-tab" data-bs-toggle="pill" data-bs-target="#ai" type="button" role="tab">
+                            <i class="fas fa-brain me-2"></i>Yapay Zeka
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="monitoring-tab" data-bs-toggle="pill" data-bs-target="#monitoring" type="button" role="tab">
+                            <i class="fas fa-desktop me-2"></i>İzleme
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="integration-tab" data-bs-toggle="pill" data-bs-target="#integration" type="button" role="tab">
+                            <i class="fas fa-plug me-2"></i>Entegrasyon
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="security-tab" data-bs-toggle="pill" data-bs-target="#security" type="button" role="tab">
+                            <i class="fas fa-shield-alt me-2"></i>Güvenlik
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Features Tab Content -->
+                <div class="tab-content" id="featuresTabContent">
+                    <!-- Performance Tab -->
+                    <div class="tab-pane fade show active" id="performance" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-lg-4" data-aos="fade-up">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-tachometer-alt"></i>
+                                    </div>
+                                    <h4>Yüksek Performans</h4>
+                                    <p>Saniyede 24.7 kare işleme kapasitesi ile gerçek zamanlı tespit.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> GPU Optimizasyonu</li>
+                                        <li><i class="fas fa-check"></i> NVIDIA CUDA Desteği</li>
+                                        <li><i class="fas fa-check"></i> Düşük Gecikme Süresi</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-expand-arrows-alt"></i>
+                                    </div>
+                                    <h4>Ölçeklenebilirlik</h4>
+                                    <p>İhtiyaca göre büyüyebilen esnek sistem mimarisi.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Yatay/Dikey Ölçekleme</li>
+                                        <li><i class="fas fa-check"></i> Çoklu Lokasyon Desteği</li>
+                                        <li><i class="fas fa-check"></i> Yük Dengeleme</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-server"></i>
+                                    </div>
+                                    <h4>Sistem Kararlılığı</h4>
+                                    <p>Kesintisiz çalışma ve yüksek uptime garantisi.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Otomatik Yedekleme</li>
+                                        <li><i class="fas fa-check"></i> Hata Toleransı</li>
+                                        <li><i class="fas fa-check"></i> 24/7 Çalışma</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Tab -->
+                    <div class="tab-pane fade" id="ai" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-lg-4" data-aos="fade-up">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-brain"></i>
+                                    </div>
+                                    <h4>Yapay Zeka</h4>
+                                    <p>Gelişmiş derin öğrenme modelleri ile hassas tespit.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Gerçek Zamanlı Analiz</li>
+                                        <li><i class="fas fa-check"></i> Yüksek Doğruluk</li>
+                                        <li><i class="fas fa-check"></i> Sürekli Öğrenme</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <h4>Akıllı Analitik</h4>
+                                    <p>İleri seviye veri analizi ve tahminleme.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Anomali Tespiti</li>
+                                        <li><i class="fas fa-check"></i> Davranış Analizi</li>
+                                        <li><i class="fas fa-check"></i> Tahminsel Bakım</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-robot"></i>
+                                    </div>
+                                    <h4>Otomasyon</h4>
+                                    <p>Akıllı iş akışları ve otomatik aksiyonlar.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Olay Tetikleme</li>
+                                        <li><i class="fas fa-check"></i> Akıllı Alarmlar</li>
+                                        <li><i class="fas fa-check"></i> Otomatik Raporlama</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Monitoring Tab -->
+                    <div class="tab-pane fade" id="monitoring" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-lg-4" data-aos="fade-up">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-camera"></i>
+                                    </div>
+                                    <h4>Çoklu Kamera Desteği</h4>
+                                    <p>16 kameraya kadar eş zamanlı izleme ve analiz kapasitesi.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> IP Kamera Entegrasyonu</li>
+                                        <li><i class="fas fa-check"></i> Otomatik Yük Dengeleme</li>
+                                        <li><i class="fas fa-check"></i> Kesintisiz İzleme</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-bell"></i>
+                                    </div>
+                                    <h4>Akıllı Uyarı Sistemi</h4>
+                                    <p>Anlık bildirimler ve özelleştirilebilir uyarı mekanizması.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> E-posta Bildirimleri</li>
+                                        <li><i class="fas fa-check"></i> SMS Uyarıları</li>
+                                        <li><i class="fas fa-check"></i> Mobil Bildirimler</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-chart-bar"></i>
+                                    </div>
+                                    <h4>Raporlama ve Analitik</h4>
+                                    <p>Detaylı istatistikler ve özelleştirilebilir raporlama sistemi.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Özelleştirilebilir Dashboardlar</li>
+                                        <li><i class="fas fa-check"></i> Excel/PDF Export</li>
+                                        <li><i class="fas fa-check"></i> Trend Analizi</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Integration Tab -->
+                    <div class="tab-pane fade" id="integration" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-lg-4" data-aos="fade-up">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-plug"></i>
+                                    </div>
+                                    <h4>Kolay Entegrasyon</h4>
+                                    <p>Mevcut sistemlerle sorunsuz entegrasyon imkanı.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> REST API Desteği</li>
+                                        <li><i class="fas fa-check"></i> ERP Entegrasyonu</li>
+                                        <li><i class="fas fa-check"></i> Özel Entegrasyon Desteği</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-cloud"></i>
+                                    </div>
+                                    <h4>Bulut Desteği</h4>
+                                    <p>Esnek bulut altyapısı ve hibrit çözümler.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> AWS/Azure/GCP Desteği</li>
+                                        <li><i class="fas fa-check"></i> Özel Bulut Çözümleri</li>
+                                        <li><i class="fas fa-check"></i> Hibrit Yapılandırma</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-headset"></i>
+                                    </div>
+                                    <h4>7/24 Destek</h4>
+                                    <p>Kesintisiz teknik destek ve bakım hizmetleri.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Canlı Destek</li>
+                                        <li><i class="fas fa-check"></i> Uzaktan Müdahale</li>
+                                        <li><i class="fas fa-check"></i> Periyodik Bakım</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Tab -->
+                    <div class="tab-pane fade" id="security" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-lg-4" data-aos="fade-up">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </div>
+                                    <h4>Gelişmiş Güvenlik</h4>
+                                    <p>En üst düzey güvenlik standartları ile veri koruma.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> SSL/TLS Şifreleme</li>
+                                        <li><i class="fas fa-check"></i> Rol Tabanlı Erişim</li>
+                                        <li><i class="fas fa-check"></i> Veri Yedekleme</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-user-shield"></i>
+                                    </div>
+                                    <h4>Kullanıcı Yönetimi</h4>
+                                    <p>Detaylı yetkilendirme ve kullanıcı kontrolü.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> Çok Seviyeli Yetkilendirme</li>
+                                        <li><i class="fas fa-check"></i> Aktivite Logları</li>
+                                        <li><i class="fas fa-check"></i> SSO Desteği</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                                <div class="glass-card p-4 h-100">
+                                    <div class="feature-icon gradient-bg">
+                                        <i class="fas fa-lock"></i>
+                                    </div>
+                                    <h4>Veri Güvenliği</h4>
+                                    <p>Uçtan uca veri güvenliği ve uyumluluk.</p>
+                                    <ul class="feature-list list-unstyled">
+                                        <li><i class="fas fa-check"></i> KVKK Uyumluluğu</li>
+                                        <li><i class="fas fa-check"></i> Veri Şifreleme</li>
+                                        <li><i class="fas fa-check"></i> Güvenli Depolama</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sectors -->
+    <section id="sectors" class="section sectors-section">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-6 mx-auto text-center">
+                    <h2 class="display-5 fw-bold mb-3">Sektörel Çözümler</h2>
+                    <p class="lead text-muted">
+                        Her sektöre özel optimize edilmiş güvenlik çözümleri
+                    </p>
+                </div>
+            </div>
+            <div class="sectors-scroll-container">
+                <div class="sectors-scroll-wrapper">
+                    <!-- İnşaat Sektörü -->
+                    <div class="sector-scroll-item" data-aos="fade-up">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-hard-hat"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>İnşaat Sektörü</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Baret Tespiti</li>
+                                    <li><i class="fas fa-check"></i> Yelek Kontrolü</li>
+                                    <li><i class="fas fa-check"></i> Güvenlik Gözlüğü</li>
+                                    <li><i class="fas fa-check"></i> Çelik Burunlu Ayakkabı</li>
+                                    <li><i class="fas fa-check"></i> İş Eldiveni</li>
+                                    <li><i class="fas fa-check"></i> Emniyet Kemeri</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tersane ve Denizcilik -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="600">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-ship"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Denizcilik & Tersane</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Can Yeleği</li>
+                                    <li><i class="fas fa-check"></i> Su Geçirmez PPE</li>
+                                    <li><i class="fas fa-check"></i> Yüksek Koruma</li>
+                                    <li><i class="fas fa-check"></i> Baret</li>
+                                    <li><i class="fas fa-check"></i> Çelik Burunlu Ayakkabı</li>
+                                    <li><i class="fas fa-check"></i> İş Eldiveni</li>
+                                    <li><i class="fas fa-check"></i> Emniyet Kemeri</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Kimya Endüstrisi -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="100">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-flask"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Kimya Endüstrisi</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Maske Kontrolü</li>
+                                    <li><i class="fas fa-check"></i> Eldiven Tespiti</li>
+                                    <li><i class="fas fa-check"></i> Koruyucu Giysi</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    
+                    <!-- Üretim Tesisleri -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="300">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-industry"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Üretim Tesisleri</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Çoklu PPE Tespiti</li>
+                                    <li><i class="fas fa-check"></i> Anlık Raporlama</li>
+                                    <li><i class="fas fa-check"></i> Vardiya Takibi</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Enerji ve Elektrik Sektörü -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="400">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Enerji Sektörü</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Yalıtımlı Ekipman</li>
+                                    <li><i class="fas fa-check"></i> Ark Flash Koruması</li>
+                                    <li><i class="fas fa-check"></i> Dielektrik PPE</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Petrokimya Tesisleri -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="500">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-gas-pump"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Petrokimya</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Gaz Maskesi</li>
+                                    <li><i class="fas fa-check"></i> Kimyasal Tulum</li>
+                                    <li><i class="fas fa-check"></i> Özel Ekipman</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    
+                    <!-- Havacılık Endüstrisi -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="700">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-plane"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Havacılık</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Kulaklık Kontrolü</li>
+                                    <li><i class="fas fa-check"></i> Anti-statik PPE</li>
+                                    <li><i class="fas fa-check"></i> Özel Ekipman</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gıda Sektörü -->
+                    <div class="sector-scroll-item" data-aos="fade-up" data-aos-delay="200">
+                        <div class="modern-sector-card">
+                            <div class="sector-icon">
+                                <i class="fas fa-utensils"></i>
+                            </div>
+                            <div class="sector-content">
+                                <h4>Gıda Sektörü</h4>
+                                <ul class="sector-features">
+                                    <li><i class="fas fa-check"></i> Bone Kontrolü</li>
+                                    <li><i class="fas fa-check"></i> Hijyen Eldiveni</li>
+                                    <li><i class="fas fa-check"></i> Önlük Tespiti</li>
+                                </ul>
+                                <a href="#contact" class="sector-link">Detaylı Bilgi <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="scroll-indicator left"><i class="fas fa-chevron-left"></i></div>
+                <div class="scroll-indicator right"><i class="fas fa-chevron-right"></i></div>
+                <div class="scroll-dots"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits -->
+    <section id="benefits" class="section">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-6 mx-auto text-center">
+                    <h2 class="display-5 fw-bold mb-3">Avantajlar</h2>
+                    <p class="lead text-muted">
+                        SmartSafe AI ile elde edeceğiniz kazanımlar
+                    </p>
+                </div>
+            </div>
+            <div class="features-tabs mb-4">
+                <ul class="nav nav-pills justify-content-center gap-2 mb-4" id="benefitsTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="finansal-tab" data-bs-toggle="pill" data-bs-target="#finansal" type="button" role="tab">
+                            <i class="fas fa-coins me-2"></i>Finansal
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="operasyonel-tab" data-bs-toggle="pill" data-bs-target="#operasyonel" type="button" role="tab">
+                            <i class="fas fa-cogs me-2"></i>Operasyonel
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="guvenlik-tab" data-bs-toggle="pill" data-bs-target="#guvenlik" type="button" role="tab">
+                            <i class="fas fa-user-shield me-2"></i>İş Güvenliği
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="teknolojik-tab" data-bs-toggle="pill" data-bs-target="#teknolojik" type="button" role="tab">
+                            <i class="fas fa-microchip me-2"></i>Teknolojik
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="yasal-tab" data-bs-toggle="pill" data-bs-target="#yasal" type="button" role="tab">
+                            <i class="fas fa-balance-scale me-2"></i>Yasal
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="benefitsTabContent">
+                    <!-- Finansal Tab -->
+                    <div class="tab-pane fade show active" id="finansal" role="tabpanel">
+                        <div class="row g-4 justify-content-center">
+                            <div class="col-lg-10">
+                                <div class="glass-card p-5 h-100 position-relative overflow-hidden">
+                                    <div class="benefit-header text-center mb-4">
+                                        <div class="benefit-icon gradient-bg mb-3">
+                                            <i class="fas fa-coins"></i>
+                                        </div>
+                                        <h3 class="mb-3">Finansal Avantajlar</h3>
+                                        <p class="text-muted mb-4">İş güvenliği yatırımınızın hızlı geri dönüşü ve uzun vadeli finansal faydaları</p>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> İş kazası maliyetlerinin minimize edilmesi</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sigorta primlerinde potansiyel indirimler</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Denetim maliyetlerinin azaltılması</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Operasyonel verimliliğin artırılması</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> İş gücü kaybının önlenmesi</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Ekipman bakım maliyetlerinin optimizasyonu</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yasal yükümlülük risklerinin azaltılması</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> ROI odaklı güvenlik yatırımı</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="benefit-watermark">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Operasyonel Tab -->
+                    <div class="tab-pane fade" id="operasyonel" role="tabpanel">
+                        <div class="row g-4 justify-content-center">
+                            <div class="col-lg-10">
+                                <div class="glass-card p-5 h-100 position-relative overflow-hidden">
+                                    <div class="benefit-header text-center mb-4">
+                                        <div class="benefit-icon gradient-bg mb-3">
+                                            <i class="fas fa-cogs"></i>
+                                        </div>
+                                        <h3 class="mb-3">Operasyonel Faydalar</h3>
+                                        <p class="text-muted mb-4">Süreçlerinizi optimize eden ve verimliliği artıran akıllı çözümler</p>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Gerçek zamanlı izleme ve uyarı sistemi</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Otomatik raporlama ve dokümantasyon</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Çalışan güvenliğinin artırılması</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Denetim süreçlerinin kolaylaştırılması</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sektöre özel optimize edilmiş çözümler</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> 7/24 kesintisiz izleme</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Mobil uygulama ile uzaktan erişim</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Akıllı iş akışı otomasyonu</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="benefit-watermark">
+                                        <i class="fas fa-rocket"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- İş Güvenliği Tab -->
+                    <div class="tab-pane fade" id="guvenlik" role="tabpanel">
+                        <div class="row g-4 justify-content-center">
+                            <div class="col-lg-10">
+                                <div class="glass-card p-5 h-100 position-relative overflow-hidden">
+                                    <div class="benefit-header text-center mb-4">
+                                        <div class="benefit-icon gradient-bg mb-3">
+                                            <i class="fas fa-user-shield"></i>
+                                        </div>
+                                        <h3 class="mb-3">İş Güvenliği Avantajları</h3>
+                                        <p class="text-muted mb-4">Proaktif yaklaşımla çalışan güvenliğini maksimum seviyeye çıkaran teknoloji</p>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Proaktif risk yönetimi</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Anlık ihlal tespiti ve müdahale</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Çalışan güvenlik bilincinin artırılması</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Kaza önleme oranında artış</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Erken uyarı sistemleri</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Güvenlik kültürü geliştirme</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sıfır kaza hedefi desteği</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sürekli güvenlik iyileştirme</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="benefit-watermark">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Teknolojik Tab -->
+                    <div class="tab-pane fade" id="teknolojik" role="tabpanel">
+                        <div class="row g-4 justify-content-center">
+                            <div class="col-lg-10">
+                                <div class="glass-card p-5 h-100 position-relative overflow-hidden">
+                                    <div class="benefit-header text-center mb-4">
+                                        <div class="benefit-icon gradient-bg mb-3">
+                                            <i class="fas fa-microchip"></i>
+                                        </div>
+                                        <h3 class="mb-3">Teknolojik Üstünlükler</h3>
+                                        <p class="text-muted mb-4">En son yapay zeka teknolojileri ile donatılmış gelecek odaklı çözümler</p>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yapay zeka destekli hassas tespit</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sürekli öğrenen ve gelişen sistem</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Kolay entegrasyon ve ölçeklenebilirlik</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Özelleştirilebilir uyarı mekanizmaları</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Gerçek zamanlı AI analizi</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Gelişmiş görüntü işleme</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Bulut tabanlı işlem gücü</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> IoT cihaz entegrasyonu</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="benefit-watermark">
+                                        <i class="fas fa-brain"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Yasal Tab -->
+                    <div class="tab-pane fade" id="yasal" role="tabpanel">
+                        <div class="row g-4 justify-content-center">
+                            <div class="col-lg-10">
+                                <div class="glass-card p-5 h-100 position-relative overflow-hidden">
+                                    <div class="benefit-header text-center mb-4">
+                                        <div class="benefit-icon gradient-bg mb-3">
+                                            <i class="fas fa-balance-scale"></i>
+                                        </div>
+                                        <h3 class="mb-3">Yasal Uyumluluk</h3>
+                                        <p class="text-muted mb-4">Mevzuata tam uyumluluk ve yasal süreçlerde kolaylık sağlayan çözümler</p>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> İSG mevzuatına tam uyumluluk</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Otomatik denetim raporları</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yasal dokümantasyon desteği</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Sertifikasyon süreçlerinde kolaylık</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="feature-list list-unstyled">
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> KVKK uyumlu veri işleme</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Denetim hazırlık desteği</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Yasal raporlama otomasyonu</li>
+                                                <li class="benefit-item"><i class="fas fa-check-circle"></i> Uyumluluk takip sistemi</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="benefit-watermark">
+                                        <i class="fas fa-gavel"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact" class="section contact-section position-relative">
+        <div class="container">
+            <div class="row justify-content-center align-items-center g-5">
+                <!-- Left: Contact Info -->
+                <div class="col-lg-5" data-aos="fade-right">
+                    <div class="contact-info-card glass-card p-5 h-100 text-center text-lg-start">
+                        <div class="contact-icon gradient-bg mb-4 mx-auto mx-lg-0">
+                            <i class="fas fa-envelope-open-text"></i>
+                        </div>
+                        <h2 class="fw-bold mb-3">İletişime Geçin</h2>
+                        <p class="text-muted mb-4">Her türlü soru, teklif veya iş birliği için bize ulaşabilirsiniz. Size en kısa sürede dönüş yapacağız.</p>
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="contact-info-icon"><i class="fas fa-envelope"></i></div>
+                                <span class="ms-2">yigittilaver2000@gmail.com</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="contact-info-icon"><i class="fas fa-phone"></i></div>
+                                <span class="ms-2">+90 (505) 020 20 95</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <div class="contact-info-icon"><i class="fas fa-map-marker-alt"></i></div>
+                                <span class="ms-2">Maslak, İstanbul</span>
+                            </div>
+                        </div>
+                        <div class="social-links justify-content-center justify-content-lg-start mt-4 gap-3">
+                            <a href="#" class="social-link"><i class="fab fa-linkedin"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-twitter"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-facebook"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Right: Contact Form -->
+                <div class="col-lg-7" data-aos="fade-left">
+                    <div class="contact-form glass-card p-5 h-100">
+                        <form id="contactForm" action="/api/contact" method="POST">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-transparent border-0"><i class="fas fa-user"></i></span>
+                                        <input type="text" name="name" class="form-control" placeholder="Adınız Soyadınız" required>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-transparent border-0"><i class="fas fa-envelope"></i></span>
+                                        <input type="email" name="email" class="form-control" placeholder="E-posta Adresiniz" required>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="custom-dropdown" id="sectorDropdown">
+                                        <button type="button" class="custom-dropdown-toggle" id="sectorDropdownToggle" tabindex="0">
+                                            <span class="dropdown-icon"><i class="fas fa-industry"></i></span>
+                                            <span class="custom-dropdown-selected custom-dropdown-placeholder">Sektörünüz</span>
+                                            <span class="dropdown-arrow"><i class="fas fa-chevron-down"></i></span>
+                                        </button>
+                                        <div class="custom-dropdown-menu" id="sectorDropdownMenu">
+                                            <div class="custom-dropdown-option" data-value="construction"><span class="option-check"><i class="fas fa-check"></i></span>İnşaat</div>
+                                            <div class="custom-dropdown-option" data-value="chemical"><span class="option-check"><i class="fas fa-check"></i></span>Kimya</div>
+                                            <div class="custom-dropdown-option" data-value="food"><span class="option-check"><i class="fas fa-check"></i></span>Gıda</div>
+                                            <div class="custom-dropdown-option" data-value="manufacturing"><span class="option-check"><i class="fas fa-check"></i></span>Üretim</div>
+                                            <div class="custom-dropdown-option" data-value="energy"><span class="option-check"><i class="fas fa-check"></i></span>Enerji</div>
+                                            <div class="custom-dropdown-option" data-value="petrochemical"><span class="option-check"><i class="fas fa-check"></i></span>Petrokimya</div>
+                                            <div class="custom-dropdown-option" data-value="marine"><span class="option-check"><i class="fas fa-check"></i></span>Denizcilik & Tersane</div>
+                                            <div class="custom-dropdown-option" data-value="aviation"><span class="option-check"><i class="fas fa-check"></i></span>Havacılık</div>
+                                            <div class="custom-dropdown-option" data-value="other"><span class="option-check"><i class="fas fa-check"></i></span>Diğer</div>
+                                        </div>
+                                        <input type="hidden" name="sector" id="sectorInput" required>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-transparent border-0"><i class="fas fa-comment-dots"></i></span>
+                                        <textarea name="message" class="form-control" rows="1" placeholder="Mesajınız" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <button type="submit" class="btn btn-gradient w-100 py-3 fw-bold">
+                                        <i class="fas fa-paper-plane me-2"></i>Gönder
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <style>
+            .contact-section {
+                background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%);
+                position: relative;
+                overflow: hidden;
+            }
+            .contact-section::before {
+                content: '';
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="rgba(30,58,138,0.03)" width="50" height="50" x="0" y="0"/></svg>');
+                opacity: 0.2;
+            }
+            .contact-info-card {
+                background: rgba(255,255,255,0.95);
+                border-radius: 20px;
+                box-shadow: 0 8px 32px rgba(30,58,138,0.08);
+                border: 1px solid #e0e7ef;
+            }
+            .contact-icon {
+                width: 70px;
+                height: 70px;
+                border-radius: 18px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                color: white;
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                box-shadow: 0 4px 16px rgba(30,58,138,0.12);
+            }
+            .contact-info-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: #e0e7ef;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--primary);
+                font-size: 16px;
+            }
+            .contact-form {
+                background: rgba(255,255,255,0.98);
+                border-radius: 20px;
+                box-shadow: 0 8px 32px rgba(30,58,138,0.08);
+                border: 1px solid #e0e7ef;
+            }
+            .contact-form .input-group {
+                background: #f1f5f9;
+                border-radius: 12px;
+                box-shadow: 0 2px 8px rgba(30,58,138,0.03);
+                border: 1.5px solid #e0e7ef;
+                margin-bottom: 0;
+            }
+            .contact-form .input-group-text {
+                background: transparent;
+                border: none;
+                color: var(--primary);
+                font-size: 18px;
+            }
+            .contact-form .form-control,
+            .contact-form .form-select,
+            .contact-form textarea {
+                background: transparent;
+                border: none;
+                box-shadow: none;
+                font-size: 1.1rem;
+                color: var(--dark);
+                padding: 14px 12px;
+            }
+            .contact-form .form-control:focus,
+            .contact-form .form-select:focus,
+            .contact-form textarea:focus {
+                background: transparent;
+                outline: none;
+                box-shadow: none;
+            }
+            .btn-gradient {
+                background: linear-gradient(90deg, var(--primary), var(--secondary));
+                color: #fff;
+                border: none;
+                border-radius: 12px;
+                font-size: 1.1rem;
+                transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+                box-shadow: 0 4px 16px rgba(30,58,138,0.10);
+            }
+            .btn-gradient:hover {
+                background: linear-gradient(90deg, var(--secondary), var(--primary));
+                color: #fff;
+                transform: translateY(-2px) scale(1.03);
+                box-shadow: 0 8px 24px rgba(30,58,138,0.13);
+            }
+            @media (max-width: 991px) {
+                .contact-info-card {
+                    margin-bottom: 32px;
+                }
+            }
+            @media (max-width: 768px) {
+                .contact-section {
+                    padding: 60px 0;
+                }
+                .contact-info-card, .contact-form {
+                    padding: 28px 12px;
+                }
+                .contact-icon {
+                    width: 54px;
+                    height: 54px;
+                    font-size: 22px;
+                }
+                .contact-info-icon {
+                    width: 28px;
+                    height: 28px;
+                    font-size: 13px;
+                }
+            }
+        </style>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-section">
+        <div class="footer-top py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="footer-brand mb-4">
+                            <h3 class="text-white mb-2"><i class="fas fa-shield-alt"></i> SmartSafe AI</h3>
+                            <p class="text-white-50">
+                                Yapay zeka destekli endüstriyel güvenlik çözümleriyle iş yerinizi daha güvenli hale getiriyoruz.
+                            </p>
+                        </div>
+                        <div class="contact-info mb-4">
+                            <h5 class="text-white mb-3">İletişim</h5>
+                            <p class="text-white-50 mb-2">
+                                <i class="fas fa-envelope me-2"></i> yigittilaver2000@gmail.com
+                            </p>
+                            <p class="text-white-50 mb-2">
+                                <i class="fas fa-phone me-2"></i> +90 (505) 020 20 95
+                            </p>
+                            <p class="text-white-50 mb-0">
+                                <i class="fas fa-map-marker-alt me-2"></i> Maslak, İstanbul
+                            </p>
+                        </div>
+                        <div class="social-links">
+                            <a href="#" class="social-link"><i class="fab fa-linkedin"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-twitter"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-facebook"></i></a>
+                            <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <h5 class="text-white mb-4">Çözümlerimiz</h5>
+                        <ul class="footer-links">
+                            <li><a href="#features">Temel Özellikler</a></li>
+                            <li><a href="#sectors">Sektörel Çözümler</a></li>
+                            <li><a href="#benefits">İş Güvenliği Avantajları</a></li>
+                            <li><a href="#demo">Canlı Demo</a></li>
+                            <li><a href="/app">Şirket Kaydı</a></li>
+                        </ul>
+                    </div>
+                    <div class="col-lg-4">
+                        <h5 class="text-white mb-4">Destek</h5>
+                        <ul class="footer-links">
+                            <li><a href="#contact">Teknik Destek</a></li>
+                            <li><a href="#contact">Satış Öncesi Destek</a></li>
+                            <li><a href="#contact">Demo Talebi</a></li>
+                            <li><a href="#contact">Fiyatlandırma</a></li>
+                            <li><a href="#contact">Sektörel Danışmanlık</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom py-3">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <p class="text-white-50 mb-0">© 2025 SmartSafe AI. Tüm hakları saklıdır.</p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <a href="#" class="text-white-50 me-3">Gizlilik Politikası</a>
+                        <a href="#" class="text-white-50">Kullanım Şartları</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <style>
+        .footer-section {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .footer-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="rgba(255,255,255,0.03)" width="50" height="50" x="0" y="0"/></svg>');
+            opacity: 0.1;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .footer-links a:hover {
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .social-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .social-link {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .social-link:hover {
+            background: white;
+            color: var(--primary);
+            transform: translateY(-3px);
+        }
+
+        .newsletter-form .form-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 30px 0 0 30px;
+        }
+
+        .newsletter-form .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .newsletter-form .btn {
+            border-radius: 0 30px 30px 0;
+            padding: 12px 25px;
+        }
+
+        .footer-bottom {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .footer-bottom a {
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-bottom a:hover {
+            color: white !important;
+        }
+
+        .contact-info p {
+            display: flex;
+            align-items: center;
+        }
+
+        .contact-info i {
+            width: 20px;
+        }
+    </style>
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <!-- jQuery ve Toastr JS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script>
+        // Toastr ayarları
+        toastr.options = {
+            "closeButton": true,
+            "debug": false,
+            "newestOnTop": false,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "preventDuplicates": false,
+            "onclick": null,
+            "showDuration": "300",
+            "hideDuration": "1000",
+            "timeOut": "5000",
+            "extendedTimeOut": "1000",
+            "showEasing": "swing",
+            "hideEasing": "linear",
+            "showMethod": "fadeIn",
+            "hideMethod": "fadeOut"
+        };
+
+        // Contact form submit
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            fetch('/api/contact', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('Mesajınız başarıyla gönderildi!', 'Başarılı');
+                    this.reset();
+                } else {
+                    throw new Error(data.error || 'Bir hata oluştu');
+                }
+            })
+            .catch(error => {
+                toastr.error('Bir hata oluştu. Lütfen tekrar deneyin.', 'Hata');
+                console.error('Error:', error);
+            });
+        });
+
+        // Initialize AOS
+        AOS.init({
+            duration: 1000,
+            once: true
+        });
+
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            if (window.scrollY > 50) {
+                document.querySelector('.navbar').classList.add('scrolled');
+            } else {
+                document.querySelector('.navbar').classList.remove('scrolled');
+            }
+        });
+
+        // Initialize particles.js
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: '#ffffff' },
+                shape: { type: 'circle' },
+                opacity: { value: 0.5, random: false },
+                size: { value: 3, random: true },
+                line_linked: { enable: true, distance: 150, color: '#ffffff', opacity: 0.4, width: 1 },
+                move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
+            },
+            interactivity: {
+                detect_on: 'canvas',
+                events: {
+                    onhover: { enable: true, mode: 'repulse' },
+                    onclick: { enable: true, mode: 'push' },
+                    resize: true
+                }
+            },
+            retina_detect: true
+        });
+    </script>
+    <style>
+        /* Horizontal Scrolling Sectors */
+        .sectors-scroll-container {
+            position: relative;
+            width: 100%;
+            padding: 20px 0;
+        }
+
+        .sectors-scroll-wrapper {
+            display: flex;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            padding: 20px 0;
+            gap: 20px;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+        }
+
+        .sectors-scroll-wrapper::-webkit-scrollbar {
+            display: none; /* Chrome, Safari and Opera */
+        }
+
+        .sector-scroll-item {
+            flex: 0 0 auto;
+            width: 300px;
+            padding: 0 10px;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .scroll-indicator:hover {
+            background: white;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .scroll-indicator.left {
+            left: 10px;
+        }
+
+        .scroll-indicator.right {
+            right: 10px;
+        }
+
+        .scroll-indicator i {
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .sector-scroll-item {
+                width: 280px;
+            }
+            
+            .scroll-indicator {
+                display: none;
+            }
+        }
+
+        /* Update existing sector card styles */
+        .modern-sector-card {
+            height: 100%;
+            margin: 0;
+        }
+    </style>
+
+    <script>
+        // Add this to your existing script section
+        document.addEventListener('DOMContentLoaded', function() {
+            const scrollContainer = document.querySelector('.sectors-scroll-wrapper');
+            const leftIndicator = document.querySelector('.scroll-indicator.left');
+            const rightIndicator = document.querySelector('.scroll-indicator.right');
+            const scrollDotsContainer = document.querySelector('.scroll-dots');
+            const scrollAmount = 600;
+            
+            // Calculate number of dots needed
+            const totalWidth = scrollContainer.scrollWidth;
+            const viewWidth = scrollContainer.clientWidth;
+            const numDots = Math.ceil(totalWidth / viewWidth);
+            
+            // Create dots
+            const sectorTitles = ['İnşaat', 'Kimya', 'Gıda', 'Üretim', 'Enerji', 'Petrokimya', 'Denizcilik', 'Havacılık'];
+            for (let i = 0; i < numDots; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'scroll-dot' + (i === 0 ? ' active' : '');
+                
+                // Add tooltip
+                const tooltip = document.createElement('div');
+                tooltip.className = 'scroll-dot-tooltip';
+                tooltip.textContent = `${i * 3 + 1}-${Math.min((i + 1) * 3, sectorTitles.length)} Sektör`;
+                dot.appendChild(tooltip);
+
+                dot.addEventListener('click', () => {
+                    scrollContainer.scrollTo({
+                        left: i * viewWidth,
+                        behavior: 'smooth'
+                    });
+                });
+                scrollDotsContainer.appendChild(dot);
+            }
+            
+            // Update dots based on scroll position
+            function updateDots() {
+                const scrollPosition = scrollContainer.scrollLeft;
+                const dots = scrollDotsContainer.querySelectorAll('.scroll-dot');
+                const activeIndex = Math.round(scrollPosition / viewWidth);
+                
+                dots.forEach((dot, index) => {
+                    dot.classList.toggle('active', index === activeIndex);
+                });
+            }
+            
+            // Show/hide indicators based on scroll position
+            function updateIndicators() {
+                leftIndicator.style.opacity = scrollContainer.scrollLeft > 0 ? '1' : '0';
+                rightIndicator.style.opacity = 
+                    scrollContainer.scrollLeft < (scrollContainer.scrollWidth - scrollContainer.clientWidth - 10) ? '1' : '0';
+                updateDots();
+            }
+
+            // Initial states
+            updateIndicators();
+
+            // Scroll event listener
+            scrollContainer.addEventListener('scroll', updateIndicators);
+
+            // Click handlers for indicators
+            leftIndicator.addEventListener('click', () => {
+                scrollContainer.scrollBy({
+                    left: -scrollAmount,
+                    behavior: 'smooth'
+                });
+            });
+
+            rightIndicator.addEventListener('click', () => {
+                scrollContainer.scrollBy({
+                    left: scrollAmount,
+                    behavior: 'smooth'
+                });
+            });
+
+            // Touch scroll handling
+            let isDown = false;
+            let startX;
+            let scrollLeft;
+
+            scrollContainer.addEventListener('mousedown', (e) => {
+                isDown = true;
+                scrollContainer.style.cursor = 'grabbing';
+                startX = e.pageX - scrollContainer.offsetLeft;
+                scrollLeft = scrollContainer.scrollLeft;
+            });
+
+            scrollContainer.addEventListener('mouseleave', () => {
+                isDown = false;
+                scrollContainer.style.cursor = 'grab';
+            });
+
+            scrollContainer.addEventListener('mouseup', () => {
+                isDown = false;
+                scrollContainer.style.cursor = 'grab';
+            });
+
+            scrollContainer.addEventListener('mousemove', (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - scrollContainer.offsetLeft;
+                const walk = (x - startX) * 2;
+                scrollContainer.scrollLeft = scrollLeft - walk;
+            });
+
+            // Handle window resize
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    // Remove existing dots
+                    scrollDotsContainer.innerHTML = '';
+                    
+                    // Recalculate and create new dots
+                    const newTotalWidth = scrollContainer.scrollWidth;
+                    const newViewWidth = scrollContainer.clientWidth;
+                    const newNumDots = Math.ceil(newTotalWidth / newViewWidth);
+                    
+                    for (let i = 0; i < newNumDots; i++) {
+                        const dot = document.createElement('div');
+                        dot.className = 'scroll-dot';
+                        dot.addEventListener('click', () => {
+                            scrollContainer.scrollTo({
+                                left: i * newViewWidth,
+                                behavior: 'smooth'
+                            });
+                        });
+                        scrollDotsContainer.appendChild(dot);
+                    }
+                    
+                    updateDots();
+                }, 200);
+            });
+        });
+    </script>
+    <script>
+        // Custom dropdown logic
+        const dropdown = document.getElementById('sectorDropdown');
+        const toggle = document.getElementById('sectorDropdownToggle');
+        const menu = document.getElementById('sectorDropdownMenu');
+        const options = menu.querySelectorAll('.custom-dropdown-option');
+        const selected = dropdown.querySelector('.custom-dropdown-selected');
+        const input = document.getElementById('sectorInput');
+        let open = false;
+        function closeDropdown() {
+            dropdown.classList.remove('open');
+            open = false;
+        }
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            open = !open;
+            dropdown.classList.toggle('open', open);
+        });
+        options.forEach(opt => {
+            opt.addEventListener('click', function() {
+                options.forEach(o => o.classList.remove('active'));
+                this.classList.add('active');
+                selected.textContent = this.textContent.trim();
+                selected.classList.remove('custom-dropdown-placeholder');
+                input.value = this.getAttribute('data-value');
+                closeDropdown();
+            });
+        });
+        document.addEventListener('click', function(e) {
+            if (!dropdown.contains(e.target)) closeDropdown();
+        });
+        toggle.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                open = !open;
+                dropdown.classList.toggle('open', open);
+            }
+        });
+    </script>
+</body>
+</html> 

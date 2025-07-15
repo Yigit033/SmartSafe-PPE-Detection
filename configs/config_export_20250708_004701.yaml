@@ -1,0 +1,81 @@
+camera:
+  auto_discovery: true
+  connection_timeout: 10
+  default_fps: 25
+  default_resolution: 1280x720
+  fallback_to_simulation: true
+  frame_buffer_size: 5
+  retry_attempts: 3
+  use_real_cameras: false
+custom: {}
+database:
+  database: smartsafe_ai
+  host: localhost
+  password: ''
+  pool_size: 10
+  port: 5432
+  ssl_mode: prefer
+  timeout: 30
+  username: postgres
+debug: true
+detection:
+  batch_size: 1
+  confidence_threshold: 0.5
+  enable_tracking: true
+  input_size: !!python/tuple
+  - 640
+  - 640
+  max_detections: 100
+  model_path: data/models/yolov8n.pt
+  nms_threshold: 0.45
+  use_gpu: true
+environment: development
+features:
+  ai_insights: true
+  analytics: true
+  api_access: true
+  cloud_sync: false
+  mobile_app: false
+  multi_tenant: true
+  real_time_detection: true
+  reporting: true
+host: 0.0.0.0
+logging:
+  backup_count: 5
+  console_enabled: true
+  file_enabled: true
+  file_path: logs/smartsafe.log
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  json_enabled: true
+  level: DEBUG
+  max_file_size: 10MB
+monitoring:
+  alert_thresholds:
+    cpu_usage: 80.0
+    error_rate: 5.0
+    memory_usage: 85.0
+    response_time: 2.0
+  enabled: true
+  grafana_enabled: false
+  health_check_interval: 30
+  metrics_port: 9090
+  prometheus_enabled: false
+performance:
+  async_processing: true
+  cache_enabled: true
+  cache_size: 1000
+  compression_enabled: true
+  cpu_limit: 80.0
+  max_workers: 4
+  memory_limit: 1GB
+  worker_timeout: 300
+port: 5000
+security:
+  cors_enabled: true
+  jwt_expiration: 86400
+  max_login_attempts: 5
+  password_min_length: 8
+  rate_limiting: true
+  require_https: false
+  secret_key: smartsafe-ai-secret-key-change-in-production
+  session_timeout: 3600

@@ -1,0 +1,10 @@
+debug: false
+logging:
+  console_enabled: false
+  level: WARNING
+monitoring:
+  enabled: true
+  prometheus_enabled: true
+security:
+  require_https: true
+  session_timeout: 1800
