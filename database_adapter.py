@@ -137,48 +137,48 @@ class DatabaseAdapter:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
-                
-                # Users table
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS users (
-                        user_id TEXT PRIMARY KEY,
-                        company_id TEXT NOT NULL,
-                        username TEXT NOT NULL,
-                        email TEXT UNIQUE NOT NULL,
-                        password_hash TEXT NOT NULL,
-                        role TEXT DEFAULT 'operator',
-                        permissions TEXT,
-                        last_login TIMESTAMP,
-                        status TEXT DEFAULT 'active',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                        UNIQUE(company_id, username)
-                    )
-                ''')
-                
-                # Cameras table
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS cameras (
-                        camera_id TEXT PRIMARY KEY,
-                        company_id TEXT NOT NULL,
-                        camera_name TEXT NOT NULL,
-                        location TEXT NOT NULL,
-                        ip_address TEXT,
-                        rtsp_url TEXT,
-                        username TEXT,
-                        password TEXT,
-                        resolution TEXT DEFAULT '1920x1080',
-                        fps INTEGER DEFAULT 25,
-                        status TEXT DEFAULT 'active',
-                        last_detection TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                        UNIQUE(company_id, camera_name)
-                    )
-                ''')
-                
-                conn.commit()
-                logger.info("✅ Database tables created successfully")
+            
+            # Users table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT DEFAULT 'operator',
+                    permissions TEXT,
+                    last_login TIMESTAMP,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    UNIQUE(company_id, username)
+                )
+            ''')
+            
+            # Cameras table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cameras (
+                    camera_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    camera_name TEXT NOT NULL,
+                    location TEXT NOT NULL,
+                    ip_address TEXT,
+                    rtsp_url TEXT,
+                    username TEXT,
+                    password TEXT,
+                    resolution TEXT DEFAULT '1920x1080',
+                    fps INTEGER DEFAULT 25,
+                    status TEXT DEFAULT 'active',
+                    last_detection TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    UNIQUE(company_id, camera_name)
+                )
+            ''')
+            
+            conn.commit()
+            logger.info("✅ Database tables created successfully")
             
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")

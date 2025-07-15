@@ -112,7 +112,7 @@ class MultiTenantDatabase:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+        
             # Şirketler tablosu
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS companies (
@@ -282,7 +282,7 @@ class MultiTenantDatabase:
                 columns = [column[1] for column in cursor.fetchall()]
                 
                 if 'port' not in columns:
-                    logger.info("�� Adding port column to cameras table...")
+                    logger.info("🔧 Adding port column to cameras table...")
                     cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
                     conn.commit()
                     logger.info("✅ Migration: port column added successfully")

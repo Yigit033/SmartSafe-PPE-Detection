@@ -8301,7 +8301,7 @@ smartsafe_requests_total 100
         return self.app
 
 def main():
-    """Ana fonksiyon"""
+    """Ana fonksiyon - Sadece development mode için"""
     print("🌐 SmartSafe AI - SaaS Multi-Tenant API Server")
     print("=" * 60)
     print("✅ Multi-tenant şirket yönetimi")
@@ -8310,27 +8310,16 @@ def main():
     print("✅ Kamera yönetimi")
     print("✅ Responsive web arayüzü")
     print("=" * 60)
-    print("🚀 Server başlatılıyor...")
+    print("🚀 Development Server başlatılıyor...")
     
     try:
         api_server = SmartSafeSaaSAPI()
-        app = api_server.app  # Doğrudan Flask app objesini al
+        app = api_server.app
         
-        # Production mode check
-        is_production = os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEROKU_APP_NAME')
-        
-        if is_production:
-            # In production, return the app for gunicorn
-            logger.info("🚀 Production mode: Returning app for WSGI server")
-            port = int(os.environ.get('PORT', 10000))
-            logger.info(f"Using port {port}")
-            print(f"Flask app ready: {app}")
-            return app
-        else:
-            # In development mode, run with Flask's server
-            port = int(os.environ.get('PORT', 10000))
-            logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
-            app.run(host='0.0.0.0', port=port, debug=True)
+        # Development mode - Flask development server
+        port = int(os.environ.get('PORT', 10000))
+        logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
+        app.run(host='0.0.0.0', port=port, debug=True)
             
     except KeyboardInterrupt:
         logger.info("🛑 SaaS API Server stopped by user")
@@ -8340,25 +8329,43 @@ def main():
     
     return 0
 
-# Create app instance for production WSGI servers
+# =============================================================================
+# PRODUCTION APP INSTANCE - Bu obje Gunicorn tarafından kullanılır
+# =============================================================================
+print("🔧 Creating global Flask app for production deployment...")
 try:
     api_server = SmartSafeSaaSAPI()
-    app = api_server.app  # Doğrudan Flask app objesini al
-    print(f"✅ Global Flask app created: {app}")
+    app = api_server.app
+    print(f"✅ Global Flask app created successfully: {app}")
+    print(f"📍 App name: {app.name}")
+    print(f"📍 Environment: {app.env}")
+    print("🚀 Ready for WSGI server (Gunicorn)")
+    print("📌 Gunicorn will use this 'app' object directly")
 except Exception as e:
-    print(f"❌ Error creating Flask app: {e}")
-    # Fallback app creation
+    print(f"❌ Critical error creating Flask app: {e}")
+    import traceback
+    traceback.print_exc()
+    
+    # Emergency fallback app
     from flask import Flask
     app = Flask(__name__)
     
     @app.route('/health')
     def health():
-        return {'status': 'ok', 'message': 'Fallback app running'}
+        return {'status': 'error', 'message': 'Emergency fallback app - main app failed to initialize'}
+    
+    @app.route('/')
+    def index():
+        return {'status': 'error', 'message': 'Main application failed to start'}
+    
+    print("⚠️ Emergency fallback Flask app created")
 
 if __name__ == "__main__":
-    exit(main())
+    # Bu blok sadece development mode'da çalışır
+    # Production'da Gunicorn global 'app' objesini kullanır
+    print("🔧 Development mode detected - starting Flask dev server...")
+    main()
 
 
-""" ASıl dosyamız bu ama "smartsafe_saas_api_içinde_tekrar_eden_dosya.py" adlı dosyadaiki tane aynı sınıf var, gerekli düzenlemeyi yap! """ 
 
 
