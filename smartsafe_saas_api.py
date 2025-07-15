@@ -59,6 +59,13 @@ class SmartSafeSaaSAPI:
                         static_folder='static')
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
+        # Force production mode settings
+        is_production = os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEROKU_APP_NAME')
+        if is_production:
+            self.app.config['DEBUG'] = False
+            self.app.config['TESTING'] = False
+            self.app.config['ENV'] = 'production'
+        
         # Mail configuration
         self.app.config['MAIL_SERVER'] = 'smtp.gmail.com'
         self.app.config['MAIL_PORT'] = 587
