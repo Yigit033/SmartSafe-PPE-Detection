@@ -19,7 +19,7 @@ def quick_test():
     # Test 1: App Import
     print("\n1. Testing App Import...")
     try:
-        os.environ['RAILWAY_ENVIRONMENT'] = 'production'
+        os.environ['PYTHONANYWHERE_ENVIRONMENT'] = 'production'
         from smartsafe_saas_api import app
         if app:
             print("OK App import successful")

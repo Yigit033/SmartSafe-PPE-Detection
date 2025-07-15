@@ -59,9 +59,8 @@ class SmartSafeSaaSAPI:
                         static_folder='static')
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
-        # Force production mode settings - Multi-platform optimized
-        is_production = (os.environ.get('FLY_ENVIRONMENT') or
-                        os.environ.get('RAILWAY_ENVIRONMENT') or 
+        # Force production mode settings - PythonAnywhere + Render.com focused
+        is_production = (os.environ.get('PYTHONANYWHERE_ENVIRONMENT') or
                         os.environ.get('RENDER') or 
                         os.environ.get('HEROKU_APP_NAME'))
         
@@ -8448,15 +8447,13 @@ if __name__ == "__main__":
         port = int(os.environ.get('PORT', 8080))  # Railway default port
         host = '0.0.0.0'
         
-        # Platform detection
-        if os.environ.get('FLY_ENVIRONMENT'):
-            platform = "Fly.io"
-        elif os.environ.get('RAILWAY_ENVIRONMENT'):
-            platform = "Railway.app"
+        # Platform detection - PythonAnywhere + Render.com focused
+        if os.environ.get('PYTHONANYWHERE_ENVIRONMENT'):
+            platform = "PythonAnywhere (Temporary)"
         elif os.environ.get('RENDER'):
-            platform = "Render.com"
+            platform = "Render.com (Target Platform)"
         else:
-            platform = "Local"
+            platform = "Local Development"
         print(f"🌐 Platform: {platform}")
         print(f"🌐 Starting server on {host}:{port}")
         print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
