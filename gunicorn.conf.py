@@ -15,8 +15,8 @@ backlog = 2048
 workers = 1  # Single worker for free tier
 worker_class = "sync"
 worker_connections = 1000
-timeout = 300
-keepalive = 2
+timeout = 120  # Reduced timeout for better responsiveness
+keepalive = 5  # Increased keepalive
 max_requests = 100
 max_requests_jitter = 10
 

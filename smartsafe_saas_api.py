@@ -8364,11 +8364,14 @@ if __name__ == "__main__":
     # Bu blok sadece development mode'da çalışır
     # Production'da Gunicorn global 'app' objesini kullanır
     import os
-    if not os.environ.get('RENDER'):
+    is_production = os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEROKU_APP_NAME')
+    
+    if not is_production:
         print("🔧 Development mode detected - starting Flask dev server...")
         main()
     else:
         print("🚀 Production mode - Gunicorn will handle the app")
+        print("📌 Flask app ready for WSGI server")
 
 
 
