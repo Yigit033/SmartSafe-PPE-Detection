@@ -283,4 +283,5 @@ This is a **professional-grade commercial system** designed for workplace safety
 
 *🔒 Stay Safe • ⚡ Stay Fast • 🏭 Stay Compliant*
 
-</div> 
+</div> #   F o r c e   r e d e p l o y  
+ 
