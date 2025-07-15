@@ -11,14 +11,15 @@ import multiprocessing
 bind = f"0.0.0.0:{os.getenv('PORT', '10000')}"
 backlog = 2048
 
-# Worker processes
-workers = 1  # Single worker for free tier
+# Worker processes - Memory optimized
+workers = 1  # Single worker for free tier (512MB limit)
 worker_class = "sync"
-worker_connections = 1000
+worker_connections = 500  # Reduced for memory optimization
 timeout = 120  # Reduced timeout for better responsiveness
 keepalive = 5  # Increased keepalive
-max_requests = 100
-max_requests_jitter = 10
+max_requests = 50  # Reduced to force memory cleanup
+max_requests_jitter = 5  # Reduced jitter
+preload_app = True  # Memory sharing optimization
 
 # Restart workers after this many requests to prevent memory leaks
 max_requests = 100

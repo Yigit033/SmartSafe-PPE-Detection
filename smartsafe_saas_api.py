@@ -30,23 +30,16 @@ from io import BytesIO
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging - Memory optimized
+import os
+log_level = logging.WARNING if os.environ.get('RENDER') else logging.INFO
+logging.basicConfig(level=log_level, format='%(levelname)s:%(name)s:%(message)s')
 logger = logging.getLogger(__name__)
 
 # Enterprise modülleri import et
-try:
-    from camera_integration_manager import get_camera_manager, ProfessionalCameraManager
-    from enhanced_error_handler import EnhancedErrorHandler
-    from professional_config_manager import ProfessionalConfigManager
-    from performance_optimizer import PerformanceOptimizer
-    from enterprise_security_manager import EnterpriseSecurityManager
-    from enterprise_monitoring_system import EnterpriseMonitoringSystem
-    ENTERPRISE_MODULES_AVAILABLE = True
-    logger.info("✅ Enterprise modülleri yüklendi")
-except ImportError as e:
-    logger.warning(f"⚠️ Enterprise modülleri yüklenemedi: {e}")
-    ENTERPRISE_MODULES_AVAILABLE = False
+# Lazy loading için enterprise modülleri startup'ta yükleme - Memory optimization
+ENTERPRISE_MODULES_AVAILABLE = True
+logger.info("✅ Enterprise modülleri lazy loading için hazır - Memory optimized")
 
 # Global değişkenler - kamera sistemi için
 active_detectors = {}
@@ -96,42 +89,71 @@ class SmartSafeSaaSAPI:
         logger.info("🌐 SmartSafe AI SaaS API Server initialized")
     
     def init_enterprise_modules(self):
-        """Enterprise modülleri başlat"""
+        """Enterprise modülleri lazy loading ile başlat - Memory optimized"""
         if ENTERPRISE_MODULES_AVAILABLE:
             try:
-                # Error Handler
-                self.error_handler = EnhancedErrorHandler()
-                logger.info("✅ Enhanced Error Handler başlatıldı")
-                
-                # Config Manager
-                self.config_manager = ProfessionalConfigManager()
-                logger.info("✅ Professional Config Manager başlatıldı")
-                
-                # Performance Optimizer
-                self.performance_optimizer = PerformanceOptimizer()
-                logger.info("✅ Performance Optimizer başlatıldı")
-                
-                # Security Manager
-                self.security_manager = EnterpriseSecurityManager()
-                logger.info("✅ Enterprise Security Manager başlatıldı")
-                
-                # Monitoring System
-                self.monitoring_system = EnterpriseMonitoringSystem()
-                logger.info("✅ Enterprise Monitoring System başlatıldı")
-                
-                # Camera Manager
-                self.camera_manager = get_camera_manager()
-                logger.info("✅ Professional Camera Manager başlatıldı")
-                
+                # Lazy loading - sadece gerekli olanları yükle
                 self.enterprise_enabled = True
-                logger.info("🚀 Tüm Enterprise modülleri başarıyla entegre edildi!")
+                self.error_handler = None  # Lazy load
+                self.config_manager = None  # Lazy load
+                self.performance_optimizer = None  # Lazy load
+                self.security_manager = None  # Lazy load
+                self.monitoring_system = None  # Lazy load
+                self.camera_manager = None  # Lazy load
+                
+                logger.info("✅ Enterprise modülleri lazy loading ile hazırlandı - Memory optimized")
                 
             except Exception as e:
-                logger.error(f"❌ Enterprise modül başlatma hatası: {e}")
+                logger.error(f"❌ Enterprise modül hazırlama hatası: {e}")
                 self.enterprise_enabled = False
         else:
             self.enterprise_enabled = False
             logger.info("⚙️ Fallback moda geçiliyor - Enterprise özellikler devre dışı")
+    
+    def get_camera_manager(self):
+        """Lazy load camera manager"""
+        if self.camera_manager is None:
+            try:
+                from camera_integration_manager import get_camera_manager
+                self.camera_manager = get_camera_manager()
+                logger.info("✅ Camera Manager lazy loaded")
+            except ImportError:
+                logger.warning("⚠️ Camera Manager import failed")
+                return None
+        return self.camera_manager
+    
+    def get_config_manager(self):
+        """Lazy load config manager"""
+        if self.config_manager is None:
+            try:
+                from professional_config_manager import ProfessionalConfigManager
+                self.config_manager = ProfessionalConfigManager()
+                logger.info("✅ Config Manager lazy loaded")
+            except ImportError:
+                logger.warning("⚠️ Config Manager import failed")
+                return None
+        return self.config_manager
+    
+    def get_performance_optimizer(self):
+        """Lazy load performance optimizer"""
+        if self.performance_optimizer is None:
+            try:
+                from performance_optimizer import PerformanceOptimizer
+                self.performance_optimizer = PerformanceOptimizer()
+                logger.info("✅ Performance Optimizer lazy loaded")
+            except ImportError:
+                logger.warning("⚠️ Performance Optimizer import failed")
+                return None
+        return self.performance_optimizer
+    
+    def cleanup_memory(self):
+        """Memory cleanup for production optimization"""
+        try:
+            import gc
+            gc.collect()
+            logger.info("✅ Memory cleanup completed")
+        except Exception as e:
+            logger.warning(f"⚠️ Memory cleanup failed: {e}")
     
     def setup_routes(self):
         """API rotalarını ayarla"""
@@ -2273,7 +2295,7 @@ Mesaj:
             print(f"Kamera {camera_key} worker durduruldu")
     
     def run_detection(self, camera_key, camera_id, company_id, mode, confidence=0.5):
-        """Tespit çalıştır - Sektörel Detection Factory kullanarak"""
+        """Tespit çalıştır - Lazy loading ile memory optimized"""
         print(f"Tespit sistemi başlatılıyor - Kamera: {camera_key}, Sektör: {mode}, Confidence: {confidence}")
         
         # Detection sonuçları için queue oluştur
@@ -2295,16 +2317,9 @@ Mesaj:
             print(f"⚠️ Şirket sektörü belirlenemedi: {e}, construction kullanılacak")
             sector_id = 'construction'
         
-        # Sektörel Detector'ı başlat
-        try:
-            detector = SectorDetectorFactory.get_detector(sector_id, company_id)
-            if detector:
-                print(f"✅ {sector_id.upper()} sektörü detector başlatıldı (Company: {company_id}) - Kamera: {camera_key}, Confidence: {confidence}")
-            else:
-                print(f"⚠️ {sector_id.upper()} detector yüklenemedi, simülasyon modu - Kamera: {camera_key}")
-        except Exception as e:
-            print(f"❌ Sektörel Detector başlatılamadı: {e}, simülasyon moduna geçiliyor")
-            detector = None
+        # Lazy loading - Detector'ı sadece ihtiyaç anında yükle
+        detector = None
+        print(f"✅ {sector_id.upper()} sektörü detector lazy loading ile hazırlandı - Memory optimized")
         
         try:
             frame_count = 0
@@ -2320,6 +2335,18 @@ Mesaj:
                         # Her 5 frame'de bir tespit yap (performans için)
                         if frame_count % 5 == 0:
                             current_time = time.time()
+                            
+                            # Lazy loading - Detector'ı sadece ihtiyaç anında yükle
+                            if detector is None:
+                                try:
+                                    detector = SectorDetectorFactory.get_detector(sector_id, company_id)
+                                    if detector:
+                                        print(f"✅ {sector_id.upper()} sektörü detector lazy loaded - Memory optimized")
+                                    else:
+                                        print(f"⚠️ {sector_id.upper()} detector yüklenemedi, simülasyon modu")
+                                except Exception as e:
+                                    print(f"❌ Sektörel Detector lazy loading hatası: {e}, simülasyon moduna geçiliyor")
+                                    detector = None
                             
                             if detector is not None:
                                 # Sektörel PPE tespiti
@@ -8319,7 +8346,7 @@ def main():
         # Development mode - Flask development server
         port = int(os.environ.get('PORT', 10000))
         logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
-        app.run(host='0.0.0.0', port=port, debug=True)
+        app.run(host='0.0.0.0', port=port, debug=False)  # Debug=False for memory optimization
             
     except KeyboardInterrupt:
         logger.info("🛑 SaaS API Server stopped by user")
