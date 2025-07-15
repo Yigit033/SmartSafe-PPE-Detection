@@ -193,7 +193,7 @@ class SmartSafeSaaSAPI:
                 
                 # Form validasyonu
                 if not all([name, email, sector, message]):
-                    return jsonify({'success': False, 'error': 'Tüm alanları doldurun'}), 400
+                    return jsonify({'success': False, 'error': 'Please fill all fields'}), 400
                 
                 # E-posta gönderimi
                 msg = Message(
@@ -214,7 +214,7 @@ Mesaj:
                 
                 return jsonify({
                     'success': True,
-                    'message': 'Mesajınız başarıyla gönderildi'
+                    'message': 'Your message has been sent successfully'
                 })
                 
             except Exception as e:
@@ -233,7 +233,7 @@ Mesaj:
         # Uygulama ana sayfası - Şirket kayıt
         @self.app.route('/app', methods=['GET'])
         def app_home():
-            """Şirket kayıt formu"""
+            """Company registration form"""
             return render_template_string(self.get_home_template())
 
         # Şirket kaydı
@@ -256,7 +256,7 @@ Mesaj:
                     return jsonify({
                         'success': True, 
                         'company_id': result,
-                        'message': 'Şirket başarıyla kaydedildi',
+                        'message': 'Company registered successfully',
                         'login_url': f'/company/{result}/login'
                     })
                 else:
@@ -264,7 +264,7 @@ Mesaj:
                     
             except Exception as e:
                 logger.error(f"❌ Şirket kayıt hatası: {e}")
-                return jsonify({'success': False, 'error': 'Kayıt işlemi başarısız'}), 500
+                return jsonify({'success': False, 'error': 'Registration failed'}), 500
 
         # HTML Form kayıt endpoint'i
         @self.app.route('/api/register-form', methods=['POST'])
@@ -329,7 +329,7 @@ Mesaj:
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Kayıt Başarılı!</title>
+                        <title>Registration Successful!</title>
                         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
                         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
                         <style>
@@ -353,25 +353,25 @@ Mesaj:
                                     <div class="card">
                                         <div class="card-body text-center p-5">
                                             <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
-                                            <h2 class="mt-3 text-success">🎉 Kayıt Başarılı!</h2>
+                                            <h2 class="mt-3 text-success">🎉 Registration Successful!</h2>
                                             <hr>
                                             <div class="alert alert-info">
-                                                <h5><i class="fas fa-building"></i> Şirket ID'niz:</h5>
+                                                <h5><i class="fas fa-building"></i> Your Company ID:</h5>
                                                 <h3 class="text-primary"><strong>{company_id}</strong></h3>
                                             </div>
                                             <div class="alert alert-warning">
                                                 <i class="fas fa-exclamation-triangle"></i>
-                                                <strong>ÖNEMLİ:</strong> Bu ID'yi not alın! 
-                                                Tekrar giriş yaparken gerekecek.
+                                                <strong>IMPORTANT:</strong> Please note this ID! 
+                                                You will need it to log in again.
                                             </div>
                                             <div class="mt-4">
                                                 <a href="{login_url}" class="btn btn-primary btn-lg">
-                                                    <i class="fas fa-sign-in-alt"></i> Giriş Sayfasına Git
+                                                    <i class="fas fa-sign-in-alt"></i> Go to Login Page
                                                 </a>
                                             </div>
                                             <div class="mt-3">
                                                 <a href="/" class="btn btn-outline-secondary">
-                                                    <i class="fas fa-home"></i> Ana Sayfa
+                                                    <i class="fas fa-home"></i> Home Page
                                                 </a>
                                             </div>
                                         </div>
@@ -380,7 +380,7 @@ Mesaj:
                             </div>
                         </div>
                         <script>
-                            // Şirket ID'sini localStorage'da sakla
+                            // Store company ID in localStorage
                             localStorage.setItem('lastCompanyId', '{company_id}');
                         </script>
                     </body>
@@ -540,7 +540,7 @@ Mesaj:
                 if not company:
                     return f'''
                     <script>
-                        alert("❌ '{company_id}' ID'sine sahip şirket bulunamadı!\\nLütfen şirket ID'nizi kontrol edin.");
+                        alert("❌ Company with ID '{company_id}' not found!\\nPlease check your company ID.");
                         window.history.back();
                     </script>
                     '''
@@ -2743,11 +2743,11 @@ Mesaj:
         """Ana sayfa template"""
         return '''
         <!DOCTYPE html>
-        <html lang="tr">
+        <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SmartSafe AI - SaaS Kayıt</title>
+            <title>SmartSafe AI - Company Registration</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
             <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
             <style>
@@ -2882,7 +2882,7 @@ Mesaj:
                             <h1 class="text-white display-4 fw-bold mb-3" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
                                 <i class="fas fa-shield-alt me-3"></i> SmartSafe AI
                             </h1>
-                            <p class="text-white-50 fs-5">Güvenlik İzleme SaaS Sistemi</p>
+                                                            <p class="text-white-50 fs-5">Security Monitoring SaaS System</p>
                         </div>
                         
                         <div class="glass-card">
@@ -2891,32 +2891,32 @@ Mesaj:
                                     <div class="feature-icon mx-auto gradient-bg">
                                         <i class="fas fa-building"></i>
                                     </div>
-                                    <h2 class="fw-bold mb-2">Şirket Kaydı</h2>
-                                    <p class="text-muted">SmartSafe AI ile güvenli çalışma alanları oluşturun</p>
+                                    <h2 class="fw-bold mb-2">Company Registration</h2>
+                                    <p class="text-muted">Create safe workspaces with SmartSafe AI</p>
                                 </div>
                                 
                                 <form id="registerForm" method="POST" action="/api/register-form">
                                     <div class="row">
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
-                                                <i class="fas fa-building text-primary me-2"></i>Şirket Adı *
+                                                <i class="fas fa-building text-primary me-2"></i>Company Name *
                                             </label>
                                             <input type="text" class="form-control form-control-lg" name="company_name" 
-                                                   placeholder="Şirket adınızı girin" required 
+                                                   placeholder="Enter your company name" required 
                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
-                                                <i class="fas fa-industry text-primary me-2"></i>Sektör *
+                                                <i class="fas fa-industry text-primary me-2"></i>Industry *
                                             </label>
                                             <select class="form-select form-select-lg" name="sector" required
                                                     style="border-radius: 15px; border: 2px solid #e2e8f0;">
-                                                <option value="">Sektörünüzü seçin</option>
-                                                <option value="construction">🏗️ İnşaat</option>
-                                                <option value="manufacturing">🏭 İmalat</option>
-                                                <option value="chemical">⚗️ Kimya</option>
-                                                <option value="food">🍕 Gıda</option>
-                                                <option value="warehouse">📦 Depo/Lojistik</option>
+                                                <option value="">Select your industry</option>
+                                                <option value="construction">🏗️ Construction</option>
+                                                <option value="manufacturing">🏭 Manufacturing</option>
+                                                <option value="chemical">⚗️ Chemical</option>
+                                                <option value="food">🍕 Food & Beverage</option>
+                                                <option value="warehouse">📦 Warehouse/Logistics</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2924,10 +2924,10 @@ Mesaj:
                                     <div class="row">
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
-                                                <i class="fas fa-user text-primary me-2"></i>İletişim Kişisi *
+                                                <i class="fas fa-user text-primary me-2"></i>Contact Person *
                                             </label>
                                             <input type="text" class="form-control form-control-lg" name="contact_person" 
-                                                   placeholder="Ad Soyad" required
+                                                   placeholder="Full Name" required
                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
                                         <div class="col-md-6 mb-4">
@@ -2935,7 +2935,7 @@ Mesaj:
                                                 <i class="fas fa-envelope text-primary me-2"></i>E-mail *
                                             </label>
                                             <input type="email" class="form-control form-control-lg" name="email" required
-                                                   placeholder="ornek@email.com"
+                                                   placeholder="example@company.com"
                                                    autocomplete="email"
                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
@@ -2944,31 +2944,31 @@ Mesaj:
                                     <div class="row">
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
-                                                <i class="fas fa-phone text-primary me-2"></i>Telefon
+                                                <i class="fas fa-phone text-primary me-2"></i>Phone
                                             </label>
                                             <input type="tel" class="form-control form-control-lg" name="phone"
-                                                   placeholder="+90 555 123 45 67"
+                                                   placeholder="+1 555 123 4567"
                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                         </div>
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
-                                                <i class="fas fa-video text-primary me-2"></i>Kamera Sayısı
+                                                <i class="fas fa-video text-primary me-2"></i>Camera Count
                                             </label>
                                             <select class="form-select form-select-lg" name="max_cameras"
                                                     style="border-radius: 15px; border: 2px solid #e2e8f0;">
-                                                <option value="5">📹 5 Kamera (Basic)</option>
-                                                <option value="10">📹 10 Kamera (Professional)</option>
-                                                <option value="16">📹 16 Kamera (Enterprise)</option>
+                                                <option value="5">📹 5 Cameras (Basic)</option>
+                                                <option value="10">📹 10 Cameras (Professional)</option>
+                                                <option value="16">📹 16 Cameras (Enterprise)</option>
                                             </select>
                                         </div>
                                     </div>
                                     
                                     <div class="mb-4">
                                         <label class="form-label fw-semibold">
-                                            <i class="fas fa-map-marker-alt text-primary me-2"></i>Adres
+                                            <i class="fas fa-map-marker-alt text-primary me-2"></i>Address
                                         </label>
                                         <textarea class="form-control form-control-lg" name="address" rows="3"
-                                                  placeholder="Şirket adresinizi girin"
+                                                  placeholder="Enter your company address"
                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;"></textarea>
                                     </div>
                                     
@@ -2977,12 +2977,12 @@ Mesaj:
                                         <div class="glass-card p-4" style="background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.1);">
                                             <label class="form-label fw-bold fs-5 mb-3">
                                                 <i class="fas fa-hard-hat text-warning me-2"></i> 
-                                                Zorunlu PPE Seçimi *
+                                                Required PPE Selection *
                                             </label>
-                                            <p class="text-muted mb-3">Şirketinizde zorunlu olmasını istediğiniz PPE'leri seçin:</p>
+                                            <p class="text-muted mb-3">Select the PPE items that should be mandatory in your company:</p>
                                             <div class="alert alert-info border-0" style="background: rgba(59, 130, 246, 0.1);">
                                                 <i class="fas fa-info-circle me-2"></i> 
-                                                <strong>Önce sektör seçimi yapın</strong> - Sektörünüze özel PPE seçenekleri görünecek
+                                                <strong>First select your industry</strong> - Industry-specific PPE options will appear
                                             </div>
                                         
                                             <!-- İnşaat Sektörü PPE -->
@@ -2992,7 +2992,7 @@ Mesaj:
                                                         <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
                                                             <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="construction-helmet" checked>
                                                             <label class="form-check-label fw-semibold" for="construction-helmet">
-                                                                <i class="fas fa-hard-hat text-primary me-2"></i> Baret/Kask
+                                                                <i class="fas fa-hard-hat text-primary me-2"></i> Hard Hat/Helmet
                                                             </label>
                                                         </div>
                                                     </div>
@@ -3000,7 +3000,7 @@ Mesaj:
                                                         <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
                                                             <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="construction-vest" checked>
                                                             <label class="form-check-label fw-semibold" for="construction-vest">
-                                                                <i class="fas fa-tshirt text-warning me-2"></i> Güvenlik Yeleği
+                                                                <i class="fas fa-tshirt text-warning me-2"></i> Safety Vest
                                                             </label>
                                                         </div>
                                                     </div>
@@ -3008,7 +3008,7 @@ Mesaj:
                                                         <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
                                                             <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="construction-shoes" checked>
                                                             <label class="form-check-label fw-semibold" for="construction-shoes">
-                                                                <i class="fas fa-socks text-success me-2"></i> Güvenlik Ayakkabısı
+                                                                <i class="fas fa-socks text-success me-2"></i> Safety Shoes
                                                             </label>
                                                         </div>
                                                     </div>
@@ -3016,8 +3016,8 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="construction-gloves">
                                                         <label class="form-check-label" for="construction-gloves">
-                                                            <i class="fas fa-hand-paper text-info"></i> Güvenlik Eldiveni
-                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                            <i class="fas fa-hand-paper text-info"></i> Safety Gloves
+                                                            <span class="badge bg-success ms-1">Optional</span>
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3025,8 +3025,8 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="glasses" id="construction-glasses">
                                                         <label class="form-check-label" for="construction-glasses">
-                                                            <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
-                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                            <i class="fas fa-glasses text-info"></i> Safety Glasses
+                                                            <span class="badge bg-success ms-1">Optional</span>
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3040,7 +3040,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="hairnet" id="food-hairnet" checked>
                                                         <label class="form-check-label" for="food-hairnet">
-                                                            <i class="fas fa-user-nurse text-primary"></i> Bone/Başlık
+                                                            <i class="fas fa-user-nurse text-primary"></i> Hair Net/Cap
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3048,7 +3048,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="face_mask" id="food-mask" checked>
                                                         <label class="form-check-label" for="food-mask">
-                                                            <i class="fas fa-head-side-mask text-warning"></i> Hijyen Maskesi
+                                                            <i class="fas fa-head-side-mask text-warning"></i> Hygiene Mask
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3056,7 +3056,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="apron" id="food-apron" checked>
                                                         <label class="form-check-label" for="food-apron">
-                                                            <i class="fas fa-tshirt text-success"></i> Hijyen Önlüğü
+                                                            <i class="fas fa-tshirt text-success"></i> Hygiene Apron
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3064,8 +3064,8 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="food-gloves">
                                                         <label class="form-check-label" for="food-gloves">
-                                                            <i class="fas fa-hand-paper text-info"></i> Hijyen Eldiveni
-                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                            <i class="fas fa-hand-paper text-info"></i> Hygiene Gloves
+                                                            <span class="badge bg-success ms-1">Optional</span>
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3073,8 +3073,8 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_shoes" id="food-shoes">
                                                         <label class="form-check-label" for="food-shoes">
-                                                            <i class="fas fa-socks text-info"></i> Kaymaz Ayakkabı
-                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                            <i class="fas fa-socks text-info"></i> Non-slip Shoes
+                                                            <span class="badge bg-success ms-1">Optional</span>
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3088,7 +3088,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="gloves" id="chemical-gloves" checked>
                                                         <label class="form-check-label" for="chemical-gloves">
-                                                            <i class="fas fa-hand-paper text-primary"></i> Kimyasal Eldiven
+                                                            <i class="fas fa-hand-paper text-primary"></i> Chemical Gloves
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3096,7 +3096,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="glasses" id="chemical-glasses" checked>
                                                         <label class="form-check-label" for="chemical-glasses">
-                                                            <i class="fas fa-glasses text-warning"></i> Güvenlik Gözlüğü
+                                                                <i class="fas fa-glasses text-warning"></i> Safety Goggles
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3104,7 +3104,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="face_mask" id="chemical-mask" checked>
                                                         <label class="form-check-label" for="chemical-mask">
-                                                            <i class="fas fa-head-side-mask text-success"></i> Solunum Maskesi
+                                                            <i class="fas fa-head-side-mask text-success"></i> Respiratory Mask
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3112,7 +3112,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_suit" id="chemical-suit" checked>
                                                         <label class="form-check-label" for="chemical-suit">
-                                                            <i class="fas fa-tshirt text-info"></i> Kimyasal Tulum
+                                                            <i class="fas fa-tshirt text-info"></i> Chemical Suit
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3126,7 +3126,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="manufacturing-helmet" checked>
                                                         <label class="form-check-label" for="manufacturing-helmet">
-                                                            <i class="fas fa-hard-hat text-primary"></i> Endüstriyel Kask
+                                                            <i class="fas fa-hard-hat text-primary"></i> Industrial Helmet
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3134,7 +3134,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="manufacturing-vest" checked>
                                                         <label class="form-check-label" for="manufacturing-vest">
-                                                            <i class="fas fa-tshirt text-warning"></i> Reflektörlü Yelek
+                                                            <i class="fas fa-tshirt text-warning"></i> Reflective Vest
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3142,7 +3142,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="gloves" id="manufacturing-gloves" checked>
                                                         <label class="form-check-label" for="manufacturing-gloves">
-                                                            <i class="fas fa-hand-paper text-success"></i> İş Eldiveni
+                                                            <i class="fas fa-hand-paper text-success"></i> Work Gloves
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3150,7 +3150,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="manufacturing-shoes" checked>
                                                         <label class="form-check-label" for="manufacturing-shoes">
-                                                            <i class="fas fa-socks text-info"></i> Çelik Burunlu Ayakkabı
+                                                            <i class="fas fa-socks text-info"></i> Steel Toe Shoes
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3164,7 +3164,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="warehouse-vest" checked>
                                                         <label class="form-check-label" for="warehouse-vest">
-                                                            <i class="fas fa-tshirt text-primary"></i> Görünürlük Yeleği
+                                                            <i class="fas fa-tshirt text-primary"></i> Visibility Vest
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3172,7 +3172,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="warehouse-shoes" checked>
                                                         <label class="form-check-label" for="warehouse-shoes">
-                                                            <i class="fas fa-socks text-warning"></i> Güvenlik Ayakkabısı
+                                                            <i class="fas fa-socks text-warning"></i> Safety Shoes
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3180,8 +3180,8 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="helmet" id="warehouse-helmet">
                                                         <label class="form-check-label" for="warehouse-helmet">
-                                                            <i class="fas fa-hard-hat text-info"></i> Koruyucu Kask
-                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                            <i class="fas fa-hard-hat text-info"></i> Protective Helmet
+                                                            <span class="badge bg-success ms-1">Optional</span>
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3189,8 +3189,8 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="warehouse-gloves">
                                                         <label class="form-check-label" for="warehouse-gloves">
-                                                            <i class="fas fa-hand-paper text-info"></i> İş Eldiveni
-                                                            <span class="badge bg-success ms-1">Opsiyonel</span>
+                                                            <i class="fas fa-hand-paper text-info"></i> Work Gloves
+                                                            <span class="badge bg-success ms-1">Optional</span>
                                                         </label>
                                                     </div>
                                                 </div>
@@ -3203,24 +3203,24 @@ Mesaj:
                                     
                                     <div class="mb-4">
                                         <label class="form-label fw-semibold">
-                                            <i class="fas fa-lock text-primary me-2"></i>Şifre *
+                                            <i class="fas fa-lock text-primary me-2"></i>Password *
                                         </label>
                                         <input type="password" class="form-control form-control-lg" name="password" required
-                                               placeholder="Güvenli bir şifre oluşturun"
+                                               placeholder="Create a secure password"
                                                style="border-radius: 15px; border: 2px solid #e2e8f0;">
                                     </div>
                                     
                                     <div class="text-center mb-4">
                                         <div class="alert alert-success border-0" style="background: rgba(34, 197, 94, 0.1); border-radius: 15px;">
                                             <i class="fas fa-gift text-success me-2"></i> 
-                                            <strong>İlk ay ücretsiz!</strong> Anında kurulum.
+                                            <strong>First month free!</strong> Instant setup.
                                         </div>
                                     </div>
                                     
                                     <div class="d-grid">
                                         <button type="submit" class="btn btn-primary btn-lg" 
                                                 style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
-                                            <i class="fas fa-rocket me-2"></i> Kayıt Ol & Hemen Başla
+                                                                                            <i class="fas fa-rocket me-2"></i> Register & Get Started
                                         </button>
                                     </div>
                                 </form>
@@ -3232,15 +3232,15 @@ Mesaj:
                                         <div class="feature-icon mx-auto" style="width: 48px; height: 48px; background: linear-gradient(135deg, #64748b 0%, #475569 100%);">
                                             <i class="fas fa-sign-in-alt" style="font-size: 20px;"></i>
                                         </div>
-                                        <h5 class="mt-3 mb-2 fw-bold">Kayıtlı Şirket Girişi</h5>
-                                        <p class="text-muted small">Mevcut şirket hesabınızla giriş yapın</p>
+                                        <h5 class="mt-3 mb-2 fw-bold">Registered Company Login</h5>
+                                                                                 <p class="text-muted small">Login with your existing company account</p>
                                     </div>
                                     
                                     <form method="POST" action="/api/company-login-redirect">
                                         <div class="row align-items-end">
                                             <div class="col-md-8 mb-3">
                                                 <label class="form-label fw-semibold small">
-                                                    <i class="fas fa-id-card text-primary me-2"></i>Şirket ID
+                                                    <i class="fas fa-id-card text-primary me-2"></i>Company ID
                                                 </label>
                                                 <input type="text" 
                                                        class="form-control form-control-lg" 
@@ -3254,14 +3254,14 @@ Mesaj:
                                                 <button type="submit" 
                                                         class="btn btn-outline-primary btn-lg w-100" 
                                                         style="border-radius: 15px; border: 2px solid #1E3A8A; font-weight: 600;">
-                                                    <i class="fas fa-arrow-right me-2"></i> Giriş
+                                                    <i class="fas fa-arrow-right me-2"></i> Login
                                                 </button>
                                             </div>
                                         </div>
                                         <div class="alert alert-info border-0 mt-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 10px;">
                                             <small class="text-muted">
                                                 <i class="fas fa-info-circle me-2"></i>
-                                                Şirket ID'niz kayıt sonrası size verilen COMP_ ile başlayan kodunuzdur.
+                                                Your Company ID is the code starting with COMP_ given to you after registration.
                                             </small>
                                         </div>
                                     </form>
@@ -3293,7 +3293,7 @@ Mesaj:
                         // Add error message
                         const errorDiv = document.createElement('div');
                         errorDiv.className = 'invalid-feedback';
-                        errorDiv.textContent = 'Geçerli bir email adresi girin (Türkçe karakterler desteklenir)';
+                        errorDiv.textContent = 'Please enter a valid email address (Turkish characters are supported)';
                         input.parentNode.appendChild(errorDiv);
                     } else if (input.value && isValid) {
                         input.classList.add('is-valid');
@@ -3322,7 +3322,7 @@ Mesaj:
                     // Email validation
                     if (!emailInput.value.includes('@')) {
                         e.preventDefault();
-                        alert('Lutfen gecerli bir email adresi girin!');
+                        alert('Please enter a valid email address!');
                         emailInput.focus();
                         return false;
                     }
@@ -3333,86 +3333,86 @@ Mesaj:
                     
                     if (requiredPPE.length === 0 && optionalPPE.length === 0) {
                         e.preventDefault();
-                        alert('En az bir PPE turu secmelisiniz!');
+                        alert('You must select at least one PPE type!');
                         return false;
                     }
                 });
 
-                // PPE Sektor Secimi - Debug Version
+                // PPE Sector Selection - Debug Version
                 document.addEventListener('DOMContentLoaded', function() {
-                    console.log('DOM yuklendi, PPE sistemi baslatiliyor...');
+                    console.log('DOM loaded, PPE system starting...');
                     
                     var sectorSelect = document.querySelector('select[name="sector"]');
                     var ppeContainer = document.getElementById('ppe-selection-container');
                     
-                    console.log('Sektor select elementi:', sectorSelect);
-                    console.log('PPE container elementi:', ppeContainer);
+                    console.log('Sector select element:', sectorSelect);
+                    console.log('PPE container element:', ppeContainer);
                     
                     if (sectorSelect && ppeContainer) {
-                        console.log('Elementler bulundu, event listener ekleniyor...');
+                        console.log('Elements found, adding event listener...');
                         
-                        // Sayfa yuklendiginde mevcut sektor degerini kontrol et
+                        // Check current sector value on page load
                         var currentSector = sectorSelect.value;
-                        console.log('Sayfa yuklendiginde sektor degeri:', currentSector);
+                        console.log('Sector value on page load:', currentSector);
                         
                         if (currentSector && currentSector !== '') {
-                            console.log('Mevcut sektor var, PPE gosteriliyor...');
+                            console.log('Current sector exists, showing PPE...');
                             showPPEForSector(currentSector, ppeContainer);
                         }
                         
                         sectorSelect.addEventListener('change', function() {
                             var sector = this.value;
-                            console.log('Sektor degisti:', sector);
+                            console.log('Sector changed:', sector);
                             showPPEForSector(sector, ppeContainer);
                         });
                         
-                        console.log('Event listener basariyla eklendi!');
+                        console.log('Event listener added successfully!');
                     } else {
-                        console.log('HATA: Elementler bulunamadi!');
+                        console.log('ERROR: Elements not found!');
                         console.log('sectorSelect:', sectorSelect);
                         console.log('ppeContainer:', ppeContainer);
                     }
                 });
                 
                 function showPPEForSector(sector, ppeContainer) {
-                    console.log('showPPEForSector cagirildi, sektor:', sector);
+                    console.log('showPPEForSector called, sector:', sector);
                     
-                    // Tum PPE seceneklerini gizle
+                    // Hide all PPE options
                     var options = document.querySelectorAll('.ppe-options');
-                    console.log('Bulunan PPE option sayisi:', options.length);
+                    console.log('Found PPE options count:', options.length);
                     
                     for (var i = 0; i < options.length; i++) {
                         options[i].style.display = 'none';
-                        console.log('Gizlendi:', options[i].id);
+                        console.log('Hidden:', options[i].id);
                     }
                     
                     if (sector && sector !== '') {
-                        // PPE container goster
+                        // Show PPE container
                         ppeContainer.style.display = 'block';
-                        console.log('PPE container gosterildi');
+                        console.log('PPE container shown');
                         
-                        // Secilen sektorun PPE'sini goster
+                        // Show selected sector's PPE
                         var targetPPEId = sector + '-ppe';
                         var targetPPE = document.getElementById(targetPPEId);
                         
-                        console.log('Aranan PPE ID:', targetPPEId);
-                        console.log('Bulunan PPE elementi:', targetPPE);
+                        console.log('Target PPE ID:', targetPPEId);
+                        console.log('Found PPE element:', targetPPE);
                         
                         if (targetPPE) {
                             targetPPE.style.display = 'block';
-                            console.log('PPE secenekleri gosterildi!');
+                            console.log('PPE options shown!');
                         } else {
-                            console.log('HATA: PPE elementi bulunamadi!');
-                            // Tum PPE elementlerini listele
+                            console.log('ERROR: PPE element not found!');
+                            // List all PPE elements
                             var allPPEs = document.querySelectorAll('[id$="-ppe"]');
-                            console.log('Mevcut PPE elementleri:');
+                            console.log('Available PPE elements:');
                             for (var j = 0; j < allPPEs.length; j++) {
                                 console.log('- ' + allPPEs[j].id);
                             }
                         }
                     } else {
                         ppeContainer.style.display = 'none';
-                        console.log('PPE container gizlendi');
+                        console.log('PPE container hidden');
                     }
                 }
             </script>
@@ -4514,14 +4514,14 @@ Mesaj:
         '''
     
     def get_login_template(self, company_id):
-        """Şirket giriş sayfası template"""
+        """Company login page template"""
         return '''
         <!DOCTYPE html>
-        <html lang="tr">
+        <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SmartSafe AI - Şirket Girişi</title>
+            <title>SmartSafe AI - Company Login</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
             <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
             <style>
@@ -4654,32 +4654,32 @@ Mesaj:
                         <h2 class="fw-bold mb-3">SmartSafe AI</h2>
                         <div class="company-badge mb-3">
                             <i class="fas fa-building me-2"></i>
-                            Şirket ID: ''' + company_id + '''
+                            Company ID: ''' + company_id + '''
                         </div>
-                        <p class="text-muted">Güvenli giriş yapın</p>
+                        <p class="text-muted">Secure login</p>
                     </div>
                     
                     <form action="/company/''' + company_id + '''/login-form" method="POST">
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
-                                <i class="fas fa-envelope text-primary me-2"></i>Email Adresiniz
+                                <i class="fas fa-envelope text-primary me-2"></i>Your Email
                             </label>
                             <input type="email" class="form-control form-control-lg" id="email" name="email" 
-                                   placeholder="ornek@sirketiniz.com" required>
+                                   placeholder="example@yourcompany.com" required>
                         </div>
                         
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
-                                <i class="fas fa-lock text-primary me-2"></i>Şifreniz
+                                <i class="fas fa-lock text-primary me-2"></i>Your Password
                             </label>
                             <input type="password" class="form-control form-control-lg" id="password" name="password" 
-                                   placeholder="Şifrenizi girin" required>
+                                   placeholder="Enter your password" required>
                         </div>
                         
                         <div class="d-grid mb-4">
                             <button type="submit" class="btn btn-primary btn-lg" 
                                     style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
-                                <i class="fas fa-sign-in-alt me-2"></i>Giriş Yap
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
                             </button>
                         </div>
                     </form>
@@ -4688,19 +4688,19 @@ Mesaj:
                         <div class="alert alert-info border-0 mb-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 15px;">
                             <small>
                                 <i class="fas fa-info-circle me-2"></i>
-                                Şirket kaydı sırasında verilen email ve şifrenizi kullanın
+                                Use the email and password provided during company registration
                             </small>
                         </div>
                         
                                                  <div class="row">
                              <div class="col-6">
                                  <a href="/#contact" class="btn btn-outline-secondary btn-sm w-100" style="border-radius: 20px;">
-                                     <i class="fas fa-key me-1"></i>Şifremi Unuttum
+                                     <i class="fas fa-key me-1"></i>Forgot Password
                                  </a>
                              </div>
                              <div class="col-6">
                                  <a href="/app" class="btn btn-outline-primary btn-sm w-100" style="border-radius: 20px;">
-                                     <i class="fas fa-user-plus me-1"></i>Yeni Kayıt
+                                     <i class="fas fa-user-plus me-1"></i>New Registration
                                  </a>
                              </div>
                          </div>
@@ -5549,7 +5549,7 @@ Mesaj:
                         // Add error message
                         const errorDiv = document.createElement('div');
                         errorDiv.className = 'invalid-feedback';
-                        errorDiv.textContent = 'Geçerli bir email adresi girin (Türkçe karakterler desteklenir)';
+                        errorDiv.textContent = 'Please enter a valid email address (Turkish characters are supported)';
                         input.parentNode.appendChild(errorDiv);
                     } else if (input.value && isValid) {
                         input.classList.add('is-valid');
@@ -5719,12 +5719,12 @@ Mesaj:
                     const password = formData.get('password');
                     
                     if (!password) {
-                        alert('❌ Lütfen şifrenizi girin!');
+                        alert('❌ Please enter your password!');
                         return;
                     }
                     
                     if (!document.getElementById('confirmDelete').checked) {
-                        alert('❌ Lütfen onay kutusunu işaretleyin!');
+                        alert('❌ Please check the confirmation box!');
                         return;
                     }
                     
@@ -6325,7 +6325,7 @@ Mesaj:
                     });
                     
                     if (!data.email || !data.contact_person || !data.role) {
-                        alert('❌ Lütfen tüm alanları doldurun!');
+                        alert('❌ Please fill all fields!');
                         return;
                     }
                     
