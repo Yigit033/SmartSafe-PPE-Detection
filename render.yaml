@@ -27,7 +27,7 @@ services:
       
       # Test connection pooling port
       nc -zv aws-0-us-west-1.pooler.supabase.com 6543 || echo "Connection pooling port test failed but continuing..."
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 5 --max-requests 50 --max-requests-jitter 5 --preload smartsafe_saas_api:app
+    startCommand: gunicorn -c gunicorn.conf.py smartsafe_saas_api:app
     healthCheckPath: /health
     envVars:
       - key: RENDER

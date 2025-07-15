@@ -27,10 +27,11 @@ pidfile = None  # No PID file needed
 user = None  # Run as current user
 group = None  # Run as current group
 
-# Logging for Render.com
+# Logging for Render.com - VERBOSE for debugging
+loglevel = "debug"
 accesslog = "-"  # Log to stdout
 errorlog = "-"   # Log to stderr
-loglevel = "info"  # Log level
+access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
 capture_output = True  # Capture stdout/stderr
 
 # Process naming
