@@ -21,10 +21,6 @@ max_requests = 50  # Reduced to force memory cleanup
 max_requests_jitter = 5  # Reduced jitter
 preload_app = True  # Memory sharing optimization
 
-# Restart workers after this many requests to prevent memory leaks
-max_requests = 100
-max_requests_jitter = 10
-
 # Logging
 accesslog = "-"  # Log to stdout
 errorlog = "-"   # Log to stderr

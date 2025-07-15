@@ -158,6 +158,29 @@ class SmartSafeSaaSAPI:
     def setup_routes(self):
         """API rotalarını ayarla"""
         
+        # Health check endpoint for deployment
+        @self.app.route('/health')
+        def health():
+            """Health check endpoint"""
+            try:
+                # Test database connection
+                db_status = "connected" if self.db else "disconnected"
+                
+                return jsonify({
+                    'status': 'healthy',
+                    'service': 'SmartSafe AI SaaS',
+                    'database': db_status,
+                    'enterprise_enabled': self.enterprise_enabled,
+                    'timestamp': datetime.now().isoformat()
+                })
+            except Exception as e:
+                logger.error(f"❌ Health check error: {e}")
+                return jsonify({
+                    'status': 'unhealthy',
+                    'error': str(e),
+                    'timestamp': datetime.now().isoformat()
+                }), 500
+        
         # İletişim formu endpoint'i
         @self.app.route('/api/contact', methods=['POST'])
         def contact():
@@ -8360,32 +8383,44 @@ def main():
 # PRODUCTION APP INSTANCE - Bu obje Gunicorn tarafından kullanılır
 # =============================================================================
 print("🔧 Creating global Flask app for production deployment...")
-try:
-    api_server = SmartSafeSaaSAPI()
-    app = api_server.app
-    print(f"✅ Global Flask app created successfully: {app}")
-    print(f"📍 App name: {app.name}")
-    print(f"📍 Environment: {app.config.get('ENV', 'production')}")
-    print("🚀 Ready for WSGI server (Gunicorn)")
-    print("📌 Gunicorn will use this 'app' object directly")
-except Exception as e:
-    print(f"❌ Critical error creating Flask app: {e}")
-    import traceback
-    traceback.print_exc()
-    
-    # Emergency fallback app
-    from flask import Flask
-    app = Flask(__name__)
-    
-    @app.route('/health')
-    def health():
-        return {'status': 'error', 'message': 'Emergency fallback app - main app failed to initialize'}
-    
-    @app.route('/')
-    def index():
-        return {'status': 'error', 'message': 'Main application failed to start'}
-    
-    print("⚠️ Emergency fallback Flask app created")
+
+# Global app variable for Gunicorn
+app = None
+
+def create_app():
+    """Factory function to create Flask app"""
+    global app
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        print(f"✅ Global Flask app created successfully: {app}")
+        print(f"📍 App name: {app.name}")
+        print(f"📍 Environment: {app.config.get('ENV', 'production')}")
+        print("🚀 Ready for WSGI server (Gunicorn)")
+        print("📌 Gunicorn will use this 'app' object directly")
+        return app
+    except Exception as e:
+        print(f"❌ Critical error creating Flask app: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Emergency fallback app
+        from flask import Flask
+        app = Flask(__name__)
+        
+        @app.route('/health')
+        def health():
+            return {'status': 'error', 'message': 'Emergency fallback app - main app failed to initialize'}
+        
+        @app.route('/')
+        def index():
+            return {'status': 'error', 'message': 'Main application failed to start'}
+        
+        print("⚠️ Emergency fallback Flask app created")
+        return app
+
+# Create the app instance
+app = create_app()
 
 if __name__ == "__main__":
     # Bu blok sadece development mode'da çalışır
