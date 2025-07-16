@@ -59,10 +59,9 @@ class SmartSafeSaaSAPI:
                         static_folder='static')
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
-        # Force production mode settings - PythonAnywhere + Render.com focused
-        is_production = (os.environ.get('PYTHONANYWHERE_ENVIRONMENT') or
-                        os.environ.get('RENDER') or 
-                        os.environ.get('HEROKU_APP_NAME'))
+        # Force production mode settings - Render.com focused
+        is_production = (os.environ.get('RENDER') or 
+                        os.environ.get('FLASK_ENV') == 'production')
         
         if is_production:
             self.app.config['DEBUG'] = False
@@ -8436,22 +8435,20 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    # RAILWAY.APP OPTIMIZED FLASK SERVER
-    print("🚀 RAILWAY.APP - Starting optimized Flask server...")
+    # RENDER.COM OPTIMIZED FLASK SERVER
+    print("🚀 RENDER.COM - Starting optimized Flask server...")
     
     try:
         api_server = SmartSafeSaaSAPI()
         app = api_server.app
         
-        # Railway.app automatic port detection
-        port = int(os.environ.get('PORT', 8080))  # Railway default port
+        # Render.com automatic port detection
+        port = int(os.environ.get('PORT', 10000))  # Render.com default port
         host = '0.0.0.0'
         
-        # Platform detection - PythonAnywhere + Render.com focused
-        if os.environ.get('PYTHONANYWHERE_ENVIRONMENT'):
-            platform = "PythonAnywhere (Temporary)"
-        elif os.environ.get('RENDER'):
-            platform = "Render.com (Target Platform)"
+        # Platform detection - Render.com focused
+        if os.environ.get('RENDER'):
+            platform = "Render.com (Production)"
         else:
             platform = "Local Development"
         print(f"🌐 Platform: {platform}")
@@ -8459,13 +8456,13 @@ if __name__ == "__main__":
         print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
         print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
         
-        # RAILWAY.APP OPTIMIZED FLASK SERVER
+        # RENDER.COM OPTIMIZED FLASK SERVER
         app.run(
             host=host, 
             port=port, 
             debug=False, 
             threaded=True,
-            use_reloader=False,  # Railway.app optimization
+            use_reloader=False,  # Render.com optimization
             use_debugger=False   # Production safety
         )
         
@@ -8473,7 +8470,7 @@ if __name__ == "__main__":
         print(f"❌ Server start error: {e}")
         import traceback
         traceback.print_exc()
-        # Exit with error code for Railway.app
+        # Exit with error code for Render.com
         import sys
         sys.exit(1)
 

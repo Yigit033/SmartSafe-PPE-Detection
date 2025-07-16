@@ -3,7 +3,7 @@ services:
     name: smartsafe-ppe-detection
     env: python
     region: oregon
-    plan: free
+    plan: starter
     buildCommand: |
       # Create required directories
       mkdir -p /opt/render/project/src/ssl
