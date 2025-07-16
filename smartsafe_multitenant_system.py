@@ -433,25 +433,48 @@ class MultiTenantDatabase:
             
             if result:
                 logger.info(f"🔍 Auth debug - Result length: {len(result)}")
-                logger.info(f"🔍 Auth debug - Password hash: {result[4] if len(result) > 4 else 'INDEX_ERROR'}")
                 
-                if len(result) > 4 and result[4]:
-                    password_hash = result[4]
-                    if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
-                        logger.info("✅ Password verification successful")
-                        return {
-                            'user_id': result[0],
-                            'company_id': result[1],
-                            'username': result[2],
-                            'email': result[3],
-                            'role': result[5],
-                            'permissions': json.loads(result[6]) if result[6] else [],
-                            'company_name': result[7]
-                        }
+                # PostgreSQL RealDictRow için sözlük erişimi kullan
+                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                    password_hash = result.get('password_hash')
+                    logger.info(f"🔍 Auth debug - Password hash: {password_hash}")
+                    
+                    if password_hash:
+                        if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
+                            logger.info("✅ Password verification successful")
+                            return {
+                                'user_id': result.get('user_id'),
+                                'company_id': result.get('company_id'),
+                                'username': result.get('username'),
+                                'email': result.get('email'),
+                                'role': result.get('role'),
+                                'permissions': json.loads(result.get('permissions')) if result.get('permissions') else [],
+                                'company_name': result.get('company_name')
+                            }
+                        else:
+                            logger.error("❌ Password verification failed")
                     else:
-                        logger.error("❌ Password verification failed")
-                else:
-                    logger.error("❌ Password hash not found or empty")
+                        logger.error("❌ Password hash not found or empty")
+                else:  # Liste formatı (SQLite için)
+                    logger.info(f"🔍 Auth debug - Password hash: {result[4] if len(result) > 4 else 'INDEX_ERROR'}")
+                    
+                    if len(result) > 4 and result[4]:
+                        password_hash = result[4]
+                        if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
+                            logger.info("✅ Password verification successful")
+                            return {
+                                'user_id': result[0],
+                                'company_id': result[1],
+                                'username': result[2],
+                                'email': result[3],
+                                'role': result[5],
+                                'permissions': json.loads(result[6]) if result[6] else [],
+                                'company_name': result[7]
+                            }
+                        else:
+                            logger.error("❌ Password verification failed")
+                    else:
+                        logger.error("❌ Password hash not found or empty")
             else:
                 logger.error("❌ No user found with this email")
             
@@ -514,15 +537,27 @@ class MultiTenantDatabase:
             conn.close()
             
             if result:
-                return {
-                    'user_id': result[0],
-                    'company_id': result[1],
-                    'username': result[2],
-                    'email': result[3],
-                    'role': result[4],
-                    'permissions': json.loads(result[5]) if result[5] else [],
-                    'company_name': result[6]
-                }
+                # PostgreSQL RealDictRow için sözlük erişimi kullan
+                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                    return {
+                        'user_id': result.get('user_id'),
+                        'company_id': result.get('company_id'),
+                        'username': result.get('username'),
+                        'email': result.get('email'),
+                        'role': result.get('role'),
+                        'permissions': json.loads(result.get('permissions')) if result.get('permissions') else [],
+                        'company_name': result.get('company_name')
+                    }
+                else:  # Liste formatı (SQLite için)
+                    return {
+                        'user_id': result[0],
+                        'company_id': result[1],
+                        'username': result[2],
+                        'email': result[3],
+                        'role': result[4],
+                        'permissions': json.loads(result[5]) if result[5] else [],
+                        'company_name': result[6]
+                    }
             
             return None
             
