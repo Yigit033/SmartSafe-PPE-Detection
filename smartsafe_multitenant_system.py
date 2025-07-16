@@ -104,10 +104,6 @@ class MultiTenantDatabase:
             else:
                 logger.info("✅ Multi-tenant database initialized successfully")
                 
-            # Ek tablolar için manuel kontrol (PostgreSQL için)
-            if self.db_adapter.db_type == 'postgresql':
-                self._ensure_postgresql_tables()
-                
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
             # Fallback to original SQLite initialization
@@ -117,6 +113,13 @@ class MultiTenantDatabase:
                 logger.error(f"❌ Fallback database initialization also failed: {fallback_error}")
                 # Create a minimal working state
                 logger.info("✅ Multi-tenant veritabanı oluşturuldu")
+        
+        # PostgreSQL için ek tablolar kontrolü - her durumda çalışsın
+        try:
+            if self.db_adapter.db_type == 'postgresql':
+                self._ensure_postgresql_tables()
+        except Exception as e:
+            logger.error(f"❌ PostgreSQL tablo kontrolü hatası: {e}")
     
     def _ensure_postgresql_tables(self):
         """PostgreSQL için eksik tabloları kontrol et ve oluştur"""

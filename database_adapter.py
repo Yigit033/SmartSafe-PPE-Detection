@@ -214,26 +214,46 @@ class DatabaseAdapter:
             ''')
             
             # Violations table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS violations (
-                    violation_id TEXT PRIMARY KEY,
-                    company_id TEXT NOT NULL,
-                    camera_id TEXT NOT NULL,
-                    user_id TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    violation_type TEXT NOT NULL,
-                    missing_ppe TEXT,
-                    severity TEXT DEFAULT 'medium',
-                    penalty_amount REAL DEFAULT 0,
-                    image_path TEXT,
-                    resolved BOOLEAN DEFAULT 0,
-                    resolved_by TEXT,
-                    resolved_at TIMESTAMP,
-                    status TEXT DEFAULT 'active',
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                    FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
-                )
-            ''')
+            if self.db_type == 'postgresql':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS violations (
+                        violation_id TEXT PRIMARY KEY,
+                        company_id TEXT NOT NULL,
+                        camera_id TEXT NOT NULL,
+                        user_id TEXT,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        violation_type TEXT NOT NULL,
+                        missing_ppe TEXT,
+                        severity TEXT DEFAULT 'medium',
+                        penalty_amount REAL DEFAULT 0,
+                        image_path TEXT,
+                        resolved BOOLEAN DEFAULT FALSE,
+                        resolved_by TEXT,
+                        resolved_at TIMESTAMP,
+                        status TEXT DEFAULT 'active'
+                    )
+                ''')
+            else:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS violations (
+                        violation_id TEXT PRIMARY KEY,
+                        company_id TEXT NOT NULL,
+                        camera_id TEXT NOT NULL,
+                        user_id TEXT,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        violation_type TEXT NOT NULL,
+                        missing_ppe TEXT,
+                        severity TEXT DEFAULT 'medium',
+                        penalty_amount REAL DEFAULT 0,
+                        image_path TEXT,
+                        resolved BOOLEAN DEFAULT 0,
+                        resolved_by TEXT,
+                        resolved_at TIMESTAMP,
+                        status TEXT DEFAULT 'active',
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                        FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                    )
+                ''')
             
             conn.commit()
             logger.info("✅ Database tables created successfully")
