@@ -431,9 +431,21 @@ class SmartSafeSectorManager:
         ''', (sector_id,))
         
         result = cursor.fetchone()
-        company_count = result[0] or 0
-        total_cameras = result[1] or 0
-        total_revenue = result[2] or 0.0
+        
+        # PostgreSQL RealDictRow için sözlük erişimi kullan
+        if result:
+            if hasattr(result, 'keys'):  # RealDictRow veya dict
+                company_count = result.get('company_count') or 0
+                total_cameras = result.get('total_cameras') or 0
+                total_revenue = result.get('total_revenue') or 0.0
+            else:  # Liste formatı (SQLite için)
+                company_count = result[0] or 0
+                total_cameras = result[1] or 0
+                total_revenue = result[2] or 0.0
+        else:
+            company_count = 0
+            total_cameras = 0
+            total_revenue = 0.0
         
         conn.close()
         

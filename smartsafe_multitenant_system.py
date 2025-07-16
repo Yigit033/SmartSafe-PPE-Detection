@@ -582,7 +582,11 @@ class MultiTenantDatabase:
                 conn.close()
                 return False, "Şirket bulunamadı"
             
-            max_cameras = result[0]
+            # PostgreSQL RealDictRow için sözlük erişimi kullan
+            if hasattr(result, 'keys'):  # RealDictRow veya dict
+                max_cameras = result.get('max_cameras')
+            else:  # Liste formatı (SQLite için)
+                max_cameras = result[0]
             
             # Mevcut aktif kamera sayısını kontrol et
             cursor.execute(f'''
@@ -843,8 +847,15 @@ class MultiTenantDatabase:
             result = cursor.fetchone()
             conn.close()
             
-            if result and result[0]:
-                return json.loads(result[0])
+            if result:
+                # PostgreSQL RealDictRow için sözlük erişimi kullan
+                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                    required_ppe = result.get('required_ppe')
+                else:  # Liste formatı (SQLite için)
+                    required_ppe = result[0]
+                
+                if required_ppe:
+                    return json.loads(required_ppe)
             return []
             
         except Exception as e:

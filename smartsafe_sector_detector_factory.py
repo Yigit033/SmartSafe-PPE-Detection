@@ -155,16 +155,25 @@ class BaseSectorDetector(ABC):
             result = cursor.fetchone()
             conn.close()
             
-            if result and result[0]:
+            if result:
                 import json
-                ppe_config = json.loads(result[0])
+                # PostgreSQL RealDictRow için sözlük erişimi kullan
+                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                    ppe_data = result.get('ppe_config')
+                else:  # Liste formatı (SQLite için)
+                    ppe_data = result[0]
                 
-                # Yeni format kontrolü
-                if isinstance(ppe_config, dict) and 'required' in ppe_config:
-                    return ppe_config
+                if ppe_data:
+                    ppe_config = json.loads(ppe_data)
+                    
+                    # Yeni format kontrolü
+                    if isinstance(ppe_config, dict) and 'required' in ppe_config:
+                        return ppe_config
+                    else:
+                        # Eski format - geriye uyumluluk
+                        return {'required': ppe_config, 'optional': []}
                 else:
-                    # Eski format - geriye uyumluluk
-                    return {'required': ppe_config, 'optional': []}
+                    return {'required': [], 'optional': []}
             else:
                 # Varsayılan sektör PPE'leri
                 return self.get_default_sector_ppe()

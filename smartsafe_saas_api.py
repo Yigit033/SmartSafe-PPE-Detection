@@ -2314,7 +2314,14 @@ Mesaj:
             result = cursor.fetchone()
             conn.close()
             
-            sector_id = result[0] if result else 'construction'
+            # PostgreSQL RealDictRow için sözlük erişimi kullan
+            if result:
+                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                    sector_id = result.get('sector') or 'construction'
+                else:  # Liste formatı (SQLite için)
+                    sector_id = result[0] if result[0] else 'construction'
+            else:
+                sector_id = 'construction'
             print(f"📊 Şirket {company_id} sektörü: {sector_id}")
             
         except Exception as e:
