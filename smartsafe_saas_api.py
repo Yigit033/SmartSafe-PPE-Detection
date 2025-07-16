@@ -543,9 +543,10 @@ Mesaj:
                     '''
                 
                 # Şirket var mı kontrol et
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
-                cursor.execute('SELECT company_name FROM companies WHERE company_id = ?', (company_id,))
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'SELECT company_name FROM companies WHERE company_id = {placeholder}', (company_id,))
                 company = cursor.fetchone()
                 conn.close()
                 
@@ -909,73 +910,39 @@ Mesaj:
                 print(f"🔍 Profile update data: {data}")
                 
                 # Profil güncelleme
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                # Önce şirket tablosunda hangi kolonların var olduğunu kontrol et
-                cursor.execute("PRAGMA table_info(companies)")
-                columns = [column[1] for column in cursor.fetchall()]
-                print(f"🔍 Available columns in companies: {columns}")
+                # Şirket bilgilerini güncelle
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f"""
+                    UPDATE companies 
+                    SET company_name = {placeholder}, 
+                        contact_person = {placeholder}, 
+                        email = {placeholder}, 
+                        phone = {placeholder}, 
+                        sector = {placeholder}, 
+                        address = {placeholder}
+                    WHERE company_id = {placeholder}
+                """, (
+                    data.get('company_name'),
+                    data.get('contact_person'),
+                    data.get('email'),
+                    data.get('phone'),
+                    data.get('sector'),
+                    data.get('address'),
+                    company_id
+                ))
                 
-                # Şirket bilgilerini güncelle - sadece mevcut kolonları kullan
-                if all(col in columns for col in ['company_name', 'contact_person', 'email', 'phone', 'sector', 'address']):
-                    cursor.execute("""
-                        UPDATE companies 
-                        SET company_name = ?, 
-                            contact_person = ?, 
-                            email = ?, 
-                            phone = ?, 
-                            sector = ?, 
-                            address = ?
-                        WHERE company_id = ?
-                    """, (
-                        data.get('company_name'),
-                        data.get('contact_person'),
-                        data.get('email'),
-                        data.get('phone'),
-                        data.get('sector'),
-                        data.get('address'),
-                        company_id
-                    ))
-                else:
-                    # Sadece mevcut kolonları güncelle
-                    cursor.execute("""
-                        UPDATE companies 
-                        SET company_name = ?, 
-                            email = ?
-                        WHERE company_id = ?
-                    """, (
-                        data.get('company_name'),
-                        data.get('email'),
-                        company_id
-                    ))
-                
-                # Kullanıcı tablosunu kontrol et
-                cursor.execute("PRAGMA table_info(users)")
-                user_columns = [column[1] for column in cursor.fetchall()]
-                print(f"🔍 Available columns in users: {user_columns}")
-                
-                # Kullanıcı bilgilerini güncelle - sadece mevcut kolonları kullan
-                if 'contact_person' in user_columns:
-                    cursor.execute("""
-                        UPDATE users 
-                        SET email = ?, 
-                            contact_person = ?
-                        WHERE company_id = ?
-                    """, (
-                        data.get('email'),
-                        data.get('contact_person'),
-                        company_id
-                    ))
-                else:
-                    cursor.execute("""
-                        UPDATE users 
-                        SET email = ?
-                        WHERE company_id = ?
-                    """, (
-                        data.get('email'),
-                        company_id
-                    ))
+                # Kullanıcı bilgilerini güncelle
+                cursor.execute(f"""
+                    UPDATE users 
+                    SET email = {placeholder}
+                    WHERE company_id = {placeholder}
+                """, (
+                    data.get('email'),
+                    company_id
+                ))
                 
                 conn.commit()
                 conn.close()
@@ -1003,29 +970,24 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Mevcut ve yeni şifre gerekli'}), 400
                 
                 # Mevcut şifre kontrolü
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute('SELECT password FROM companies WHERE company_id = ?', (company_id,))
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'SELECT password_hash FROM users WHERE company_id = {placeholder} AND role = \'admin\'', (company_id,))
                 stored_password = cursor.fetchone()
                 
-                if not stored_password or not self.db.verify_password(data['current_password'], stored_password[0]):
+                if not stored_password or not bcrypt.checkpw(data['current_password'].encode('utf-8'), stored_password[0].encode('utf-8')):
                     return jsonify({'success': False, 'error': 'Mevcut şifre yanlış'}), 401
                 
                 # Yeni şifre hash'le
-                new_password_hash = self.db.hash_password(data['new_password'])
+                new_password_hash = bcrypt.hashpw(data['new_password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 
                 # Şifre güncelle
-                cursor.execute("""
-                    UPDATE companies 
-                    SET password = ? 
-                    WHERE company_id = ?
-                """, (new_password_hash, company_id))
-                
-                cursor.execute("""
+                cursor.execute(f"""
                     UPDATE users 
-                    SET password_hash = ? 
-                    WHERE company_id = ?
+                    SET password_hash = {placeholder} 
+                    WHERE company_id = {placeholder}
                 """, (new_password_hash, company_id))
                 
                 conn.commit()
@@ -1051,20 +1013,21 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Şifre gerekli'}), 400
                 
                 # Şifre kontrolü
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute('SELECT password FROM companies WHERE company_id = ?', (company_id,))
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'SELECT password_hash FROM users WHERE company_id = {placeholder} AND role = \'admin\'', (company_id,))
                 stored_password = cursor.fetchone()
                 
-                if not stored_password or not self.db.verify_password(password, stored_password[0]):
+                if not stored_password or not bcrypt.checkpw(password.encode('utf-8'), stored_password[0].encode('utf-8')):
                     return jsonify({'success': False, 'error': 'Yanlış şifre'}), 401
                 
                 # Hesap silme işlemi
                 tables_to_clean = ['detections', 'violations', 'cameras', 'users', 'sessions', 'companies']
                 
                 for table in tables_to_clean:
-                    cursor.execute(f'DELETE FROM {table} WHERE company_id = ?', (company_id,))
+                    cursor.execute(f'DELETE FROM {table} WHERE company_id = {placeholder}', (company_id,))
                 
                 conn.commit()
                 conn.close()
@@ -1097,13 +1060,14 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 # Kullanıcıları getir
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute("""
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f"""
                     SELECT user_id, email, contact_person, role, status, created_at, last_login
                     FROM users 
-                    WHERE company_id = ?
+                    WHERE company_id = {placeholder}
                     ORDER BY created_at DESC
                 """, (company_id,))
                 
@@ -1147,12 +1111,13 @@ Mesaj:
                 password_hash = self.db.hash_password(temp_password)
                 
                 # Kullanıcı ekle
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute("""
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f"""
                     INSERT INTO users (user_id, company_id, email, contact_person, password_hash, role, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'active', datetime('now'))
+                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 'active', CURRENT_TIMESTAMP)
                 """, (user_id, company_id, data['email'], data['contact_person'], password_hash, data['role']))
                 
                 conn.commit()
@@ -1182,11 +1147,12 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Kendi hesabınızı silemezsiniz'}), 400
                 
                 # Kullanıcı sil
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute("DELETE FROM users WHERE user_id = ? AND company_id = ?", (user_id, company_id))
-                cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f"DELETE FROM users WHERE user_id = {placeholder} AND company_id = {placeholder}", (user_id, company_id))
+                cursor.execute(f"DELETE FROM sessions WHERE user_id = {placeholder}", (user_id,))
                 
                 conn.commit()
                 conn.close()
@@ -2341,9 +2307,10 @@ Mesaj:
         # Şirketin sektörünü belirle
         try:
             # Şirket bilgilerini al
-            conn = sqlite3.connect('smartsafe_saas.db')
+            conn = self.db.get_connection()
             cursor = conn.cursor()
-            cursor.execute('SELECT sector FROM companies WHERE company_id = ?', (company_id,))
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            cursor.execute(f'SELECT sector FROM companies WHERE company_id = {placeholder}', (company_id,))
             result = cursor.fetchone()
             conn.close()
             

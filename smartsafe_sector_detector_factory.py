@@ -144,12 +144,12 @@ class BaseSectorDetector(ABC):
             from smartsafe_multitenant_system import MultiTenantDatabase
             db = MultiTenantDatabase()
             
-            import sqlite3
-            conn = sqlite3.connect(db.db_path)
+            conn = db.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute('''
-                SELECT required_ppe FROM companies WHERE company_id = ?
+            placeholder = db.get_placeholder()
+            cursor.execute(f'''
+                SELECT required_ppe FROM companies WHERE company_id = {placeholder}
             ''', (company_id,))
             
             result = cursor.fetchone()

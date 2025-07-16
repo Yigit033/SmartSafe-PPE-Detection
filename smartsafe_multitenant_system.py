@@ -426,21 +426,41 @@ class MultiTenantDatabase:
             result = cursor.fetchone()
             conn.close()
             
-            if result and bcrypt.checkpw(password.encode('utf-8'), result[4].encode('utf-8')):
-                return {
-                    'user_id': result[0],
-                    'company_id': result[1],
-                    'username': result[2],
-                    'email': result[3],
-                    'role': result[5],
-                    'permissions': json.loads(result[6]) if result[6] else [],
-                    'company_name': result[7]
-                }
+            # Debug logging
+            logger.info(f"🔍 Auth debug - Email: {email}")
+            logger.info(f"🔍 Auth debug - Result: {result}")
+            logger.info(f"🔍 Auth debug - Result type: {type(result)}")
+            
+            if result:
+                logger.info(f"🔍 Auth debug - Result length: {len(result)}")
+                logger.info(f"🔍 Auth debug - Password hash: {result[4] if len(result) > 4 else 'INDEX_ERROR'}")
+                
+                if len(result) > 4 and result[4]:
+                    password_hash = result[4]
+                    if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
+                        logger.info("✅ Password verification successful")
+                        return {
+                            'user_id': result[0],
+                            'company_id': result[1],
+                            'username': result[2],
+                            'email': result[3],
+                            'role': result[5],
+                            'permissions': json.loads(result[6]) if result[6] else [],
+                            'company_name': result[7]
+                        }
+                    else:
+                        logger.error("❌ Password verification failed")
+                else:
+                    logger.error("❌ Password hash not found or empty")
+            else:
+                logger.error("❌ No user found with this email")
             
             return None
             
         except Exception as e:
             logger.error(f"❌ Kimlik doğrulama hatası: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return None
     
     def create_session(self, user_id: str, company_id: str, ip_address: str, user_agent: str) -> str:
