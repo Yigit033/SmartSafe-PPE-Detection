@@ -336,7 +336,7 @@ class MultiTenantDatabase:
     def create_company(self, company_data: Dict) -> Tuple[bool, str]:
         """Yeni şirket kaydı"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = self.get_connection()
             cursor = conn.cursor()
             
             # Benzersiz şirket ID oluştur
