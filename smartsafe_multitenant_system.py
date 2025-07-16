@@ -103,6 +103,11 @@ class MultiTenantDatabase:
                 self._init_sqlite_database()
             else:
                 logger.info("✅ Multi-tenant database initialized successfully")
+                
+            # Ek tablolar için manuel kontrol (PostgreSQL için)
+            if self.db_adapter.db_type == 'postgresql':
+                self._ensure_postgresql_tables()
+                
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
             # Fallback to original SQLite initialization
@@ -112,6 +117,48 @@ class MultiTenantDatabase:
                 logger.error(f"❌ Fallback database initialization also failed: {fallback_error}")
                 # Create a minimal working state
                 logger.info("✅ Multi-tenant veritabanı oluşturuldu")
+    
+    def _ensure_postgresql_tables(self):
+        """PostgreSQL için eksik tabloları kontrol et ve oluştur"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            logger.info("🔧 PostgreSQL tabloları kontrol ediliyor...")
+            
+            # Sessions tablosu kontrolü
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'sessions'
+                );
+            """)
+            
+            sessions_exists = cursor.fetchone()[0]
+            
+            if not sessions_exists:
+                logger.info("🔧 Sessions tablosu oluşturuluyor...")
+                cursor.execute('''
+                    CREATE TABLE sessions (
+                        session_id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        company_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL,
+                        ip_address TEXT,
+                        user_agent TEXT,
+                        status TEXT DEFAULT 'active'
+                    )
+                ''')
+                logger.info("✅ Sessions tablosu oluşturuldu")
+            
+            conn.commit()
+            conn.close()
+            logger.info("✅ PostgreSQL tabloları kontrol edildi")
+            
+        except Exception as e:
+            logger.error(f"❌ PostgreSQL tablo kontrolü hatası: {e}")
     
     def _init_sqlite_database(self):
         """Fallback SQLite database initialization"""

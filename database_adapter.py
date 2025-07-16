@@ -237,6 +237,7 @@ class DatabaseAdapter:
             
             conn.commit()
             logger.info("✅ Database tables created successfully")
+            return True
             
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
