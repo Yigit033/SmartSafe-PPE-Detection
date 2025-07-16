@@ -815,7 +815,8 @@ Mesaj:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
             try:
-                conn = sqlite3.connect(self.db.db_path)
+                # Database adapter kullan (PostgreSQL/SQLite otomatik seçim)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -854,11 +855,12 @@ Mesaj:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
             try:
-                conn = sqlite3.connect(self.db.db_path)
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
                 # Şirket var mı kontrol et
-                cursor.execute('SELECT company_name FROM companies WHERE company_id = ?', (company_id,))
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'SELECT company_name FROM companies WHERE company_id = {placeholder}', (company_id,))
                 company = cursor.fetchone()
                 
                 if not company:
@@ -868,7 +870,7 @@ Mesaj:
                 tables_to_clean = ['detections', 'violations', 'cameras', 'users', 'sessions', 'companies']
                 
                 for table in tables_to_clean:
-                    cursor.execute(f'DELETE FROM {table} WHERE company_id = ?', (company_id,))
+                    cursor.execute(f'DELETE FROM {table} WHERE company_id = {placeholder}', (company_id,))
                 
                 conn.commit()
                 conn.close()
