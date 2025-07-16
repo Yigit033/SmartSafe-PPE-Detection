@@ -116,27 +116,26 @@ class DatabaseAdapter:
             logger.info("🔧 Creating database tables...")
             
             # Companies table
-            if self.db_type == 'postgresql':
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS companies (
-                        company_id TEXT PRIMARY KEY,
-                        company_name TEXT NOT NULL,
-                        sector TEXT NOT NULL,
-                        contact_person TEXT NOT NULL,
-                        email TEXT UNIQUE NOT NULL,
-                        phone TEXT,
-                        address TEXT,
-                        max_cameras INTEGER DEFAULT 5,
-                        subscription_type TEXT DEFAULT 'basic',
-                        subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        subscription_end TIMESTAMP,
-                        status TEXT DEFAULT 'active',
-                        api_key TEXT UNIQUE,
-                        required_ppe TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS companies (
+                    company_id TEXT PRIMARY KEY,
+                    company_name TEXT NOT NULL,
+                    sector TEXT NOT NULL,
+                    contact_person TEXT NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    phone TEXT,
+                    address TEXT,
+                    max_cameras INTEGER DEFAULT 5,
+                    subscription_type TEXT DEFAULT 'basic',
+                    subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    subscription_end TIMESTAMP,
+                    status TEXT DEFAULT 'active',
+                    api_key TEXT UNIQUE,
+                    required_ppe TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             
             # Users table
             cursor.execute('''
@@ -174,6 +173,65 @@ class DatabaseAdapter:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (company_id) REFERENCES companies (company_id),
                     UNIQUE(company_id, camera_name)
+                )
+            ''')
+            
+            # Sessions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    company_id TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (user_id) REFERENCES users (user_id),
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                )
+            ''')
+            
+            # Detections table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS detections (
+                    detection_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    camera_id TEXT NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    total_people INTEGER,
+                    compliant_people INTEGER,
+                    violation_people INTEGER,
+                    compliance_rate REAL,
+                    confidence_score REAL,
+                    image_path TEXT,
+                    detection_data TEXT,
+                    track_id TEXT,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                )
+            ''')
+            
+            # Violations table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS violations (
+                    violation_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    camera_id TEXT NOT NULL,
+                    user_id TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    violation_type TEXT NOT NULL,
+                    missing_ppe TEXT,
+                    severity TEXT DEFAULT 'medium',
+                    penalty_amount REAL DEFAULT 0,
+                    image_path TEXT,
+                    resolved BOOLEAN DEFAULT 0,
+                    resolved_by TEXT,
+                    resolved_at TIMESTAMP,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                    FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
                 )
             ''')
             
