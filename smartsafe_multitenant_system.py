@@ -86,6 +86,13 @@ class MultiTenantDatabase:
         """Database connection with timeout"""
         return self.db_adapter.get_connection(timeout)
     
+    def get_placeholder(self):
+        """Get appropriate placeholder for database type"""
+        if self.db_adapter.db_type == 'postgresql':
+            return '%s'
+        else:
+            return '?'
+    
     def init_database(self):
         """Multi-tenant veritabanı tablolarını oluştur"""
         try:
@@ -357,11 +364,12 @@ class MultiTenantDatabase:
                 # Eski format: [...] - geriye uyumluluk
                 ppe_json = json.dumps({'required': ppe_config, 'optional': []})
             
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 INSERT INTO companies 
                 (company_id, company_name, sector, contact_person, email, phone, address, 
                  max_cameras, subscription_type, subscription_end, api_key, required_ppe)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 company_id, company_data['company_name'], company_data['sector'],
                 company_data['contact_person'], company_data['email'], 
@@ -377,10 +385,10 @@ class MultiTenantDatabase:
                 bcrypt.gensalt()
             ).decode('utf-8')
             
-            cursor.execute('''
+            cursor.execute(f'''
                 INSERT INTO users 
                 (user_id, company_id, username, email, password_hash, role, permissions)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 user_id, company_id, 'admin', company_data['email'],
                 password_hash, 'admin', 
@@ -403,15 +411,16 @@ class MultiTenantDatabase:
     def authenticate_user(self, email: str, password: str) -> Optional[Dict]:
         """Kullanıcı doğrulama"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = self.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 SELECT u.user_id, u.company_id, u.username, u.email, u.password_hash, 
                        u.role, u.permissions, c.company_name, c.status as company_status
                 FROM users u
                 JOIN companies c ON u.company_id = c.company_id
-                WHERE u.email = ? AND u.status = 'active' AND c.status = 'active'
+                WHERE u.email = {placeholder} AND u.status = 'active' AND c.status = 'active'
             ''', (email,))
             
             result = cursor.fetchone()
@@ -437,21 +446,22 @@ class MultiTenantDatabase:
     def create_session(self, user_id: str, company_id: str, ip_address: str, user_agent: str) -> str:
         """Oturum oluştur"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = self.get_connection()
             cursor = conn.cursor()
             
             session_id = secrets.token_urlsafe(32)
             expires_at = datetime.now() + timedelta(hours=24)
             
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 INSERT INTO sessions 
                 (session_id, user_id, company_id, expires_at, ip_address, user_agent)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (session_id, user_id, company_id, expires_at, ip_address, user_agent))
             
             # Son giriş zamanını güncelle
-            cursor.execute('''
-                UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?
+            cursor.execute(f'''
+                UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = {placeholder}
             ''', (user_id,))
             
             conn.commit()
@@ -466,16 +476,17 @@ class MultiTenantDatabase:
     def validate_session(self, session_id: str) -> Optional[Dict]:
         """Oturum doğrulama"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = self.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 SELECT s.user_id, s.company_id, u.username, u.email, u.role, 
                        u.permissions, c.company_name
                 FROM sessions s
                 JOIN users u ON s.user_id = u.user_id
                 JOIN companies c ON s.company_id = c.company_id
-                WHERE s.session_id = ? AND s.expires_at > CURRENT_TIMESTAMP 
+                WHERE s.session_id = {placeholder} AND s.expires_at > CURRENT_TIMESTAMP 
                       AND s.status = 'active' AND u.status = 'active' AND c.status = 'active'
             ''', (session_id,))
             
@@ -506,8 +517,9 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             # Önce şirketin max_cameras limitini al
-            cursor.execute('''
-                SELECT max_cameras FROM companies WHERE company_id = ? AND status = 'active'
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
+                SELECT max_cameras FROM companies WHERE company_id = {placeholder} AND status = 'active'
             ''', (company_id,))
             
             result = cursor.fetchone()
@@ -518,9 +530,9 @@ class MultiTenantDatabase:
             max_cameras = result[0]
             
             # Mevcut aktif kamera sayısını kontrol et
-            cursor.execute('''
+            cursor.execute(f'''
                 SELECT COUNT(*) FROM cameras 
-                WHERE company_id = ? AND status = 'active'
+                WHERE company_id = {placeholder} AND status = 'active'
             ''', (company_id,))
             
             current_cameras = cursor.fetchone()[0]
@@ -529,9 +541,10 @@ class MultiTenantDatabase:
                 return False, f"Maksimum kamera limitine ({max_cameras}) ulaşıldı"
             
             # Aynı isimde kamera var mı kontrol et
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 SELECT camera_id FROM cameras 
-                WHERE company_id = ? AND camera_name = ? AND status = 'active'
+                WHERE company_id = {placeholder} AND camera_name = {placeholder} AND status = 'active'
             ''', (company_id, camera_data.get('camera_name')))
             
             if cursor.fetchone():
@@ -542,11 +555,11 @@ class MultiTenantDatabase:
             camera_id = str(uuid.uuid4())
             
             # Kamerayı ekle
-            cursor.execute('''
+            cursor.execute(f'''
                 INSERT INTO cameras (
                     camera_id, company_id, camera_name, location, ip_address, port,
                     rtsp_url, username, password, resolution, fps, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 camera_id, company_id, 
                 camera_data.get('camera_name'),
@@ -576,12 +589,13 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             # Tüm kamera bilgilerini çek
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 SELECT camera_id, camera_name, location, ip_address, port, rtsp_url, 
                        username, password, resolution, fps, status, last_detection,
                        created_at, updated_at
                 FROM cameras
-                WHERE company_id = ? AND status = 'active'
+                WHERE company_id = {placeholder} AND status = 'active'
             ''', (company_id,))
             
             cameras = []
