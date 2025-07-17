@@ -156,6 +156,40 @@ class MultiTenantDatabase:
                 ''')
                 logger.info("✅ Sessions tablosu oluşturuldu")
             
+            # Cameras tablosuna port kolonu kontrolü
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'cameras'
+                    AND column_name = 'port'
+                );
+            """)
+            
+            port_exists = cursor.fetchone()[0]
+            
+            if not port_exists:
+                logger.info("🔧 Cameras tablosuna port kolonu ekleniyor...")
+                cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
+                logger.info("✅ Port kolonu eklendi")
+            
+            # Updated_at kolonu kontrolü
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'cameras'
+                    AND column_name = 'updated_at'
+                );
+            """)
+            
+            updated_at_exists = cursor.fetchone()[0]
+            
+            if not updated_at_exists:
+                logger.info("🔧 Cameras tablosuna updated_at kolonu ekleniyor...")
+                cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                logger.info("✅ Updated_at kolonu eklendi")
+            
             conn.commit()
             conn.close()
             logger.info("✅ PostgreSQL tabloları kontrol edildi")
@@ -772,7 +806,8 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             # Bugünkü istatistikler
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 SELECT 
                     COUNT(*) as total_detections,
                     SUM(total_people) as total_people,
@@ -780,14 +815,14 @@ class MultiTenantDatabase:
                     SUM(violation_people) as violation_people,
                     AVG(compliance_rate) as avg_compliance_rate
                 FROM detections
-                WHERE company_id = ? AND date(timestamp) = date('now')
+                WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
             ''', (company_id,))
             
             detection_stats = cursor.fetchone()
             
             # Aktif kamera sayısı
-            cursor.execute('''
-                SELECT COUNT(*) FROM cameras WHERE company_id = ? AND status = 'active'
+            cursor.execute(f'''
+                SELECT COUNT(*) FROM cameras WHERE company_id = {placeholder} AND status = 'active'
             ''', (company_id,))
             
             active_cameras = cursor.fetchone()[0]

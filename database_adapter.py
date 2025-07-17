@@ -163,6 +163,7 @@ class DatabaseAdapter:
                     camera_name TEXT NOT NULL,
                     location TEXT NOT NULL,
                     ip_address TEXT,
+                    port INTEGER DEFAULT 554,
                     rtsp_url TEXT,
                     username TEXT,
                     password TEXT,
@@ -171,6 +172,7 @@ class DatabaseAdapter:
                     status TEXT DEFAULT 'active',
                     last_detection TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (company_id) REFERENCES companies (company_id),
                     UNIQUE(company_id, camera_name)
                 )
