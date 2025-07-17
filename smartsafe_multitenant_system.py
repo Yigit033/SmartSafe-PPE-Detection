@@ -725,117 +725,158 @@ class MultiTenantDatabase:
             return None
     
     def add_camera(self, company_id: str, camera_data: Dict) -> Tuple[bool, str]:
-        """Yeni kamera ekle"""
+        """
+        Şirket kamerası ekle - Production-ready version
+        
+        Args:
+            company_id: Şirket ID'si
+            camera_data: Kamera bilgileri
+            
+        Returns:
+            (success, message/camera_id)
+        """
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Önce şirketin max_cameras limitini al
-            placeholder = self.get_placeholder()
-            cursor.execute(f'''
-                SELECT max_cameras FROM companies WHERE company_id = {placeholder} AND status = 'active'
-            ''', (company_id,))
+            # Unique camera ID oluştur
+            camera_id = f"CAM_{uuid.uuid4().hex[:8].upper()}"
             
-            result = cursor.fetchone()
-            if not result:
-                conn.close()
-                return False, "Şirket bulunamadı"
+            # RTSP URL oluştur
+            ip_address = camera_data.get('ip_address', '')
+            port = camera_data.get('port', 8080)
+            username = camera_data.get('username', '')
+            password = camera_data.get('password', '')
+            protocol = camera_data.get('protocol', 'http')
+            stream_path = camera_data.get('stream_path', '/video')
             
-            # PostgreSQL RealDictRow için sözlük erişimi kullan
-            if hasattr(result, 'keys'):  # RealDictRow veya dict
-                max_cameras = result.get('max_cameras')
-            else:  # Liste formatı (SQLite için)
-                max_cameras = result[0]
-            
-            # Mevcut aktif kamera sayısını kontrol et
-            cursor.execute(f'''
-                SELECT COUNT(*) FROM cameras 
-                WHERE company_id = {placeholder} AND status = 'active'
-            ''', (company_id,))
-            
-            current_cameras = cursor.fetchone()[0]
-            if current_cameras >= max_cameras:
-                conn.close()
-                return False, f"Maksimum kamera limitine ({max_cameras}) ulaşıldı"
-            
-            # Aynı isimde kamera var mı kontrol et
-            placeholder = self.get_placeholder()
-            cursor.execute(f'''
-                SELECT camera_id FROM cameras 
-                WHERE company_id = {placeholder} AND camera_name = {placeholder} AND status = 'active'
-            ''', (company_id, camera_data.get('camera_name')))
-            
-            if cursor.fetchone():
-                conn.close()
-                return False, "Bu isimde bir kamera zaten mevcut"
-            
-            # Yeni kamera ID'si oluştur
-            camera_id = str(uuid.uuid4())
-            
-            # Gerçek kamera için RTSP URL oluştur
-            rtsp_url = camera_data.get('rtsp_url', '')
-            if not rtsp_url:
-                ip_address = camera_data.get('ip_address', '')
-                port = camera_data.get('port', 8080)
-                protocol = camera_data.get('protocol', 'http')
-                stream_path = camera_data.get('stream_path', '/video')
-                username = camera_data.get('username', '')
-                password = camera_data.get('password', '')
-                
+            # RTSP URL formatı
+            if username and password:
                 if protocol == 'rtsp':
-                    if username and password:
-                        rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{stream_path}"
-                    else:
-                        rtsp_url = f"rtsp://{ip_address}:{port}{stream_path}"
+                    rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{stream_path}"
+                else:
+                    rtsp_url = f"http://{username}:{password}@{ip_address}:{port}{stream_path}"
+            else:
+                if protocol == 'rtsp':
+                    rtsp_url = f"rtsp://{ip_address}:{port}{stream_path}"
                 else:
                     rtsp_url = f"http://{ip_address}:{port}{stream_path}"
             
-            # Çözünürlük formatı
+            # Resolution formatı
             resolution = camera_data.get('resolution', '1920x1080')
-            if camera_data.get('width') and camera_data.get('height'):
-                resolution = f"{camera_data.get('width')}x{camera_data.get('height')}"
+            if isinstance(resolution, dict):
+                width = resolution.get('width', 1920)
+                height = resolution.get('height', 1080)
+                resolution = f"{width}x{height}"
             
-            # Kamerayı ekle - Enhanced real camera support
+            # Placeholder belirleme
+            placeholder = self.get_placeholder()
+            
+            # Önce mevcut kamera var mı kontrol et
             cursor.execute(f'''
-                INSERT INTO cameras (
-                    camera_id, company_id, camera_name, location, ip_address, port,
-                    rtsp_url, username, password, protocol, stream_path, auth_type,
-                    resolution, fps, quality, audio_enabled, night_vision, 
-                    motion_detection, recording_enabled, camera_type, status
-                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 
-                         {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
-                         {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 
-                         {placeholder}, {placeholder}, {placeholder}, {placeholder})
-            ''', (
-                camera_id, company_id, 
+                SELECT camera_id FROM cameras 
+                WHERE company_id = {placeholder} AND camera_name = {placeholder}
+            ''', (company_id, camera_data.get('name', camera_data.get('camera_name', 'Real Camera'))))
+            
+            existing_camera = cursor.fetchone()
+            if existing_camera:
+                conn.close()
+                return False, "Bu isimde kamera zaten mevcut"
+            
+            # Production database için temel kolonları kullan
+            basic_columns = [
+                'camera_id', 'company_id', 'camera_name', 'location', 'ip_address',
+                'rtsp_url', 'username', 'password', 'resolution', 'fps', 'status'
+            ]
+            
+            basic_values = [
+                camera_id, 
+                company_id, 
                 camera_data.get('name', camera_data.get('camera_name', 'Real Camera')),
                 camera_data.get('location', 'Genel'),
-                camera_data.get('ip_address', ''),
-                camera_data.get('port', 8080),
+                ip_address,
                 rtsp_url,
-                camera_data.get('username', ''),
-                camera_data.get('password', ''),
-                camera_data.get('protocol', 'http'),
-                camera_data.get('stream_path', '/video'),
-                camera_data.get('auth_type', 'basic'),
+                username,
+                password,
                 resolution,
                 camera_data.get('fps', 25),
-                camera_data.get('quality', 80),
-                camera_data.get('audio_enabled', False),
-                camera_data.get('night_vision', False),
-                camera_data.get('motion_detection', True),
-                camera_data.get('recording_enabled', True),
-                'real_camera',
                 'active'
-            ))
+            ]
             
-            conn.commit()
-            conn.close()
-            return True, camera_id
+            # Dinamik olarak mevcut kolonları kontrol et
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'cameras' 
+                    ORDER BY ordinal_position
+                """)
+                available_columns = [row[0] if hasattr(row, 'keys') else row[0] for row in cursor.fetchall()]
+            else:
+                # SQLite için PRAGMA kullan
+                cursor.execute("PRAGMA table_info(cameras)")
+                available_columns = [row[1] for row in cursor.fetchall()]
             
+            # Sadece mevcut kolonları kullan
+            final_columns = []
+            final_values = []
+            
+            for i, col in enumerate(basic_columns):
+                if col in available_columns:
+                    final_columns.append(col)
+                    final_values.append(basic_values[i])
+            
+            # Ek kolonlar varsa ekle
+            if 'port' in available_columns:
+                final_columns.append('port')
+                final_values.append(port)
+            
+            if 'protocol' in available_columns:
+                final_columns.append('protocol')
+                final_values.append(protocol)
+            
+            if 'stream_path' in available_columns:
+                final_columns.append('stream_path')
+                final_values.append(stream_path)
+            
+            if 'auth_type' in available_columns:
+                final_columns.append('auth_type')
+                final_values.append(camera_data.get('auth_type', 'basic'))
+            
+            if 'camera_type' in available_columns:
+                final_columns.append('camera_type')
+                final_values.append('ip_camera')
+            
+            # INSERT query oluştur
+            columns_str = ', '.join(final_columns)
+            placeholders_str = ', '.join([placeholder] * len(final_columns))
+            
+            insert_query = f'''
+                INSERT INTO cameras ({columns_str}) 
+                VALUES ({placeholders_str})
+            '''
+            
+            # Kamerayı ekle
+            cursor.execute(insert_query, final_values)
+            
+            # Başarı kontrolü
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                logger.info(f"✅ Camera added successfully: {camera_id}")
+                return True, camera_id
+            else:
+                conn.close()
+                logger.error("❌ Camera insert failed - no rows affected")
+                return False, "Kamera eklenirken hata oluştu"
+                
         except Exception as e:
-            logger.error(f"ERROR: Kamera ekleme hatasi: {e}")
-            return False, str(e)
+            logger.error(f"❌ Camera add error: {e}")
+            try:
+                conn.close()
+            except:
+                pass
+            return False, f"Kamera ekleme hatası: {str(e)}"
     
     def get_company_cameras(self, company_id: str) -> List[Dict]:
         """Şirket kameralarını getir"""
@@ -843,12 +884,12 @@ class MultiTenantDatabase:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Tüm kamera bilgilerini çek (port kolonu olmadan)
+            # Tüm kamera bilgilerini çek (updated_at kolonu olmadan)
             placeholder = self.get_placeholder()
             cursor.execute(f'''
                 SELECT camera_id, camera_name, location, ip_address, rtsp_url, 
                        username, password, resolution, fps, status, last_detection,
-                       created_at, updated_at
+                       created_at
                 FROM cameras
                 WHERE company_id = {placeholder} AND status = 'active'
             ''', (company_id,))
@@ -862,7 +903,7 @@ class MultiTenantDatabase:
                         'name': row.get('camera_name'),
                         'location': row.get('location'),
                         'ip_address': row.get('ip_address'),
-                        'port': 554,  # Default port
+                        'port': 8080,  # Default port updated to 8080
                         'rtsp_url': row.get('rtsp_url'),
                         'username': row.get('username'),
                         'password': row.get('password'),
@@ -871,7 +912,7 @@ class MultiTenantDatabase:
                         'status': row.get('status'),
                         'last_detection': str(row.get('last_detection')) if row.get('last_detection') else '',
                         'created_at': str(row.get('created_at')) if row.get('created_at') else '',
-                        'updated_at': str(row.get('updated_at')) if row.get('updated_at') else ''
+                        'updated_at': str(row.get('created_at')) if row.get('created_at') else ''  # Use created_at as fallback
                     }
                 else:  # Liste formatı (SQLite için)
                     camera = {
@@ -879,7 +920,7 @@ class MultiTenantDatabase:
                         'name': row[1],
                         'location': row[2],
                         'ip_address': row[3],
-                        'port': 554,  # Default port
+                        'port': 8080,  # Default port updated to 8080
                         'rtsp_url': row[4],
                         'username': row[5],
                         'password': row[6],
@@ -888,7 +929,7 @@ class MultiTenantDatabase:
                         'status': row[9],
                         'last_detection': str(row[10]) if row[10] else '',
                         'created_at': str(row[11]) if row[11] else '',
-                        'updated_at': str(row[12]) if row[12] else ''
+                        'updated_at': str(row[11]) if row[11] else ''  # Use created_at as fallback
                     }
                 cameras.append(camera)
             
@@ -1095,10 +1136,23 @@ class MultiTenantDatabase:
             
             conn.close()
             
-            # Trend hesaplamaları
-            cameras_trend = active_cameras - last_week_cameras
-            violations_trend = today_violations - yesterday_violations
+            # Trend hesaplamaları - Fix all NoneType issues
+            cameras_trend = (active_cameras or 0) - (last_week_cameras or 0)
+            violations_trend = (today_violations or 0) - (yesterday_violations or 0)
+            
+            # Safe compliance trend calculation
+            avg_compliance_rate = avg_compliance_rate or 0
+            week_compliance = week_compliance or 0
             compliance_trend = avg_compliance_rate - week_compliance if week_compliance > 0 else 0
+            
+            # Ensure all values are not None
+            total_detections = total_detections or 0
+            total_people = total_people or 0
+            compliant_people = compliant_people or 0
+            violation_people = violation_people or 0
+            active_cameras = active_cameras or 0
+            active_workers = active_workers or 0
+            monthly_violations = monthly_violations or 0
             
             return {
                 'total_detections': total_detections,

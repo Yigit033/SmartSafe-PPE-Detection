@@ -1431,44 +1431,50 @@ Mesaj:
                 data = request.get_json()
                 logger.info(f"🔍 Testing real camera connection for company {company_id}")
                 
-                # Gerçek kamera yapılandırması oluştur
-                from camera_integration_manager import RealCameraManager, RealCameraConfig
-                
-                real_camera_manager = RealCameraManager()
-                camera_config = real_camera_manager.create_real_camera_from_form(data)
-                
-                # Gerçek kamera testi yap
-                test_result = real_camera_manager.test_real_camera_connection(camera_config)
+                # Try enhanced real camera manager first
+                try:
+                    from camera_integration_manager import RealCameraManager, RealCameraConfig
+                    
+                    real_camera_manager = RealCameraManager()
+                    camera_config = real_camera_manager.create_real_camera_from_form(data)
+                    
+                    # Gerçek kamera testi yap
+                    test_result = real_camera_manager.test_real_camera_connection(camera_config)
+                    
+                except ImportError:
+                    logger.warning("⚠️ RealCameraManager not available, using fallback")
+                    # Fallback to basic connection test
+                    test_result = self._basic_camera_test(data)
                 
                 # API response formatına dönüştür
                 if test_result['success']:
                     api_response = {
                         'success': True,
-                        'connection_time': test_result['connection_time'],
-                        'stream_quality': test_result['stream_quality'],
-                        'supported_features': test_result['supported_features'],
-                        'camera_info': test_result['camera_info'],
+                        'connection_time': test_result.get('connection_time', 0),
+                        'stream_quality': test_result.get('stream_quality', 'good'),
+                        'supported_features': test_result.get('supported_features', []),
+                        'camera_info': test_result.get('camera_info', {}),
                         'test_results': {
                             'connection_status': 'success',
-                            'response_time': f"{test_result['connection_time']*1000:.0f}ms",
-                            'resolution': test_result['stream_quality'].get('resolution', 'Bilinmiyor'),
-                            'fps': test_result['stream_quality'].get('fps', 0),
-                            'quality': test_result['stream_quality'].get('quality', 'unknown'),
-                            'supported_features': test_result['supported_features'],
-                            'test_duration': f"{test_result['connection_time']:.1f} saniye"
+                            'response_time': f"{test_result.get('connection_time', 0):.0f}ms",
+                            'resolution': test_result.get('camera_info', {}).get('resolution', 'Bilinmiyor'),
+                            'fps': test_result.get('camera_info', {}).get('fps', 25),
+                            'quality': test_result.get('stream_quality', 'good'),
+                            'supported_features': test_result.get('supported_features', []),
+                            'test_duration': f"{test_result.get('connection_time', 0)/1000:.1f} saniye"
                         },
-                        'message': f'Kamera bağlantısı başarılı! ({test_result["connection_time"]:.1f}s)'
+                        'message': f'Kamera bağlantısı başarılı! ({test_result.get("connection_time", 0):.0f}ms)'
                     }
                 else:
                     api_response = {
                         'success': False,
-                        'error': test_result['error'],
+                        'error': test_result.get('error_message', 'Bilinmeyen hata'),
                         'test_results': {
                             'connection_status': 'failed',
-                            'error_message': test_result['error'],
-                            'test_duration': '0 saniye'
+                            'error_message': test_result.get('error_message', 'Bilinmeyen hata'),
+                            'test_duration': f"{test_result.get('connection_time', 0)/1000:.1f} saniye"
                         },
-                        'message': f'Kamera bağlantısı başarısız: {test_result["error"]}'
+                        'message': f'Kamera bağlantısı başarısız: {test_result.get("error_message", "Bilinmeyen hata")}'
                     }
                 
                 logger.info(f"✅ Camera test completed for {camera_config.name}: {test_result['success']}")
@@ -2212,63 +2218,88 @@ Mesaj:
             logger.debug(f"Real-time status check error for {ip_address}: {e}")
             return None
     
-    def _basic_camera_test(self, rtsp_url, camera_name):
-        """Basit kamera testi (Enterprise olmayan durumlar için)"""
+    def _basic_camera_test(self, camera_data):
+        """Basit kamera testi (RealCameraManager olmayan durumlar için)"""
         import time
+        import requests
         start_time = time.time()
         
+        # Extract camera info from form data
+        ip_address = camera_data.get('ip_address', '')
+        port = camera_data.get('port', 8080)
+        username = camera_data.get('username', '')
+        password = camera_data.get('password', '')
+        protocol = camera_data.get('protocol', 'http')
+        
         test_result = {
-            'connection_status': 'failed',
-            'response_time_ms': 0,
-            'resolution_detected': 'Unknown',
-            'fps_detected': 0,
-            'source_type': 'unknown',
-            'features': {},
+            'success': False,
+            'connection_time': 0,
+            'stream_quality': 'unknown',
+            'supported_features': [],
+            'camera_info': {},
             'error_message': ''
         }
         
         try:
-            if rtsp_url.isdigit():
-                # Local camera test
-                camera_index = int(rtsp_url)
-                cap = cv2.VideoCapture(camera_index)
-                
-                if cap.isOpened():
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
-                        test_result['connection_status'] = 'connected'
-                        test_result['resolution_detected'] = f"{frame.shape[1]}x{frame.shape[0]}"
-                        test_result['fps_detected'] = cap.get(cv2.CAP_PROP_FPS) or 25
-                        test_result['source_type'] = 'local'
-                        test_result['features'] = {'video_stream': True}
-                    else:
-                        test_result['error_message'] = 'Kameradan frame alınamadı'
-                    cap.release()
+            # Build camera URL
+            if username and password:
+                if protocol == 'rtsp':
+                    camera_url = f"rtsp://{username}:{password}@{ip_address}:{port}/video"
                 else:
-                    test_result['error_message'] = 'Kamera açılamadı'
-                    
-            elif rtsp_url.startswith(('rtsp://', 'http://')):
-                # Network camera test
-                cap = cv2.VideoCapture(rtsp_url)
-                
-                if cap.isOpened():
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
-                        test_result['connection_status'] = 'connected'
-                        test_result['resolution_detected'] = f"{frame.shape[1]}x{frame.shape[0]}"
-                        test_result['fps_detected'] = cap.get(cv2.CAP_PROP_FPS) or 25
-                        test_result['source_type'] = 'rtsp' if rtsp_url.startswith('rtsp://') else 'ip_webcam'
-                        test_result['features'] = {'video_stream': True, 'network_camera': True}
-                    else:
-                        test_result['error_message'] = 'Network kamerasından frame alınamadı'
-                    cap.release()
-                else:
-                    test_result['error_message'] = 'Network kamerası bağlantısı kurulamadı'
+                    camera_url = f"http://{username}:{password}@{ip_address}:{port}/video"
             else:
-                test_result['error_message'] = 'Geçersiz kamera URL formatı'
+                if protocol == 'rtsp':
+                    camera_url = f"rtsp://{ip_address}:{port}/video"
+                else:
+                    camera_url = f"http://{ip_address}:{port}/video"
+            
+            # Test HTTP connection first
+            if protocol == 'http':
+                try:
+                    auth = None
+                    if username and password:
+                        auth = (username, password)
+                    
+                    response = requests.get(f"http://{ip_address}:{port}", 
+                                          auth=auth, timeout=5)
+                    if response.status_code == 200:
+                        test_result['success'] = True
+                        test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
+                        test_result['stream_quality'] = 'good'
+                        test_result['supported_features'] = ['http_stream']
+                        test_result['camera_info'] = {
+                            'ip': ip_address,
+                            'port': port,
+                            'protocol': protocol
+                        }
+                        return test_result
+                except Exception:
+                    pass
+            
+            # Test with OpenCV as fallback
+            cap = cv2.VideoCapture(camera_url)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    test_result['success'] = True
+                    test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
+                    test_result['stream_quality'] = 'good'
+                    test_result['supported_features'] = ['video_stream']
+                    test_result['camera_info'] = {
+                        'ip': ip_address,
+                        'port': port,
+                        'protocol': protocol,
+                        'resolution': f"{frame.shape[1]}x{frame.shape[0]}"
+                    }
+                cap.release()
+            else:
+                test_result['error_message'] = 'Kamera bağlantısı kurulamadı'
                 
         except Exception as e:
-            test_result['error_message'] = str(e)
+            test_result['error_message'] = f'Kamera test hatası: {str(e)}'
+            
+        test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
+        return test_result
         
         test_result['response_time_ms'] = (time.time() - start_time) * 1000
         return test_result
