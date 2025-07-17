@@ -1874,10 +1874,11 @@ Mesaj:
                 conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute('''
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
                     UPDATE companies 
-                    SET required_ppe = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE company_id = ?
+                    SET required_ppe = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
                 ''', (json.dumps(required_ppe), company_id))
                 
                 conn.commit()

@@ -775,9 +775,10 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             # Önce kameranın bu şirkete ait olduğunu doğrula
-            cursor.execute('''
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
                 SELECT camera_name FROM cameras 
-                WHERE company_id = ? AND camera_id = ? AND status = 'active'
+                WHERE company_id = {placeholder} AND camera_id = {placeholder} AND status = 'active'
             ''', (company_id, camera_id))
             
             if not cursor.fetchone():
@@ -785,10 +786,10 @@ class MultiTenantDatabase:
                 return False, "Kamera bulunamadı"
             
             # Kamerayı sil (soft delete)
-            cursor.execute('''
+            cursor.execute(f'''
                 UPDATE cameras 
                 SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
-                WHERE company_id = ? AND camera_id = ?
+                WHERE company_id = {placeholder} AND camera_id = {placeholder}
             ''', (company_id, camera_id))
             
             conn.commit()
@@ -828,52 +829,90 @@ class MultiTenantDatabase:
             active_cameras = cursor.fetchone()[0]
             
             # Bugünkü ihlal sayısı
-            cursor.execute('''
-                SELECT COUNT(*) FROM violations 
-                WHERE company_id = ? AND date(timestamp) = date('now')
-            ''', (company_id,))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
+                ''', (company_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} AND date(timestamp) = date('now')
+                ''', (company_id,))
             
             today_violations = cursor.fetchone()[0]
             
             # Dünkü istatistikler (trend hesaplama için)
-            cursor.execute('''
-                SELECT COUNT(*) FROM violations 
-                WHERE company_id = ? AND date(timestamp) = date('now', '-1 day')
-            ''', (company_id,))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE - INTERVAL '1 day'
+                ''', (company_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} AND date(timestamp) = date('now', '-1 day')
+                ''', (company_id,))
             
             yesterday_violations = cursor.fetchone()[0] or 0
             
             # Geçen haftaki kamera sayısı
-            cursor.execute('''
-                SELECT COUNT(*) FROM cameras 
-                WHERE company_id = ? AND created_at < date('now', '-7 days')
-            ''', (company_id,))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM cameras 
+                    WHERE company_id = {placeholder} AND created_at < CURRENT_DATE - INTERVAL '7 days'
+                ''', (company_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM cameras 
+                    WHERE company_id = {placeholder} AND created_at < date('now', '-7 days')
+                ''', (company_id,))
             
             last_week_cameras = cursor.fetchone()[0] or 0
             
             # Compliance trend (son 7 günün ortalaması)
-            cursor.execute('''
-                SELECT AVG(compliance_rate) 
-                FROM detections 
-                WHERE company_id = ? AND date(timestamp) > date('now', '-7 days')
-            ''', (company_id,))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT AVG(compliance_rate) 
+                    FROM detections 
+                    WHERE company_id = {placeholder} AND date(timestamp) > CURRENT_DATE - INTERVAL '7 days'
+                ''', (company_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT AVG(compliance_rate) 
+                    FROM detections 
+                    WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-7 days')
+                ''', (company_id,))
             
             week_compliance = cursor.fetchone()[0] or 0
             
             # Aktif çalışan sayısı (bugün tespit edilen unique kişi sayısı)
-            cursor.execute('''
-                SELECT COUNT(DISTINCT track_id) 
-                FROM detections 
-                WHERE company_id = ? AND date(timestamp) = date('now')
-            ''', (company_id,))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT COUNT(DISTINCT track_id) 
+                    FROM detections 
+                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
+                ''', (company_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT COUNT(DISTINCT track_id) 
+                    FROM detections 
+                    WHERE company_id = {placeholder} AND date(timestamp) = date('now')
+                ''', (company_id,))
             
             active_workers = cursor.fetchone()[0] or 0
             
             # Aylık ihlal sayısı
-            cursor.execute('''
-                SELECT COUNT(*) FROM violations 
-                WHERE company_id = ? AND date(timestamp) > date('now', '-30 days')
-            ''', (company_id,))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} AND date(timestamp) > CURRENT_DATE - INTERVAL '30 days'
+                ''', (company_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-30 days')
+                ''', (company_id,))
             
             monthly_violations = cursor.fetchone()[0] or 0
             
@@ -925,8 +964,9 @@ class MultiTenantDatabase:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute('''
-                SELECT required_ppe FROM companies WHERE company_id = ?
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
+                SELECT required_ppe FROM companies WHERE company_id = {placeholder}
             ''', (company_id,))
             
             result = cursor.fetchone()
