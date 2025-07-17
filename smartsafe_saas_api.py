@@ -1429,25 +1429,47 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 data = request.get_json()
+                if not data:
+                    return jsonify({'success': False, 'error': 'Kamera bilgileri gerekli'}), 400
+                
                 logger.info(f"🔍 Testing real camera connection for company {company_id}")
                 
                 # Try enhanced real camera manager first
+                test_result = None
                 try:
                     from camera_integration_manager import RealCameraManager, RealCameraConfig
                     
                     real_camera_manager = RealCameraManager()
-                    camera_config = real_camera_manager.create_real_camera_from_form(data)
+                    
+                    # Create camera config from form data
+                    camera_config = RealCameraConfig(
+                        camera_id=f"TEST_{data.get('ip_address', 'unknown')}",
+                        name=data.get('name', 'Test Camera'),
+                        ip_address=data.get('ip_address', ''),
+                        port=int(data.get('port', 8080)),
+                        username=data.get('username', ''),
+                        password=data.get('password', ''),
+                        protocol=data.get('protocol', 'http'),
+                        stream_path=data.get('stream_path', '/video'),
+                        auth_type=data.get('auth_type', 'basic')
+                    )
                     
                     # Gerçek kamera testi yap
                     test_result = real_camera_manager.test_real_camera_connection(camera_config)
                     
-                except ImportError:
-                    logger.warning("⚠️ RealCameraManager not available, using fallback")
-                    # Fallback to basic connection test
+                except (ImportError, AttributeError) as e:
+                    logger.warning(f"⚠️ RealCameraManager not available: {e}, using fallback")
+                    test_result = None
+                except Exception as e:
+                    logger.error(f"❌ RealCameraManager error: {e}, using fallback")
+                    test_result = None
+                
+                # Fallback to basic connection test if RealCameraManager fails
+                if test_result is None:
                     test_result = self._basic_camera_test(data)
                 
                 # API response formatına dönüştür
-                if test_result['success']:
+                if test_result and test_result.get('success'):
                     api_response = {
                         'success': True,
                         'connection_time': test_result.get('connection_time', 0),
@@ -1468,16 +1490,17 @@ Mesaj:
                 else:
                     api_response = {
                         'success': False,
-                        'error': test_result.get('error_message', 'Bilinmeyen hata'),
+                        'error': test_result.get('error_message', 'Bilinmeyen hata') if test_result else 'Kamera testi başarısız',
                         'test_results': {
                             'connection_status': 'failed',
-                            'error_message': test_result.get('error_message', 'Bilinmeyen hata'),
-                            'test_duration': f"{test_result.get('connection_time', 0)/1000:.1f} saniye"
+                            'error_message': test_result.get('error_message', 'Bilinmeyen hata') if test_result else 'Kamera testi başarısız',
+                            'test_duration': f"{test_result.get('connection_time', 0)/1000:.1f} saniye" if test_result else '0.0 saniye'
                         },
-                        'message': f'Kamera bağlantısı başarısız: {test_result.get("error_message", "Bilinmeyen hata")}'
+                        'message': f'Kamera bağlantısı başarısız: {test_result.get("error_message", "Bilinmeyen hata") if test_result else "Kamera testi başarısız"}'
                     }
                 
-                logger.info(f"✅ Camera test completed for {camera_config.name}: {test_result['success']}")
+                camera_name = data.get('name', data.get('ip_address', 'Unknown'))
+                logger.info(f"✅ Camera test completed for {camera_name}: {api_response['success']}")
                 return jsonify(api_response)
                 
             except Exception as e:
@@ -2299,9 +2322,6 @@ Mesaj:
             test_result['error_message'] = f'Kamera test hatası: {str(e)}'
             
         test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
-        return test_result
-        
-        test_result['response_time_ms'] = (time.time() - start_time) * 1000
         return test_result
     
     def camera_worker(self, camera_key, camera_id):

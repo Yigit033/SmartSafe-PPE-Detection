@@ -750,6 +750,9 @@ class MultiTenantDatabase:
         """
         try:
             conn = self.get_connection()
+            if conn is None:
+                return False, "Veritabanı bağlantısı başarısız"
+                
             cursor = conn.cursor()
             
             # Unique camera ID oluştur
@@ -817,79 +820,94 @@ class MultiTenantDatabase:
             ]
             
             # Dinamik olarak mevcut kolonları kontrol et
-            if self.db_adapter.db_type == 'postgresql':
-                cursor.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'cameras' 
-                    ORDER BY ordinal_position
-                """)
-                available_columns = [row[0] if hasattr(row, 'keys') else row[0] for row in cursor.fetchall()]
-            else:
-                # SQLite için PRAGMA kullan
-                cursor.execute("PRAGMA table_info(cameras)")
-                available_columns = [row[1] for row in cursor.fetchall()]
+            try:
+                if self.db_adapter.db_type == 'postgresql':
+                    cursor.execute("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'cameras' 
+                        ORDER BY ordinal_position
+                    """)
+                    available_columns = [row[0] if hasattr(row, 'keys') else row[0] for row in cursor.fetchall()]
+                else:
+                    # SQLite için PRAGMA kullan
+                    cursor.execute("PRAGMA table_info(cameras)")
+                    available_columns = [row[1] for row in cursor.fetchall()]
+            except Exception as e:
+                logger.warning(f"Column check failed, using basic columns: {e}")
+                available_columns = basic_columns
             
             # Sadece mevcut kolonları kullan
             final_columns = []
             final_values = []
             
-            for i, col in enumerate(basic_columns):
-                if col in available_columns:
-                    final_columns.append(col)
+            for i, column in enumerate(basic_columns):
+                if column in available_columns:
+                    final_columns.append(column)
                     final_values.append(basic_values[i])
             
-            # Ek kolonlar varsa ekle
-            if 'port' in available_columns:
-                final_columns.append('port')
-                final_values.append(port)
+            # Ek kolonları kontrol et ve ekle
+            extended_columns = {
+                'port': port,
+                'protocol': protocol,
+                'stream_path': stream_path,
+                'auth_type': camera_data.get('auth_type', 'basic'),
+                'quality': camera_data.get('quality', 80),
+                'audio_enabled': camera_data.get('audio_enabled', False),
+                'night_vision': camera_data.get('night_vision', False),
+                'motion_detection': camera_data.get('motion_detection', True),
+                'recording_enabled': camera_data.get('recording_enabled', True),
+                'camera_type': camera_data.get('camera_type', 'ip_camera'),
+                'connection_retries': camera_data.get('connection_retries', 3),
+                'timeout': camera_data.get('timeout', 10),
+                'created_at': 'CURRENT_TIMESTAMP',
+                'updated_at': 'CURRENT_TIMESTAMP'
+            }
             
-            if 'protocol' in available_columns:
-                final_columns.append('protocol')
-                final_values.append(protocol)
+            for column, value in extended_columns.items():
+                if column in available_columns:
+                    final_columns.append(column)
+                    if column in ['created_at', 'updated_at']:
+                        final_values.append(value)  # Raw SQL
+                    else:
+                        final_values.append(value)
             
-            if 'stream_path' in available_columns:
-                final_columns.append('stream_path')
-                final_values.append(stream_path)
+            # SQL query oluştur
+            placeholders_list = []
+            actual_values = []
             
-            if 'auth_type' in available_columns:
-                final_columns.append('auth_type')
-                final_values.append(camera_data.get('auth_type', 'basic'))
+            for i, value in enumerate(final_values):
+                if value == 'CURRENT_TIMESTAMP':
+                    placeholders_list.append('CURRENT_TIMESTAMP')
+                else:
+                    placeholders_list.append(placeholder)
+                    actual_values.append(value)
             
-            if 'camera_type' in available_columns:
-                final_columns.append('camera_type')
-                final_values.append('ip_camera')
-            
-            # INSERT query oluştur
+            placeholders_str = ', '.join(placeholders_list)
             columns_str = ', '.join(final_columns)
-            placeholders_str = ', '.join([placeholder] * len(final_columns))
             
             insert_query = f'''
-                INSERT INTO cameras ({columns_str}) 
+                INSERT INTO cameras ({columns_str})
                 VALUES ({placeholders_str})
             '''
             
-            # Kamerayı ekle
-            cursor.execute(insert_query, final_values)
+            # Execute query
+            cursor.execute(insert_query, actual_values)
             
-            # Başarı kontrolü
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                logger.info(f"✅ Camera added successfully: {camera_id}")
-                return True, camera_id
-            else:
-                conn.close()
-                logger.error("❌ Camera insert failed - no rows affected")
-                return False, "Kamera eklenirken hata oluştu"
-                
+            # Commit transaction
+            conn.commit()
+            
+            # Başarılı sonuç
+            conn.close()
+            logger.info(f"✅ Camera added successfully: {camera_id}")
+            return True, camera_id
+            
         except Exception as e:
-            logger.error(f"❌ Camera add error: {e}")
-            try:
+            logger.error(f"❌ Camera addition failed: {e}")
+            if conn:
+                conn.rollback()
                 conn.close()
-            except:
-                pass
-            return False, f"Kamera ekleme hatası: {str(e)}"
+            return False, f"Kamera eklenirken hata oluştu: {str(e)}"
     
     def get_company_cameras(self, company_id: str) -> List[Dict]:
         """Şirket kameralarını getir"""
