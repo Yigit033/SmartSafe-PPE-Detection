@@ -830,17 +830,31 @@ Mesaj:
                 
                 companies_list = []
                 for comp in companies:
-                    companies_list.append({
-                        'company_id': comp[0],
-                        'company_name': comp[1],
-                        'email': comp[2],
-                        'sector': comp[3],
-                        'max_cameras': comp[4],
-                        'created_at': comp[5],
-                        'status': comp[6],
-                        'contact_person': comp[7],
-                        'phone': comp[8]
-                    })
+                    # PostgreSQL RealDictRow için sözlük erişimi kullan
+                    if hasattr(comp, 'keys'):  # RealDictRow veya dict
+                        companies_list.append({
+                            'company_id': comp.get('company_id'),
+                            'company_name': comp.get('company_name'),
+                            'email': comp.get('email'),
+                            'sector': comp.get('sector'),
+                            'max_cameras': comp.get('max_cameras'),
+                            'created_at': str(comp.get('created_at')) if comp.get('created_at') else '',
+                            'status': comp.get('status'),
+                            'contact_person': comp.get('contact_person'),
+                            'phone': comp.get('phone')
+                        })
+                    else:  # Liste formatı (SQLite için)
+                        companies_list.append({
+                            'company_id': comp[0],
+                            'company_name': comp[1],
+                            'email': comp[2],
+                            'sector': comp[3],
+                            'max_cameras': comp[4],
+                            'created_at': str(comp[5]) if comp[5] else '',
+                            'status': comp[6],
+                            'contact_person': comp[7],
+                            'phone': comp[8]
+                        })
                 
                 conn.close()
                 return jsonify({'companies': companies_list})
@@ -867,6 +881,12 @@ Mesaj:
                 if not company:
                     return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
                 
+                # PostgreSQL RealDictRow için sözlük erişimi kullan
+                if hasattr(company, 'keys'):  # RealDictRow veya dict
+                    company_name = company.get('company_name')
+                else:  # Liste formatı (SQLite için)
+                    company_name = company[0]
+                
                 # İlgili verileri sil (CASCADE mantığı)
                 tables_to_clean = ['detections', 'violations', 'cameras', 'users', 'sessions', 'companies']
                 
@@ -876,7 +896,7 @@ Mesaj:
                 conn.commit()
                 conn.close()
                 
-                return jsonify({'success': True, 'message': f'Şirket {company[0]} silindi'})
+                return jsonify({'success': True, 'message': f'Şirket {company_name} silindi'})
                 
             except Exception as e:
                 return jsonify({'success': False, 'error': str(e)}), 500
@@ -4853,8 +4873,74 @@ Mesaj:
             <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
             <script>
                 $(document).ready(function() {
-                    $('#companiesTable').DataTable();
+                    loadCompanies();
                 });
+                
+                function loadCompanies() {
+                    fetch('/api/admin/companies')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.companies) {
+                                const tbody = document.querySelector('#companiesTable tbody');
+                                tbody.innerHTML = '';
+                                
+                                data.companies.forEach(company => {
+                                    const row = document.createElement('tr');
+                                    row.innerHTML = `
+                                        <td>${company.company_name}</td>
+                                        <td>${company.email}</td>
+                                        <td>${company.sector}</td>
+                                        <td>${company.max_cameras}</td>
+                                        <td>${company.created_at}</td>
+                                        <td>
+                                            <span class="badge bg-${company.status === 'active' ? 'success' : 'danger'}">
+                                                ${company.status}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger" onclick="deleteCompany('${company.company_id}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    `;
+                                    tbody.appendChild(row);
+                                });
+                                
+                                // Initialize DataTable after loading data
+                                $('#companiesTable').DataTable({
+                                    destroy: true, // Allow reinitialization
+                                    language: {
+                                        url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json'
+                                    }
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading companies:', error);
+                            alert('Şirketler yüklenirken hata oluştu: ' + error.message);
+                        });
+                }
+                
+                function deleteCompany(companyId) {
+                    if (confirm('Bu şirketi silmek istediğinizden emin misiniz?')) {
+                        fetch(`/api/admin/companies/${companyId}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Şirket başarıyla silindi');
+                                loadCompanies(); // Reload table
+                            } else {
+                                alert('Hata: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error deleting company:', error);
+                            alert('Silme işlemi sırasında hata oluştu');
+                        });
+                    }
+                }
             </script>
         </body>
         </html>

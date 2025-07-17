@@ -170,8 +170,40 @@ class MultiTenantDatabase:
             
             if not port_exists:
                 logger.info("🔧 Cameras tablosuna port kolonu ekleniyor...")
-                cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
-                logger.info("✅ Port kolonu eklendi")
+                try:
+                    cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
+                    logger.info("✅ Port kolonu eklendi")
+                except Exception as e:
+                    logger.error(f"❌ Port kolonu eklenirken hata: {e}")
+                    # Alternatif yöntem - tabloyu yeniden oluştur
+                    try:
+                        cursor.execute('DROP TABLE IF EXISTS cameras_backup')
+                        cursor.execute('CREATE TABLE cameras_backup AS SELECT * FROM cameras')
+                        cursor.execute('DROP TABLE cameras')
+                        cursor.execute('''
+                            CREATE TABLE cameras (
+                                camera_id TEXT PRIMARY KEY,
+                                company_id TEXT NOT NULL,
+                                camera_name TEXT NOT NULL,
+                                location TEXT NOT NULL,
+                                ip_address TEXT,
+                                port INTEGER DEFAULT 554,
+                                rtsp_url TEXT,
+                                username TEXT,
+                                password TEXT,
+                                resolution TEXT DEFAULT '1920x1080',
+                                fps INTEGER DEFAULT 25,
+                                status TEXT DEFAULT 'active',
+                                last_detection TIMESTAMP,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        ''')
+                        cursor.execute('INSERT INTO cameras SELECT *, 554 FROM cameras_backup')
+                        cursor.execute('DROP TABLE cameras_backup')
+                        logger.info("✅ Cameras tablosu port kolonu ile yeniden oluşturuldu")
+                    except Exception as e2:
+                        logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
             
             # Updated_at kolonu kontrolü
             cursor.execute("""
@@ -821,12 +853,33 @@ class MultiTenantDatabase:
             
             detection_stats = cursor.fetchone()
             
+            # PostgreSQL RealDictRow için sözlük erişimi kullan
+            if detection_stats:
+                if hasattr(detection_stats, 'keys'):  # RealDictRow veya dict
+                    total_detections = detection_stats.get('total_detections') or 0
+                    total_people = detection_stats.get('total_people') or 0
+                    compliant_people = detection_stats.get('compliant_people') or 0
+                    violation_people = detection_stats.get('violation_people') or 0
+                    avg_compliance_rate = detection_stats.get('avg_compliance_rate') or 0
+                else:  # Liste formatı (SQLite için)
+                    total_detections = detection_stats[0] or 0
+                    total_people = detection_stats[1] or 0
+                    compliant_people = detection_stats[2] or 0
+                    violation_people = detection_stats[3] or 0
+                    avg_compliance_rate = detection_stats[4] or 0
+            else:
+                total_detections = total_people = compliant_people = violation_people = avg_compliance_rate = 0
+            
             # Aktif kamera sayısı
             cursor.execute(f'''
                 SELECT COUNT(*) FROM cameras WHERE company_id = {placeholder} AND status = 'active'
             ''', (company_id,))
             
-            active_cameras = cursor.fetchone()[0]
+            active_cameras_result = cursor.fetchone()
+            if hasattr(active_cameras_result, 'keys'):  # RealDictRow
+                active_cameras = active_cameras_result.get('count') or active_cameras_result[0] or 0
+            else:  # Liste formatı
+                active_cameras = active_cameras_result[0] or 0
             
             # Bugünkü ihlal sayısı
             if self.db_adapter.db_type == 'postgresql':
@@ -840,7 +893,11 @@ class MultiTenantDatabase:
                     WHERE company_id = {placeholder} AND date(timestamp) = date('now')
                 ''', (company_id,))
             
-            today_violations = cursor.fetchone()[0]
+            today_violations_result = cursor.fetchone()
+            if hasattr(today_violations_result, 'keys'):  # RealDictRow
+                today_violations = today_violations_result.get('count') or today_violations_result[0] or 0
+            else:  # Liste formatı
+                today_violations = today_violations_result[0] or 0
             
             # Dünkü istatistikler (trend hesaplama için)
             if self.db_adapter.db_type == 'postgresql':
@@ -854,7 +911,11 @@ class MultiTenantDatabase:
                     WHERE company_id = {placeholder} AND date(timestamp) = date('now', '-1 day')
                 ''', (company_id,))
             
-            yesterday_violations = cursor.fetchone()[0] or 0
+            yesterday_violations_result = cursor.fetchone()
+            if hasattr(yesterday_violations_result, 'keys'):  # RealDictRow
+                yesterday_violations = yesterday_violations_result.get('count') or yesterday_violations_result[0] or 0
+            else:  # Liste formatı
+                yesterday_violations = yesterday_violations_result[0] or 0
             
             # Geçen haftaki kamera sayısı
             if self.db_adapter.db_type == 'postgresql':
@@ -868,7 +929,11 @@ class MultiTenantDatabase:
                     WHERE company_id = {placeholder} AND created_at < date('now', '-7 days')
                 ''', (company_id,))
             
-            last_week_cameras = cursor.fetchone()[0] or 0
+            last_week_cameras_result = cursor.fetchone()
+            if hasattr(last_week_cameras_result, 'keys'):  # RealDictRow
+                last_week_cameras = last_week_cameras_result.get('count') or last_week_cameras_result[0] or 0
+            else:  # Liste formatı
+                last_week_cameras = last_week_cameras_result[0] or 0
             
             # Compliance trend (son 7 günün ortalaması)
             if self.db_adapter.db_type == 'postgresql':
@@ -884,7 +949,11 @@ class MultiTenantDatabase:
                     WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-7 days')
                 ''', (company_id,))
             
-            week_compliance = cursor.fetchone()[0] or 0
+            week_compliance_result = cursor.fetchone()
+            if hasattr(week_compliance_result, 'keys'):  # RealDictRow
+                week_compliance = week_compliance_result.get('avg') or week_compliance_result[0] or 0
+            else:  # Liste formatı
+                week_compliance = week_compliance_result[0] or 0
             
             # Aktif çalışan sayısı (bugün tespit edilen unique kişi sayısı)
             if self.db_adapter.db_type == 'postgresql':
@@ -900,7 +969,11 @@ class MultiTenantDatabase:
                     WHERE company_id = {placeholder} AND date(timestamp) = date('now')
                 ''', (company_id,))
             
-            active_workers = cursor.fetchone()[0] or 0
+            active_workers_result = cursor.fetchone()
+            if hasattr(active_workers_result, 'keys'):  # RealDictRow
+                active_workers = active_workers_result.get('count') or active_workers_result[0] or 0
+            else:  # Liste formatı
+                active_workers = active_workers_result[0] or 0
             
             # Aylık ihlal sayısı
             if self.db_adapter.db_type == 'postgresql':
@@ -914,22 +987,25 @@ class MultiTenantDatabase:
                     WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-30 days')
                 ''', (company_id,))
             
-            monthly_violations = cursor.fetchone()[0] or 0
+            monthly_violations_result = cursor.fetchone()
+            if hasattr(monthly_violations_result, 'keys'):  # RealDictRow
+                monthly_violations = monthly_violations_result.get('count') or monthly_violations_result[0] or 0
+            else:  # Liste formatı
+                monthly_violations = monthly_violations_result[0] or 0
             
             conn.close()
             
             # Trend hesaplamaları
             cameras_trend = active_cameras - last_week_cameras
             violations_trend = today_violations - yesterday_violations
-            current_compliance = detection_stats[4] or 0
-            compliance_trend = current_compliance - week_compliance if week_compliance > 0 else 0
+            compliance_trend = avg_compliance_rate - week_compliance if week_compliance > 0 else 0
             
             return {
-                'total_detections': detection_stats[0] or 0,
-                'total_people': detection_stats[1] or 0,
-                'compliant_people': detection_stats[2] or 0,
-                'violation_people': detection_stats[3] or 0,
-                'compliance_rate': current_compliance,
+                'total_detections': total_detections,
+                'total_people': total_people,
+                'compliant_people': compliant_people,
+                'violation_people': violation_people,
+                'compliance_rate': avg_compliance_rate,
                 'active_cameras': active_cameras,
                 'today_violations': today_violations,
                 'active_workers': active_workers,
