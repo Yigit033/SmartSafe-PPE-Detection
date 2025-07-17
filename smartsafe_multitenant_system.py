@@ -93,6 +93,11 @@ class MultiTenantDatabase:
         else:
             return '?'
     
+    def hash_password(self, password: str) -> str:
+        """Hash password using bcrypt"""
+        import bcrypt
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
     def init_database(self):
         """Multi-tenant veritabanı tablolarını oluştur"""
         try:
@@ -767,23 +772,60 @@ class MultiTenantDatabase:
             # Yeni kamera ID'si oluştur
             camera_id = str(uuid.uuid4())
             
-            # Kamerayı ekle
+            # Gerçek kamera için RTSP URL oluştur
+            rtsp_url = camera_data.get('rtsp_url', '')
+            if not rtsp_url:
+                ip_address = camera_data.get('ip_address', '')
+                port = camera_data.get('port', 8080)
+                protocol = camera_data.get('protocol', 'http')
+                stream_path = camera_data.get('stream_path', '/video')
+                username = camera_data.get('username', '')
+                password = camera_data.get('password', '')
+                
+                if protocol == 'rtsp':
+                    if username and password:
+                        rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{stream_path}"
+                    else:
+                        rtsp_url = f"rtsp://{ip_address}:{port}{stream_path}"
+                else:
+                    rtsp_url = f"http://{ip_address}:{port}{stream_path}"
+            
+            # Çözünürlük formatı
+            resolution = camera_data.get('resolution', '1920x1080')
+            if camera_data.get('width') and camera_data.get('height'):
+                resolution = f"{camera_data.get('width')}x{camera_data.get('height')}"
+            
+            # Kamerayı ekle - Enhanced real camera support
             cursor.execute(f'''
                 INSERT INTO cameras (
                     camera_id, company_id, camera_name, location, ip_address, port,
-                    rtsp_url, username, password, resolution, fps, status
-                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                    rtsp_url, username, password, protocol, stream_path, auth_type,
+                    resolution, fps, quality, audio_enabled, night_vision, 
+                    motion_detection, recording_enabled, camera_type, status
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 
+                         {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
+                         {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 
+                         {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 camera_id, company_id, 
-                camera_data.get('camera_name'),
+                camera_data.get('name', camera_data.get('camera_name', 'Real Camera')),
                 camera_data.get('location', 'Genel'),
                 camera_data.get('ip_address', ''),
-                camera_data.get('port', 554),
-                camera_data.get('rtsp_url', ''),
+                camera_data.get('port', 8080),
+                rtsp_url,
                 camera_data.get('username', ''),
                 camera_data.get('password', ''),
-                camera_data.get('resolution', '1920x1080'),
+                camera_data.get('protocol', 'http'),
+                camera_data.get('stream_path', '/video'),
+                camera_data.get('auth_type', 'basic'),
+                resolution,
                 camera_data.get('fps', 25),
+                camera_data.get('quality', 80),
+                camera_data.get('audio_enabled', False),
+                camera_data.get('night_vision', False),
+                camera_data.get('motion_detection', True),
+                camera_data.get('recording_enabled', True),
+                'real_camera',
                 'active'
             ))
             
@@ -801,10 +843,10 @@ class MultiTenantDatabase:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Tüm kamera bilgilerini çek
+            # Tüm kamera bilgilerini çek (port kolonu olmadan)
             placeholder = self.get_placeholder()
             cursor.execute(f'''
-                SELECT camera_id, camera_name, location, ip_address, port, rtsp_url, 
+                SELECT camera_id, camera_name, location, ip_address, rtsp_url, 
                        username, password, resolution, fps, status, last_detection,
                        created_at, updated_at
                 FROM cameras
@@ -813,22 +855,41 @@ class MultiTenantDatabase:
             
             cameras = []
             for row in cursor.fetchall():
-                camera = {
-                    'id': row[0],  # Frontend için id olarak döndür
-                    'name': row[1],  # Frontend için name olarak döndür
-                    'location': row[2],
-                    'ip_address': row[3],
-                    'port': row[4] if row[4] else 554,
-                    'rtsp_url': row[5],
-                    'username': row[6],
-                    'password': row[7],
-                    'resolution': row[8],
-                    'fps': row[9],
-                    'status': row[10],
-                    'last_detection': row[11],
-                    'created_at': row[12],
-                    'updated_at': row[13]
-                }
+                # PostgreSQL RealDictRow için sözlük erişimi kullan
+                if hasattr(row, 'keys'):  # RealDictRow veya dict
+                    camera = {
+                        'id': row.get('camera_id'),
+                        'name': row.get('camera_name'),
+                        'location': row.get('location'),
+                        'ip_address': row.get('ip_address'),
+                        'port': 554,  # Default port
+                        'rtsp_url': row.get('rtsp_url'),
+                        'username': row.get('username'),
+                        'password': row.get('password'),
+                        'resolution': row.get('resolution'),
+                        'fps': row.get('fps'),
+                        'status': row.get('status'),
+                        'last_detection': str(row.get('last_detection')) if row.get('last_detection') else '',
+                        'created_at': str(row.get('created_at')) if row.get('created_at') else '',
+                        'updated_at': str(row.get('updated_at')) if row.get('updated_at') else ''
+                    }
+                else:  # Liste formatı (SQLite için)
+                    camera = {
+                        'id': row[0],
+                        'name': row[1],
+                        'location': row[2],
+                        'ip_address': row[3],
+                        'port': 554,  # Default port
+                        'rtsp_url': row[4],
+                        'username': row[5],
+                        'password': row[6],
+                        'resolution': row[7],
+                        'fps': row[8],
+                        'status': row[9],
+                        'last_detection': str(row[10]) if row[10] else '',
+                        'created_at': str(row[11]) if row[11] else '',
+                        'updated_at': str(row[12]) if row[12] else ''
+                    }
                 cameras.append(camera)
             
             conn.close()
@@ -915,9 +976,10 @@ class MultiTenantDatabase:
             
             active_cameras_result = cursor.fetchone()
             if hasattr(active_cameras_result, 'keys'):  # RealDictRow
-                active_cameras = active_cameras_result.get('count') or active_cameras_result[0] or 0
+                # PostgreSQL'de COUNT(*) sonucu 'count' değil, doğrudan değer döner
+                active_cameras = list(active_cameras_result.values())[0] if active_cameras_result else 0
             else:  # Liste formatı
-                active_cameras = active_cameras_result[0] or 0
+                active_cameras = active_cameras_result[0] if active_cameras_result else 0
             
             # Bugünkü ihlal sayısı
             if self.db_adapter.db_type == 'postgresql':
@@ -933,9 +995,9 @@ class MultiTenantDatabase:
             
             today_violations_result = cursor.fetchone()
             if hasattr(today_violations_result, 'keys'):  # RealDictRow
-                today_violations = today_violations_result.get('count') or today_violations_result[0] or 0
+                today_violations = list(today_violations_result.values())[0] if today_violations_result else 0
             else:  # Liste formatı
-                today_violations = today_violations_result[0] or 0
+                today_violations = today_violations_result[0] if today_violations_result else 0
             
             # Dünkü istatistikler (trend hesaplama için)
             if self.db_adapter.db_type == 'postgresql':
@@ -951,9 +1013,9 @@ class MultiTenantDatabase:
             
             yesterday_violations_result = cursor.fetchone()
             if hasattr(yesterday_violations_result, 'keys'):  # RealDictRow
-                yesterday_violations = yesterday_violations_result.get('count') or yesterday_violations_result[0] or 0
+                yesterday_violations = list(yesterday_violations_result.values())[0] if yesterday_violations_result else 0
             else:  # Liste formatı
-                yesterday_violations = yesterday_violations_result[0] or 0
+                yesterday_violations = yesterday_violations_result[0] if yesterday_violations_result else 0
             
             # Geçen haftaki kamera sayısı
             if self.db_adapter.db_type == 'postgresql':
@@ -969,9 +1031,9 @@ class MultiTenantDatabase:
             
             last_week_cameras_result = cursor.fetchone()
             if hasattr(last_week_cameras_result, 'keys'):  # RealDictRow
-                last_week_cameras = last_week_cameras_result.get('count') or last_week_cameras_result[0] or 0
+                last_week_cameras = list(last_week_cameras_result.values())[0] if last_week_cameras_result else 0
             else:  # Liste formatı
-                last_week_cameras = last_week_cameras_result[0] or 0
+                last_week_cameras = last_week_cameras_result[0] if last_week_cameras_result else 0
             
             # Compliance trend (son 7 günün ortalaması)
             if self.db_adapter.db_type == 'postgresql':
@@ -989,9 +1051,9 @@ class MultiTenantDatabase:
             
             week_compliance_result = cursor.fetchone()
             if hasattr(week_compliance_result, 'keys'):  # RealDictRow
-                week_compliance = week_compliance_result.get('avg') or week_compliance_result[0] or 0
+                week_compliance = list(week_compliance_result.values())[0] if week_compliance_result else 0
             else:  # Liste formatı
-                week_compliance = week_compliance_result[0] or 0
+                week_compliance = week_compliance_result[0] if week_compliance_result else 0
             
             # Aktif çalışan sayısı (bugün tespit edilen unique kişi sayısı)
             if self.db_adapter.db_type == 'postgresql':
@@ -1009,9 +1071,9 @@ class MultiTenantDatabase:
             
             active_workers_result = cursor.fetchone()
             if hasattr(active_workers_result, 'keys'):  # RealDictRow
-                active_workers = active_workers_result.get('count') or active_workers_result[0] or 0
+                active_workers = list(active_workers_result.values())[0] if active_workers_result else 0
             else:  # Liste formatı
-                active_workers = active_workers_result[0] or 0
+                active_workers = active_workers_result[0] if active_workers_result else 0
             
             # Aylık ihlal sayısı
             if self.db_adapter.db_type == 'postgresql':
@@ -1027,9 +1089,9 @@ class MultiTenantDatabase:
             
             monthly_violations_result = cursor.fetchone()
             if hasattr(monthly_violations_result, 'keys'):  # RealDictRow
-                monthly_violations = monthly_violations_result.get('count') or monthly_violations_result[0] or 0
+                monthly_violations = list(monthly_violations_result.values())[0] if monthly_violations_result else 0
             else:  # Liste formatı
-                monthly_violations = monthly_violations_result[0] or 0
+                monthly_violations = monthly_violations_result[0] if monthly_violations_result else 0
             
             conn.close()
             

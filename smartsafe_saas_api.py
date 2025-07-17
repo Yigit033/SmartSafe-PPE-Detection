@@ -1085,7 +1085,7 @@ Mesaj:
                 
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 cursor.execute(f"""
-                    SELECT user_id, email, contact_person, role, status, created_at, last_login
+                    SELECT user_id, email, username, role, status, created_at, last_login
                     FROM users 
                     WHERE company_id = {placeholder}
                     ORDER BY created_at DESC
@@ -1093,15 +1093,27 @@ Mesaj:
                 
                 users = []
                 for row in cursor.fetchall():
-                    users.append({
-                        'user_id': row[0],
-                        'email': row[1],
-                        'contact_person': row[2],
-                        'role': row[3] if row[3] else 'admin',
-                        'status': row[4] if row[4] else 'active',
-                        'created_at': row[5],
-                        'last_login': row[6]
-                    })
+                    # PostgreSQL RealDictRow için sözlük erişimi kullan
+                    if hasattr(row, 'keys'):  # RealDictRow veya dict
+                        users.append({
+                            'user_id': row.get('user_id'),
+                            'email': row.get('email'),
+                            'username': row.get('username'),
+                            'role': row.get('role') or 'admin',
+                            'status': row.get('status'),
+                            'created_at': str(row.get('created_at')) if row.get('created_at') else '',
+                            'last_login': str(row.get('last_login')) if row.get('last_login') else ''
+                        })
+                    else:  # Liste formatı (SQLite için)
+                        users.append({
+                            'user_id': row[0],
+                            'email': row[1],
+                            'username': row[2],
+                            'role': row[3] if row[3] else 'admin',
+                            'status': row[4] if row[4] else 'active',
+                            'created_at': str(row[5]) if row[5] else '',
+                            'last_login': str(row[6]) if row[6] else ''
+                        })
                 
                 conn.close()
                 return jsonify({'success': True, 'users': users})
@@ -1410,75 +1422,65 @@ Mesaj:
         
         @self.app.route('/api/company/<company_id>/cameras/test', methods=['POST'])
         def test_camera(company_id):
-            """Kamera bağlantı testi - Profesyonel kamera yöneticisi ile"""
+            """Gerçek kamera bağlantı testi - Enhanced real camera support"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 data = request.get_json()
-                rtsp_url = data.get('rtsp_url', '')
-                camera_name = data.get('name', 'Test Camera')
+                logger.info(f"🔍 Testing real camera connection for company {company_id}")
                 
-                # Enterprise kamera yöneticisini kullan
-                if self.enterprise_enabled and hasattr(self, 'camera_manager'):
-                    # Enterprise Camera Manager kullan
-                    camera_manager = self.camera_manager
-                    
-                    # Kamera konfigürasyonu oluştur
-                    if rtsp_url.startswith('http://') and ':8080' in rtsp_url:
-                        # IP Webcam
-                        ip = rtsp_url.split('//')[1].split(':')[0]
-                        camera_config = camera_manager.create_ip_webcam_config(camera_name, ip, 8080)
-                    elif rtsp_url.startswith('rtsp://'):
-                        # RTSP Camera
-                        from camera_integration_manager import CameraSource
-                        camera_config = CameraSource(
-                            camera_id=f"TEST_{int(time.time())}",
-                            name=camera_name,
-                            source_type='rtsp',
-                            connection_url=rtsp_url,
-                            resolution=(1280, 720),
-                            fps=25
-                        )
-                    else:
-                        # Local camera
-                        camera_index = int(rtsp_url) if rtsp_url.isdigit() else 0
-                        camera_config = camera_manager.create_local_camera_config(camera_name, camera_index)
-                    
-                    # Enterprise test yap
-                    test_result = camera_manager.test_camera_connection(camera_config)
-                    
-                    # Performance monitoring
-                    if hasattr(self, 'performance_optimizer'):
-                        self.performance_optimizer.record_camera_test(camera_config.camera_id, test_result)
+                # Gerçek kamera yapılandırması oluştur
+                from camera_integration_manager import RealCameraManager, RealCameraConfig
                 
-                else:
-                    # Fallback: Basit test
-                    test_result = self._basic_camera_test(rtsp_url, camera_name)
+                real_camera_manager = RealCameraManager()
+                camera_config = real_camera_manager.create_real_camera_from_form(data)
+                
+                # Gerçek kamera testi yap
+                test_result = real_camera_manager.test_real_camera_connection(camera_config)
                 
                 # API response formatına dönüştür
-                api_response = {
-                    'success': test_result['connection_status'] == 'connected',
-                    'test_results': {
-                        'connection_status': 'success' if test_result['connection_status'] == 'connected' else 'failed',
-                        'response_time': f"{test_result.get('response_time_ms', 0):.0f}ms",
-                        'resolution': test_result.get('resolution_detected', 'Bilinmiyor'),
-                        'fps': test_result.get('fps_detected', 0),
-                        'codec': 'H.264',
-                        'source_type': test_result.get('source_type', 'unknown'),
-                        'features': test_result.get('features', {}),
-                        'error_message': test_result.get('error_message', ''),
-                        'test_duration': f"{test_result.get('response_time_ms', 0)/1000:.1f} saniye"
-                    },
-                    'message': 'Kamera bağlantısı başarılı' if test_result['connection_status'] == 'connected' else f"Kamera bağlantısı başarısız: {test_result.get('error_message', 'Bilinmeyen hata')}"
-                }
+                if test_result['success']:
+                    api_response = {
+                        'success': True,
+                        'connection_time': test_result['connection_time'],
+                        'stream_quality': test_result['stream_quality'],
+                        'supported_features': test_result['supported_features'],
+                        'camera_info': test_result['camera_info'],
+                        'test_results': {
+                            'connection_status': 'success',
+                            'response_time': f"{test_result['connection_time']*1000:.0f}ms",
+                            'resolution': test_result['stream_quality'].get('resolution', 'Bilinmiyor'),
+                            'fps': test_result['stream_quality'].get('fps', 0),
+                            'quality': test_result['stream_quality'].get('quality', 'unknown'),
+                            'supported_features': test_result['supported_features'],
+                            'test_duration': f"{test_result['connection_time']:.1f} saniye"
+                        },
+                        'message': f'Kamera bağlantısı başarılı! ({test_result["connection_time"]:.1f}s)'
+                    }
+                else:
+                    api_response = {
+                        'success': False,
+                        'error': test_result['error'],
+                        'test_results': {
+                            'connection_status': 'failed',
+                            'error_message': test_result['error'],
+                            'test_duration': '0 saniye'
+                        },
+                        'message': f'Kamera bağlantısı başarısız: {test_result["error"]}'
+                    }
                 
+                logger.info(f"✅ Camera test completed for {camera_config.name}: {test_result['success']}")
                 return jsonify(api_response)
                 
             except Exception as e:
-                print(f"❌ Camera test error: {str(e)}")
-                return jsonify({'success': False, 'error': str(e)}), 500
+                logger.error(f"❌ Real camera test error: {e}")
+                return jsonify({
+                    'success': False, 
+                    'error': str(e),
+                    'message': f'Kamera testi sırasında hata: {str(e)}'
+                }), 500
         
         @self.app.route('/api/company/<company_id>/cameras/groups', methods=['GET'])
         def get_camera_groups(company_id):

@@ -155,7 +155,7 @@ class DatabaseAdapter:
                 )
             ''')
             
-            # Cameras table
+            # Cameras table - Enhanced for real camera support
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS cameras (
                     camera_id TEXT PRIMARY KEY,
@@ -163,14 +163,26 @@ class DatabaseAdapter:
                     camera_name TEXT NOT NULL,
                     location TEXT NOT NULL,
                     ip_address TEXT,
-                    port INTEGER DEFAULT 554,
+                    port INTEGER DEFAULT 8080,
                     rtsp_url TEXT,
                     username TEXT,
                     password TEXT,
+                    protocol TEXT DEFAULT 'http',
+                    stream_path TEXT DEFAULT '/video',
+                    auth_type TEXT DEFAULT 'basic',
                     resolution TEXT DEFAULT '1920x1080',
                     fps INTEGER DEFAULT 25,
+                    quality INTEGER DEFAULT 80,
+                    audio_enabled BOOLEAN DEFAULT FALSE,
+                    night_vision BOOLEAN DEFAULT FALSE,
+                    motion_detection BOOLEAN DEFAULT TRUE,
+                    recording_enabled BOOLEAN DEFAULT TRUE,
+                    camera_type TEXT DEFAULT 'ip_camera',
                     status TEXT DEFAULT 'active',
                     last_detection TIMESTAMP,
+                    last_test_time TIMESTAMP,
+                    connection_retries INTEGER DEFAULT 3,
+                    timeout INTEGER DEFAULT 10,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (company_id) REFERENCES companies (company_id),
@@ -267,6 +279,33 @@ class DatabaseAdapter:
         finally:
             if conn:
                 conn.close()
+    
+    def execute_query(self, query: str, params: tuple = None, fetch_all: bool = True):
+        """Execute a query with optional parameters"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            if query.strip().upper().startswith('SELECT'):
+                if fetch_all:
+                    result = cursor.fetchall()
+                else:
+                    result = cursor.fetchone()
+            else:
+                conn.commit()
+                result = cursor.rowcount
+            
+            conn.close()
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Query execution error: {e}")
+            raise
 
 # Global database adapter instance
 db_adapter = DatabaseAdapter()

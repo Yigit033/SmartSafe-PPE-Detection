@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SmartSafe AI - Professional Camera Integration Manager
-Enterprise-grade camera management with IP Webcam, RTSP, and local camera support
+Enterprise-grade camera management with IP Webcam, RTSP, and real camera support
 """
 
 import cv2
@@ -16,17 +16,64 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
+import base64
+from urllib.parse import urlparse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
+class RealCameraConfig:
+    """Real camera configuration based on actual camera settings"""
+    camera_id: str
+    name: str
+    ip_address: str
+    port: int = 8080
+    username: str = ""
+    password: str = ""
+    protocol: str = "http"  # http, rtsp, onvif
+    stream_path: str = "/video"
+    auth_type: str = "basic"  # basic, digest, none
+    resolution: Tuple[int, int] = (1920, 1080)
+    fps: int = 25
+    quality: int = 80
+    audio_enabled: bool = False
+    night_vision: bool = False
+    motion_detection: bool = True
+    recording_enabled: bool = True
+    status: str = "inactive"  # active, inactive, error, testing
+    last_test_time: Optional[datetime] = None
+    connection_retries: int = 3
+    timeout: int = 10
+    
+    def get_stream_url(self) -> str:
+        """Generate stream URL based on configuration"""
+        if self.protocol == "rtsp":
+            if self.username and self.password:
+                return f"rtsp://{self.username}:{self.password}@{self.ip_address}:{self.port}{self.stream_path}"
+            else:
+                return f"rtsp://{self.ip_address}:{self.port}{self.stream_path}"
+        else:  # HTTP
+            return f"http://{self.ip_address}:{self.port}{self.stream_path}"
+    
+    def get_mjpeg_url(self) -> str:
+        """Generate MJPEG snapshot URL"""
+        return f"http://{self.ip_address}:{self.port}/shot.jpg"
+    
+    def get_auth_header(self) -> Dict[str, str]:
+        """Generate authentication header"""
+        if self.auth_type == "basic" and self.username and self.password:
+            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+            return {"Authorization": f"Basic {credentials}"}
+        return {}
+
+@dataclass
 class CameraSource:
     """Professional camera source configuration"""
     camera_id: str
     name: str
-    source_type: str  # 'ip_webcam', 'rtsp', 'local', 'usb'
+    source_type: str  # 'real_camera', 'ip_webcam', 'rtsp', 'local', 'usb'
     connection_url: str
     backup_url: Optional[str] = None
     username: Optional[str] = None
@@ -38,6 +85,288 @@ class CameraSource:
     enabled: bool = True
     last_connection_test: Optional[datetime] = None
     connection_status: str = "unknown"  # unknown, connected, failed, testing
+
+class RealCameraManager:
+    """Enhanced real camera management system"""
+    
+    def __init__(self):
+        self.real_cameras: Dict[str, RealCameraConfig] = {}
+        self.active_streams: Dict[str, cv2.VideoCapture] = {}
+        self.connection_threads: Dict[str, threading.Thread] = {}
+        self.frame_buffers: Dict[str, np.ndarray] = {}
+        self.last_frames: Dict[str, datetime] = {}
+        
+        # Performance tracking
+        self.fps_counters: Dict[str, List[float]] = {}
+        self.connection_stats: Dict[str, Dict] = {}
+        
+        logger.info("🎥 Real Camera Manager initialized")
+    
+    def add_real_camera(self, camera_config: RealCameraConfig) -> Tuple[bool, str]:
+        """Add a real camera to the system"""
+        try:
+            # Test connection first
+            test_result = self.test_real_camera_connection(camera_config)
+            
+            if test_result['success']:
+                self.real_cameras[camera_config.camera_id] = camera_config
+                camera_config.status = "active"
+                camera_config.last_test_time = datetime.now()
+                
+                logger.info(f"✅ Real camera added successfully: {camera_config.name}")
+                return True, "Camera added successfully"
+            else:
+                logger.error(f"❌ Failed to add camera: {test_result['error']}")
+                return False, test_result['error']
+                
+        except Exception as e:
+            logger.error(f"❌ Error adding real camera: {e}")
+            return False, str(e)
+    
+    def test_real_camera_connection(self, camera_config: RealCameraConfig) -> Dict[str, Any]:
+        """Test real camera connection with comprehensive checks"""
+        logger.info(f"🔍 Testing real camera connection: {camera_config.name}")
+        
+        result = {
+            'success': False,
+            'error': '',
+            'connection_time': 0,
+            'stream_quality': 'unknown',
+            'supported_features': [],
+            'camera_info': {}
+        }
+        
+        start_time = time.time()
+        
+        try:
+            # 1. Basic connectivity test
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(camera_config.timeout)
+            
+            connection_result = sock.connect_ex((camera_config.ip_address, camera_config.port))
+            sock.close()
+            
+            if connection_result != 0:
+                result['error'] = f"Cannot connect to {camera_config.ip_address}:{camera_config.port}"
+                return result
+            
+            # 2. HTTP/RTSP stream test
+            if camera_config.protocol == "rtsp":
+                stream_test = self._test_rtsp_stream(camera_config)
+            else:
+                stream_test = self._test_http_stream(camera_config)
+            
+            if not stream_test['success']:
+                result['error'] = stream_test['error']
+                return result
+            
+            # 3. Authentication test
+            if camera_config.username and camera_config.password:
+                auth_test = self._test_camera_authentication(camera_config)
+                if not auth_test['success']:
+                    result['error'] = f"Authentication failed: {auth_test['error']}"
+                    return result
+            
+            # 4. Feature detection
+            features = self._detect_camera_features(camera_config)
+            result['supported_features'] = features
+            
+            # 5. Quality assessment
+            quality_info = self._assess_stream_quality(camera_config)
+            result['stream_quality'] = quality_info
+            
+            result['connection_time'] = time.time() - start_time
+            result['success'] = True
+            
+            logger.info(f"✅ Camera connection test passed: {camera_config.name}")
+            return result
+            
+        except Exception as e:
+            result['error'] = str(e)
+            logger.error(f"❌ Camera connection test failed: {e}")
+            return result
+    
+    def _test_http_stream(self, camera_config: RealCameraConfig) -> Dict[str, Any]:
+        """Test HTTP stream connection"""
+        try:
+            stream_url = camera_config.get_stream_url()
+            headers = camera_config.get_auth_header()
+            
+            # Test MJPEG snapshot first
+            mjpeg_url = camera_config.get_mjpeg_url()
+            response = requests.get(mjpeg_url, headers=headers, timeout=camera_config.timeout)
+            
+            if response.status_code == 200:
+                # Try to open video stream
+                cap = cv2.VideoCapture(stream_url)
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    cap.release()
+                    
+                    if ret and frame is not None:
+                        return {'success': True, 'frame_size': frame.shape}
+                    else:
+                        return {'success': False, 'error': 'No frame received'}
+                else:
+                    return {'success': False, 'error': 'Cannot open video stream'}
+            else:
+                return {'success': False, 'error': f'HTTP {response.status_code}'}
+                
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _test_rtsp_stream(self, camera_config: RealCameraConfig) -> Dict[str, Any]:
+        """Test RTSP stream connection"""
+        try:
+            stream_url = camera_config.get_stream_url()
+            
+            cap = cv2.VideoCapture(stream_url)
+            if cap.isOpened():
+                # Set timeout
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                
+                ret, frame = cap.read()
+                cap.release()
+                
+                if ret and frame is not None:
+                    return {'success': True, 'frame_size': frame.shape}
+                else:
+                    return {'success': False, 'error': 'No frame received from RTSP'}
+            else:
+                return {'success': False, 'error': 'Cannot open RTSP stream'}
+                
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _test_camera_authentication(self, camera_config: RealCameraConfig) -> Dict[str, Any]:
+        """Test camera authentication"""
+        try:
+            test_url = f"http://{camera_config.ip_address}:{camera_config.port}/status"
+            headers = camera_config.get_auth_header()
+            
+            response = requests.get(test_url, headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                return {'success': True}
+            elif response.status_code == 401:
+                return {'success': False, 'error': 'Invalid credentials'}
+            else:
+                return {'success': False, 'error': f'HTTP {response.status_code}'}
+                
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _detect_camera_features(self, camera_config: RealCameraConfig) -> List[str]:
+        """Detect available camera features"""
+        features = []
+        
+        try:
+            # Test common endpoints
+            base_url = f"http://{camera_config.ip_address}:{camera_config.port}"
+            headers = camera_config.get_auth_header()
+            
+            # Common feature endpoints
+            feature_endpoints = {
+                'ptz': '/ptz',
+                'zoom': '/zoom',
+                'focus': '/focus',
+                'night_vision': '/night_vision',
+                'motion_detection': '/motion',
+                'audio': '/audio',
+                'recording': '/recording'
+            }
+            
+            for feature, endpoint in feature_endpoints.items():
+                try:
+                    response = requests.get(f"{base_url}{endpoint}", headers=headers, timeout=2)
+                    if response.status_code == 200:
+                        features.append(feature)
+                except:
+                    pass
+                    
+        except Exception as e:
+            logger.debug(f"Feature detection error: {e}")
+        
+        return features
+    
+    def _assess_stream_quality(self, camera_config: RealCameraConfig) -> Dict[str, Any]:
+        """Assess stream quality"""
+        try:
+            stream_url = camera_config.get_stream_url()
+            cap = cv2.VideoCapture(stream_url)
+            
+            if cap.isOpened():
+                # Get actual resolution
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                
+                cap.release()
+                
+                return {
+                    'resolution': f"{width}x{height}",
+                    'fps': fps,
+                    'quality': 'good' if width >= 1280 else 'medium'
+                }
+            else:
+                return {'quality': 'unknown', 'error': 'Cannot open stream'}
+                
+        except Exception as e:
+            return {'quality': 'unknown', 'error': str(e)}
+    
+    def get_real_camera_status(self, camera_id: str) -> Dict[str, Any]:
+        """Get comprehensive real camera status"""
+        if camera_id not in self.real_cameras:
+            return {'status': 'not_found'}
+        
+        camera = self.real_cameras[camera_id]
+        
+        return {
+            'camera_id': camera_id,
+            'name': camera.name,
+            'ip_address': camera.ip_address,
+            'port': camera.port,
+            'protocol': camera.protocol,
+            'status': camera.status,
+            'resolution': f"{camera.resolution[0]}x{camera.resolution[1]}",
+            'fps': camera.fps,
+            'quality': camera.quality,
+            'audio_enabled': camera.audio_enabled,
+            'night_vision': camera.night_vision,
+            'motion_detection': camera.motion_detection,
+            'recording_enabled': camera.recording_enabled,
+            'last_test_time': camera.last_test_time,
+            'stream_url': camera.get_stream_url(),
+            'mjpeg_url': camera.get_mjpeg_url()
+        }
+    
+    def create_real_camera_from_form(self, form_data: Dict[str, Any]) -> RealCameraConfig:
+        """Create real camera configuration from form data"""
+        import uuid
+        
+        camera_id = form_data.get('camera_id', str(uuid.uuid4()))
+        
+        return RealCameraConfig(
+            camera_id=camera_id,
+            name=form_data.get('name', 'Real Camera'),
+            ip_address=form_data.get('ip_address', '192.168.1.100'),
+            port=int(form_data.get('port', 8080)),
+            username=form_data.get('username', ''),
+            password=form_data.get('password', ''),
+            protocol=form_data.get('protocol', 'http'),
+            stream_path=form_data.get('stream_path', '/video'),
+            auth_type=form_data.get('auth_type', 'basic'),
+            resolution=(
+                int(form_data.get('width', 1920)),
+                int(form_data.get('height', 1080))
+            ),
+            fps=int(form_data.get('fps', 25)),
+            quality=int(form_data.get('quality', 80)),
+            audio_enabled=form_data.get('audio_enabled', False),
+            night_vision=form_data.get('night_vision', False),
+            motion_detection=form_data.get('motion_detection', True),
+            recording_enabled=form_data.get('recording_enabled', True)
+        )
 
 class ProfessionalCameraManager:
     """Enterprise-grade camera management system"""
