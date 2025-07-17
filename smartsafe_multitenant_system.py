@@ -682,22 +682,35 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             placeholder = self.get_placeholder()
-            cursor.execute(f'''
-                SELECT s.user_id, s.company_id, u.username, u.email, u.role, 
-                       u.permissions, c.company_name
-                FROM sessions s
-                JOIN users u ON s.user_id = u.user_id
-                JOIN companies c ON s.company_id = c.company_id
-                WHERE s.session_id = {placeholder} AND s.expires_at > CURRENT_TIMESTAMP 
-                      AND s.status = 'active' AND u.status = 'active' AND c.status = 'active'
-            ''', (session_id,))
+            
+            # SQLite için datetime karşılaştırması düzelt
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT s.user_id, s.company_id, u.username, u.email, u.role, 
+                           u.permissions, c.company_name
+                    FROM sessions s
+                    JOIN users u ON s.user_id = u.user_id
+                    JOIN companies c ON s.company_id = c.company_id
+                    WHERE s.session_id = {placeholder} AND s.expires_at > CURRENT_TIMESTAMP 
+                          AND s.status = 'active' AND u.status = 'active' AND c.status = 'active'
+                ''', (session_id,))
+            else:
+                cursor.execute(f'''
+                    SELECT s.user_id, s.company_id, u.username, u.email, u.role, 
+                           u.permissions, c.company_name
+                    FROM sessions s
+                    JOIN users u ON s.user_id = u.user_id
+                    JOIN companies c ON s.company_id = c.company_id
+                    WHERE s.session_id = {placeholder} AND s.expires_at > datetime('now') 
+                          AND s.status = 'active' AND u.status = 'active' AND c.status = 'active'
+                ''', (session_id,))
             
             result = cursor.fetchone()
             conn.close()
             
             if result:
                 # PostgreSQL RealDictRow için sözlük erişimi kullan
-                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                if hasattr(result, 'keys') and hasattr(result, 'get'):  # RealDictRow veya dict
                     return {
                         'user_id': result.get('user_id'),
                         'company_id': result.get('company_id'),
@@ -707,7 +720,7 @@ class MultiTenantDatabase:
                         'permissions': json.loads(result.get('permissions')) if result.get('permissions') else [],
                         'company_name': result.get('company_name')
                     }
-                else:  # Liste formatı (SQLite için)
+                else:  # SQLite Row veya liste formatı
                     return {
                         'user_id': result[0],
                         'company_id': result[1],
