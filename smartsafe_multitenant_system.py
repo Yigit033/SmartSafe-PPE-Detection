@@ -301,7 +301,7 @@ class MultiTenantDatabase:
                     severity TEXT DEFAULT 'medium',
                     penalty_amount REAL DEFAULT 0,
                     image_path TEXT,
-                    resolved BOOLEAN DEFAULT 0,
+                    resolved BOOLEAN DEFAULT FALSE,
                     resolved_by TEXT,
                     resolved_at DATETIME,
                     status TEXT DEFAULT 'active',
