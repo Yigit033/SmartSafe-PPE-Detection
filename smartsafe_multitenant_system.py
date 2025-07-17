@@ -117,16 +117,21 @@ class MultiTenantDatabase:
         # PostgreSQL için ek tablolar kontrolü - her durumda çalışsın
         try:
             if self.db_adapter.db_type == 'postgresql':
+                logger.info("🔧 PostgreSQL tablo kontrolü başlatılıyor...")
                 self._ensure_postgresql_tables()
         except Exception as e:
             logger.error(f"❌ PostgreSQL tablo kontrolü hatası: {e}")
+            # Hata durumunda da devam et
     
     def _ensure_postgresql_tables(self):
         """PostgreSQL için eksik tabloları kontrol et ve oluştur"""
         try:
             conn = self.get_connection()
+            if not conn:
+                logger.error("❌ PostgreSQL bağlantısı alınamadı")
+                return
+                
             cursor = conn.cursor()
-            
             logger.info("🔧 PostgreSQL tabloları kontrol ediliyor...")
             
             # Sessions tablosu kontrolü
@@ -156,54 +161,87 @@ class MultiTenantDatabase:
                 ''')
                 logger.info("✅ Sessions tablosu oluşturuldu")
             
-            # Cameras tablosuna port kolonu kontrolü
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.columns 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'cameras'
-                    AND column_name = 'port'
-                );
-            """)
-            
-            port_exists = cursor.fetchone()[0]
-            
-            if not port_exists:
-                logger.info("🔧 Cameras tablosuna port kolonu ekleniyor...")
-                try:
+            # Cameras tablosuna port kolonu kontrolü - Daha agresif yaklaşım
+            try:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'cameras'
+                        AND column_name = 'port'
+                    );
+                """)
+                
+                port_exists = cursor.fetchone()[0]
+                logger.info(f"🔍 Port kolonu var mı: {port_exists}")
+                
+                if not port_exists:
+                    logger.info("🔧 Cameras tablosuna port kolonu ekleniyor...")
+                    # Önce mevcut veriyi kontrol et
+                    cursor.execute("SELECT COUNT(*) FROM cameras")
+                    camera_count = cursor.fetchone()[0]
+                    logger.info(f"📊 Mevcut kamera sayısı: {camera_count}")
+                    
+                    # Port kolonunu ekle
                     cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
                     logger.info("✅ Port kolonu eklendi")
-                except Exception as e:
-                    logger.error(f"❌ Port kolonu eklenirken hata: {e}")
-                    # Alternatif yöntem - tabloyu yeniden oluştur
-                    try:
-                        cursor.execute('DROP TABLE IF EXISTS cameras_backup')
-                        cursor.execute('CREATE TABLE cameras_backup AS SELECT * FROM cameras')
-                        cursor.execute('DROP TABLE cameras')
+                    
+                    # Verify eklendi mi
+                    cursor.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'cameras'
+                            AND column_name = 'port'
+                        );
+                    """)
+                    verify_port = cursor.fetchone()[0]
+                    logger.info(f"✅ Port kolonu doğrulama: {verify_port}")
+                else:
+                    logger.info("✅ Port kolonu zaten mevcut")
+                    
+            except Exception as e:
+                logger.error(f"❌ Port kolonu işlemi hatası: {e}")
+                # Son çare - tabloyu yeniden oluştur
+                try:
+                    logger.info("🔧 Son çare: Cameras tablosunu yeniden oluşturuyor...")
+                    cursor.execute('DROP TABLE IF EXISTS cameras_backup')
+                    cursor.execute('CREATE TABLE cameras_backup AS SELECT * FROM cameras')
+                    cursor.execute('DROP TABLE cameras CASCADE')
+                    cursor.execute('''
+                        CREATE TABLE cameras (
+                            camera_id TEXT PRIMARY KEY,
+                            company_id TEXT NOT NULL,
+                            camera_name TEXT NOT NULL,
+                            location TEXT NOT NULL,
+                            ip_address TEXT,
+                            port INTEGER DEFAULT 554,
+                            rtsp_url TEXT,
+                            username TEXT,
+                            password TEXT,
+                            resolution TEXT DEFAULT '1920x1080',
+                            fps INTEGER DEFAULT 25,
+                            status TEXT DEFAULT 'active',
+                            last_detection TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    # Veri varsa geri yükle
+                    cursor.execute('SELECT COUNT(*) FROM cameras_backup')
+                    backup_count = cursor.fetchone()[0]
+                    if backup_count > 0:
                         cursor.execute('''
-                            CREATE TABLE cameras (
-                                camera_id TEXT PRIMARY KEY,
-                                company_id TEXT NOT NULL,
-                                camera_name TEXT NOT NULL,
-                                location TEXT NOT NULL,
-                                ip_address TEXT,
-                                port INTEGER DEFAULT 554,
-                                rtsp_url TEXT,
-                                username TEXT,
-                                password TEXT,
-                                resolution TEXT DEFAULT '1920x1080',
-                                fps INTEGER DEFAULT 25,
-                                status TEXT DEFAULT 'active',
-                                last_detection TIMESTAMP,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )
+                            INSERT INTO cameras (camera_id, company_id, camera_name, location, 
+                                               ip_address, rtsp_url, username, password, 
+                                               resolution, fps, status, last_detection, 
+                                               created_at, updated_at, port)
+                            SELECT *, 554 FROM cameras_backup
                         ''')
-                        cursor.execute('INSERT INTO cameras SELECT *, 554 FROM cameras_backup')
-                        cursor.execute('DROP TABLE cameras_backup')
-                        logger.info("✅ Cameras tablosu port kolonu ile yeniden oluşturuldu")
-                    except Exception as e2:
-                        logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
+                    cursor.execute('DROP TABLE cameras_backup')
+                    logger.info("✅ Cameras tablosu port kolonu ile yeniden oluşturuldu")
+                except Exception as e2:
+                    logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
             
             # Updated_at kolonu kontrolü
             cursor.execute("""
@@ -1020,6 +1058,8 @@ class MultiTenantDatabase:
             
         except Exception as e:
             logger.error(f"❌ İstatistik getirme hatası: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return {
                 'total_detections': 0,
                 'total_people': 0,
