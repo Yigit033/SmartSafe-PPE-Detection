@@ -7481,38 +7481,63 @@ Mesaj:
                         </div>
                         <div class="modal-body">
                             <form id="addCameraForm">
+                                <!-- Yardım Bölümü -->
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-info-circle"></i> Kamera Bilgilerini Nasıl Bulabilirim?</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>IP Adresi:</strong> Kameranızın ağ ayarları menüsünden veya router admin panelinden</li>
+                                        <li><strong>Port:</strong> Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</li>
+                                        <li><strong>Kullanıcı/Şifre:</strong> Kamera web arayüzü için giriş bilgileri</li>
+                                        <li><strong>Test Önerisi:</strong> Önce "Bağlantıyı Test Et" yapın, sonra ekleyin</li>
+                                    </ul>
+                                </div>
+                                
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Kamera Adı *</label>
-                                        <input type="text" class="form-control" name="camera_name" required>
+                                        <input type="text" class="form-control" name="camera_name" placeholder="Örnek: Ana Giriş Kamerası" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Lokasyon *</label>
-                                        <input type="text" class="form-control" name="location" required>
+                                        <input type="text" class="form-control" name="location" placeholder="Örnek: Ana Giriş, Üretim Alanı" required>
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">IP Adresi *</label>
-                                        <input type="text" class="form-control" name="ip_address" required>
+                                        <input type="text" class="form-control" name="ip_address" placeholder="192.168.1.11" required>
+                                        <div class="form-text">Kameranızın ağ ayarlarından IP adresini bulabilirsiniz</div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Port</label>
-                                        <input type="number" class="form-control" name="port" value="554">
+                                        <input type="number" class="form-control" name="port" placeholder="8080" value="8080">
+                                        <div class="form-text">Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</div>
                                     </div>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label">RTSP URL</label>
-                                    <input type="text" class="form-control" name="rtsp_url">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Protokol</label>
+                                        <select class="form-select" name="protocol">
+                                            <option value="http">HTTP (IP Webcam, Web Kameraları)</option>
+                                            <option value="rtsp">RTSP (Profesyonel IP Kameraları)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Stream Yolu</label>
+                                        <input type="text" class="form-control" name="stream_path" placeholder="/video" value="/video">
+                                        <div class="form-text">Yaygın yollar: /video, /stream1, /live</div>
+                                    </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Kullanıcı Adı</label>
-                                        <input type="text" class="form-control" name="username">
+                                        <input type="text" class="form-control" name="username" placeholder="admin">
+                                        <div class="form-text">Kamera web arayüzü için kullanıcı adı</div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Şifre</label>
-                                        <input type="password" class="form-control" name="password">
+                                        <input type="password" class="form-control" name="password" placeholder="Kamera parolanız">
+                                        <div class="form-text">Güvenlik için varsayılan parolayı değiştirin</div>
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -8589,6 +8614,7 @@ if __name__ == "__main__":
         # Exit with error code for Render.com
         import sys
         sys.exit(1)
+
 
 
 

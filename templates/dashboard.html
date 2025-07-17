@@ -681,6 +681,33 @@
             });
         }
 
+        // Çözünürlük güncelle
+        function updateResolution() {
+            const width = document.getElementById('resolutionWidth').value;
+            const heightSelect = document.getElementById('resolutionHeight');
+            
+            // Otomatik yükseklik ayarla
+            if (width == '1920') {
+                heightSelect.value = '1080';
+            } else if (width == '1280') {
+                heightSelect.value = '720';
+            } else if (width == '640') {
+                heightSelect.value = '480';
+            }
+        }
+
+        // Kalite slider güncelle
+        document.addEventListener('DOMContentLoaded', function() {
+            const qualitySlider = document.getElementById('cameraQuality');
+            const qualityValue = document.getElementById('qualityValue');
+            
+            if (qualitySlider && qualityValue) {
+                qualitySlider.addEventListener('input', function() {
+                    qualityValue.textContent = this.value;
+                });
+            }
+        });
+
         // Toast mesajları
         function showToast(type, message) {
             const toastContainer = document.getElementById('toastContainer') || createToastContainer();
@@ -726,18 +753,29 @@
                     <button type="button" class="btn-close" onclick="hideAddCameraModal()"></button>
                 </div>
                 <div class="modal-body">
+                    <!-- Yardım Bölümü -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Kamera Bilgilerini Nasıl Bulabilirim?</h6>
+                        <ul class="mb-0">
+                            <li><strong>IP Adresi:</strong> Kameranızın ağ ayarları menüsünden veya router admin panelinden</li>
+                            <li><strong>Port:</strong> Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</li>
+                            <li><strong>Kullanıcı/Şifre:</strong> Kamera web arayüzü için giriş bilgileri</li>
+                            <li><strong>Test Önerisi:</strong> Önce "Kamera Testi" yapın, sonra ekleyin</li>
+                        </ul>
+                    </div>
+                    
                     <form id="addCameraForm">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="cameraName" class="form-label">Kamera Adı *</label>
-                                    <input type="text" class="form-control" id="cameraName" required>
+                                    <input type="text" class="form-control" id="cameraName" placeholder="Örnek: Ana Giriş Kamerası" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="cameraLocation" class="form-label">Konum</label>
-                                    <input type="text" class="form-control" id="cameraLocation" value="Genel">
+                                    <input type="text" class="form-control" id="cameraLocation" placeholder="Örnek: Ana Giriş, Üretim Alanı" value="Genel">
                                 </div>
                             </div>
                         </div>
@@ -746,13 +784,15 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="cameraIP" class="form-label">IP Adresi *</label>
-                                    <input type="text" class="form-control" id="cameraIP" placeholder="192.168.1.190" required>
+                                    <input type="text" class="form-control" id="cameraIP" placeholder="192.168.1.11" required>
+                                    <div class="form-text">Kameranızın ağ ayarlarından IP adresini bulabilirsiniz</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="cameraPort" class="form-label">Port *</label>
-                                    <input type="number" class="form-control" id="cameraPort" value="8080" required>
+                                    <input type="number" class="form-control" id="cameraPort" placeholder="8080" value="8080" required>
+                                    <div class="form-text">Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</div>
                                 </div>
                             </div>
                         </div>
@@ -761,13 +801,15 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="cameraUsername" class="form-label">Kullanıcı Adı</label>
-                                    <input type="text" class="form-control" id="cameraUsername">
+                                    <input type="text" class="form-control" id="cameraUsername" placeholder="admin">
+                                    <div class="form-text">Kamera web arayüzü için kullanıcı adı</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="cameraPassword" class="form-label">Parola</label>
-                                    <input type="password" class="form-control" id="cameraPassword">
+                                    <input type="password" class="form-control" id="cameraPassword" placeholder="Kamera parolanız">
+                                    <div class="form-text">Güvenlik için varsayılan parolayı değiştirin</div>
                                 </div>
                             </div>
                         </div>
@@ -777,15 +819,16 @@
                                 <div class="mb-3">
                                     <label for="cameraProtocol" class="form-label">Protokol</label>
                                     <select class="form-select" id="cameraProtocol">
-                                        <option value="http">HTTP</option>
-                                        <option value="rtsp">RTSP</option>
+                                        <option value="http">HTTP (IP Webcam, Web Kameraları)</option>
+                                        <option value="rtsp">RTSP (Profesyonel IP Kameraları)</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="streamPath" class="form-label">Stream Yolu</label>
-                                    <input type="text" class="form-control" id="streamPath" value="/video">
+                                    <input type="text" class="form-control" id="streamPath" placeholder="/video" value="/video">
+                                    <div class="form-text">Yaygın yollar: /video, /stream1, /live</div>
                                 </div>
                             </div>
                         </div>
@@ -795,9 +838,9 @@
                                 <div class="mb-3">
                                     <label for="authType" class="form-label">Kimlik Doğrulama</label>
                                     <select class="form-select" id="authType">
-                                        <option value="none">Yok</option>
-                                        <option value="basic">Basic</option>
-                                        <option value="digest">Digest</option>
+                                        <option value="none">Kimlik Doğrulama Yok</option>
+                                        <option value="basic" selected>Basic Authentication</option>
+                                        <option value="digest">Digest Authentication</option>
                                     </select>
                                 </div>
                             </div>
@@ -816,19 +859,32 @@
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="resolutionWidth" class="form-label">Genişlik</label>
-                                    <input type="number" class="form-control" id="resolutionWidth" value="1920">
+                                    <select class="form-select" id="resolutionWidth" onchange="updateResolution()">
+                                        <option value="1920">1920 (Full HD)</option>
+                                        <option value="1280">1280 (HD)</option>
+                                        <option value="640">640 (SD)</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="resolutionHeight" class="form-label">Yükseklik</label>
-                                    <input type="number" class="form-control" id="resolutionHeight" value="1080">
+                                    <select class="form-select" id="resolutionHeight">
+                                        <option value="1080">1080 (Full HD)</option>
+                                        <option value="720">720 (HD)</option>
+                                        <option value="480">480 (SD)</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="cameraFPS" class="form-label">FPS</label>
-                                    <input type="number" class="form-control" id="cameraFPS" value="25">
+                                    <select class="form-select" id="cameraFPS">
+                                        <option value="25" selected>25 FPS (Önerilen)</option>
+                                        <option value="30">30 FPS</option>
+                                        <option value="15">15 FPS (Düşük Bant)</option>
+                                        <option value="10">10 FPS (Çok Düşük)</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
