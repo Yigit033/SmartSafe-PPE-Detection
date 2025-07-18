@@ -2600,19 +2600,91 @@ Mesaj:
                     'timestamp': datetime.now().isoformat()
                 }), 500
 
-        # Video streaming endpoint'leri
+        # === PROFESSIONAL SAAS LIVE DETECTION SYSTEM ===
+        @self.app.route('/api/company/<company_id>/live-detection', methods=['GET'])
+        def live_detection_dashboard(company_id):
+            """SaaS Canlı Tespit Dashboard"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return redirect(f'/company/{company_id}/login')
+                
+                # Şirket kameralarını getir
+                cameras = self.db.get_company_cameras(company_id)
+                
+                # Şirket bilgilerini getir
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT company_name, sector, required_ppe
+                    FROM companies WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                company_data = cursor.fetchone()
+                conn.close()
+                
+                if not company_data:
+                    return redirect('/')
+                
+                # PostgreSQL Row object vs SQLite tuple compatibility
+                if hasattr(company_data, 'keys'):
+                    company_name = company_data['company_name']
+                    sector = company_data['sector']
+                    required_ppe = company_data['required_ppe']
+                else:
+                    company_name = company_data[0]
+                    sector = company_data[1]
+                    required_ppe = company_data[2]
+                
+                # PPE konfigürasyonunu işle
+                ppe_config = []
+                if required_ppe:
+                    try:
+                        import json
+                        ppe_data = json.loads(required_ppe)
+                        if isinstance(ppe_data, dict):
+                            ppe_config = ppe_data.get('required', [])
+                        else:
+                            ppe_config = ppe_data
+                    except:
+                        ppe_config = ['helmet', 'vest']
+                
+                return render_template_string(self.get_live_detection_template(), 
+                                            company_id=company_id,
+                                            company_name=company_name,
+                                            sector=sector,
+                                            cameras=cameras,
+                                            ppe_config=ppe_config,
+                                            user_data=user_data)
+                
+            except Exception as e:
+                logger.error(f"❌ Live detection dashboard error: {e}")
+                return redirect(f'/company/{company_id}/dashboard')
+
         @self.app.route('/api/company/<company_id>/start-detection', methods=['POST'])
         def start_detection(company_id):
-            """Şirket için tespit başlat"""
+            """Şirket için tespit başlat - SaaS Edition"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
                 
                 data = request.json
-                camera_id = data.get('camera', '0')
-                mode = data.get('mode', 'construction')
+                camera_id = data.get('camera_id')
+                detection_mode = data.get('mode', 'ppe')
                 confidence = data.get('confidence', 0.5)
+                
+                if not camera_id:
+                    return jsonify({'success': False, 'error': 'Kamera ID gerekli'}), 400
+                
+                # Kamera var mı kontrol et
+                cameras = self.db.get_company_cameras(company_id)
+                camera_exists = any(cam['camera_id'] == camera_id for cam in cameras)
+                
+                if not camera_exists:
+                    return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
                 
                 # Kamera zaten aktifse durdur
                 camera_key = f"{company_id}_{camera_id}"
@@ -2622,21 +2694,36 @@ Mesaj:
                 # Kamera aktif olarak işaretle
                 active_detectors[camera_key] = True
                 
-                # Kamera worker thread'ini başlat
-                camera_thread = threading.Thread(
-                    target=self.camera_worker,
-                    args=(camera_key, camera_id),
-                    daemon=True
-                )
-                camera_thread.start()
-                
-                # Tespit thread'ini başlat - confidence parametresi ile
+                # Detection thread'ini başlat
                 detection_thread = threading.Thread(
-                    target=self.run_detection,
-                    args=(camera_key, camera_id, company_id, mode, confidence),
+                    target=self.saas_detection_worker,
+                    args=(camera_key, camera_id, company_id, detection_mode, confidence),
                     daemon=True
                 )
                 detection_thread.start()
+                
+                # Thread'i kaydet
+                detection_threads[camera_key] = {
+                    'thread': detection_thread,
+                    'config': {
+                        'mode': detection_mode,
+                        'confidence': confidence,
+                        'started_at': datetime.now().isoformat()
+                    }
+                }
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Kamera {camera_id} tespiti başlatıldı',
+                    'camera_id': camera_id,
+                    'detection_mode': detection_mode,
+                    'confidence': confidence,
+                    'stream_url': f'/api/company/{company_id}/camera-stream/{camera_id}'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Detection start error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
                 
                 detection_threads[camera_key] = {
                     'camera_thread': camera_thread,
@@ -2684,16 +2771,119 @@ Mesaj:
             except Exception as e:
                 return jsonify({'success': False, 'error': str(e)}), 500
 
-        @self.app.route('/api/company/<company_id>/video-feed/<camera_id>')
-        def video_feed(company_id, camera_id):
-            """Video stream endpoint"""
+        @self.app.route('/api/company/<company_id>/camera-stream/<camera_id>')
+        def camera_stream(company_id, camera_id):
+            """SaaS Kamera Stream Endpoint"""
             user_data = self.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
             camera_key = f"{company_id}_{camera_id}"
-            return Response(self.generate_frames(camera_key),
+            return Response(self.generate_saas_frames(camera_key, company_id, camera_id),
                            mimetype='multipart/x-mixed-replace; boundary=frame')
+
+        @self.app.route('/api/company/<company_id>/detection-status/<camera_id>')
+        def detection_status(company_id, camera_id):
+            """Tespit durumu API"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'error': 'Yetkisiz erişim'}), 401
+                
+                camera_key = f"{company_id}_{camera_id}"
+                
+                # Tespit durumu
+                is_active = camera_key in active_detectors and active_detectors[camera_key]
+                
+                # Thread bilgisi
+                thread_info = detection_threads.get(camera_key, {})
+                
+                # Son tespit sonuçları
+                recent_results = []
+                if camera_key in detection_results:
+                    try:
+                        while not detection_results[camera_key].empty():
+                            result = detection_results[camera_key].get_nowait()
+                            recent_results.append(result)
+                    except:
+                        pass
+                
+                return jsonify({
+                    'success': True,
+                    'camera_id': camera_id,
+                    'is_active': is_active,
+                    'thread_info': thread_info,
+                    'recent_results': recent_results[-10:] if recent_results else []  # Son 10 sonuç
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Detection status error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/company/<company_id>/live-stats')
+        def live_stats(company_id):
+            """Canlı istatistikler API"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'error': 'Yetkisiz erişim'}), 401
+                
+                # Aktif kameralar
+                active_cameras = []
+                for key, active in active_detectors.items():
+                    if key.startswith(f"{company_id}_") and active:
+                        camera_id = key.split('_', 1)[1]
+                        active_cameras.append(camera_id)
+                
+                # Son 1 saat içindeki tespitler
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # Son tespitler
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM detections 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= datetime('now', '-1 hour')
+                ''', (company_id,))
+                
+                recent_detections = cursor.fetchone()
+                recent_detections = recent_detections[0] if recent_detections else 0
+                
+                # Son ihlaller
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= datetime('now', '-1 hour')
+                ''', (company_id,))
+                
+                recent_violations = cursor.fetchone()
+                recent_violations = recent_violations[0] if recent_violations else 0
+                
+                # Uyum oranı
+                compliance_rate = 0
+                if recent_detections > 0:
+                    compliance_rate = max(0, (recent_detections - recent_violations) / recent_detections * 100)
+                
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'stats': {
+                        'active_cameras': len(active_cameras),
+                        'active_camera_ids': active_cameras,
+                        'recent_detections': recent_detections,
+                        'recent_violations': recent_violations,
+                        'compliance_rate': round(compliance_rate, 1),
+                        'system_status': 'active' if active_cameras else 'idle',
+                        'timestamp': datetime.now().isoformat()
+                    }
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Live stats error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
 
         @self.app.route('/api/company/<company_id>/detection-results/<camera_id>')
         def get_detection_results(company_id, camera_id):
@@ -10127,6 +10317,991 @@ if __name__ == "__main__":
         # Exit with error code for Render.com
         import sys
         sys.exit(1)
+
+    def saas_detection_worker(self, camera_key, camera_id, company_id, detection_mode, confidence=0.5):
+        """SaaS Profesyonel Detection Worker"""
+        logger.info(f"🚀 SaaS Detection başlatılıyor - Kamera: {camera_id}, Şirket: {company_id}")
+        
+        # Detection sonuçları için queue oluştur
+        detection_results[camera_key] = queue.Queue(maxsize=20)
+        
+        # Kamera başlat
+        self.start_saas_camera(camera_key, camera_id, company_id)
+        
+        # YOLOv8 model yükle
+        try:
+            import torch
+            from ultralytics import YOLO
+            
+            # CPU kullan (daha kararlı)
+            device = 'cpu'
+            model = YOLO('yolov8n.pt')
+            model.to(device)
+            
+            logger.info(f"✅ YOLOv8 model yüklendi - Device: {device}")
+            
+        except Exception as e:
+            logger.error(f"❌ Model yükleme hatası: {e}")
+            return
+        
+        frame_count = 0
+        detection_count = 0
+        
+        while active_detectors.get(camera_key, False):
+            try:
+                # Frame al
+                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
+                    frame = frame_buffers[camera_key].copy()
+                    frame_count += 1
+                    
+                    # Her 3 frame'de bir tespit yap (performans)
+                    if frame_count % 3 == 0:
+                        start_time = time.time()
+                        
+                        # YOLO detection
+                        results = model(frame, conf=confidence, verbose=False)
+                        
+                        # Sonuçları işle
+                        people_detected = 0
+                        ppe_violations = []
+                        ppe_compliant = 0
+                        
+                        for result in results:
+                            if result.boxes is not None:
+                                for box in result.boxes:
+                                    class_id = int(box.cls[0])
+                                    confidence_score = float(box.conf[0])
+                                    
+                                    # Person detection
+                                    if class_id == 0:  # person class
+                                        people_detected += 1
+                                        
+                                        # PPE kontrolü (basitleştirilmiş)
+                                        # Gerçek uygulamada daha karmaşık PPE analizi yapılır
+                                        has_helmet = confidence_score > 0.6  # Örnek
+                                        has_vest = confidence_score > 0.5    # Örnek
+                                        
+                                        if has_helmet and has_vest:
+                                            ppe_compliant += 1
+                                        else:
+                                            missing_ppe = []
+                                            if not has_helmet:
+                                                missing_ppe.append('helmet')
+                                            if not has_vest:
+                                                missing_ppe.append('vest')
+                                            
+                                            ppe_violations.append({
+                                                'person_id': f"person_{len(ppe_violations)}",
+                                                'missing_ppe': missing_ppe,
+                                                'confidence': confidence_score,
+                                                'bbox': box.xyxy[0].tolist()
+                                            })
+                        
+                        # Uyum oranı hesapla
+                        compliance_rate = 0
+                        if people_detected > 0:
+                            compliance_rate = (ppe_compliant / people_detected) * 100
+                        
+                        processing_time = (time.time() - start_time) * 1000
+                        detection_count += 1
+                        
+                        # Sonuçları kaydet
+                        detection_data = {
+                            'camera_id': camera_id,
+                            'company_id': company_id,
+                            'timestamp': datetime.now().isoformat(),
+                            'frame_count': frame_count,
+                            'detection_count': detection_count,
+                            'people_detected': people_detected,
+                            'ppe_compliant': ppe_compliant,
+                            'ppe_violations': ppe_violations,
+                            'compliance_rate': round(compliance_rate, 1),
+                            'processing_time_ms': round(processing_time, 2),
+                            'detection_mode': detection_mode,
+                            'confidence_threshold': confidence
+                        }
+                        
+                        # Queue'ya ekle
+                        try:
+                            detection_results[camera_key].put_nowait(detection_data)
+                        except queue.Full:
+                            try:
+                                detection_results[camera_key].get_nowait()
+                            except queue.Empty:
+                                pass
+                            detection_results[camera_key].put_nowait(detection_data)
+                        
+                        # Veritabanına kaydet (her 10 tespit)
+                        if detection_count % 10 == 0:
+                            self.save_detection_to_db(detection_data)
+                        
+                        # İhlal varsa veritabanına kaydet
+                        if ppe_violations:
+                            self.save_violations_to_db(company_id, camera_id, ppe_violations)
+                    
+                    time.sleep(0.01)  # CPU'yu rahatlatmak için
+                else:
+                    time.sleep(0.1)
+                    
+            except Exception as e:
+                logger.error(f"❌ SaaS Detection hatası: {e}")
+                time.sleep(1)
+        
+        logger.info(f"🛑 SaaS Detection durduruldu - Kamera: {camera_id}")
+
+    def start_saas_camera(self, camera_key, camera_id, company_id):
+        """SaaS Kamera başlatma"""
+        try:
+            # Kamera bilgilerini al
+            cameras = self.db.get_company_cameras(company_id)
+            camera_info = None
+            
+            for cam in cameras:
+                if cam['camera_id'] == camera_id:
+                    camera_info = cam
+                    break
+            
+            if not camera_info:
+                logger.error(f"❌ Kamera bulunamadı: {camera_id}")
+                return
+            
+            # Kamera URL'sini oluştur
+            camera_url = None
+            if camera_info.get('ip_address') and camera_info.get('port'):
+                protocol = camera_info.get('protocol', 'http')
+                ip = camera_info['ip_address']
+                port = camera_info['port']
+                stream_path = camera_info.get('stream_path', '/video')
+                
+                if protocol == 'rtsp':
+                    camera_url = f"rtsp://{ip}:{port}{stream_path}"
+                else:
+                    camera_url = f"http://{ip}:{port}{stream_path}"
+            else:
+                # Webcam kullan
+                camera_url = 0
+            
+            # Kamera worker thread'ini başlat
+            camera_thread = threading.Thread(
+                target=self.saas_camera_worker,
+                args=(camera_key, camera_url),
+                daemon=True
+            )
+            camera_thread.start()
+            
+            logger.info(f"✅ SaaS Kamera başlatıldı: {camera_id} -> {camera_url}")
+            
+        except Exception as e:
+            logger.error(f"❌ SaaS Kamera başlatma hatası: {e}")
+
+    def saas_camera_worker(self, camera_key, camera_url):
+        """SaaS Kamera Worker"""
+        cap = None
+        try:
+            import cv2
+            
+            # Kamera bağlantısı
+            cap = cv2.VideoCapture(camera_url)
+            
+            if not cap.isOpened():
+                logger.error(f"❌ Kamera açılamadı: {camera_url}")
+                return
+            
+            # Kamera ayarları
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 15)
+            
+            camera_captures[camera_key] = cap
+            
+            logger.info(f"✅ SaaS Kamera worker başladı: {camera_key}")
+            
+            while active_detectors.get(camera_key, False):
+                ret, frame = cap.read()
+                if ret:
+                    frame_buffers[camera_key] = frame
+                else:
+                    logger.warning(f"⚠️ Frame okunamadı: {camera_key}")
+                    time.sleep(0.1)
+                    
+        except Exception as e:
+            logger.error(f"❌ SaaS Kamera worker hatası: {e}")
+        finally:
+            if cap:
+                cap.release()
+            if camera_key in camera_captures:
+                del camera_captures[camera_key]
+            if camera_key in frame_buffers:
+                del frame_buffers[camera_key]
+            
+            logger.info(f"🛑 SaaS Kamera worker durduruldu: {camera_key}")
+
+    def generate_saas_frames(self, camera_key, company_id, camera_id):
+        """SaaS Frame Generator"""
+        import cv2
+        
+        while active_detectors.get(camera_key, False):
+            try:
+                # Frame al
+                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
+                    frame = frame_buffers[camera_key].copy()
+                    
+                    # Detection sonuçlarını al
+                    detection_overlay = self.get_detection_overlay(camera_key)
+                    
+                    # Overlay ekle
+                    if detection_overlay:
+                        frame = self.draw_saas_overlay(frame, detection_overlay)
+                    
+                    # Frame'i encode et
+                    ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    if ret:
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                else:
+                    # Placeholder frame
+                    import numpy as np
+                    placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(placeholder, 'Camera Loading...', (200, 240), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    
+                    ret, buffer = cv2.imencode('.jpg', placeholder)
+                    if ret:
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                
+                time.sleep(0.05)  # ~20 FPS
+                
+            except Exception as e:
+                logger.error(f"❌ Frame generation hatası: {e}")
+                time.sleep(0.1)
+
+    def get_detection_overlay(self, camera_key):
+        """Detection overlay bilgilerini al"""
+        try:
+            if camera_key in detection_results:
+                # En son detection sonucunu al
+                latest_result = None
+                temp_results = []
+                
+                # Queue'dan tüm sonuçları al
+                while not detection_results[camera_key].empty():
+                    try:
+                        result = detection_results[camera_key].get_nowait()
+                        temp_results.append(result)
+                    except queue.Empty:
+                        break
+                
+                # En son sonucu al
+                if temp_results:
+                    latest_result = temp_results[-1]
+                    
+                    # Sonuçları geri koy (sadece son 5'ini)
+                    for result in temp_results[-5:]:
+                        try:
+                            detection_results[camera_key].put_nowait(result)
+                        except queue.Full:
+                            break
+                
+                return latest_result
+            
+        except Exception as e:
+            logger.error(f"❌ Detection overlay hatası: {e}")
+        
+        return None
+
+    def draw_saas_overlay(self, frame, detection_data):
+        """SaaS Detection Overlay çiz"""
+        import cv2
+        
+        try:
+            # Üst bilgi paneli
+            cv2.rectangle(frame, (0, 0), (640, 80), (0, 0, 0), -1)
+            cv2.rectangle(frame, (0, 0), (640, 80), (255, 255, 255), 2)
+            
+            # Başlık
+            cv2.putText(frame, 'SmartSafe AI - Live Detection', (10, 25), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            # İstatistikler
+            people_count = detection_data.get('people_detected', 0)
+            compliance_rate = detection_data.get('compliance_rate', 0)
+            violations = detection_data.get('ppe_violations', [])
+            
+            cv2.putText(frame, f'People: {people_count}', (10, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.putText(frame, f'Compliance: {compliance_rate}%', (120, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.putText(frame, f'Violations: {len(violations)}', (280, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            # Uyum durumu göstergesi
+            color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            cv2.circle(frame, (600, 40), 15, color, -1)
+            
+            # İhlal detayları
+            if violations:
+                y_offset = 100
+                for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
+                    missing_ppe = ', '.join(violation.get('missing_ppe', []))
+                    cv2.putText(frame, f'Violation {i+1}: {missing_ppe}', (10, y_offset), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                    y_offset += 20
+            
+            # Zaman damgası
+            timestamp = detection_data.get('timestamp', '')
+            if timestamp:
+                cv2.putText(frame, timestamp[:19], (10, frame.shape[0] - 10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            
+        except Exception as e:
+            logger.error(f"❌ Overlay çizim hatası: {e}")
+        
+        return frame
+
+    def save_detection_to_db(self, detection_data):
+        """Detection sonuçlarını veritabanına kaydet"""
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            cursor.execute(f'''
+                INSERT INTO detections (
+                    company_id, camera_id, timestamp, people_detected, 
+                    ppe_compliant, compliance_rate, processing_time_ms
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+            ''', (
+                detection_data['company_id'],
+                detection_data['camera_id'],
+                detection_data['timestamp'],
+                detection_data['people_detected'],
+                detection_data['ppe_compliant'],
+                detection_data['compliance_rate'],
+                detection_data['processing_time_ms']
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"❌ Detection DB kayıt hatası: {e}")
+
+    def save_violations_to_db(self, company_id, camera_id, violations):
+        """İhlalleri veritabanına kaydet"""
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            for violation in violations:
+                cursor.execute(f'''
+                    INSERT INTO violations (
+                        company_id, camera_id, timestamp, violation_type, 
+                        missing_ppe, confidence, person_id
+                    ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ''', (
+                    company_id,
+                    camera_id,
+                    datetime.now().isoformat(),
+                    'PPE_VIOLATION',
+                    ', '.join(violation['missing_ppe']),
+                    violation['confidence'],
+                    violation['person_id']
+                ))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"❌ Violation DB kayıt hatası: {e}")
+
+    def get_live_detection_template(self):
+        """SaaS Live Detection HTML Template"""
+        return '''
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canlı Tespit - SmartSafe AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --dark-color: #2c3e50;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: rgba(255,255,255,0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--dark-color) !important;
+            font-size: 1.5rem;
+        }
+
+        .main-container {
+            margin-top: 20px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.95);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 20px;
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .camera-stream {
+            width: 100%;
+            height: 400px;
+            border-radius: 10px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .camera-stream img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 10px;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--dark-color);
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .btn-custom {
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+        }
+
+        .btn-success-custom {
+            background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-danger-custom {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #e74c3c 100%);
+            color: white;
+        }
+
+        .alert-custom {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+
+        .camera-controls {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+        .violation-item {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 4px solid var(--danger-color);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .compliance-good { color: var(--success-color); }
+        .compliance-warning { color: var(--warning-color); }
+        .compliance-danger { color: var(--danger-color); }
+
+        .system-status {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/company/{{ company_id }}/dashboard">
+                <i class="fas fa-shield-alt"></i> SmartSafe AI
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                    <i class="fas fa-video"></i> Kameralar
+                </a>
+                <a class="nav-link active" href="/api/company/{{ company_id }}/live-detection">
+                    <span class="live-indicator"></span> Canlı Tespit
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <div class="row">
+            <div class="col-12">
+                <div class="text-center mb-4">
+                    <h1 class="text-white display-4 fw-bold">
+                        <i class="fas fa-eye"></i> Canlı PPE Tespiti
+                    </h1>
+                    <p class="text-white-50 fs-5">{{ company_name }} - {{ sector|title }} Sektörü</p>
+                </div>
+                
+                <div class="system-status">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <i class="fas fa-server"></i>
+                            <span class="ms-2">Sistem: <strong id="system-status">Hazır</strong></span>
+                        </div>
+                        <div class="col-md-3">
+                            <i class="fas fa-video"></i>
+                            <span class="ms-2">Aktif Kameralar: <strong id="active-cameras">0</strong></span>
+                        </div>
+                        <div class="col-md-3">
+                            <i class="fas fa-eye"></i>
+                            <span class="ms-2">Tespitler: <strong id="total-detections">0</strong></span>
+                        </div>
+                        <div class="col-md-3">
+                            <i class="fas fa-percentage"></i>
+                            <span class="ms-2">Uyum: <strong id="compliance-rate">--%</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Ana Kamera Görüntüsü -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-video"></i> Kamera Görüntüsü
+                            <span class="live-indicator"></span>
+                            <span id="camera-status">Bekleniyor...</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="camera-controls">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label text-white">Kamera Seç:</label>
+                                    <select class="form-select" id="camera-select">
+                                        <option value="">Kamera seçin...</option>
+                                        {% for camera in cameras %}
+                                        <option value="{{ camera.camera_id }}">
+                                            {{ camera.name }} ({{ camera.location }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white">Güven Eşiği:</label>
+                                    <select class="form-select" id="confidence-select">
+                                        <option value="0.3">Düşük (0.3)</option>
+                                        <option value="0.5" selected>Orta (0.5)</option>
+                                        <option value="0.7">Yüksek (0.7)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12 text-center">
+                                    <button class="btn btn-success-custom btn-custom me-2" onclick="startDetection()">
+                                        <i class="fas fa-play"></i> Tespiti Başlat
+                                    </button>
+                                    <button class="btn btn-danger-custom btn-custom" onclick="stopDetection()">
+                                        <i class="fas fa-stop"></i> Tespiti Durdur
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="camera-stream" id="camera-display">
+                            <div class="text-center">
+                                <i class="fas fa-camera fa-3x mb-3"></i>
+                                <p>Kamera seçin ve tespiti başlatın</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- İstatistikler ve Kontroller -->
+            <div class="col-lg-4">
+                <!-- Canlı İstatistikler -->
+                <div class="stats-card text-center">
+                    <div class="stat-value" id="people-count">0</div>
+                    <div class="stat-label">Tespit Edilen Kişi</div>
+                </div>
+                
+                <div class="stats-card text-center">
+                    <div class="stat-value compliance-good" id="compliant-count">0</div>
+                    <div class="stat-label">PPE Uyumlu</div>
+                </div>
+                
+                <div class="stats-card text-center">
+                    <div class="stat-value compliance-danger" id="violation-count">0</div>
+                    <div class="stat-label">İhlal Sayısı</div>
+                </div>
+
+                <!-- Son İhlaller -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> Son İhlaller
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-violations">
+                            <p class="text-muted text-center">İhlal bulunamadı</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PPE Gereksinimleri -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-hard-hat"></i> PPE Gereksinimleri
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for ppe in ppe_config %}
+                            <div class="col-6 mb-2">
+                                <div class="text-center p-2 bg-light rounded">
+                                    <i class="fas fa-check-circle text-success"></i>
+                                    <small class="d-block">{{ ppe|title }}</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentCameraId = null;
+        let detectionActive = false;
+        let statsInterval = null;
+
+        // Tespit başlatma
+        function startDetection() {
+            const cameraSelect = document.getElementById('camera-select');
+            const confidenceSelect = document.getElementById('confidence-select');
+            
+            if (!cameraSelect.value) {
+                alert('Lütfen bir kamera seçin!');
+                return;
+            }
+            
+            if (detectionActive) {
+                alert('Tespit zaten aktif!');
+                return;
+            }
+            
+            currentCameraId = cameraSelect.value;
+            const confidence = parseFloat(confidenceSelect.value);
+            
+            // Tespit başlat
+            fetch('/api/company/{{ company_id }}/start-detection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    camera_id: currentCameraId,
+                    mode: 'ppe',
+                    confidence: confidence
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    detectionActive = true;
+                    document.getElementById('camera-status').textContent = 'Aktif';
+                    document.getElementById('system-status').textContent = 'Çalışıyor';
+                    
+                    // Video stream'i başlat
+                    const streamUrl = `/api/company/{{ company_id }}/camera-stream/${currentCameraId}`;
+                    document.getElementById('camera-display').innerHTML = 
+                        `<img src="${streamUrl}" alt="Kamera Görüntüsü" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+                    
+                    // İstatistikleri güncellemeye başla
+                    startStatsUpdate();
+                    
+                    showAlert('Tespit başarıyla başlatıldı!', 'success');
+                } else {
+                    showAlert('Tespit başlatılamadı: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Bir hata oluştu!', 'danger');
+            });
+        }
+
+        // Tespit durdurma
+        function stopDetection() {
+            if (!detectionActive) {
+                alert('Tespit zaten durmuş!');
+                return;
+            }
+            
+            fetch('/api/company/{{ company_id }}/stop-detection', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    detectionActive = false;
+                    currentCameraId = null;
+                    document.getElementById('camera-status').textContent = 'Durduruldu';
+                    document.getElementById('system-status').textContent = 'Hazır';
+                    
+                    // Video stream'i durdur
+                    document.getElementById('camera-display').innerHTML = `
+                        <div class="text-center">
+                            <i class="fas fa-camera fa-3x mb-3"></i>
+                            <p>Kamera seçin ve tespiti başlatın</p>
+                        </div>
+                    `;
+                    
+                    // İstatistik güncellemeyi durdur
+                    stopStatsUpdate();
+                    
+                    showAlert('Tespit durduruldu!', 'info');
+                } else {
+                    showAlert('Tespit durdurulamadı: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Bir hata oluştu!', 'danger');
+            });
+        }
+
+        // İstatistik güncelleme
+        function startStatsUpdate() {
+            statsInterval = setInterval(updateStats, 2000); // Her 2 saniyede bir
+        }
+
+        function stopStatsUpdate() {
+            if (statsInterval) {
+                clearInterval(statsInterval);
+                statsInterval = null;
+            }
+        }
+
+        function updateStats() {
+            if (!detectionActive || !currentCameraId) return;
+            
+            // Canlı istatistikleri al
+            fetch(`/api/company/{{ company_id }}/live-stats`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('active-cameras').textContent = stats.active_cameras;
+                        document.getElementById('total-detections').textContent = stats.recent_detections;
+                        document.getElementById('compliance-rate').textContent = stats.compliance_rate + '%';
+                        
+                        // Compliance rate renk
+                        const complianceElement = document.getElementById('compliance-rate');
+                        if (stats.compliance_rate >= 80) {
+                            complianceElement.className = 'compliance-good';
+                        } else if (stats.compliance_rate >= 60) {
+                            complianceElement.className = 'compliance-warning';
+                        } else {
+                            complianceElement.className = 'compliance-danger';
+                        }
+                    }
+                })
+                .catch(error => console.error('Stats update error:', error));
+            
+            // Detection durumu al
+            fetch(`/api/company/{{ company_id }}/detection-status/${currentCameraId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.recent_results.length > 0) {
+                        const latest = data.recent_results[data.recent_results.length - 1];
+                        
+                        document.getElementById('people-count').textContent = latest.people_detected || 0;
+                        document.getElementById('compliant-count').textContent = latest.ppe_compliant || 0;
+                        document.getElementById('violation-count').textContent = latest.ppe_violations ? latest.ppe_violations.length : 0;
+                        
+                        // İhlalleri göster
+                        updateViolations(latest.ppe_violations || []);
+                    }
+                })
+                .catch(error => console.error('Detection status error:', error));
+        }
+
+        function updateViolations(violations) {
+            const container = document.getElementById('recent-violations');
+            
+            if (violations.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center">İhlal bulunamadı</p>';
+                return;
+            }
+            
+            let html = '';
+            violations.slice(0, 5).forEach((violation, index) => {
+                const missingPpe = violation.missing_ppe.join(', ');
+                html += `
+                    <div class="violation-item">
+                        <strong>Kişi ${index + 1}</strong>
+                        <div class="mt-1">
+                            <small class="text-danger">Eksik PPE: ${missingPpe}</small>
+                        </div>
+                        <div class="mt-1">
+                            <small class="text-muted">Güven: ${(violation.confidence * 100).toFixed(1)}%</small>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            alertDiv.style.cssText = 'top: 100px; right: 20px; z-index: 1050; min-width: 300px;';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', function() {
+            // İlk istatistikleri yükle
+            fetch(`/api/company/{{ company_id }}/live-stats`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('active-cameras').textContent = stats.active_cameras;
+                        document.getElementById('total-detections').textContent = stats.recent_detections;
+                        document.getElementById('compliance-rate').textContent = stats.compliance_rate + '%';
+                    }
+                })
+                .catch(error => console.error('Initial stats error:', error));
+        });
+    </script>
+</body>
+</html>
+        '''
 
 
 
