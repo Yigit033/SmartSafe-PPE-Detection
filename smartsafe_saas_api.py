@@ -2102,17 +2102,38 @@ Mesaj:
                 cursor = conn.cursor()
                 
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
-                cursor.execute(f'''
-                    UPDATE companies 
-                    SET email_notifications = {placeholder}, 
-                        sms_notifications = {placeholder}, 
-                        push_notifications = {placeholder}, 
-                        violation_alerts = {placeholder}, 
-                        system_alerts = {placeholder}, 
-                        report_notifications = {placeholder},
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE company_id = {placeholder}
-                ''', (
+                if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
+                    cursor.execute(f'''
+                        UPDATE companies 
+                        SET email_notifications = {placeholder}, 
+                            sms_notifications = {placeholder}, 
+                            push_notifications = {placeholder}, 
+                            violation_alerts = {placeholder}, 
+                            system_alerts = {placeholder}, 
+                            report_notifications = {placeholder},
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE company_id = {placeholder}
+                    ''', (
+                        data.get('email_notifications', True),
+                        data.get('sms_notifications', False),
+                        data.get('push_notifications', True),
+                        data.get('violation_alerts', True),
+                        data.get('system_alerts', True),
+                        data.get('report_notifications', True),
+                        company_id
+                    ))
+                else:
+                    cursor.execute(f'''
+                        UPDATE companies 
+                        SET email_notifications = {placeholder}, 
+                            sms_notifications = {placeholder}, 
+                            push_notifications = {placeholder}, 
+                            violation_alerts = {placeholder}, 
+                            system_alerts = {placeholder}, 
+                            report_notifications = {placeholder},
+                            updated_at = datetime('now')
+                        WHERE company_id = {placeholder}
+                    ''', (
                     data.get('email_notifications', True),
                     data.get('sms_notifications', False),
                     data.get('push_notifications', True),

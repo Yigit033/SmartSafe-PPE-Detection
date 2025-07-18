@@ -995,11 +995,18 @@ class MultiTenantDatabase:
                 return False, "Kamera bulunamadı"
             
             # Kamerayı sil (soft delete)
-            cursor.execute(f'''
-                UPDATE cameras 
-                SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
-                WHERE company_id = {placeholder} AND camera_id = {placeholder}
-            ''', (company_id, camera_id))
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    UPDATE cameras 
+                    SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                ''', (company_id, camera_id))
+            else:
+                cursor.execute(f'''
+                    UPDATE cameras 
+                    SET status = 'deleted', updated_at = datetime('now')
+                    WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                ''', (company_id, camera_id))
             
             conn.commit()
             conn.close()
