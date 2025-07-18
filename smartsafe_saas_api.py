@@ -247,6 +247,12 @@ Mesaj:
         def app_home():
             """Company registration form"""
             return render_template_string(self.get_home_template())
+        
+        # Fiyatlandırma sayfası
+        @self.app.route('/pricing')
+        def pricing():
+            """Fiyatlandırma ve plan seçimi sayfası"""
+            return render_template_string(self.get_pricing_template())
 
         # Şirket kaydı
         @self.app.route('/api/register', methods=['POST'])
@@ -315,6 +321,21 @@ Mesaj:
                 }
                 
                 data['required_ppe'] = ppe_config
+                
+                # Abonelik planı seçimi
+                subscription_plan = request.form.get('subscription_plan', 'starter')
+                plan_prices = {
+                    'starter': {'monthly': 99, 'cameras': 5},
+                    'professional': {'monthly': 299, 'cameras': 15},
+                    'enterprise': {'monthly': 599, 'cameras': 50}
+                }
+                
+                if subscription_plan in plan_prices:
+                    data['subscription_type'] = subscription_plan
+                    data['max_cameras'] = plan_prices[subscription_plan]['cameras']
+                else:
+                    data['subscription_type'] = 'starter'
+                    data['max_cameras'] = 5
                 
                 # Doğrulama
                 required_fields = ['company_name', 'sector', 'contact_person', 'email', 'password']
@@ -908,6 +929,53 @@ Mesaj:
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
                 return redirect(f'/company/{company_id}/login')
+            
+            # Şirket bilgilerini yükle
+            try:
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT company_name, contact_person, email, phone, sector, address
+                    FROM companies WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                company_data = cursor.fetchone()
+                conn.close()
+                
+                if company_data:
+                    # PostgreSQL RealDictRow için sözlük erişimi kullan
+                    if hasattr(company_data, 'keys'):  # RealDictRow veya dict
+                        user_data.update({
+                            'company_name': company_data.get('company_name', ''),
+                            'contact_person': company_data.get('contact_person', ''),
+                            'email': company_data.get('email', ''),
+                            'phone': company_data.get('phone', ''),
+                            'sector': company_data.get('sector', 'construction'),
+                            'address': company_data.get('address', '')
+                        })
+                    else:  # SQLite tuple formatı
+                        user_data.update({
+                            'company_name': company_data[0] or '',
+                            'contact_person': company_data[1] or '',
+                            'email': company_data[2] or '',
+                            'phone': company_data[3] or '',
+                            'sector': company_data[4] or 'construction',
+                            'address': company_data[5] or ''
+                        })
+                
+            except Exception as e:
+                logger.error(f"❌ Şirket bilgileri yüklenirken hata: {e}")
+                # Varsayılan değerler
+                user_data.update({
+                    'company_name': '',
+                    'contact_person': '',
+                    'email': '',
+                    'phone': '',
+                    'sector': 'construction',
+                    'address': ''
+                })
             
             return render_template_string(self.get_company_settings_template(), 
                                         company_id=company_id, 
@@ -2066,6 +2134,60 @@ Mesaj:
                 logger.error(f"❌ Bildirim ayarları güncelleme hatası: {e}")
                 return jsonify({'success': False, 'error': 'Güncelleme başarısız'}), 500
 
+        # Abonelik plan değiştirme API endpoint'i
+        @self.app.route('/api/company/<company_id>/subscription/change-plan', methods=['POST'])
+        def change_subscription_plan(company_id):
+            """Abonelik planını değiştir"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                new_plan = data.get('new_plan')
+                
+                if not new_plan:
+                    return jsonify({'success': False, 'error': 'Yeni plan seçimi gerekli'}), 400
+                
+                # Plan fiyatları
+                plan_prices = {
+                    'starter': {'monthly': 99, 'cameras': 5, 'name': 'Starter'},
+                    'professional': {'monthly': 299, 'cameras': 15, 'name': 'Professional'},
+                    'enterprise': {'monthly': 599, 'cameras': 50, 'name': 'Enterprise'}
+                }
+                
+                if new_plan not in plan_prices:
+                    return jsonify({'success': False, 'error': 'Geçersiz plan'}), 400
+                
+                # Database güncelleme
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    UPDATE companies 
+                    SET subscription_type = {placeholder}, 
+                        max_cameras = {placeholder},
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
+                ''', (new_plan, plan_prices[new_plan]['cameras'], company_id))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Plan başarıyla değiştirildi',
+                    'new_plan': new_plan,
+                    'plan_name': plan_prices[new_plan]['name'],
+                    'monthly_price': plan_prices[new_plan]['monthly'],
+                    'max_cameras': plan_prices[new_plan]['cameras']
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Plan değiştirme hatası: {e}")
+                return jsonify({'success': False, 'error': 'Plan değiştirme başarısız'}), 500
+
         # Abonelik bilgileri API endpoint'leri
         @self.app.route('/api/company/<company_id>/subscription', methods=['GET'])
         def get_subscription_info(company_id):
@@ -2963,6 +3085,252 @@ Mesaj:
                 print(f"Frame generation error: {e}")
                 break
     
+    def get_pricing_template(self):
+        """Fiyatlandırma sayfası template'i"""
+        return '''
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Fiyatlandırma - SmartSafe AI</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <style>
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .pricing-card {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px 30px;
+                    margin: 20px 0;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .pricing-card:hover {
+                    transform: translateY(-10px);
+                    box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+                }
+                .pricing-card.featured {
+                    border: 3px solid #667eea;
+                    transform: scale(1.05);
+                }
+                .pricing-card.featured::before {
+                    content: "EN POPÜLER";
+                    position: absolute;
+                    top: 20px;
+                    right: -30px;
+                    background: #667eea;
+                    color: white;
+                    padding: 5px 40px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    transform: rotate(45deg);
+                }
+                .price {
+                    font-size: 3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    margin: 20px 0;
+                }
+                .price-currency {
+                    font-size: 1.5rem;
+                    color: #7f8c8d;
+                }
+                .price-period {
+                    font-size: 1rem;
+                    color: #95a5a6;
+                }
+                .feature-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 30px 0;
+                }
+                .feature-list li {
+                    padding: 10px 0;
+                    border-bottom: 1px solid #ecf0f1;
+                }
+                .feature-list li:last-child {
+                    border-bottom: none;
+                }
+                .feature-check {
+                    color: #27ae60;
+                    margin-right: 10px;
+                }
+                .feature-cross {
+                    color: #e74c3c;
+                    margin-right: 10px;
+                }
+                .btn-pricing {
+                    width: 100%;
+                    padding: 15px;
+                    border-radius: 50px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    transition: all 0.3s ease;
+                }
+                .btn-pricing:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+                }
+                .navbar {
+                    background: rgba(255,255,255,0.95) !important;
+                    backdrop-filter: blur(10px);
+                }
+                .hero-section {
+                    padding: 100px 0 50px;
+                    text-align: center;
+                    color: white;
+                }
+                .comparison-table {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px;
+                    margin: 50px 0;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                }
+            </style>
+        </head>
+        <body>
+            <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+                <div class="container">
+                    <a class="navbar-brand fw-bold" href="/">
+                        <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+                    </a>
+                    <div class="navbar-nav ms-auto">
+                        <a class="nav-link" href="/">Ana Sayfa</a>
+                        <a class="nav-link" href="/pricing">Fiyatlandırma</a>
+                        <a class="nav-link" href="/app">Kayıt Ol</a>
+                    </div>
+                </div>
+            </nav>
+
+            <section class="hero-section">
+                <div class="container">
+                    <h1 class="display-4 fw-bold mb-4">
+                        <i class="fas fa-tags"></i> Fiyatlandırma Planları
+                    </h1>
+                    <p class="lead">İhtiyacınıza uygun planı seçin ve hemen başlayın</p>
+                    <div class="row justify-content-center mt-5">
+                        <div class="col-12">
+                            <div class="alert alert-info d-inline-block">
+                                <i class="fas fa-gift"></i> <strong>Özel Fırsat:</strong> İlk 30 gün ücretsiz!
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="pricing-section">
+                <div class="container">
+                    <div class="row">
+                        <!-- Starter Plan -->
+                        <div class="col-lg-4">
+                            <div class="pricing-card">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary">
+                                        <i class="fas fa-rocket"></i> Starter
+                                    </h3>
+                                    <p class="text-muted">Küçük işletmeler için</p>
+                                    <div class="price">
+                                        <span class="price-currency">₺</span>99
+                                        <span class="price-period">/ay</span>
+                                    </div>
+                                </div>
+                                
+                                <ul class="feature-list">
+                                    <li><i class="fas fa-check feature-check"></i> 5 Kamera Desteği</li>
+                                    <li><i class="fas fa-check feature-check"></i> Temel PPE Tespiti</li>
+                                    <li><i class="fas fa-check feature-check"></i> Email Bildirimleri</li>
+                                    <li><i class="fas fa-check feature-check"></i> Günlük Raporlar</li>
+                                    <li><i class="fas fa-check feature-check"></i> 7 Gün Veri Saklama</li>
+                                    <li><i class="fas fa-times feature-cross"></i> Gelişmiş Analitik</li>
+                                    <li><i class="fas fa-times feature-cross"></i> API Erişimi</li>
+                                    <li><i class="fas fa-times feature-cross"></i> Öncelikli Destek</li>
+                                </ul>
+                                
+                                <a href="/app?plan=starter" class="btn btn-outline-primary btn-pricing">
+                                    <i class="fas fa-arrow-right"></i> Başlayın
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Professional Plan -->
+                        <div class="col-lg-4">
+                            <div class="pricing-card featured">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary">
+                                        <i class="fas fa-star"></i> Professional
+                                    </h3>
+                                    <p class="text-muted">Orta ölçekli şirketler için</p>
+                                    <div class="price">
+                                        <span class="price-currency">₺</span>299
+                                        <span class="price-period">/ay</span>
+                                    </div>
+                                </div>
+                                
+                                <ul class="feature-list">
+                                    <li><i class="fas fa-check feature-check"></i> 15 Kamera Desteği</li>
+                                    <li><i class="fas fa-check feature-check"></i> Gelişmiş PPE Tespiti</li>
+                                    <li><i class="fas fa-check feature-check"></i> Email + SMS Bildirimleri</li>
+                                    <li><i class="fas fa-check feature-check"></i> Detaylı Raporlar</li>
+                                    <li><i class="fas fa-check feature-check"></i> 30 Gün Veri Saklama</li>
+                                    <li><i class="fas fa-check feature-check"></i> Gelişmiş Analitik</li>
+                                    <li><i class="fas fa-check feature-check"></i> API Erişimi</li>
+                                    <li><i class="fas fa-times feature-cross"></i> Öncelikli Destek</li>
+                                </ul>
+                                
+                                <a href="/app?plan=professional" class="btn btn-primary btn-pricing">
+                                    <i class="fas fa-crown"></i> En Popüler
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Enterprise Plan -->
+                        <div class="col-lg-4">
+                            <div class="pricing-card">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary">
+                                        <i class="fas fa-building"></i> Enterprise
+                                    </h3>
+                                    <p class="text-muted">Büyük kuruluşlar için</p>
+                                    <div class="price">
+                                        <span class="price-currency">₺</span>599
+                                        <span class="price-period">/ay</span>
+                                    </div>
+                                </div>
+                                
+                                <ul class="feature-list">
+                                    <li><i class="fas fa-check feature-check"></i> 50 Kamera Desteği</li>
+                                    <li><i class="fas fa-check feature-check"></i> AI Destekli Analiz</li>
+                                    <li><i class="fas fa-check feature-check"></i> Tüm Bildirim Türleri</li>
+                                    <li><i class="fas fa-check feature-check"></i> Özel Raporlar</li>
+                                    <li><i class="fas fa-check feature-check"></i> 90 Gün Veri Saklama</li>
+                                    <li><i class="fas fa-check feature-check"></i> Gelişmiş Analitik</li>
+                                    <li><i class="fas fa-check feature-check"></i> Full API Erişimi</li>
+                                    <li><i class="fas fa-check feature-check"></i> 7/24 Öncelikli Destek</li>
+                                </ul>
+                                
+                                <a href="/app?plan=enterprise" class="btn btn-success btn-pricing">
+                                    <i class="fas fa-rocket"></i> Kurumsal
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        </body>
+        </html>
+        '''
+    
     def get_home_template(self):
         """Ana sayfa template"""
         return '''
@@ -3120,6 +3488,50 @@ Mesaj:
                                 </div>
                                 
                                 <form id="registerForm" method="POST" action="/api/register-form">
+                                    <!-- Abonelik Planı Seçimi -->
+                                    <div class="mb-4">
+                                        <label class="form-label fw-semibold">
+                                            <i class="fas fa-crown text-warning me-2"></i>Abonelik Planı *
+                                        </label>
+                                        <div class="row">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="subscription_plan" 
+                                                           id="plan_starter" value="starter" checked>
+                                                    <label class="form-check-label" for="plan_starter">
+                                                        <strong>Starter</strong>
+                                                        <br><small class="text-muted">₺99/ay - 5 kamera</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="subscription_plan" 
+                                                           id="plan_professional" value="professional">
+                                                    <label class="form-check-label" for="plan_professional">
+                                                        <strong>Professional</strong>
+                                                        <br><small class="text-muted">₺299/ay - 15 kamera</small>
+                                                        <span class="badge bg-primary ms-1">Popüler</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="subscription_plan" 
+                                                           id="plan_enterprise" value="enterprise">
+                                                    <label class="form-check-label" for="plan_enterprise">
+                                                        <strong>Enterprise</strong>
+                                                        <br><small class="text-muted">₺599/ay - 50 kamera</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info mt-2">
+                                            <i class="fas fa-info-circle"></i> 
+                                            İlk 30 gün ücretsiz! İstediğiniz zaman planınızı değiştirebilirsiniz.
+                                        </div>
+                                    </div>
+
                                     <div class="row">
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
@@ -4059,7 +4471,7 @@ Mesaj:
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <form id="cameraForm">
+                            <form id="addCameraForm">
                                 <!-- Yardım Bölümü -->
                                 <div class="alert alert-info">
                                     <h6><i class="fas fa-info-circle"></i> Kamera Bilgilerini Nasıl Bulabilirim?</h6>
@@ -4480,7 +4892,7 @@ Mesaj:
                 }
                 
                 function testCameraConnection() {
-                    const formData = new FormData(document.getElementById('cameraForm'));
+                    const formData = new FormData(document.getElementById('addCameraForm'));
                     const data = Object.fromEntries(formData);
                     
                     // Gerekli alanları kontrol et
@@ -4557,7 +4969,7 @@ Mesaj:
                 }
                 
                 function addCamera() {
-                    const formData = new FormData(document.getElementById('cameraForm'));
+                    const formData = new FormData(document.getElementById('addCameraForm'));
                     const data = Object.fromEntries(formData);
                     
                     fetch(`/api/company/${companyId}/cameras`, {
@@ -4572,7 +4984,7 @@ Mesaj:
                             loadCameras();
                             loadStats();
                             bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
-                            document.getElementById('cameraForm').reset();
+                            document.getElementById('addCameraForm').reset();
                             // Test sonuçlarını temizle
                             document.getElementById('testResults').style.display = 'none';
                         } else {
@@ -5559,11 +5971,11 @@ Mesaj:
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Sektör</label>
                                             <select class="form-select" name="sector">
-                                                <option value="construction">İnşaat</option>
-                                                <option value="manufacturing">İmalat</option>
-                                                <option value="chemical">Kimya</option>
-                                                <option value="food">Gıda</option>
-                                                <option value="warehouse">Depo/Lojistik</option>
+                                                <option value="construction" {% if user_data.sector == 'construction' %}selected{% endif %}>İnşaat</option>
+                                                <option value="manufacturing" {% if user_data.sector == 'manufacturing' %}selected{% endif %}>İmalat</option>
+                                                <option value="chemical" {% if user_data.sector == 'chemical' %}selected{% endif %}>Kimya</option>
+                                                <option value="food" {% if user_data.sector == 'food' %}selected{% endif %}>Gıda</option>
+                                                <option value="warehouse" {% if user_data.sector == 'warehouse' %}selected{% endif %}>Depo/Lojistik</option>
                                             </select>
                                         </div>
                                     </div>
@@ -6044,13 +6456,13 @@ Mesaj:
                                 </div>
                                 
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-outline-primary">
+                                    <button class="btn btn-outline-primary" onclick="changePaymentMethod()">
                                         <i class="fas fa-credit-card"></i> Ödeme Yöntemi Değiştir
                                     </button>
-                                    <button class="btn btn-outline-warning">
+                                    <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#changePlanModal">
                                         <i class="fas fa-exchange-alt"></i> Plan Değiştir
                                     </button>
-                                    <button class="btn btn-outline-info">
+                                    <button class="btn btn-outline-info" onclick="downloadInvoices()">
                                         <i class="fas fa-download"></i> Faturaları İndir
                                     </button>
                                 </div>
@@ -6132,6 +6544,78 @@ Mesaj:
                 </div>
             </div>
             
+            <!-- Plan Değiştirme Modal -->
+            <div class="modal fade" id="changePlanModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-exchange-alt"></i> Abonelik Planı Değiştir
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="card plan-card" onclick="selectPlan('starter')">
+                                        <div class="card-body text-center">
+                                            <h5 class="card-title">
+                                                <i class="fas fa-rocket text-primary"></i> Starter
+                                            </h5>
+                                            <div class="price-display">₺99<small>/ay</small></div>
+                                            <ul class="list-unstyled">
+                                                <li>5 Kamera</li>
+                                                <li>Temel PPE</li>
+                                                <li>Email Bildirimleri</li>
+                                            </ul>
+                                            <input type="radio" name="new_plan" value="starter" id="starter_plan">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card plan-card" onclick="selectPlan('professional')">
+                                        <div class="card-body text-center">
+                                            <h5 class="card-title">
+                                                <i class="fas fa-star text-warning"></i> Professional
+                                            </h5>
+                                            <div class="price-display">₺299<small>/ay</small></div>
+                                            <ul class="list-unstyled">
+                                                <li>15 Kamera</li>
+                                                <li>Gelişmiş PPE</li>
+                                                <li>SMS + Email</li>
+                                            </ul>
+                                            <input type="radio" name="new_plan" value="professional" id="professional_plan">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card plan-card" onclick="selectPlan('enterprise')">
+                                        <div class="card-body text-center">
+                                            <h5 class="card-title">
+                                                <i class="fas fa-building text-success"></i> Enterprise
+                                            </h5>
+                                            <div class="price-display">₺599<small>/ay</small></div>
+                                            <ul class="list-unstyled">
+                                                <li>50 Kamera</li>
+                                                <li>AI Destekli</li>
+                                                <li>7/24 Destek</li>
+                                            </ul>
+                                            <input type="radio" name="new_plan" value="enterprise" id="enterprise_plan">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                            <button type="button" class="btn btn-primary" onclick="changePlan()">
+                                <i class="fas fa-check"></i> Planı Değiştir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Hesap Silme Modal -->
             <div class="modal fade" id="deleteAccountModal" tabindex="-1">
                 <div class="modal-dialog">
@@ -6263,7 +6747,10 @@ Mesaj:
                     .then(data => {
                         if (data.success) {
                             alert('✅ Profil başarıyla güncellendi!');
-                            location.reload();
+                            // Sayfayı yeniden yükle ki güncellenmiş veriler görünsün
+                            setTimeout(() => {
+                                location.reload();
+                            }, 1000);
                         } else {
                             alert('❌ Hata: ' + data.error);
                         }
@@ -6541,6 +7028,59 @@ Mesaj:
                     }
                 }
                 
+                // Plan seçimi fonksiyonları
+                function selectPlan(planType) {
+                    // Tüm plan kartlarından seçimi kaldır
+                    document.querySelectorAll('.plan-card').forEach(card => {
+                        card.classList.remove('selected');
+                    });
+                    
+                    // Seçilen planı işaretle
+                    event.currentTarget.classList.add('selected');
+                    document.getElementById(planType + '_plan').checked = true;
+                }
+                
+                function changePlan() {
+                    const selectedPlan = document.querySelector('input[name="new_plan"]:checked');
+                    
+                    if (!selectedPlan) {
+                        alert('❌ Lütfen bir plan seçin!');
+                        return;
+                    }
+                    
+                    const newPlan = selectedPlan.value;
+                    
+                    if (confirm(`${newPlan.toUpperCase()} planına geçmek istediğinizden emin misiniz?`)) {
+                        fetch(`/api/company/${companyId}/subscription/change-plan`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({new_plan: newPlan})
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success) {
+                                alert(`✅ Plan başarıyla ${result.plan_name} olarak değiştirildi!`);
+                                bootstrap.Modal.getInstance(document.getElementById('changePlanModal')).hide();
+                                loadSubscriptionInfo(); // Abonelik bilgilerini yenile
+                            } else {
+                                alert('❌ Hata: ' + result.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Plan değiştirme hatası:', error);
+                            alert('❌ Plan değiştirme sırasında bir hata oluştu');
+                        });
+                    }
+                }
+                
+                function changePaymentMethod() {
+                    alert('💳 Ödeme yöntemi değiştirme özelliği yakında eklenecek!');
+                }
+                
+                function downloadInvoices() {
+                    alert('📄 Fatura indirme özelliği yakında eklenecek!');
+                }
+
                 // Sayfa yüklendiğinde tüm ayarları yükle
                 document.addEventListener('DOMContentLoaded', function() {
                     // PPE konfigürasyonu yükle
@@ -8139,11 +8679,41 @@ Mesaj:
                                         <div class="form-text">Güvenlik için varsayılan parolayı değiştirin</div>
                                     </div>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Grup</label>
-                                    <select class="form-select" name="group_id">
-                                        <option value="">Grup Seçin</option>
-                                    </select>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Kimlik Doğrulama Türü</label>
+                                        <select class="form-select" name="auth_type">
+                                            <option value="basic">Basic Auth</option>
+                                            <option value="digest">Digest Auth</option>
+                                            <option value="none">Kimlik Doğrulama Yok</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Çözünürlük</label>
+                                        <select class="form-select" name="resolution">
+                                            <option value="640x480">640x480 (VGA)</option>
+                                            <option value="1280x720">1280x720 (HD)</option>
+                                            <option value="1920x1080">1920x1080 (Full HD)</option>
+                                            <option value="3840x2160">3840x2160 (4K)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">FPS (Saniye/Kare)</label>
+                                        <select class="form-select" name="fps">
+                                            <option value="15">15 FPS</option>
+                                            <option value="20">20 FPS</option>
+                                            <option value="25">25 FPS</option>
+                                            <option value="30" selected>30 FPS</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Grup</label>
+                                        <select class="form-select" name="group_id">
+                                            <option value="">Grup Seçin</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="d-grid">
                                     <button type="button" class="btn btn-warning" onclick="testCameraConnection()">
@@ -8469,47 +9039,76 @@ Mesaj:
                     const data = {};
                     formData.forEach((value, key) => { data[key] = value; });
                     
-                    const resultsContainer = document.getElementById('testResults');
-                    resultsContainer.style.display = 'block';
-                    resultsContainer.innerHTML = `
+                    // Gerekli alanları kontrol et
+                    if (!data.ip_address) {
+                        alert('❌ IP adresi gerekli!');
+                        return;
+                    }
+                    
+                    const testButton = document.querySelector('button[onclick="testCameraConnection()"]');
+                    const testResults = document.getElementById('testResults');
+                    
+                    // Test başlatıldığında UI güncelle
+                    testButton.disabled = true;
+                    testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test Ediliyor...';
+                    testResults.style.display = 'block';
+                    testResults.innerHTML = `
                         <div class="alert alert-info">
-                            <i class="fas fa-spinner fa-spin"></i> Kamera bağlantısı test ediliyor...
+                            <i class="fas fa-clock"></i> Kamera bağlantısı test ediliyor...
                         </div>
                     `;
                     
                     fetch(`/api/company/${companyId}/cameras/test`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(data)
                     })
                     .then(response => response.json())
                     .then(result => {
                         if (result.success) {
-                            const testData = result.test_results;
-                            resultsContainer.innerHTML = `
+                            testResults.innerHTML = `
                                 <div class="alert alert-success">
-                                    <h6><i class="fas fa-check-circle"></i> Test Başarılı!</h6>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <p><strong>Yanıt Süresi:</strong> ${testData.response_time}</p>
-                                            <p><strong>Çözünürlük:</strong> ${testData.resolution}</p>
-                                            <p><strong>FPS:</strong> ${testData.fps}</p>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <p><strong>Codec:</strong> ${testData.codec}</p>
-                                            <p><strong>Kalite Skoru:</strong> ${testData.quality_score}/10</p>
-                                            <p><strong>Test Süresi:</strong> ${testData.test_duration}</p>
-                                        </div>
-                                    </div>
+                                    <h6><i class="fas fa-check-circle"></i> Bağlantı Başarılı!</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>Durum:</strong> ${result.status}</li>
+                                        <li><strong>Protokol:</strong> ${result.protocol}</li>
+                                        <li><strong>Çözünürlük:</strong> ${result.resolution || 'Bilinmiyor'}</li>
+                                        <li><strong>Bağlantı Süresi:</strong> ${result.connection_time}ms</li>
+                                        ${result.quality_score ? `<li><strong>Kalite Skoru:</strong> ${result.quality_score}/100</li>` : ''}
+                                    </ul>
                                 </div>
                             `;
                         } else {
-                            resultsContainer.innerHTML = `
+                            testResults.innerHTML = `
                                 <div class="alert alert-danger">
-                                    <i class="fas fa-exclamation-triangle"></i> Test başarısız: ${result.error}
+                                    <h6><i class="fas fa-times-circle"></i> Bağlantı Başarısız!</h6>
+                                    <p><strong>Hata:</strong> ${result.error}</p>
+                                    <div class="mt-2">
+                                        <small><strong>Öneriler:</strong></small>
+                                        <ul class="mb-0">
+                                            <li>IP adresinin doğru olduğundan emin olun</li>
+                                            <li>Kamera ve bilgisayarın aynı ağda olduğunu kontrol edin</li>
+                                            <li>Kullanıcı adı ve şifrenin doğru olduğunu kontrol edin</li>
+                                            <li>Kameranın açık ve erişilebilir olduğunu kontrol edin</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             `;
                         }
+                    })
+                    .catch(error => {
+                        console.error('Kamera test hatası:', error);
+                        testResults.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-times-circle"></i> Test Hatası!</h6>
+                                <p>Kamera testi sırasında bir hata oluştu: ${error.message}</p>
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        // Test bittiğinde UI'yi eski haline getir
+                        testButton.disabled = false;
+                        testButton.innerHTML = '<i class="fas fa-check"></i> Bağlantıyı Test Et';
                     });
                 }
                 
@@ -8522,7 +9121,7 @@ Mesaj:
                     
                     fetch(`/api/company/${companyId}/cameras`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(data)
                     })
                     .then(response => response.json())
@@ -8530,10 +9129,17 @@ Mesaj:
                         if (result.success) {
                             alert('✅ Kamera başarıyla eklendi!');
                             bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
+                            form.reset();
+                            // Test sonuçlarını temizle
+                            document.getElementById('testResults').style.display = 'none';
                             loadCameras();
                         } else {
                             alert('❌ Hata: ' + result.error);
                         }
+                    })
+                    .catch(error => {
+                        console.error('Kamera ekleme hatası:', error);
+                        alert('❌ Kamera ekleme sırasında bir hata oluştu');
                     });
                 }
                 

@@ -934,10 +934,10 @@ class MultiTenantDatabase:
             cameras = []
             for row in cursor.fetchall():
                 # PostgreSQL RealDictRow için sözlük erişimi kullan
-                if hasattr(row, 'keys'):  # RealDictRow veya dict
+                if hasattr(row, 'keys') and hasattr(row, 'get'):  # RealDictRow veya dict
                     camera = {
-                        'id': row.get('camera_id'),
-                        'name': row.get('camera_name'),
+                        'camera_id': row.get('camera_id'),
+                        'camera_name': row.get('camera_name'),
                         'location': row.get('location'),
                         'ip_address': row.get('ip_address'),
                         'port': 8080,  # Default port updated to 8080
@@ -953,8 +953,8 @@ class MultiTenantDatabase:
                     }
                 else:  # Liste formatı (SQLite için)
                     camera = {
-                        'id': row[0],
-                        'name': row[1],
+                        'camera_id': row[0],
+                        'camera_name': row[1],
                         'location': row[2],
                         'ip_address': row[3],
                         'port': 8080,  # Default port updated to 8080
@@ -1243,13 +1243,26 @@ class MultiTenantDatabase:
             
             if result:
                 # PostgreSQL RealDictRow için sözlük erişimi kullan
-                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                if hasattr(result, 'keys') and hasattr(result, 'get'):  # RealDictRow veya dict
                     required_ppe = result.get('required_ppe')
                 else:  # Liste formatı (SQLite için)
                     required_ppe = result[0]
                 
                 if required_ppe:
-                    return json.loads(required_ppe)
+                    ppe_data = json.loads(required_ppe)
+                    
+                    # Şirket kaydı sırasında girilen format: {'required': [...], 'optional': [...]}
+                    if isinstance(ppe_data, dict):
+                        if 'required' in ppe_data:
+                            return ppe_data['required']
+                        else:
+                            # Eski format - sadece liste
+                            return list(ppe_data.keys()) if isinstance(ppe_data, dict) else []
+                    elif isinstance(ppe_data, list):
+                        # Direkt liste formatı
+                        return ppe_data
+                    else:
+                        return []
             return []
             
         except Exception as e:
