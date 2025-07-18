@@ -1967,6 +1967,168 @@ Mesaj:
                 logger.error(f"❌ PPE config getirme hatası: {e}")
                 return jsonify({'success': False, 'error': 'Veri getirme başarısız'}), 500
 
+        # Bildirim ayarları API endpoint'leri
+        @self.app.route('/api/company/<company_id>/notifications', methods=['GET'])
+        def get_notification_settings(company_id):
+            """Get company notification settings"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT email_notifications, sms_notifications, push_notifications, 
+                           violation_alerts, system_alerts, report_notifications
+                    FROM companies WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result:
+                    settings = {
+                        'email_notifications': result[0] if result[0] is not None else True,
+                        'sms_notifications': result[1] if result[1] is not None else False,
+                        'push_notifications': result[2] if result[2] is not None else True,
+                        'violation_alerts': result[3] if result[3] is not None else True,
+                        'system_alerts': result[4] if result[4] is not None else True,
+                        'report_notifications': result[5] if result[5] is not None else True
+                    }
+                else:
+                    # Varsayılan ayarlar
+                    settings = {
+                        'email_notifications': True,
+                        'sms_notifications': False,
+                        'push_notifications': True,
+                        'violation_alerts': True,
+                        'system_alerts': True,
+                        'report_notifications': True
+                    }
+                
+                return jsonify({
+                    'success': True,
+                    'settings': settings
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Bildirim ayarları getirme hatası: {e}")
+                return jsonify({'success': False, 'error': 'Veri getirme başarısız'}), 500
+
+        @self.app.route('/api/company/<company_id>/notifications', methods=['PUT'])
+        def update_notification_settings(company_id):
+            """Update company notification settings"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                if not data:
+                    return jsonify({'success': False, 'error': 'Veri gerekli'}), 400
+                
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    UPDATE companies 
+                    SET email_notifications = {placeholder}, 
+                        sms_notifications = {placeholder}, 
+                        push_notifications = {placeholder}, 
+                        violation_alerts = {placeholder}, 
+                        system_alerts = {placeholder}, 
+                        report_notifications = {placeholder},
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
+                ''', (
+                    data.get('email_notifications', True),
+                    data.get('sms_notifications', False),
+                    data.get('push_notifications', True),
+                    data.get('violation_alerts', True),
+                    data.get('system_alerts', True),
+                    data.get('report_notifications', True),
+                    company_id
+                ))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Bildirim ayarları güncellendi'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Bildirim ayarları güncelleme hatası: {e}")
+                return jsonify({'success': False, 'error': 'Güncelleme başarısız'}), 500
+
+        # Abonelik bilgileri API endpoint'leri
+        @self.app.route('/api/company/<company_id>/subscription', methods=['GET'])
+        def get_subscription_info(company_id):
+            """Get company subscription information"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT subscription_type, subscription_end, max_cameras, 
+                           created_at, company_name, sector
+                    FROM companies WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result:
+                    # Kamera kullanımını al
+                    cameras = self.db.get_company_cameras(company_id)
+                    used_cameras = len(cameras)
+                    
+                    # Abonelik durumunu kontrol et
+                    subscription_end = result[1]
+                    is_active = True
+                    days_remaining = 0
+                    
+                    if subscription_end:
+                        if isinstance(subscription_end, str):
+                            subscription_end = datetime.fromisoformat(subscription_end.replace('Z', '+00:00'))
+                        
+                        days_remaining = (subscription_end - datetime.now()).days
+                        is_active = days_remaining > 0
+                    
+                    subscription_info = {
+                        'subscription_type': result[0] or 'basic',
+                        'subscription_end': subscription_end.isoformat() if subscription_end else None,
+                        'max_cameras': result[2] or 5,
+                        'used_cameras': used_cameras,
+                        'created_at': result[3].isoformat() if result[3] else None,
+                        'company_name': result[4],
+                        'sector': result[5],
+                        'is_active': is_active,
+                        'days_remaining': days_remaining,
+                        'usage_percentage': (used_cameras / (result[2] or 5)) * 100
+                    }
+                    
+                    return jsonify({
+                        'success': True,
+                        'subscription': subscription_info
+                    })
+                else:
+                    return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
+                
+            except Exception as e:
+                logger.error(f"❌ Abonelik bilgileri getirme hatası: {e}")
+                return jsonify({'success': False, 'error': 'Veri getirme başarısız'}), 500
+
         # === UNIFIED CAMERA SYNC ENDPOINT ===
         @self.app.route('/api/company/<company_id>/cameras/sync', methods=['POST'])
         def sync_cameras(company_id):
@@ -3890,54 +4052,121 @@ Mesaj:
             <div class="modal fade" id="addCameraModal" tabindex="-1">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
-                        <div class="modal-header">
+                        <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title">
-                                <i class="fas fa-video"></i> Yeni Kamera Ekle
+                                <i class="fas fa-plus"></i> Yeni Kamera Ekle
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <form id="cameraForm">
+                                <!-- Yardım Bölümü -->
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-info-circle"></i> Kamera Bilgilerini Nasıl Bulabilirim?</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>IP Adresi:</strong> Kameranızın ağ ayarları menüsünden veya router admin panelinden</li>
+                                        <li><strong>Port:</strong> Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</li>
+                                        <li><strong>Kullanıcı/Şifre:</strong> Kamera web arayüzü için giriş bilgileri</li>
+                                        <li><strong>Test Önerisi:</strong> Önce "Bağlantıyı Test Et" yapın, sonra ekleyin</li>
+                                    </ul>
+                                </div>
+                                
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Kamera Adı *</label>
-                                        <input type="text" class="form-control" name="camera_name" required>
+                                        <input type="text" class="form-control" name="camera_name" placeholder="Örnek: Ana Giriş Kamerası" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Konum *</label>
-                                        <input type="text" class="form-control" name="location" required>
+                                        <label class="form-label">Lokasyon *</label>
+                                        <input type="text" class="form-control" name="location" placeholder="Örnek: Ana Giriş, Üretim Alanı" required>
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">IP Adresi</label>
-                                        <input type="text" class="form-control" name="ip_address" placeholder="192.168.1.100">
+                                        <label class="form-label">IP Adresi *</label>
+                                        <input type="text" class="form-control" name="ip_address" placeholder="192.168.1.11" required>
+                                        <div class="form-text">Kameranızın ağ ayarlarından IP adresini bulabilirsiniz</div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Port</label>
-                                        <input type="number" class="form-control" name="port" value="554">
+                                        <input type="number" class="form-control" name="port" placeholder="8080" value="8080">
+                                        <div class="form-text">Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</div>
                                     </div>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label">RTSP URL</label>
-                                    <input type="text" class="form-control" name="rtsp_url" placeholder="rtsp://192.168.1.100:554/stream1">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Protokol</label>
+                                        <select class="form-select" name="protocol">
+                                            <option value="http">HTTP (IP Webcam, Web Kameraları)</option>
+                                            <option value="rtsp">RTSP (Profesyonel IP Kameraları)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Stream Yolu</label>
+                                        <input type="text" class="form-control" name="stream_path" placeholder="/video" value="/video">
+                                        <div class="form-text">Yaygın yollar: /video, /stream1, /live</div>
+                                    </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Kullanıcı Adı</label>
-                                        <input type="text" class="form-control" name="username">
+                                        <input type="text" class="form-control" name="username" placeholder="admin">
+                                        <div class="form-text">Kamera web arayüzü için kullanıcı adı</div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Şifre</label>
-                                        <input type="password" class="form-control" name="password">
+                                        <input type="password" class="form-control" name="password" placeholder="Kamera parolanız">
+                                        <div class="form-text">Güvenlik için varsayılan parolayı değiştirin</div>
                                     </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Kimlik Doğrulama Türü</label>
+                                        <select class="form-select" name="auth_type">
+                                            <option value="basic">Basic Auth</option>
+                                            <option value="digest">Digest Auth</option>
+                                            <option value="none">Kimlik Doğrulama Yok</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Çözünürlük</label>
+                                        <select class="form-select" name="resolution">
+                                            <option value="640x480">640x480 (VGA)</option>
+                                            <option value="1280x720">1280x720 (HD)</option>
+                                            <option value="1920x1080">1920x1080 (Full HD)</option>
+                                            <option value="3840x2160">3840x2160 (4K)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">FPS (Saniye/Kare)</label>
+                                        <select class="form-select" name="fps">
+                                            <option value="15">15 FPS</option>
+                                            <option value="20">20 FPS</option>
+                                            <option value="25">25 FPS</option>
+                                            <option value="30" selected>30 FPS</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Grup</label>
+                                        <select class="form-select" name="group_id">
+                                            <option value="">Grup Seçin</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-warning" onclick="testCameraConnection()">
+                                        <i class="fas fa-check"></i> Bağlantıyı Test Et
+                                    </button>
+                                </div>
+                                <div id="testResults" class="mt-3" style="display: none;">
+                                    <!-- Test results will appear here -->
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> İptal
-                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
                             <button type="button" class="btn btn-primary" onclick="addCamera()">
                                 <i class="fas fa-plus"></i> Kamera Ekle
                             </button>
@@ -4250,6 +4479,83 @@ Mesaj:
                         now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                 }
                 
+                function testCameraConnection() {
+                    const formData = new FormData(document.getElementById('cameraForm'));
+                    const data = Object.fromEntries(formData);
+                    
+                    // Gerekli alanları kontrol et
+                    if (!data.ip_address) {
+                        alert('❌ IP adresi gerekli!');
+                        return;
+                    }
+                    
+                    const testButton = document.querySelector('button[onclick="testCameraConnection()"]');
+                    const testResults = document.getElementById('testResults');
+                    
+                    // Test başlatıldığında UI güncelle
+                    testButton.disabled = true;
+                    testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test Ediliyor...';
+                    testResults.style.display = 'block';
+                    testResults.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-clock"></i> Kamera bağlantısı test ediliyor...
+                        </div>
+                    `;
+                    
+                    fetch(`/api/company/${companyId}/cameras/test`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            testResults.innerHTML = `
+                                <div class="alert alert-success">
+                                    <h6><i class="fas fa-check-circle"></i> Bağlantı Başarılı!</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>Durum:</strong> ${result.status}</li>
+                                        <li><strong>Protokol:</strong> ${result.protocol}</li>
+                                        <li><strong>Çözünürlük:</strong> ${result.resolution || 'Bilinmiyor'}</li>
+                                        <li><strong>Bağlantı Süresi:</strong> ${result.connection_time}ms</li>
+                                        ${result.quality_score ? `<li><strong>Kalite Skoru:</strong> ${result.quality_score}/100</li>` : ''}
+                                    </ul>
+                                </div>
+                            `;
+                        } else {
+                            testResults.innerHTML = `
+                                <div class="alert alert-danger">
+                                    <h6><i class="fas fa-times-circle"></i> Bağlantı Başarısız!</h6>
+                                    <p><strong>Hata:</strong> ${result.error}</p>
+                                    <div class="mt-2">
+                                        <small><strong>Öneriler:</strong></small>
+                                        <ul class="mb-0">
+                                            <li>IP adresinin doğru olduğundan emin olun</li>
+                                            <li>Kamera ve bilgisayarın aynı ağda olduğunu kontrol edin</li>
+                                            <li>Kullanıcı adı ve şifrenin doğru olduğunu kontrol edin</li>
+                                            <li>Kameranın açık ve erişilebilir olduğunu kontrol edin</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Kamera test hatası:', error);
+                        testResults.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-times-circle"></i> Test Hatası!</h6>
+                                <p>Kamera testi sırasında bir hata oluştu: ${error.message}</p>
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        // Test bittiğinde UI'yi eski haline getir
+                        testButton.disabled = false;
+                        testButton.innerHTML = '<i class="fas fa-check"></i> Bağlantıyı Test Et';
+                    });
+                }
+                
                 function addCamera() {
                     const formData = new FormData(document.getElementById('cameraForm'));
                     const data = Object.fromEntries(formData);
@@ -4267,6 +4573,8 @@ Mesaj:
                             loadStats();
                             bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
                             document.getElementById('cameraForm').reset();
+                            // Test sonuçlarını temizle
+                            document.getElementById('testResults').style.display = 'none';
                         } else {
                             alert('❌ Hata: ' + result.error);
                         }
@@ -5424,18 +5732,223 @@ Mesaj:
                                     <h6>Email Bildirimleri</h6>
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <div>
-                                            <strong>PPE İhlal Uyarıları</strong>
-                                            <small class="text-muted d-block">İhlal tespit edildiğinde email gönder</small>
+                                            <strong>Email Bildirimleri</strong>
+                                            <small class="text-muted d-block">Genel email bildirimleri</small>
                                         </div>
                                         <label class="notification-toggle">
-                                            <input type="checkbox" checked>
+                                            <input type="checkbox" id="email_notifications" checked>
                                             <span class="slider"></span>
                                         </label>
                                     </div>
                                     
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <div>
-                                            <strong>Günlük Raporlar</strong>
+                                            <strong>SMS Bildirimleri</strong>
+                                            <small class="text-muted d-block">Acil durumlarda SMS gönder</small>
+                                        </div>
+                                        <label class="notification-toggle">
+                                            <input type="checkbox" id="sms_notifications">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <strong>Push Bildirimleri</strong>
+                                            <small class="text-muted d-block">Tarayıcı bildirimleri</small>
+                                        </div>
+                                        <label class="notification-toggle">
+                                            <input type="checkbox" id="push_notifications" checked>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>Uyarı Türleri</h6>
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <strong>İhlal Uyarıları</strong>
+                                            <small class="text-muted d-block">PPE ihlali tespit edildiğinde uyar</small>
+                                        </div>
+                                        <label class="notification-toggle">
+                                            <input type="checkbox" id="violation_alerts" checked>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <strong>Sistem Uyarıları</strong>
+                                            <small class="text-muted d-block">Sistem durumu ve hata uyarıları</small>
+                                        </div>
+                                        <label class="notification-toggle">
+                                            <input type="checkbox" id="system_alerts" checked>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <strong>Rapor Bildirimleri</strong>
+                                            <small class="text-muted d-block">Günlük ve haftalık raporlar</small>
+                                        </div>
+                                        <label class="notification-toggle">
+                                            <input type="checkbox" id="report_notifications" checked>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Abonelik -->
+                        <div id="subscription-section" class="settings-section" style="display: none;">
+                            <div class="subscription-card">
+                                <h5><i class="fas fa-credit-card"></i> Abonelik Bilgileri</h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="plan-feature">
+                                            <i class="fas fa-check"></i>
+                                            <strong>Plan:</strong> <span id="subscription-type">BASIC</span>
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-check"></i>
+                                            <strong>Durum:</strong> <span id="subscription-status">Aktif</span>
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-check"></i>
+                                            <strong>Bitiş Tarihi:</strong> <span id="subscription-end">--</span>
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-check"></i>
+                                            <strong>Kalan Gün:</strong> <span id="days-remaining">--</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="plan-feature">
+                                            <i class="fas fa-video"></i>
+                                            <strong>Kamera Kullanımı:</strong> <span id="camera-usage">--/--</span>
+                                        </div>
+                                        <div class="progress mb-3">
+                                            <div class="progress-bar bg-success" id="usage-progress" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-shield-alt"></i>
+                                            <strong>Güvenlik:</strong> SSL Şifreleme
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-headset"></i>
+                                            <strong>Destek:</strong> 7/24 Teknik Destek
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <button class="btn btn-light">
+                                        <i class="fas fa-upgrade"></i> Planı Yükselt
+                                    </button>
+                                    <button class="btn btn-outline-light ms-2">
+                                        <i class="fas fa-file-invoice"></i> Fatura Geçmişi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Güvenlik -->
+                        <div id="security-section" class="settings-section" style="display: none;">
+                            <div class="form-section">
+                                <h5><i class="fas fa-shield-alt"></i> Güvenlik Ayarları</h5>
+                                
+                                <div class="mb-4">
+                                    <h6>Şifre Değiştir</h6>
+                                    <form id="passwordForm">
+                                        <div class="mb-3">
+                                            <label class="form-label">Mevcut Şifre</label>
+                                            <input type="password" class="form-control" name="current_password" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Yeni Şifre</label>
+                                            <input type="password" class="form-control" name="new_password" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Yeni Şifre (Tekrar)</label>
+                                            <input type="password" class="form-control" name="confirm_password" required>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-key"></i> Şifre Değiştir
+                                        </button>
+                                    </form>
+                                </div>
+                                
+                                <div class="danger-zone">
+                                    <h6><i class="fas fa-exclamation-triangle"></i> Tehlikeli Bölge</h6>
+                                    <p>Hesabınızı kalıcı olarak silmek istiyorsanız aşağıdaki adımları takip edin.</p>
+                                    
+                                    <form id="deleteAccountForm">
+                                        <div class="mb-3">
+                                            <label class="form-label">Şifrenizi Girin</label>
+                                            <input type="password" class="form-control" name="password" required>
+                                        </div>
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" id="confirmDelete" required>
+                                            <label class="form-check-label" for="confirmDelete">
+                                                Hesabımı ve tüm verilerimi kalıcı olarak silmek istiyorum
+                                            </label>
+                                        </div>
+                                        <button type="button" class="btn btn-danger" onclick="deleteAccount()">
+                                            <i class="fas fa-trash"></i> Hesabı Sil
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                const companyId = '{{ company_id }}';
+                
+                // Email validation function
+                function validateEmail(input) {
+                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    const isValid = emailRegex.test(input.value);
+                    
+                    if (input.value && !isValid) {
+                        input.classList.add('is-invalid');
+                        input.classList.remove('is-valid');
+                        
+                        // Remove existing error message
+                        const existingError = input.parentNode.querySelector('.invalid-feedback');
+                        if (existingError) {
+                            existingError.remove();
+                        }
+                        
+                        // Add error message
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'invalid-feedback';
+                        errorDiv.textContent = 'Please enter a valid email address (Turkish characters are supported)';
+                        input.parentNode.appendChild(errorDiv);
+                    } else if (input.value && isValid) {
+                        input.classList.add('is-valid');
+                        input.classList.remove('is-invalid');
+                        
+                        // Remove error message
+                        const existingError = input.parentNode.querySelector('.invalid-feedback');
+                        if (existingError) {
+                            existingError.remove();
+                        }
+                    } else {
+                        input.classList.remove('is-valid', 'is-invalid');
+                        
+                        // Remove error message
+                        const existingError = input.parentNode.querySelector('.invalid-feedback');
+                        if (existingError) {
+                            existingError.remove();
+                        }
+                    }
+                }
                                             <small class="text-muted d-block">Günlük özet raporu gönder</small>
                                         </div>
                                         <label class="notification-toggle">
@@ -5817,6 +6330,10 @@ Mesaj:
                     toggle.addEventListener('change', function() {
                         const settingName = this.closest('.d-flex').querySelector('strong').textContent;
                         const isEnabled = this.checked;
+                        const settingKey = this.id;
+                        
+                        // API'ye gönder
+                        updateNotificationSetting(settingKey, isEnabled);
                         
                         // Show toast notification
                         const toast = document.createElement('div');
@@ -5840,6 +6357,77 @@ Mesaj:
                         }, 3000);
                     });
                 });
+
+                // Notification settings functions
+                function updateNotificationSetting(settingKey, isEnabled) {
+                    const settings = {};
+                    settings[settingKey] = isEnabled;
+                    
+                    fetch(`/api/company/${companyId}/notifications`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(settings)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (!result.success) {
+                            console.error('Bildirim ayarı güncellenemedi:', result.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Bildirim ayarı güncelleme hatası:', error);
+                    });
+                }
+
+                // Load notification settings
+                function loadNotificationSettings() {
+                    fetch(`/api/company/${companyId}/notifications`)
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            const settings = result.settings;
+                            
+                            // Toggle'ları güncelle
+                            Object.keys(settings).forEach(key => {
+                                const toggle = document.getElementById(key);
+                                if (toggle) {
+                                    toggle.checked = settings[key];
+                                }
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Bildirim ayarları yükleme hatası:', error);
+                    });
+                }
+
+                // Load subscription info
+                function loadSubscriptionInfo() {
+                    fetch(`/api/company/${companyId}/subscription`)
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            const subscription = result.subscription;
+                            
+                            // Update subscription display
+                            document.getElementById('subscription-type').textContent = subscription.subscription_type.toUpperCase();
+                            document.getElementById('subscription-status').textContent = subscription.is_active ? 'Aktif' : 'Süresi Dolmuş';
+                            document.getElementById('subscription-end').textContent = new Date(subscription.subscription_end).toLocaleDateString('tr-TR');
+                            document.getElementById('days-remaining').textContent = subscription.days_remaining;
+                            document.getElementById('camera-usage').textContent = `${subscription.used_cameras}/${subscription.max_cameras}`;
+                            
+                            // Progress bar
+                            const progressBar = document.getElementById('usage-progress');
+                            if (progressBar) {
+                                progressBar.style.width = `${subscription.usage_percentage}%`;
+                                progressBar.className = `progress-bar ${subscription.usage_percentage > 80 ? 'bg-danger' : subscription.usage_percentage > 60 ? 'bg-warning' : 'bg-success'}`;
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Abonelik bilgileri yükleme hatası:', error);
+                    });
+                }
                 
                 // Delete Account (Enhanced)
                 function deleteAccount() {
@@ -5953,10 +6541,21 @@ Mesaj:
                     }
                 }
                 
-                // Sayfa yüklendiğinde PPE konfigürasyonunu yükle
+                // Sayfa yüklendiğinde tüm ayarları yükle
                 document.addEventListener('DOMContentLoaded', function() {
+                    // PPE konfigürasyonu yükle
                     if (document.getElementById('ppe-config-section')) {
                         loadPPEConfig();
+                    }
+                    
+                    // Bildirim ayarlarını yükle
+                    if (document.getElementById('notifications-section')) {
+                        loadNotificationSettings();
+                    }
+                    
+                    // Abonelik bilgilerini yükle
+                    if (document.getElementById('subscription-section')) {
+                        loadSubscriptionInfo();
                     }
                 });
             </script>

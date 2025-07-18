@@ -296,6 +296,12 @@ class MultiTenantDatabase:
                     status TEXT DEFAULT 'active',
                     api_key TEXT UNIQUE,
                     required_ppe TEXT, -- JSON: şirket bazlı PPE gereksinimleri
+                    email_notifications BOOLEAN DEFAULT TRUE,
+                    sms_notifications BOOLEAN DEFAULT FALSE,
+                    push_notifications BOOLEAN DEFAULT TRUE,
+                    violation_alerts BOOLEAN DEFAULT TRUE,
+                    system_alerts BOOLEAN DEFAULT TRUE,
+                    report_notifications BOOLEAN DEFAULT TRUE,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
