@@ -1457,18 +1457,135 @@ Mesaj:
         
         @self.app.route('/api/company/<company_id>/reports/violations', methods=['GET'])
         def get_violations_report(company_id):
-            """İhlal raporunu getir"""
+            """İhlal raporunu getir - Dinamik Database Verisi"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
-                # Son 30 günün ihlal verileri
+                # Son 30 günün ihlal verileri - Gerçek Database'den
                 from datetime import datetime, timedelta
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=30)
                 
-                # Örnek veri oluştur (gerçek sistemde database'den gelecek)
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # Günlük ihlal sayıları
+                if self.db.db_adapter.db_type == 'postgresql':
+                    cursor.execute(f'''
+                        SELECT DATE(timestamp) as date, COUNT(*) as count,
+                               STRING_AGG(DISTINCT missing_ppe, ', ') as ppe_types
+                        FROM violations 
+                        WHERE company_id = {placeholder} 
+                        AND timestamp >= {placeholder}
+                        GROUP BY DATE(timestamp)
+                        ORDER BY DATE(timestamp) DESC
+                        LIMIT 30
+                    ''', (company_id, start_date.isoformat()))
+                else:
+                    cursor.execute(f'''
+                        SELECT DATE(timestamp) as date, COUNT(*) as count,
+                               GROUP_CONCAT(DISTINCT missing_ppe) as ppe_types
+                        FROM violations 
+                        WHERE company_id = {placeholder} 
+                        AND timestamp >= {placeholder}
+                        GROUP BY DATE(timestamp)
+                        ORDER BY DATE(timestamp) DESC
+                        LIMIT 30
+                    ''', (company_id, start_date.isoformat()))
+                
+                daily_violations = cursor.fetchall()
+                
+                # Kamera bazlı ihlaller
+                cursor.execute(f'''
+                    SELECT camera_id, COUNT(*) as count,
+                           MAX(timestamp) as last_violation
+                    FROM violations 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= {placeholder}
+                    GROUP BY camera_id
+                    ORDER BY count DESC
+                ''', (company_id, start_date.isoformat()))
+                
+                camera_violations = cursor.fetchall()
+                
+                # PPE türü bazlı ihlaller
+                cursor.execute(f'''
+                    SELECT missing_ppe, COUNT(*) as count
+                    FROM violations 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= {placeholder}
+                    GROUP BY missing_ppe
+                    ORDER BY count DESC
+                ''', (company_id, start_date.isoformat()))
+                
+                ppe_violations = cursor.fetchall()
+                
+                conn.close()
+                
+                # Veriyi formatla
+                violations_data = {
+                    'daily_violations': [],
+                    'camera_violations': [],
+                    'ppe_violations': [],
+                    'total_violations': 0,
+                    'period': f"{start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+                }
+                
+                # Günlük ihlaller
+                total_violations = 0
+                for row in daily_violations:
+                    if hasattr(row, 'keys'):  # PostgreSQL
+                        violations_data['daily_violations'].append({
+                            'date': row['date'],
+                            'count': row['count'],
+                            'ppe_types': row['ppe_types'] or ''
+                        })
+                        total_violations += row['count']
+                    else:  # SQLite
+                        violations_data['daily_violations'].append({
+                            'date': row[0],
+                            'count': row[1],
+                            'ppe_types': row[2] or ''
+                        })
+                        total_violations += row[1]
+                
+                # Kamera ihlalleri
+                for row in camera_violations:
+                    if hasattr(row, 'keys'):  # PostgreSQL
+                        violations_data['camera_violations'].append({
+                            'camera_id': row['camera_id'],
+                            'count': row['count'],
+                            'last_violation': row['last_violation']
+                        })
+                    else:  # SQLite
+                        violations_data['camera_violations'].append({
+                            'camera_id': row[0],
+                            'count': row[1],
+                            'last_violation': row[2]
+                        })
+                
+                # PPE ihlalleri
+                for row in ppe_violations:
+                    if hasattr(row, 'keys'):  # PostgreSQL
+                        violations_data['ppe_violations'].append({
+                            'ppe_type': row['missing_ppe'],
+                            'count': row['count']
+                        })
+                    else:  # SQLite
+                        violations_data['ppe_violations'].append({
+                            'ppe_type': row[0],
+                            'count': row[1]
+                        })
+                
+                violations_data['total_violations'] = total_violations
+                
+                logger.info(f"✅ Violations report generated for {company_id}: {total_violations} violations")
+                
+                return jsonify({'success': True, 'data': violations_data})
                 violations = [
                     {
                         'date': '2025-07-05',
@@ -1510,31 +1627,215 @@ Mesaj:
         
         @self.app.route('/api/company/<company_id>/reports/compliance', methods=['GET'])
         def get_compliance_report(company_id):
-            """Uyumluluk raporunu getir"""
+            """Uyumluluk raporunu getir - Dinamik Database Verisi"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
-                # Örnek uyumluluk verileri
-                compliance_data = {
-                    'overall_compliance': 87.5,
-                    'helmet_compliance': 92.3,
-                    'vest_compliance': 85.1,
-                    'shoes_compliance': 89.7,
-                    'daily_stats': [
-                        {'date': '2025-07-01', 'compliance': 88.2},
-                        {'date': '2025-07-02', 'compliance': 91.5},
-                        {'date': '2025-07-03', 'compliance': 85.8},
-                        {'date': '2025-07-04', 'compliance': 89.3},
-                        {'date': '2025-07-05', 'compliance': 87.5}
-                    ],
-                    'camera_stats': [
-                        {'camera_name': 'Ana Giriş', 'compliance': 89.2},
-                        {'camera_name': 'İnşaat Alanı', 'compliance': 84.5},
-                        {'camera_name': 'Depo Girişi', 'compliance': 91.7}
-                    ]
+                # Gerçek uyumluluk verileri - Database'den
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # Son 30 günün detection ve violation verileri
+                from datetime import datetime, timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=30)
+                
+                # Günlük uyum oranları
+                if self.db.db_adapter.db_type == 'postgresql':
+                    cursor.execute(f'''
+                        SELECT DATE(d.timestamp) as date,
+                               COUNT(d.detection_id) as total_detections,
+                               COUNT(v.violation_id) as total_violations,
+                               ROUND(
+                                   CASE 
+                                       WHEN COUNT(d.detection_id) > 0 
+                                       THEN (COUNT(d.detection_id) - COUNT(v.violation_id)) * 100.0 / COUNT(d.detection_id)
+                                       ELSE 0 
+                                   END, 1
+                               ) as compliance_rate
+                        FROM detections d
+                        LEFT JOIN violations v ON DATE(d.timestamp) = DATE(v.timestamp) 
+                                              AND d.company_id = v.company_id
+                        WHERE d.company_id = {placeholder} 
+                        AND d.timestamp >= {placeholder}
+                        GROUP BY DATE(d.timestamp)
+                        ORDER BY DATE(d.timestamp) DESC
+                        LIMIT 30
+                    ''', (company_id, start_date.isoformat()))
+                else:
+                    cursor.execute(f'''
+                        SELECT DATE(d.timestamp) as date,
+                               COUNT(d.detection_id) as total_detections,
+                               COUNT(v.violation_id) as total_violations,
+                               ROUND(
+                                   CASE 
+                                       WHEN COUNT(d.detection_id) > 0 
+                                       THEN (COUNT(d.detection_id) - COUNT(v.violation_id)) * 100.0 / COUNT(d.detection_id)
+                                       ELSE 0 
+                                   END, 1
+                               ) as compliance_rate
+                        FROM detections d
+                        LEFT JOIN violations v ON DATE(d.timestamp) = DATE(v.timestamp) 
+                                              AND d.company_id = v.company_id
+                        WHERE d.company_id = {placeholder} 
+                        AND d.timestamp >= {placeholder}
+                        GROUP BY DATE(d.timestamp)
+                        ORDER BY DATE(d.timestamp) DESC
+                        LIMIT 30
+                    ''', (company_id, start_date.isoformat()))
+                
+                daily_compliance = cursor.fetchall()
+                
+                # Kamera bazlı uyum oranları
+                cursor.execute(f'''
+                    SELECT d.camera_id,
+                           COUNT(d.detection_id) as total_detections,
+                           COUNT(v.violation_id) as total_violations,
+                           ROUND(
+                               CASE 
+                                   WHEN COUNT(d.detection_id) > 0 
+                                   THEN (COUNT(d.detection_id) - COUNT(v.violation_id)) * 100.0 / COUNT(d.detection_id)
+                                   ELSE 0 
+                               END, 1
+                           ) as compliance_rate
+                    FROM detections d
+                    LEFT JOIN violations v ON d.camera_id = v.camera_id 
+                                          AND d.company_id = v.company_id
+                    WHERE d.company_id = {placeholder} 
+                    AND d.timestamp >= {placeholder}
+                    GROUP BY d.camera_id
+                    ORDER BY compliance_rate DESC
+                ''', (company_id, start_date.isoformat()))
+                
+                camera_compliance = cursor.fetchall()
+                
+                # PPE türü bazlı uyum oranları
+                cursor.execute(f'''
+                    SELECT missing_ppe, COUNT(*) as violation_count
+                    FROM violations 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= {placeholder}
+                    GROUP BY missing_ppe
+                    ORDER BY violation_count DESC
+                ''', (company_id, start_date.isoformat()))
+                
+                ppe_violations = cursor.fetchall()
+                
+                # Toplam istatistikler
+                cursor.execute(f'''
+                    SELECT COUNT(*) as total_detections
+                    FROM detections 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= {placeholder}
+                ''', (company_id, start_date.isoformat()))
+                
+                total_detections = cursor.fetchone()
+                total_detections = total_detections[0] if total_detections else 0
+                
+                cursor.execute(f'''
+                    SELECT COUNT(*) as total_violations
+                    FROM violations 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= {placeholder}
+                ''', (company_id, start_date.isoformat()))
+                
+                total_violations = cursor.fetchone()
+                total_violations = total_violations[0] if total_violations else 0
+                
+                conn.close()
+                
+                # Genel uyum oranı hesapla
+                overall_compliance = 0
+                if total_detections > 0:
+                    overall_compliance = round((total_detections - total_violations) * 100.0 / total_detections, 1)
+                
+                # PPE türü bazlı uyum hesapla
+                ppe_compliance = {
+                    'helmet_compliance': 90.0,  # Varsayılan
+                    'vest_compliance': 85.0,    # Varsayılan
+                    'shoes_compliance': 88.0    # Varsayılan
                 }
+                
+                # Violation verilerinden PPE uyum oranlarını hesapla
+                helmet_violations = 0
+                vest_violations = 0
+                shoes_violations = 0
+                
+                for row in ppe_violations:
+                    if hasattr(row, 'keys'):  # PostgreSQL
+                        ppe_type = row['missing_ppe'].lower()
+                        count = row['violation_count']
+                    else:  # SQLite
+                        ppe_type = row[0].lower()
+                        count = row[1]
+                    
+                    if 'helmet' in ppe_type or 'kask' in ppe_type:
+                        helmet_violations += count
+                    elif 'vest' in ppe_type or 'yelek' in ppe_type:
+                        vest_violations += count
+                    elif 'shoes' in ppe_type or 'ayakkabı' in ppe_type:
+                        shoes_violations += count
+                
+                # PPE uyum oranlarını güncelle
+                if total_detections > 0:
+                    ppe_compliance['helmet_compliance'] = round((total_detections - helmet_violations) * 100.0 / total_detections, 1)
+                    ppe_compliance['vest_compliance'] = round((total_detections - vest_violations) * 100.0 / total_detections, 1)
+                    ppe_compliance['shoes_compliance'] = round((total_detections - shoes_violations) * 100.0 / total_detections, 1)
+                
+                # Veriyi formatla
+                compliance_data = {
+                    'overall_compliance': overall_compliance,
+                    'helmet_compliance': ppe_compliance['helmet_compliance'],
+                    'vest_compliance': ppe_compliance['vest_compliance'],
+                    'shoes_compliance': ppe_compliance['shoes_compliance'],
+                    'daily_stats': [],
+                    'camera_stats': [],
+                    'total_detections': total_detections,
+                    'total_violations': total_violations,
+                    'period': f"{start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+                }
+                
+                # Günlük istatistikler
+                for row in daily_compliance:
+                    if hasattr(row, 'keys'):  # PostgreSQL
+                        compliance_data['daily_stats'].append({
+                            'date': str(row['date']),
+                            'compliance': float(row['compliance_rate']) if row['compliance_rate'] else 0,
+                            'detections': row['total_detections'],
+                            'violations': row['total_violations']
+                        })
+                    else:  # SQLite
+                        compliance_data['daily_stats'].append({
+                            'date': str(row[0]),
+                            'compliance': float(row[3]) if row[3] else 0,
+                            'detections': row[1],
+                            'violations': row[2]
+                        })
+                
+                # Kamera istatistikleri
+                for row in camera_compliance:
+                    if hasattr(row, 'keys'):  # PostgreSQL
+                        compliance_data['camera_stats'].append({
+                            'camera_name': f'Kamera {row["camera_id"]}',
+                            'camera_id': row['camera_id'],
+                            'compliance': float(row['compliance_rate']) if row['compliance_rate'] else 0,
+                            'detections': row['total_detections'],
+                            'violations': row['total_violations']
+                        })
+                    else:  # SQLite
+                        compliance_data['camera_stats'].append({
+                            'camera_name': f'Kamera {row[0]}',
+                            'camera_id': row[0],
+                            'compliance': float(row[3]) if row[3] else 0,
+                            'detections': row[1],
+                            'violations': row[2]
+                        })
+                
+                logger.info(f"✅ Compliance report generated for {company_id}: {overall_compliance}% overall compliance")
                 
                 return jsonify({'success': True, 'data': compliance_data})
                 
@@ -8428,30 +8729,30 @@ Mesaj:
                                         <div class="mb-3">
                                             <div class="d-flex justify-content-between">
                                                 <span>Baret</span>
-                                                <span class="text-success fw-bold">92.3%</span>
+                                                <span class="text-success fw-bold" id="helmetCompliance">--%</span>
                                             </div>
                                             <div class="progress">
-                                                <div class="progress-bar bg-success" style="width: 92.3%"></div>
+                                                <div class="progress-bar bg-success" id="helmetProgress" style="width: 0%"></div>
                                             </div>
                                         </div>
                                         
                                         <div class="mb-3">
                                             <div class="d-flex justify-content-between">
                                                 <span>Güvenlik Yeleği</span>
-                                                <span class="text-warning fw-bold">85.1%</span>
+                                                <span class="text-warning fw-bold" id="vestCompliance">--%</span>
                                             </div>
                                             <div class="progress">
-                                                <div class="progress-bar bg-warning" style="width: 85.1%"></div>
+                                                <div class="progress-bar bg-warning" id="vestProgress" style="width: 0%"></div>
                                             </div>
                                         </div>
                                         
                                         <div class="mb-3">
                                             <div class="d-flex justify-content-between">
                                                 <span>Güvenlik Ayakkabısı</span>
-                                                <span class="text-success fw-bold">89.7%</span>
+                                                <span class="text-success fw-bold" id="shoesCompliance">--%</span>
                                             </div>
                                             <div class="progress">
-                                                <div class="progress-bar bg-success" style="width: 89.7%"></div>
+                                                <div class="progress-bar bg-success" id="shoesProgress" style="width: 0%"></div>
                                             </div>
                                         </div>
                                         
@@ -8638,21 +8939,105 @@ Mesaj:
                 
                 // Initialize charts and data
                 document.addEventListener('DOMContentLoaded', function() {
-                    initializeCharts();
+                    loadDashboardData();
                     loadViolations();
+                    loadComplianceReport();
                 });
                 
-                // Initialize Charts
-                function initializeCharts() {
-                    // Compliance Chart
+                // Load Dashboard Data
+                function loadDashboardData() {
+                    // Load violations report
+                    fetch(`/api/company/${companyId}/reports/violations`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateViolationsChart(data.data);
+                                updateViolationsStats(data.data);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading violations report:', error);
+                        });
+                    
+                    // Load compliance report
+                    fetch(`/api/company/${companyId}/reports/compliance`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateComplianceChart(data.data);
+                                updateComplianceStats(data.data);
+                                updateCameraPerformance(data.data);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading compliance report:', error);
+                        });
+                }
+                
+                // Update Violations Chart
+                function updateViolationsChart(data) {
+                    const violationCtx = document.getElementById('violationTypesChart').getContext('2d');
+                    
+                    // PPE türlerini grupla
+                    const ppeTypes = {};
+                    data.ppe_violations.forEach(violation => {
+                        const type = violation.ppe_type;
+                        ppeTypes[type] = (ppeTypes[type] || 0) + violation.count;
+                    });
+                    
+                    const labels = Object.keys(ppeTypes);
+                    const values = Object.values(ppeTypes);
+                    const colors = ['#e74c3c', '#f39c12', '#3498db', '#9b59b6', '#1abc9c'];
+                    
+                    if (violationTypesChart) {
+                        violationTypesChart.destroy();
+                    }
+                    
+                    violationTypesChart = new Chart(violationCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: colors.slice(0, labels.length),
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // Update Compliance Chart
+                function updateComplianceChart(data) {
                     const complianceCtx = document.getElementById('complianceChart').getContext('2d');
+                    
+                    // Son 7 günün verilerini al
+                    const dailyStats = data.daily_stats.slice(0, 7).reverse();
+                    const labels = dailyStats.map(stat => {
+                        const date = new Date(stat.date);
+                        return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+                    });
+                    const values = dailyStats.map(stat => stat.compliance);
+                    
+                    if (complianceChart) {
+                        complianceChart.destroy();
+                    }
+                    
                     complianceChart = new Chart(complianceCtx, {
                         type: 'line',
                         data: {
-                            labels: ['01 Tem', '02 Tem', '03 Tem', '04 Tem', '05 Tem'],
+                            labels: labels,
                             datasets: [{
                                 label: 'Uyumluluk Oranı (%)',
-                                data: [88.2, 91.5, 85.8, 89.3, 87.5],
+                                data: values,
                                 borderColor: '#667eea',
                                 backgroundColor: 'rgba(102, 126, 234, 0.1)',
                                 borderWidth: 3,
@@ -8676,78 +9061,130 @@ Mesaj:
                             }
                         }
                     });
+                }
+                
+                // Update Compliance Stats
+                function updateComplianceStats(data) {
+                    // Genel uyumluluk
+                    document.getElementById('overallCompliance').textContent = data.overall_compliance + '%';
+                    document.getElementById('overallCompliance').className = 
+                        data.overall_compliance >= 85 ? 'stat-value compliance-good' :
+                        data.overall_compliance >= 70 ? 'stat-value compliance-warning' :
+                        'stat-value compliance-danger';
                     
-                    // Violation Types Chart
-                    const violationCtx = document.getElementById('violationTypesChart').getContext('2d');
-                    violationTypesChart = new Chart(violationCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Baret', 'Güvenlik Yeleği', 'Güvenlik Ayakkabısı'],
-                            datasets: [{
-                                data: [12, 8, 3],
-                                backgroundColor: ['#e74c3c', '#f39c12', '#3498db'],
-                                borderWidth: 0
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'bottom'
+                    // PPE türü bazlı uyumluluk
+                    updatePPECompliance('helmet', data.helmet_compliance);
+                    updatePPECompliance('vest', data.vest_compliance);
+                    updatePPECompliance('shoes', data.shoes_compliance);
+                    
+                    // Toplam tespit ve ihlal sayıları
+                    document.getElementById('totalDetections').textContent = data.total_detections;
+                    document.getElementById('totalViolations').textContent = data.total_violations;
+                }
+                
+                // Update PPE Compliance
+                function updatePPECompliance(type, value) {
+                    const element = document.getElementById(type + 'Compliance');
+                    const progressBar = document.getElementById(type + 'Progress');
+                    
+                    if (element) {
+                        element.textContent = value + '%';
+                        element.className = 
+                            value >= 85 ? 'text-success fw-bold' :
+                            value >= 70 ? 'text-warning fw-bold' :
+                            'text-danger fw-bold';
+                    }
+                    
+                    if (progressBar) {
+                        progressBar.style.width = value + '%';
+                        progressBar.className = 
+                            value >= 85 ? 'progress-bar bg-success' :
+                            value >= 70 ? 'progress-bar bg-warning' :
+                            'progress-bar bg-danger';
+                    }
+                }
+                
+                // Update Camera Performance
+                function updateCameraPerformance(data) {
+                    const tableBody = document.getElementById('cameraPerformanceTable');
+                    if (!tableBody) return;
+                    
+                    tableBody.innerHTML = '';
+                    
+                    data.camera_stats.forEach(camera => {
+                        const row = document.createElement('tr');
+                        const complianceBadge = 
+                            camera.compliance >= 85 ? 'bg-success' :
+                            camera.compliance >= 70 ? 'bg-warning' :
+                            'bg-danger';
+                        
+                        row.innerHTML = `
+                            <td><i class="fas fa-video text-primary"></i> ${camera.camera_name}</td>
+                            <td><span class="badge ${complianceBadge}">${camera.compliance}%</span></td>
+                            <td>${camera.detections}</td>
+                            <td>${camera.violations}</td>
+                            <td>-</td>
+                            <td><span class="badge bg-success">Aktif</span></td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+                
+                // Update Violations Stats
+                function updateViolationsStats(data) {
+                    document.getElementById('totalViolationsCount').textContent = data.total_violations;
+                    document.getElementById('reportPeriod').textContent = data.period;
                                 }
                             }
                         }
                     });
                 }
                 
-                // Load Violations
+                // Load Violations - Already implemented in loadDashboardData
                 function loadViolations() {
-                    fetch(`/api/company/${companyId}/reports/violations`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            displayViolations(data.violations);
-                        } else {
-                            console.error('Failed to load violations:', data.error);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error loading violations:', error);
-                    });
+                    // This function is called from loadDashboardData
+                    // No need to duplicate API calls
+                }
+                
+                // Load Compliance Report
+                function loadComplianceReport() {
+                    // This function is called from loadDashboardData
+                    // No need to duplicate API calls
                 }
                 
                 // Display Violations
-                function displayViolations(violations) {
+                function displayViolations(data) {
                     const container = document.getElementById('violationsList');
                     
-                    if (violations.length === 0) {
+                    if (!data.camera_violations || data.camera_violations.length === 0) {
                         container.innerHTML = `
                             <div class="text-center py-4">
                                 <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                                 <h5 class="text-success">Hiç ihlal yok!</h5>
-                                <p class="text-muted">Seçilen dönemde hiç PPE ihlali tespit edilmedi.</p>
+                                <p class="text-muted">Son 30 gün içinde hiç PPE ihlali tespit edilmedi.</p>
                             </div>
                         `;
                         return;
                     }
                     
-                    container.innerHTML = violations.map(violation => `
+                    container.innerHTML = data.camera_violations.slice(0, 10).map(violation => `
                         <div class="violation-card">
                             <div class="row align-items-center">
                                 <div class="col-md-3">
-                                    <strong>${violation.camera_name}</strong>
-                                    <small class="d-block text-muted">${violation.date}</small>
+                                    <strong>Kamera ${violation.camera_id}</strong>
+                                    <small class="d-block text-muted">${new Date(violation.last_violation).toLocaleDateString('tr-TR')}</small>
                                 </div>
                                 <div class="col-md-4">
-                                    <span class="text-danger">${violation.violation_text}</span>
-                                    <small class="d-block text-muted">Güven: %${violation.confidence}</small>
+                                    <span class="text-danger">${violation.count} ihlal tespit edildi</span>
+                                    <small class="d-block text-muted">Son ihlal zamanı</small>
                                 </div>
                                 <div class="col-md-2">
-                                    <span class="badge bg-warning">${violation.worker_id}</span>
+                                    <span class="badge ${violation.count > 10 ? 'bg-danger' : violation.count > 5 ? 'bg-warning' : 'bg-info'}">
+                                        ${violation.count > 10 ? 'Yüksek' : violation.count > 5 ? 'Orta' : 'Düşük'}
+                                    </span>
                                 </div>
                                 <div class="col-md-2">
-                                    <strong class="text-danger">${violation.penalty}₺</strong>
+                                    <strong class="text-danger">${violation.count * 75}₺</strong>
                                 </div>
                                 <div class="col-md-1">
                                     <button class="btn btn-sm btn-outline-primary" onclick="viewViolationDetail('${violation.camera_id}')">
