@@ -1022,6 +1022,17 @@ Mesaj:
                     company_id
                 ))
                 
+                # Kullanıcı profil resmini güncelle (eğer varsa)
+                if 'profile_image' in data:
+                    cursor.execute(f"""
+                        UPDATE users 
+                        SET profile_image = {placeholder}
+                        WHERE company_id = {placeholder}
+                    """, (
+                        data.get('profile_image'),
+                        company_id
+                    ))
+                
                 # Kullanıcı bilgilerini güncelle
                 cursor.execute(f"""
                     UPDATE users 
@@ -2058,14 +2069,25 @@ Mesaj:
                 conn.close()
                 
                 if result:
-                    settings = {
-                        'email_notifications': result[0] if result[0] is not None else True,
-                        'sms_notifications': result[1] if result[1] is not None else False,
-                        'push_notifications': result[2] if result[2] is not None else True,
-                        'violation_alerts': result[3] if result[3] is not None else True,
-                        'system_alerts': result[4] if result[4] is not None else True,
-                        'report_notifications': result[5] if result[5] is not None else True
-                    }
+                    # PostgreSQL Row object vs SQLite tuple compatibility
+                    if hasattr(result, 'keys'):  # PostgreSQL Row object
+                        settings = {
+                            'email_notifications': result['email_notifications'] if result['email_notifications'] is not None else True,
+                            'sms_notifications': result['sms_notifications'] if result['sms_notifications'] is not None else False,
+                            'push_notifications': result['push_notifications'] if result['push_notifications'] is not None else True,
+                            'violation_alerts': result['violation_alerts'] if result['violation_alerts'] is not None else True,
+                            'system_alerts': result['system_alerts'] if result['system_alerts'] is not None else True,
+                            'report_notifications': result['report_notifications'] if result['report_notifications'] is not None else True
+                        }
+                    else:  # SQLite tuple
+                        settings = {
+                            'email_notifications': result[0] if result[0] is not None else True,
+                            'sms_notifications': result[1] if result[1] is not None else False,
+                            'push_notifications': result[2] if result[2] is not None else True,
+                            'violation_alerts': result[3] if result[3] is not None else True,
+                            'system_alerts': result[4] if result[4] is not None else True,
+                            'report_notifications': result[5] if result[5] is not None else True
+                        }
                 else:
                     # Varsayılan ayarlar
                     settings = {
@@ -2236,8 +2258,29 @@ Mesaj:
                     cameras = self.db.get_company_cameras(company_id)
                     used_cameras = len(cameras)
                     
+                    # PostgreSQL Row object vs SQLite tuple compatibility
+                    if hasattr(result, 'keys'):  # PostgreSQL Row object
+                        subscription_end = result['subscription_end']
+                        subscription_info = {
+                            'subscription_type': result['subscription_type'] or 'basic',
+                            'max_cameras': result['max_cameras'] or 5,
+                            'created_at': result['created_at'].isoformat() if result['created_at'] else None,
+                            'company_name': result['company_name'],
+                            'sector': result['sector'],
+                            'used_cameras': used_cameras,
+                        }
+                    else:  # SQLite tuple
+                        subscription_end = result[1]
+                        subscription_info = {
+                            'subscription_type': result[0] or 'basic',
+                            'max_cameras': result[2] or 5,
+                            'created_at': result[3].isoformat() if result[3] else None,
+                            'company_name': result[4],
+                            'sector': result[5],
+                            'used_cameras': used_cameras,
+                        }
+                    
                     # Abonelik durumunu kontrol et
-                    subscription_end = result[1]
                     is_active = True
                     days_remaining = 0
                     
@@ -2248,18 +2291,13 @@ Mesaj:
                         days_remaining = (subscription_end - datetime.now()).days
                         is_active = days_remaining > 0
                     
-                    subscription_info = {
-                        'subscription_type': result[0] or 'basic',
+                    # Ortak alanları ekle
+                    subscription_info.update({
                         'subscription_end': subscription_end.isoformat() if subscription_end else None,
-                        'max_cameras': result[2] or 5,
-                        'used_cameras': used_cameras,
-                        'created_at': result[3].isoformat() if result[3] else None,
-                        'company_name': result[4],
-                        'sector': result[5],
                         'is_active': is_active,
                         'days_remaining': days_remaining,
-                        'usage_percentage': (used_cameras / (result[2] or 5)) * 100
-                    }
+                        'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 5)) * 100
+                    })
                     
                     return jsonify({
                         'success': True,
