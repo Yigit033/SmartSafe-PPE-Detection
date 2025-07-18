@@ -832,7 +832,7 @@ Mesaj:
                         'image_path': violation_data['image_path']
                     })
                 
-                # Eğer gerçek veri yoksa demo veriler göster
+                                # Eğer gerçek veri yoksa demo veriler göster
                 if not alerts:
                     alerts = [
                         {
@@ -1091,7 +1091,7 @@ Mesaj:
                 # Şirket bilgilerini güncelle
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 cursor.execute(f"""
-                    UPDATE companies 
+                        UPDATE companies 
                     SET company_name = {placeholder}, 
                         contact_person = {placeholder}, 
                         email = {placeholder}, 
@@ -1099,15 +1099,15 @@ Mesaj:
                         sector = {placeholder}, 
                         address = {placeholder}
                     WHERE company_id = {placeholder}
-                """, (
-                    data.get('company_name'),
-                    data.get('contact_person'),
-                    data.get('email'),
-                    data.get('phone'),
-                    data.get('sector'),
-                    data.get('address'),
-                    company_id
-                ))
+                    """, (
+                        data.get('company_name'),
+                        data.get('contact_person'),
+                        data.get('email'),
+                        data.get('phone'),
+                        data.get('sector'),
+                        data.get('address'),
+                        company_id
+                    ))
                 
                 # Kullanıcı profil resmini güncelle (eğer varsa)
                 if 'profile_image' in data:
@@ -1122,13 +1122,13 @@ Mesaj:
                 
                 # Kullanıcı bilgilerini güncelle
                 cursor.execute(f"""
-                    UPDATE users 
+                        UPDATE users 
                     SET email = {placeholder}
                     WHERE company_id = {placeholder}
-                """, (
-                    data.get('email'),
-                    company_id
-                ))
+                    """, (
+                        data.get('email'),
+                        company_id
+                    ))
                 
                 conn.commit()
                 conn.close()
@@ -1350,11 +1350,11 @@ Mesaj:
                         users.append({
                             'user_id': row[0],
                             'email': row[1],
-                            'username': row[2],
+                                'username': row[2],
                             'role': row[3] if row[3] else 'admin',
                             'status': row[4] if row[4] else 'active',
-                            'created_at': str(row[5]) if row[5] else '',
-                            'last_login': str(row[6]) if row[6] else ''
+                                'created_at': str(row[5]) if row[5] else '',
+                                'last_login': str(row[6]) if row[6] else ''
                         })
                 
                 conn.close()
@@ -2021,22 +2021,22 @@ Mesaj:
                 # API response formatına dönüştür
                 if test_result and test_result.get('success'):
                     api_response = {
-                        'success': True,
-                        'connection_time': test_result.get('connection_time', 0),
-                        'stream_quality': test_result.get('stream_quality', 'good'),
-                        'supported_features': test_result.get('supported_features', []),
-                        'camera_info': test_result.get('camera_info', {}),
-                        'test_results': {
-                            'connection_status': 'success',
-                            'response_time': f"{test_result.get('connection_time', 0):.0f}ms",
-                            'resolution': test_result.get('camera_info', {}).get('resolution', 'Bilinmiyor'),
-                            'fps': test_result.get('camera_info', {}).get('fps', 25),
-                            'quality': test_result.get('stream_quality', 'good'),
+                            'success': True,
+                            'connection_time': test_result.get('connection_time', 0),
+                            'stream_quality': test_result.get('stream_quality', 'good'),
                             'supported_features': test_result.get('supported_features', []),
-                            'test_duration': f"{test_result.get('connection_time', 0)/1000:.1f} saniye"
-                        },
-                        'message': f'Kamera bağlantısı başarılı! ({test_result.get("connection_time", 0):.0f}ms)'
-                    }
+                            'camera_info': test_result.get('camera_info', {}),
+                        'test_results': {
+                                'connection_status': 'success',
+                                'response_time': f"{test_result.get('connection_time', 0):.0f}ms",
+                                'resolution': test_result.get('camera_info', {}).get('resolution', 'Bilinmiyor'),
+                                'fps': test_result.get('camera_info', {}).get('fps', 25),
+                                'quality': test_result.get('stream_quality', 'good'),
+                                'supported_features': test_result.get('supported_features', []),
+                                'test_duration': f"{test_result.get('connection_time', 0)/1000:.1f} saniye"
+                            },
+                            'message': f'Kamera bağlantısı başarılı! ({test_result.get("connection_time", 0):.0f}ms)'
+                        }
                 else:
                     api_response = {
                         'success': False,
@@ -3318,13 +3318,13 @@ Mesaj:
                         'protocol': protocol,
                         'resolution': f"{frame.shape[1]}x{frame.shape[0]}"
                     }
-                cap.release()
+                    cap.release()
             else:
                 test_result['error_message'] = 'Kamera bağlantısı kurulamadı'
                 
         except Exception as e:
             test_result['error_message'] = f'Kamera test hatası: {str(e)}'
-            
+        
         test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
         return test_result
     
@@ -7335,7 +7335,7 @@ Mesaj:
                     </div>
                 </div>
             </div>
-
+            
             <!-- Hesap Silme Modal -->
             <div class="modal fade" id="deleteAccountModal" tabindex="-1">
                 <div class="modal-dialog">
@@ -7469,7 +7469,7 @@ Mesaj:
                             alert('✅ Profil başarıyla güncellendi!');
                             // Sayfayı yeniden yükle ki güncellenmiş veriler görünsün
                             setTimeout(() => {
-                                location.reload();
+                            location.reload();
                             }, 1000);
                         } else {
                             alert('❌ Hata: ' + data.error);
@@ -9644,10 +9644,10 @@ Mesaj:
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Grup</label>
-                                        <select class="form-select" name="group_id">
-                                            <option value="">Grup Seçin</option>
-                                        </select>
+                                    <label class="form-label">Grup</label>
+                                    <select class="form-select" name="group_id">
+                                        <option value="">Grup Seçin</option>
+                                    </select>
                                     </div>
                                 </div>
                                 <div class="d-grid">
