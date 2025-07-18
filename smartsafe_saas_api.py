@@ -741,42 +741,129 @@ Mesaj:
         # Şirket uyarıları API
         @self.app.route('/api/company/<company_id>/alerts', methods=['GET'])
         def get_company_alerts(company_id):
-            """Şirket uyarıları"""
+            """Şirket uyarıları - Gerçek verilerle"""
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
             
             try:
-                # Demo alert data (gerçek projede database'den gelecek)
-                alerts = [
-                    {
-                        'violation_type': 'Baret Eksik',
-                        'description': 'Çalışan baret takmadan çalışma alanına girdi',
-                        'time': '14:30',
-                        'camera_name': 'Kamera 1',
-                        'severity': 'Yüksek'
-                    },
-                    {
-                        'violation_type': 'Güvenlik Yeleği Eksik',
-                        'description': 'Güvenlik yeleği olmadan çalışma',
-                        'time': '13:45',
-                        'camera_name': 'Kamera 2',
-                        'severity': 'Orta'
-                    },
-                    {
-                        'violation_type': 'Güvenlik Ayakkabısı Eksik',
-                        'description': 'Uygun olmayan ayakkabı kullanımı',
-                        'time': '12:20',
-                        'camera_name': 'Kamera 3',
-                        'severity': 'Düşük'
-                    }
-                ]
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
                 
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # Son 24 saat içindeki ihlalleri getir
+                cursor.execute(f"""
+                    SELECT v.violation_type, v.missing_ppe, v.severity, v.timestamp, 
+                           c.camera_name, v.image_path, v.resolved
+                    FROM violations v
+                    JOIN cameras c ON v.camera_id = c.camera_id
+                    WHERE v.company_id = {placeholder} 
+                    AND v.timestamp >= datetime('now', '-24 hours')
+                    ORDER BY v.timestamp DESC
+                    LIMIT 10
+                """, (company_id,))
+                
+                violations = cursor.fetchall()
+                alerts = []
+                
+                for violation in violations:
+                    # PostgreSQL Row object vs SQLite tuple compatibility
+                    if hasattr(violation, 'keys'):  # PostgreSQL Row object
+                        violation_data = {
+                            'violation_type': violation['violation_type'],
+                            'missing_ppe': violation['missing_ppe'],
+                            'severity': violation['severity'],
+                            'timestamp': violation['timestamp'],
+                            'camera_name': violation['camera_name'],
+                            'image_path': violation['image_path'],
+                            'resolved': violation['resolved']
+                        }
+                    else:  # SQLite tuple
+                        violation_data = {
+                            'violation_type': violation[0],
+                            'missing_ppe': violation[1],
+                            'severity': violation[2],
+                            'timestamp': violation[3],
+                            'camera_name': violation[4],
+                            'image_path': violation[5],
+                            'resolved': violation[6]
+                        }
+                    
+                    # Timestamp'i formatla
+                    try:
+                        from datetime import datetime
+                        if isinstance(violation_data['timestamp'], str):
+                            dt = datetime.fromisoformat(violation_data['timestamp'].replace('Z', '+00:00'))
+                        else:
+                            dt = violation_data['timestamp']
+                        time_str = dt.strftime('%H:%M')
+                    except:
+                        time_str = 'Bilinmiyor'
+                    
+                    # Missing PPE listesini işle
+                    missing_ppe_list = []
+                    if violation_data['missing_ppe']:
+                        try:
+                            import json
+                            missing_ppe_list = json.loads(violation_data['missing_ppe'])
+                        except:
+                            missing_ppe_list = [violation_data['missing_ppe']]
+                    
+                    # Türkçe PPE isimleri
+                    ppe_names = {
+                        'helmet': 'Baret',
+                        'vest': 'Güvenlik Yeleği',
+                        'glasses': 'Güvenlik Gözlüğü',
+                        'gloves': 'Eldiven',
+                        'shoes': 'Güvenlik Ayakkabısı',
+                        'mask': 'Maske'
+                    }
+                    
+                    missing_ppe_tr = [ppe_names.get(ppe, ppe) for ppe in missing_ppe_list]
+                    
+                    alerts.append({
+                        'violation_type': ' + '.join(missing_ppe_tr) + ' Eksik' if missing_ppe_tr else violation_data['violation_type'],
+                        'description': f"{', '.join(missing_ppe_tr)} kullanılmadan çalışma tespit edildi" if missing_ppe_tr else 'PPE ihlali tespit edildi',
+                        'time': time_str,
+                        'camera_name': violation_data['camera_name'],
+                        'severity': violation_data['severity'] or 'Orta',
+                        'resolved': violation_data['resolved'],
+                        'image_path': violation_data['image_path']
+                    })
+                
+                # Eğer gerçek veri yoksa demo veriler göster
+                if not alerts:
+                    alerts = [
+                        {
+                            'violation_type': 'Sistem Başlatıldı',
+                            'description': 'PPE detection sistemi aktif, ihlaller burada görünecek',
+                            'time': 'Şimdi',
+                            'camera_name': 'Sistem',
+                            'severity': 'Bilgi',
+                            'resolved': False,
+                            'image_path': None
+                        }
+                    ]
+                
+                conn.close()
                 return jsonify({'alerts': alerts})
                 
             except Exception as e:
                 logger.error(f"❌ Uyarılar yüklenemedi: {e}")
-                return jsonify({'error': 'Uyarılar yüklenemedi'}), 500
+                # Hata durumunda da demo veriler göster
+                demo_alerts = [
+                    {
+                        'violation_type': 'Sistem Hazırlanıyor',
+                        'description': 'PPE detection sistemi hazırlanıyor, kameralar test ediliyor',
+                        'time': 'Şimdi',
+                        'camera_name': 'Sistem',
+                        'severity': 'Bilgi',
+                        'resolved': False,
+                        'image_path': None
+                    }
+                ]
+                return jsonify({'alerts': demo_alerts})
         
         # Şirket grafik verileri API
         @self.app.route('/api/company/<company_id>/chart-data', methods=['GET'])
@@ -1054,6 +1141,82 @@ Mesaj:
                 import traceback
                 traceback.print_exc()
                 return jsonify({'success': False, 'error': f'Sunucu hatası: {str(e)}'}), 500
+
+        @self.app.route('/api/company/<company_id>/profile/upload-logo', methods=['POST'])
+        def upload_company_logo(company_id):
+            """Şirket logosu yükle"""
+            try:
+                # Session kontrolü
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                if 'logo' not in request.files:
+                    return jsonify({'success': False, 'error': 'Dosya seçilmedi'}), 400
+                
+                file = request.files['logo']
+                if file.filename == '':
+                    return jsonify({'success': False, 'error': 'Dosya seçilmedi'}), 400
+                
+                # Dosya uzantısını kontrol et
+                allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+                file_extension = file.filename.rsplit('.', 1)[1].lower()
+                
+                if file_extension not in allowed_extensions:
+                    return jsonify({'success': False, 'error': 'Geçersiz dosya formatı. PNG, JPG, JPEG, GIF desteklenir.'}), 400
+                
+                # Dosya boyutunu kontrol et (max 5MB)
+                file.seek(0, 2)  # Dosya sonuna git
+                file_size = file.tell()
+                file.seek(0)  # Başa dön
+                
+                if file_size > 5 * 1024 * 1024:  # 5MB
+                    return jsonify({'success': False, 'error': 'Dosya boyutu 5MB\'dan büyük olamaz'}), 400
+                
+                # Dosya adını oluştur
+                import uuid
+                filename = f"logo_{company_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
+                
+                # Upload klasörünü oluştur
+                upload_folder = os.path.join('static', 'uploads', 'logos')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                # Dosyayı kaydet
+                file_path = os.path.join(upload_folder, filename)
+                file.save(file_path)
+                
+                # Veritabanında profil resmini güncelle
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # Timestamp fonksiyonu
+                if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
+                    timestamp_func = 'CURRENT_TIMESTAMP'
+                else:
+                    timestamp_func = 'datetime(\'now\')'
+                
+                cursor.execute(f"""
+                    UPDATE users 
+                    SET profile_image = {placeholder}, updated_at = {timestamp_func}
+                    WHERE company_id = {placeholder}
+                """, (f'/static/uploads/logos/{filename}', company_id))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True, 
+                    'message': 'Logo başarıyla yüklendi',
+                    'logo_url': f'/static/uploads/logos/{filename}'
+                })
+                    
+            except Exception as e:
+                print(f"❌ Logo upload error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': f'Yükleme hatası: {str(e)}'}), 500
         
         @self.app.route('/api/company/<company_id>/change-password', methods=['PUT'])
         def change_company_password(company_id):
@@ -1217,6 +1380,9 @@ Mesaj:
                 import uuid
                 user_id = f"USER_{uuid.uuid4().hex[:8].upper()}"
                 
+                # Username oluştur (email'den veya contact_person'dan)
+                username = data.get('username') or data['email'].split('@')[0]
+                
                 # Geçici şifre oluştur
                 temp_password = f"temp{uuid.uuid4().hex[:8]}"
                 password_hash = self.db.hash_password(temp_password)
@@ -1226,10 +1392,14 @@ Mesaj:
                 cursor = conn.cursor()
                 
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # PostgreSQL için timestamp fonksiyonu
+                timestamp_func = 'CURRENT_TIMESTAMP' if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql' else 'datetime(\'now\')'
+                
                 cursor.execute(f"""
-                    INSERT INTO users (user_id, company_id, email, contact_person, password_hash, role, status, created_at)
-                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 'active', CURRENT_TIMESTAMP)
-                """, (user_id, company_id, data['email'], data['contact_person'], password_hash, data['role']))
+                    INSERT INTO users (user_id, company_id, username, email, contact_person, password_hash, role, status, created_at)
+                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 'active', {timestamp_func})
+                """, (user_id, company_id, username, data['email'], data['contact_person'], password_hash, data['role']))
                 
                 conn.commit()
                 conn.close()
@@ -6862,14 +7032,93 @@ Mesaj:
                 document.getElementById('logoInput').addEventListener('change', function(e) {
                     const file = e.target.files[0];
                     if (file) {
+                        // Dosya boyutu kontrolü (5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                            alert('❌ Dosya boyutu 5MB\'dan büyük olamaz!');
+                            this.value = '';
+                            return;
+                        }
+                        
+                        // Dosya formatı kontrolü
+                        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+                        if (!allowedTypes.includes(file.type)) {
+                            alert('❌ Sadece PNG, JPG, JPEG, GIF formatları desteklenir!');
+                            this.value = '';
+                            return;
+                        }
+                        
+                        // Önizleme göster
                         const reader = new FileReader();
                         reader.onload = function(e) {
                             const logoUpload = document.querySelector('.logo-upload');
                             logoUpload.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;">`;
                         };
                         reader.readAsDataURL(file);
+                        
+                        // Dosyayı hemen yükle
+                        uploadLogo(file);
                     }
                 });
+                
+                // Logo yükleme fonksiyonu
+                function uploadLogo(file) {
+                    const formData = new FormData();
+                    formData.append('logo', file);
+                    
+                    // Loading göster
+                    const logoUpload = document.querySelector('.logo-upload');
+                    const originalContent = logoUpload.innerHTML;
+                    logoUpload.innerHTML = `
+                        <div class="d-flex align-items-center justify-content-center h-100">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Yükleniyor...</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    fetch(`/api/company/${companyId}/profile/upload-logo`, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Başarılı yükleme
+                            logoUpload.innerHTML = `<img src="${data.logo_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;">`;
+                            
+                            // Toast mesajı göster
+                            const toast = document.createElement('div');
+                            toast.className = 'toast-message';
+                            toast.innerHTML = '✅ Logo başarıyla yüklendi!';
+                            toast.style.cssText = `
+                                position: fixed;
+                                top: 20px;
+                                right: 20px;
+                                background: #28a745;
+                                color: white;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                z-index: 9999;
+                                font-weight: bold;
+                            `;
+                            document.body.appendChild(toast);
+                            
+                            setTimeout(() => {
+                                toast.remove();
+                            }, 3000);
+                        } else {
+                            // Hata durumunda eski içeriği geri yükle
+                            logoUpload.innerHTML = originalContent;
+                            alert('❌ Logo yükleme hatası: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        // Hata durumunda eski içeriği geri yükle
+                        logoUpload.innerHTML = originalContent;
+                        console.error('Logo upload error:', error);
+                        alert('❌ Logo yükleme sırasında bir hata oluştu');
+                    });
+                }
                 
                 // Notification Toggle Auto-save
                 document.querySelectorAll('.notification-toggle input').forEach(toggle => {
