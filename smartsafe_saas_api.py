@@ -6580,6 +6580,9 @@ Mesaj:
                     padding: 25px;
                     margin-top: 30px;
                 }
+                .settings-section {
+                    display: none;
+                }
             </style>
         </head>
         <body>
@@ -6639,7 +6642,7 @@ Mesaj:
                     
                     <div class="col-md-9">
                         <!-- Şirket Profili -->
-                        <div id="profile-section" class="settings-section">
+                        <div id="profile-section" class="settings-section" style="display: block;">
                             <div class="form-section">
                                 <h5><i class="fas fa-building"></i> Şirket Profili</h5>
                                 <form id="profileForm">
@@ -7417,13 +7420,29 @@ Mesaj:
                 }
 
                 // Settings Navigation
-                document.addEventListener('DOMContentLoaded', function() {
+                function initializeSettingsNavigation() {
+                    console.log('Initializing Settings Navigation');
+                    
                     const navLinks = document.querySelectorAll('.settings-nav .nav-link');
                     const sections = document.querySelectorAll('.settings-section');
+                    
+                    console.log('Found nav links:', navLinks.length);
+                    console.log('Found sections:', sections.length);
+                    
+                    if (navLinks.length === 0) {
+                        console.error('No navigation links found');
+                        return;
+                    }
+                    
+                    if (sections.length === 0) {
+                        console.error('No sections found');
+                        return;
+                    }
                     
                     navLinks.forEach(link => {
                         link.addEventListener('click', function(e) {
                             e.preventDefault();
+                            console.log('Nav link clicked:', this.getAttribute('data-section'));
                             
                             // Remove active class from all nav links
                             navLinks.forEach(nl => nl.classList.remove('active'));
@@ -7439,12 +7458,25 @@ Mesaj:
                             // Show target section
                             const targetSection = this.getAttribute('data-section');
                             const targetElement = document.getElementById(targetSection + '-section');
+                            console.log('Looking for element with ID:', targetSection + '-section');
+                            console.log('Found target element:', targetElement);
+                            
                             if (targetElement) {
                                 targetElement.style.display = 'block';
+                                console.log('Section displayed:', targetSection);
+                            } else {
+                                console.error('Target section not found:', targetSection + '-section');
                             }
                         });
                     });
-                });
+                }
+                
+                // Initialize when DOM is ready
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initializeSettingsNavigation);
+                } else {
+                    initializeSettingsNavigation();
+                }
                 
                 // Profile Form Submission
                 document.getElementById('profileForm').addEventListener('submit', function(e) {
