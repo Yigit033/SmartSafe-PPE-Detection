@@ -7377,7 +7377,7 @@ Mesaj:
             
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
             <script>
-                const companyId = '{{ company_id }}';
+                const companyId = '{{ company_id }}' || '';
                 
                 // Email Validation Function
                 function validateEmail(input) {
@@ -7423,7 +7423,7 @@ Mesaj:
                 function initializeSettingsNavigation() {
                     console.log('Initializing Settings Navigation');
                     
-                    const navLinks = document.querySelectorAll('.nav-link');
+                    const navLinks = document.querySelectorAll('.settings-nav .nav-link');
                     const sections = document.querySelectorAll('.settings-section');
                     
                     console.log('Found nav links:', navLinks.length);
