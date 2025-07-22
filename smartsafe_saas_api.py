@@ -1178,7 +1178,7 @@ Mesaj:
                 filename = f"logo_{company_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
                 
                 # Upload klasörünü oluştur
-                upload_folder = os.path.join('static', 'uploads', 'logos')
+                upload_folder = os.path.join(os.getcwd(), 'static', 'uploads', 'logos')
                 os.makedirs(upload_folder, exist_ok=True)
                 
                 # Dosyayı kaydet
