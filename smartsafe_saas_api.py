@@ -7423,7 +7423,7 @@ Mesaj:
                 function initializeSettingsNavigation() {
                     console.log('Initializing Settings Navigation');
                     
-                    const navLinks = document.querySelectorAll('.settings-nav .nav-link');
+                    const navLinks = document.querySelectorAll('.nav-link');
                     const sections = document.querySelectorAll('.settings-section');
                     
                     console.log('Found nav links:', navLinks.length);
