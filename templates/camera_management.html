@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSafe AI - Kamera Yönetimi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        .camera-form {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .smart-detection-section {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 15px;
+            padding: 30px;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .form-control, .form-select {
+            border: none;
+            border-radius: 10px;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        .btn {
+            border-radius: 10px;
+            padding: 12px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .result-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        
+        .camera-model-select {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .feature-badge {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin: 2px;
+            display: inline-block;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-5">
+            <i class="fas fa-video me-3"></i>
+            SmartSafe AI - Kamera Yönetimi
+        </h1>
+        
+        <!-- Akıllı Tespit Bölümü -->
+        <div class="smart-detection-section">
+            <h3 class="mb-4">
+                <i class="fas fa-magic me-2"></i>
+                Akıllı Kamera Tespiti
+            </h3>
+            <p class="mb-4">Sadece IP adresi ile kameranızı otomatik olarak tespit edin ve yapılandırın.</p>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">IP Adresi</label>
+                        <input type="text" id="smartIP" class="form-control" placeholder="192.168.1.100">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kamera Adı</label>
+                        <input type="text" id="smartName" class="form-control" placeholder="Akıllı Tespit Kamera">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <button id="smartDetectBtn" class="btn btn-light btn-lg w-100">
+                        <i class="fas fa-search me-2"></i>
+                        Akıllı Tespit Başlat
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button id="quickTestBtn" class="btn btn-outline-light btn-lg w-100">
+                        <i class="fas fa-bolt me-2"></i>
+                        Hızlı Test
+                    </button>
+                </div>
+            </div>
+            
+            <div id="smartResult" class="result-card mt-4" style="display: none;"></div>
+        </div>
+        
+        <!-- Manuel Kamera Ekleme -->
+        <div class="camera-form">
+            <h3 class="mb-4">
+                <i class="fas fa-cogs me-2"></i>
+                Manuel Kamera Ekleme
+            </h3>
+            
+            <form id="cameraForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Kamera Adı *</label>
+                            <input type="text" id="cameraName" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">IP Adresi *</label>
+                            <input type="text" id="cameraIP" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Port</label>
+                            <input type="number" id="cameraPort" class="form-control" value="8080">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Protokol</label>
+                            <select id="cameraProtocol" class="form-select">
+                                <option value="http">HTTP</option>
+                                <option value="rtsp">RTSP</option>
+                                <option value="https">HTTPS</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Stream Path</label>
+                            <input type="text" id="cameraPath" class="form-control" value="/video">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Kullanıcı Adı</label>
+                            <input type="text" id="cameraUsername" class="form-control">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Parola</label>
+                            <input type="password" id="cameraPassword" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Kamera Modeli Seçimi -->
+                <div class="camera-model-select">
+                    <label class="form-label fw-bold text-dark">Kamera Modeli (Opsiyonel)</label>
+                    <select id="cameraModel" class="form-select">
+                        <option value="">Otomatik Tespit</option>
+                        <option value="hikvision">Hikvision</option>
+                        <option value="dahua">Dahua</option>
+                        <option value="axis">Axis</option>
+                        <option value="foscam">Foscam</option>
+                        <option value="generic">Generic IP Camera</option>
+                        <option value="uniview">Uniview</option>
+                        <option value="android_ip_webcam">Android IP Webcam</option>
+                        <option value="raspberry_pi_camera">Raspberry Pi Camera</option>
+                    </select>
+                    <div id="modelInfo" class="mt-2" style="display: none;">
+                        <small class="text-muted">
+                            <strong>Özellikler:</strong> <span id="modelFeatures"></span><br>
+                            <strong>Desteklenen Portlar:</strong> <span id="modelPorts"></span><br>
+                            <strong>Varsayılan Path:</strong> <span id="modelPath"></span>
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <button type="button" id="testBtn" class="btn btn-warning btn-lg w-100">
+                            <i class="fas fa-vial me-2"></i>
+                            Bağlantıyı Test Et
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="submit" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-save me-2"></i>
+                            Kamerayı Ekle
+                        </button>
+                    </div>
+                </div>
+            </form>
+            
+            <div id="testResult" class="result-card mt-4" style="display: none;"></div>
+        </div>
+        
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>İşlem yapılıyor...</p>
+        </div>
+        
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Kamera modeli bilgileri
+        const cameraModels = {
+            'hikvision': {
+                features: ['PTZ', 'Gece Görüşü', 'Hareket Algılama', 'Ses'],
+                ports: [80, 554, 8000, 8080, 443],
+                path: '/ISAPI/Streaming/channels/101'
+            },
+            'dahua': {
+                features: ['PTZ', 'Gece Görüşü', 'Akıllı Tespit', 'Ses'],
+                ports: [80, 554, 37777, 443],
+                path: '/cam/realmonitor'
+            },
+            'axis': {
+                features: ['PTZ', 'Analitik', 'Gece Görüşü', 'Ses'],
+                ports: [80, 554, 443, 3000],
+                path: '/axis-cgi/jpg/image.cgi'
+            },
+            'foscam': {
+                features: ['PTZ', 'İki Yönlü Ses', 'Gece Görüşü'],
+                ports: [88, 554, 80, 443],
+                path: '/videostream.cgi'
+            },
+            'generic': {
+                features: ['Temel Streaming'],
+                ports: [8080, 80, 554, 443],
+                path: '/video'
+            },
+            'uniview': {
+                features: ['PTZ', 'Gece Görüşü', 'Hareket Algılama'],
+                ports: [80, 554, 8080, 443],
+                path: '/cgi-bin/realmonitor.cgi'
+            },
+            'android_ip_webcam': {
+                features: ['Mobil Kamera', 'Ses', 'Hareket Algılama'],
+                ports: [8080, 80, 443],
+                path: '/shot.jpg'
+            },
+            'raspberry_pi_camera': {
+                features: ['Hareket Algılama', 'Kayıt'],
+                ports: [8080, 80, 443, 8000],
+                path: '/stream.mjpg'
+            }
+        };
+        
+        // Model seçimi değiştiğinde
+        document.getElementById('cameraModel').addEventListener('change', function() {
+            const model = this.value;
+            const modelInfo = document.getElementById('modelInfo');
+            const modelFeatures = document.getElementById('modelFeatures');
+            const modelPorts = document.getElementById('modelPorts');
+            const modelPath = document.getElementById('modelPath');
+            
+            if (model && cameraModels[model]) {
+                const info = cameraModels[model];
+                modelFeatures.textContent = info.features.join(', ');
+                modelPorts.textContent = info.ports.join(', ');
+                modelPath.textContent = info.path;
+                modelInfo.style.display = 'block';
+                
+                // Varsayılan değerleri doldur
+                document.getElementById('cameraPort').value = info.ports[0];
+                document.getElementById('cameraPath').value = info.path;
+            } else {
+                modelInfo.style.display = 'none';
+            }
+        });
+        
+        // Akıllı tespit
+        document.getElementById('smartDetectBtn').addEventListener('click', async function() {
+            const ip = document.getElementById('smartIP').value;
+            const name = document.getElementById('smartName').value || 'Akıllı Tespit Kamera';
+            
+            if (!ip) {
+                showAlert('IP adresi gerekli!', 'warning');
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/cameras/smart-test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip_address: ip, camera_name: name })
+                });
+                
+                const result = await response.json();
+                showSmartResult(result);
+                
+            } catch (error) {
+                showAlert('Akıllı tespit hatası: ' + error.message, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Hızlı test
+        document.getElementById('quickTestBtn').addEventListener('click', async function() {
+            const ip = document.getElementById('smartIP').value;
+            
+            if (!ip) {
+                showAlert('IP adresi gerekli!', 'warning');
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/cameras/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: 'Hızlı Test Kamera',
+                        ip_address: ip,
+                        port: 8080,
+                        protocol: 'http',
+                        stream_path: '/video',
+                        username: 'admin',
+                        password: 'admin'
+                    })
+                });
+                
+                const result = await response.json();
+                showTestResult(result);
+                
+            } catch (error) {
+                showAlert('Hızlı test hatası: ' + error.message, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Manuel test
+        document.getElementById('testBtn').addEventListener('click', async function() {
+            const formData = getFormData();
+            
+            if (!formData.ip_address || !formData.name) {
+                showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/cameras/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                showTestResult(result);
+                
+            } catch (error) {
+                showAlert('Test hatası: ' + error.message, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Form submit
+        document.getElementById('cameraForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = getFormData();
+            
+            if (!formData.ip_address || !formData.name) {
+                showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                // Önce test et
+                const testResponse = await fetch(`/api/company/{{ company_id }}/cameras/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                const testResult = await testResponse.json();
+                
+                if (testResult.success) {
+                    showAlert('Kamera başarıyla eklendi!', 'success');
+                    this.reset();
+                } else {
+                    showAlert('Kamera testi başarısız: ' + testResult.error, 'danger');
+                }
+                
+            } catch (error) {
+                showAlert('Kamera ekleme hatası: ' + error.message, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        function getFormData() {
+            return {
+                name: document.getElementById('cameraName').value,
+                ip_address: document.getElementById('cameraIP').value,
+                port: parseInt(document.getElementById('cameraPort').value),
+                protocol: document.getElementById('cameraProtocol').value,
+                stream_path: document.getElementById('cameraPath').value,
+                username: document.getElementById('cameraUsername').value,
+                password: document.getElementById('cameraPassword').value
+            };
+        }
+        
+        function showSmartResult(result) {
+            const container = document.getElementById('smartResult');
+            
+            if (result.success) {
+                container.innerHTML = `
+                    <div class="alert alert-success">
+                        <h5><i class="fas fa-check-circle me-2"></i>Kamera Tespit Edildi!</h5>
+                        <p><strong>Model:</strong> ${result.detection_info.model}</p>
+                        <p><strong>Güven:</strong> ${(result.detection_info.confidence * 100).toFixed(1)}%</p>
+                        <p><strong>Protokol:</strong> ${result.detection_info.config.protocol}</p>
+                        <p><strong>Port:</strong> ${result.detection_info.config.port}</p>
+                        <p><strong>Path:</strong> ${result.detection_info.config.path}</p>
+                        <div class="mt-3">
+                            <button class="btn btn-primary" onclick="fillFormFromDetection('${result.detection_info.config.protocol}', ${result.detection_info.config.port}, '${result.detection_info.config.path}')">
+                                <i class="fas fa-magic me-2"></i>Formu Doldur
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="fas fa-exclamation-triangle me-2"></i>Tespit Başarısız</h5>
+                        <p>${result.error}</p>
+                        <p class="mb-0"><small>İpucu: Manuel kamera ekleme formunu kullanabilirsiniz.</small></p>
+                    </div>
+                `;
+            }
+            
+            container.style.display = 'block';
+        }
+        
+        function showTestResult(result) {
+            const container = document.getElementById('testResult');
+            
+            if (result.success) {
+                container.innerHTML = `
+                    <div class="alert alert-success">
+                        <h5><i class="fas fa-check-circle me-2"></i>Bağlantı Başarılı!</h5>
+                        <p><strong>Yanıt Süresi:</strong> ${result.test_results.response_time}</p>
+                        <p><strong>Çözünürlük:</strong> ${result.test_results.resolution}</p>
+                        <p><strong>FPS:</strong> ${result.test_results.fps}</p>
+                        <p><strong>Kalite:</strong> ${result.test_results.quality}</p>
+                        <p><strong>Test Süresi:</strong> ${result.test_results.test_duration}</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="fas fa-times-circle me-2"></i>Bağlantı Başarısız</h5>
+                        <p><strong>Hata:</strong> ${result.error}</p>
+                        <p><strong>Test Süresi:</strong> ${result.test_results.test_duration}</p>
+                        <div class="mt-3">
+                            <h6>Olası Çözümler:</h6>
+                            <ul>
+                                <li>IP adresini kontrol edin</li>
+                                <li>Port numarasını kontrol edin</li>
+                                <li>Kullanıcı adı ve şifreyi kontrol edin</li>
+                                <li>Kamera ağa bağlı mı kontrol edin</li>
+                                <li>Firewall ayarlarını kontrol edin</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.style.display = 'block';
+        }
+        
+        function fillFormFromDetection(protocol, port, path) {
+            document.getElementById('cameraProtocol').value = protocol;
+            document.getElementById('cameraPort').value = port;
+            document.getElementById('cameraPath').value = path;
+            
+            // Forma scroll
+            document.querySelector('.camera-form').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+        
+        function showAlert(message, type) {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.appendChild(alert);
+            
+            // 5 saniye sonra otomatik kapat
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html> 

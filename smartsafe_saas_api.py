@@ -2060,6 +2060,74 @@ Mesaj:
                     'error': str(e),
                     'message': f'Kamera testi sırasında hata: {str(e)}'
                 }), 500
+
+        @self.app.route('/api/company/<company_id>/cameras/smart-test', methods=['POST'])
+        def smart_test_camera(company_id):
+            """Akıllı kamera tespiti ve test"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                ip_address = data.get('ip_address')
+                camera_name = data.get('camera_name', 'Akıllı Tespit Kamera')
+                
+                if not ip_address:
+                    return jsonify({'success': False, 'error': 'IP adresi gerekli'}), 400
+                
+                logger.info(f"🧠 Smart camera test for {ip_address}")
+                
+                try:
+                    from camera_integration_manager import SmartCameraDetector
+                    
+                    detector = SmartCameraDetector()
+                    detection_result = detector.smart_detect_camera(ip_address)
+                    
+                    if detection_result['success']:
+                        # Kamera başarıyla tespit edildi, test et
+                        config = detection_result['config']
+                        
+                        # RealCameraManager ile test et
+                        from camera_integration_manager import RealCameraManager
+                        camera_manager = RealCameraManager()
+                        
+                        test_result = camera_manager.test_real_camera_connection(
+                            name=camera_name,
+                            ip_address=ip_address,
+                            port=config['port'],
+                            protocol=config['protocol'],
+                            stream_path=config['path'],
+                            username=config['credentials']['username'],
+                            password=config['credentials']['password']
+                        )
+                        
+                        return jsonify({
+                            'success': True,
+                            'detection_info': detection_result,
+                            'connection_test': test_result,
+                            'message': f"Kamera tespit edildi: {detection_result['model']} (Güven: {detection_result['confidence']:.1%})"
+                        })
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': detection_result['error'],
+                            'detection_info': detection_result
+                        })
+                        
+                except Exception as e:
+                    logger.error(f"❌ Smart test error: {e}")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Akıllı test hatası: {str(e)}'
+                    }), 500
+                    
+            except Exception as e:
+                logger.error(f"❌ Smart test API error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
         
         @self.app.route('/api/company/<company_id>/cameras/groups', methods=['GET'])
         def get_camera_groups(company_id):
@@ -2157,6 +2225,90 @@ Mesaj:
             except Exception as e:
                 print(f"❌ Assign camera to group error: {str(e)}")
                 return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/company/<company_id>/cameras/smart-discover', methods=['POST'])
+        def smart_discover_cameras(company_id):
+            """Akıllı kamera keşfi - Ağ taraması"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                network_range = data.get('network_range', '192.168.1.0/24')
+                
+                logger.info(f"🧠 Smart camera discovery for company {company_id}")
+                
+                try:
+                    from camera_integration_manager import ProfessionalCameraManager
+                    
+                    camera_manager = ProfessionalCameraManager()
+                    discovered_cameras = camera_manager.smart_discover_cameras(network_range)
+                    
+                    return jsonify({
+                        'success': True,
+                        'cameras': discovered_cameras,
+                        'total_found': len(discovered_cameras),
+                        'network_range': network_range
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"❌ Smart discovery error: {e}")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Akıllı keşif hatası: {str(e)}'
+                    }), 500
+                
+            except Exception as e:
+                logger.error(f"❌ Smart discovery API error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
+        @self.app.route('/api/company/<company_id>/cameras/model-database', methods=['GET'])
+        def get_camera_model_database(company_id):
+            """Kamera modeli veritabanını getir"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                try:
+                    from utils.camera_model_database import get_camera_database
+                    
+                    db = get_camera_database()
+                    models = {}
+                    
+                    for model_id in db.get_all_models():
+                        model_info = db.get_model_info(model_id)
+                        models[model_id] = {
+                            'name': model_info.name,
+                            'manufacturer': model_info.manufacturer,
+                            'features': model_info.features,
+                            'ports': model_info.ports,
+                            'paths': model_info.paths
+                        }
+                    
+                    return jsonify({
+                        'success': True,
+                        'models': models,
+                        'total_models': len(models)
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"❌ Model database error: {e}")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Model veritabanı hatası: {str(e)}'
+                    }), 500
+                
+            except Exception as e:
+                logger.error(f"❌ Model database API error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
         
         @self.app.route('/api/company/<company_id>/cameras/<camera_id>/stream', methods=['GET'])
         def get_camera_stream(company_id, camera_id):
@@ -2437,14 +2589,14 @@ Mesaj:
         
         @self.app.route('/company/<company_id>/cameras', methods=['GET'])
         def camera_management(company_id):
-            """Kamera yönetimi sayfası"""
+            """Kamera yönetimi sayfası - Yeni Geliştirilmiş Sistem"""
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
                 return redirect(f'/company/{company_id}/login')
             
-            return render_template_string(self.get_camera_management_template(), 
-                                        company_id=company_id, 
-                                        user_data=user_data)
+            return render_template('camera_management.html', 
+                                 company_id=company_id, 
+                                 user_data=user_data)
 
         @self.app.route('/api/company/<company_id>/ppe-config', methods=['PUT'])
         def update_ppe_config(company_id):

@@ -368,6 +368,298 @@ class RealCameraManager:
             recording_enabled=form_data.get('recording_enabled', True)
         )
 
+class SmartCameraDetector:
+    """Akıllı kamera tespit sistemi - Yeni eklenen sınıf"""
+    
+    def __init__(self):
+        # Genişletilmiş kamera modeli veritabanı
+        self.camera_database = {
+            'hikvision': {
+                'name': 'Hikvision',
+                'ports': [554, 80, 8000, 8080, 443],
+                'paths': ['/Streaming/Channels/101', '/ISAPI/Streaming/channels/101', '/doc/page/login.asp'],
+                'headers': ['Server: App-webs/', 'Server: uc-httpd'],
+                'default_rtsp': 'rtsp://{ip}:554/Streaming/Channels/101',
+                'default_http': 'http://{ip}:80/ISAPI/Streaming/channels/101',
+                'auth_endpoints': ['/ISAPI/System/deviceInfo', '/doc/page/login.asp']
+            },
+            'dahua': {
+                'name': 'Dahua',
+                'ports': [554, 80, 37777, 443],
+                'paths': ['/cam/realmonitor?channel=1&subtype=0', '/cgi-bin/magicBox.cgi'],
+                'headers': ['Server: DahuaHttp'],
+                'default_rtsp': 'rtsp://{ip}:554/cam/realmonitor?channel=1&subtype=0',
+                'default_http': 'http://{ip}:80/cgi-bin/magicBox.cgi',
+                'auth_endpoints': ['/cgi-bin/magicBox.cgi?action=getDeviceType']
+            },
+            'axis': {
+                'name': 'Axis',
+                'ports': [554, 80, 443],
+                'paths': ['/axis-media/media.amp', '/axis-cgi/jpg/image.cgi'],
+                'headers': ['Server: axis'],
+                'default_rtsp': 'rtsp://{ip}:554/axis-media/media.amp',
+                'default_http': 'http://{ip}:80/axis-cgi/jpg/image.cgi',
+                'auth_endpoints': ['/axis-cgi/param.cgi?action=list']
+            },
+            'foscam': {
+                'name': 'Foscam',
+                'ports': [554, 88, 80],
+                'paths': ['/videoMain', '/videostream.cgi'],
+                'headers': ['Server: Foscam'],
+                'default_rtsp': 'rtsp://{ip}:554/videoMain',
+                'default_http': 'http://{ip}:88/videostream.cgi',
+                'auth_endpoints': ['/cgi-bin/CGIProxy.fcgi?cmd=getDevState']
+            },
+            'generic_ip': {
+                'name': 'Generic IP Camera',
+                'ports': [554, 8080, 80, 8000],
+                'paths': ['/video', '/stream', '/mjpeg', '/shot.jpg', '/live'],
+                'headers': [],
+                'default_rtsp': 'rtsp://{ip}:554/stream',
+                'default_http': 'http://{ip}:8080/video',
+                'auth_endpoints': ['/status', '/info']
+            },
+            'android_ipwebcam': {
+                'name': 'Android IP Webcam',
+                'ports': [8080, 8081, 8082],
+                'paths': ['/shot.jpg', '/video', '/mjpeg'],
+                'headers': ['Server: IP Webcam'],
+                'default_rtsp': 'rtsp://{ip}:8080/video',
+                'default_http': 'http://{ip}:8080/shot.jpg',
+                'auth_endpoints': ['/settings']
+            }
+        }
+        
+        # Yaygın port ve path kombinasyonları
+        self.common_combinations = [
+            {'port': 80, 'path': '/video', 'protocol': 'http'},
+            {'port': 80, 'path': '/stream', 'protocol': 'http'},
+            {'port': 80, 'path': '/mjpeg', 'protocol': 'http'},
+            {'port': 8080, 'path': '/video', 'protocol': 'http'},
+            {'port': 8080, 'path': '/shot.jpg', 'protocol': 'http'},
+            {'port': 554, 'path': '/stream', 'protocol': 'rtsp'},
+            {'port': 554, 'path': '/video', 'protocol': 'rtsp'},
+            {'port': 554, 'path': '/live', 'protocol': 'rtsp'},
+            {'port': 8000, 'path': '/video', 'protocol': 'http'},
+            {'port': 8000, 'path': '/stream', 'protocol': 'http'}
+        ]
+    
+    def smart_detect_camera(self, ip_address: str, timeout: int = 5) -> Dict[str, Any]:
+        """
+        Akıllı kamera tespiti - IP adresinden otomatik konfigürasyon
+        
+        Args:
+            ip_address: Kamera IP adresi
+            timeout: Bağlantı zaman aşımı
+            
+        Returns:
+            Tespit edilen kamera bilgileri
+        """
+        logger.info(f"🔍 Smart camera detection started for {ip_address}")
+        
+        result = {
+            'success': False,
+            'ip_address': ip_address,
+            'detected_model': 'unknown',
+            'protocol': None,
+            'port': None,
+            'path': None,
+            'stream_url': None,
+            'mjpeg_url': None,
+            'auth_required': False,
+            'detection_confidence': 0.0,
+            'error': None
+        }
+        
+        try:
+            # 1. Ping testi
+            if not self._ping_test(ip_address):
+                result['error'] = "IP adresi erişilebilir değil"
+                return result
+            
+            # 2. Kamera modeli tespiti
+            model_info = self._detect_camera_model(ip_address, timeout)
+            if model_info:
+                result['detected_model'] = model_info['model']
+                result['detection_confidence'] = model_info['confidence']
+            
+            # 3. Çalışan port ve protokol tespiti
+            working_config = self._find_working_config(ip_address, model_info, timeout)
+            if working_config:
+                result.update(working_config)
+                result['success'] = True
+            else:
+                result['error'] = "Çalışan kamera konfigürasyonu bulunamadı"
+            
+            logger.info(f"✅ Smart detection complete: {result['detected_model']} - {result['protocol']}://{ip_address}:{result['port']}{result['path']}")
+            return result
+            
+        except Exception as e:
+            result['error'] = f"Tespit hatası: {str(e)}"
+            logger.error(f"❌ Smart detection failed for {ip_address}: {e}")
+            return result
+    
+    def _ping_test(self, ip_address: str) -> bool:
+        """Ping testi"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((ip_address, 80))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
+    def _detect_camera_model(self, ip_address: str, timeout: int) -> Optional[Dict]:
+        """Kamera modelini tespit et"""
+        for model, info in self.camera_database.items():
+            try:
+                # HTTP endpoint'lerini test et
+                for port in info['ports']:
+                    if port in [80, 8080, 8000]:  # HTTP portları
+                        for endpoint in info.get('auth_endpoints', ['/']):
+                            url = f"http://{ip_address}:{port}{endpoint}"
+                            try:
+                                response = requests.get(url, timeout=timeout)
+                                if response.status_code == 200:
+                                    content = response.text.lower()
+                                    
+                                    # Header kontrolü
+                                    if any(header.lower() in str(response.headers).lower() for header in info['headers']):
+                                        return {
+                                            'model': model,
+                                            'confidence': 0.9,
+                                            'info': info
+                                        }
+                                    
+                                    # İçerik kontrolü
+                                    if model in content or info['name'].lower() in content:
+                                        return {
+                                            'model': model,
+                                            'confidence': 0.8,
+                                            'info': info
+                                        }
+                            except:
+                                continue
+            except:
+                continue
+        
+        return None
+    
+    def _find_working_config(self, ip_address: str, model_info: Optional[Dict], timeout: int) -> Optional[Dict]:
+        """Çalışan konfigürasyonu bul"""
+        # Önce model bilgisine göre test et
+        if model_info:
+            config = self._test_model_config(ip_address, model_info, timeout)
+            if config:
+                return config
+        
+        # Genel kombinasyonları test et
+        for combo in self.common_combinations:
+            config = self._test_combination(ip_address, combo, timeout)
+            if config:
+                return config
+        
+        return None
+    
+    def _test_model_config(self, ip_address: str, model_info: Dict, timeout: int) -> Optional[Dict]:
+        """Model bilgisine göre konfigürasyon test et"""
+        info = model_info['info']
+        
+        # RTSP testleri
+        for port in info['ports']:
+            if port == 554:  # RTSP portu
+                for path in info['paths']:
+                    if 'rtsp' in path or 'stream' in path:
+                        rtsp_url = f"rtsp://{ip_address}:{port}{path}"
+                        if self._test_rtsp_stream(rtsp_url, timeout):
+                            return {
+                                'protocol': 'rtsp',
+                                'port': port,
+                                'path': path,
+                                'stream_url': rtsp_url,
+                                'mjpeg_url': f"http://{ip_address}:80/shot.jpg"
+                            }
+        
+        # HTTP testleri
+        for port in info['ports']:
+            if port in [80, 8080, 8000]:  # HTTP portları
+                for path in info['paths']:
+                    http_url = f"http://{ip_address}:{port}{path}"
+                    if self._test_http_stream(http_url, timeout):
+                        return {
+                            'protocol': 'http',
+                            'port': port,
+                            'path': path,
+                            'stream_url': http_url,
+                            'mjpeg_url': f"http://{ip_address}:{port}/shot.jpg"
+                        }
+        
+        return None
+    
+    def _test_combination(self, ip_address: str, combo: Dict, timeout: int) -> Optional[Dict]:
+        """Kombinasyon test et"""
+        if combo['protocol'] == 'rtsp':
+            rtsp_url = f"rtsp://{ip_address}:{combo['port']}{combo['path']}"
+            if self._test_rtsp_stream(rtsp_url, timeout):
+                return {
+                    'protocol': 'rtsp',
+                    'port': combo['port'],
+                    'path': combo['path'],
+                    'stream_url': rtsp_url,
+                    'mjpeg_url': f"http://{ip_address}:80/shot.jpg"
+                }
+        else:
+            http_url = f"http://{ip_address}:{combo['port']}{combo['path']}"
+            if self._test_http_stream(http_url, timeout):
+                return {
+                    'protocol': 'http',
+                    'port': combo['port'],
+                    'path': combo['path'],
+                    'stream_url': http_url,
+                    'mjpeg_url': f"http://{ip_address}:{combo['port']}/shot.jpg"
+                }
+        
+        return None
+    
+    def _test_rtsp_stream(self, rtsp_url: str, timeout: int) -> bool:
+        """RTSP stream test et"""
+        try:
+            cap = cv2.VideoCapture(rtsp_url)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            # Kısa süreli test
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    cap.release()
+                    return True
+                time.sleep(0.1)
+            
+            cap.release()
+            return False
+        except:
+            return False
+    
+    def _test_http_stream(self, http_url: str, timeout: int) -> bool:
+        """HTTP stream test et"""
+        try:
+            response = requests.get(http_url, timeout=timeout)
+            if response.status_code == 200:
+                # MJPEG veya video stream kontrolü
+                content_type = response.headers.get('content-type', '').lower()
+                if 'image' in content_type or 'video' in content_type or 'multipart' in content_type:
+                    return True
+                
+                # Content length kontrolü
+                if len(response.content) > 1000:  # Büyük response
+                    return True
+            
+            return False
+        except:
+            return False
+
 class ProfessionalCameraManager:
     """Enterprise-grade camera management system"""
     
@@ -1139,6 +1431,104 @@ class ProfessionalCameraManager:
             result['success'] = False
             result['error'] = str(e)
             return result
+
+    def smart_test_camera_connection(self, ip_address: str, name: str = "Smart Detected Camera") -> Dict[str, Any]:
+        """
+        Akıllı kamera bağlantı testi - Sadece IP adresi ile
+        
+        Args:
+            ip_address: Kamera IP adresi
+            name: Kamera adı
+            
+        Returns:
+            Test sonucu
+        """
+        logger.info(f"🧠 Smart camera test for {ip_address}")
+        
+        # Akıllı tespit sistemi
+        detector = SmartCameraDetector()
+        detection_result = detector.smart_detect_camera(ip_address)
+        
+        if not detection_result['success']:
+            return {
+                'success': False,
+                'error': detection_result['error'],
+                'detection_info': detection_result
+            }
+        
+        # Tespit edilen bilgilerle kamera konfigürasyonu oluştur
+        camera_config = RealCameraConfig(
+            camera_id=f"SMART_{ip_address.replace('.', '_')}",
+            name=name,
+            ip_address=ip_address,
+            port=detection_result['port'],
+            protocol=detection_result['protocol'],
+            stream_path=detection_result['path'],
+            timeout=10
+        )
+        
+        # Normal test yap
+        test_result = self.test_real_camera_connection(camera_config)
+        test_result['detection_info'] = detection_result
+        
+        return test_result
+
+    def smart_discover_cameras(self, network_range: str = "192.168.1.0/24") -> List[Dict]:
+        """
+        Akıllı kamera keşfi - Gelişmiş tespit sistemi
+        
+        Args:
+            network_range: Taranacak ağ aralığı
+            
+        Returns:
+            Keşfedilen kameralar listesi
+        """
+        logger.info(f"🧠 Smart camera discovery for {network_range}")
+        
+        discovered_cameras = []
+        detector = SmartCameraDetector()
+        
+        try:
+            import ipaddress
+            network = ipaddress.IPv4Network(network_range, strict=False)
+            
+            # Paralel tarama için ThreadPool
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            def scan_ip(ip):
+                try:
+                    detection_result = detector.smart_detect_camera(str(ip))
+                    if detection_result['success']:
+                        return {
+                            'ip': str(ip),
+                            'model': detection_result['model'],
+                            'protocol': detection_result['protocol'],
+                            'port': detection_result['port'],
+                            'path': detection_result['path'],
+                            'stream_url': detection_result['url'],
+                            'confidence': detection_result['confidence'],
+                            'detection_info': detection_result
+                        }
+                except Exception as e:
+                    logger.debug(f"Scan failed for {ip}: {e}")
+                return None
+            
+            # Paralel tarama
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                futures = {executor.submit(scan_ip, ip): ip for ip in network.hosts()}
+                
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        discovered_cameras.append(result)
+                        logger.info(f"📹 Smart discovered: {result['model']} at {result['ip']}")
+            
+            logger.info(f"✅ Smart discovery complete: {len(discovered_cameras)} cameras found")
+            return discovered_cameras
+            
+        except Exception as e:
+            logger.error(f"❌ Smart discovery failed: {e}")
+            return []
 
 # Global camera manager instance
 camera_manager = ProfessionalCameraManager()
