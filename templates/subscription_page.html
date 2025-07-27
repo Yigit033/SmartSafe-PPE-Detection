@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSafe AI - Abonelik</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .subscription-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: none;
+            transition: all 0.3s ease;
+        }
+        .subscription-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+        .plan-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .plan-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            margin: 0 auto 20px;
+        }
+        .plan-features {
+            list-style: none;
+            padding: 0;
+        }
+        .plan-features li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+        }
+        .plan-features li:last-child {
+            border-bottom: none;
+        }
+        .plan-features li i {
+            color: #27ae60;
+            margin-right: 10px;
+            width: 20px;
+        }
+        .current-plan {
+            border: 3px solid #27ae60;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        .current-plan .plan-icon {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
+                <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                    <i class="fas fa-video"></i> Kameralar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/users">
+                    <i class="fas fa-users"></i> Kullanıcılar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/reports">
+                    <i class="fas fa-chart-line"></i> Raporlar
+                </a>
+                <a class="nav-link active" href="/company/{{ company_id }}/settings">
+                    <i class="fas fa-cog"></i> Ayarlar
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="subscription-card">
+                    <div class="plan-header">
+                        <div class="plan-icon">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <h2>Abonelik Bilgileri</h2>
+                        <p class="text-muted">Mevcut planınız ve özellikleriniz</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4 class="mb-3"><i class="fas fa-info-circle text-primary"></i> Plan Detayları</h4>
+                            
+                            <div class="mb-3">
+                                <strong>Plan Türü:</strong>
+                                <span id="plan-type" class="badge bg-primary ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Başlangıç Tarihi:</strong>
+                                <span id="start-date" class="ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Bitiş Tarihi:</strong>
+                                <span id="end-date" class="ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Durum:</strong>
+                                <span id="status" class="badge bg-success ms-2">Yükleniyor...</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <h4 class="mb-3"><i class="fas fa-video text-info"></i> Kamera Kullanımı</h4>
+                            
+                            <div class="mb-3">
+                                <strong>Kullanılan Kamera:</strong>
+                                <span id="used-cameras" class="ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Maksimum Kamera:</strong>
+                                <span id="max-cameras" class="ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Kullanım Oranı:</strong>
+                                <div class="progress mt-2">
+                                    <div id="usage-progress" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <button class="btn btn-primary" onclick="openUpgradeModal()">
+                            <i class="fas fa-arrow-up"></i> Planı Yükselt
+                        </button>
+                        <a href="/company/{{ company_id }}/billing" class="btn btn-outline-info">
+                            <i class="fas fa-credit-card"></i> Fatura Bilgileri
+                        </a>
+                        <a href="/company/{{ company_id }}/dashboard" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Dashboard'a Dön
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan Yükseltme Modal -->
+    <div class="modal fade" id="upgradePlanModal" tabindex="-1" aria-labelledby="upgradePlanModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+                <div class="modal-header bg-gradient-primary text-white" style="border-radius: 20px 20px 0 0; border: none;">
+                    <h5 class="modal-title" id="upgradePlanModalLabel">
+                        <i class="fas fa-crown me-2"></i>Plan Yükseltme
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <!-- Hero Section -->
+                    <div class="bg-light py-4 px-4 text-center">
+                        <h4 class="text-primary mb-2">İlk 30 Gün Ücretsiz Deneme!</h4>
+                        <p class="text-muted mb-0">Daha fazla özellik ve kamera ile işletmenizi büyütün</p>
+                    </div>
+                    
+                    <div class="p-4">
+                        <div class="row">
+                            <!-- Starter Plan -->
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100 border-0 shadow-sm" style="border-radius: 16px; transition: all 0.3s ease;">
+                                    <div class="card-body text-center p-4">
+                                        <div class="mb-3">
+                                            <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                                <i class="fas fa-rocket text-success" style="font-size: 24px;"></i>
+                                            </div>
+                                        </div>
+                                        <h5 class="card-title fw-bold text-dark mb-2">Starter</h5>
+                                        <p class="text-muted small mb-3">Küçük işletmeler için AI destekli PPE tespiti</p>
+                                        
+                                        <div class="mb-4">
+                                            <span class="h3 fw-bold text-primary">₺299</span>
+                                            <span class="text-muted">/ay</span>
+                                        </div>
+                                        
+                                        <ul class="list-unstyled mb-4">
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #198754 !important;">
+                                                    <i class="fas fa-video text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">5 Kamera</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #0dcaf0 !important;">
+                                                    <i class="fas fa-brain text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">AI Tespit (24.7 FPS)</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #6f42c1 !important;">
+                                                    <i class="fas fa-bell text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">Temel Bildirimler</span>
+                                            </div>
+                                        </ul>
+                                        
+                                        <button class="btn btn-outline-success btn-lg w-100 rounded-pill shadow-sm" onclick="selectPlan('starter')">
+                                            <i class="fas fa-check me-2"></i>Seç
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Professional Plan -->
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100 border-0 shadow-sm" style="border-radius: 16px; transition: all 0.3s ease; transform: scale(1.05);">
+                                    <div class="card-body text-center p-4 position-relative">
+                                        <div class="position-absolute top-0 start-50 translate-middle-x">
+                                            <span class="badge bg-warning text-dark px-3 py-2" style="border-radius: 0 0 15px 15px;">
+                                                <i class="fas fa-star me-1"></i>En Popüler
+                                            </span>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                                <i class="fas fa-crown text-primary" style="font-size: 24px;"></i>
+                                            </div>
+                                        </div>
+                                        <h5 class="card-title fw-bold text-dark mb-2">Professional</h5>
+                                        <p class="text-muted small mb-3">Büyüyen işletmeler için gelişmiş AI tespit sistemi</p>
+                                        
+                                        <div class="mb-4">
+                                            <span class="h3 fw-bold text-primary">₺599</span>
+                                            <span class="text-muted">/ay</span>
+                                        </div>
+                                        
+                                        <ul class="list-unstyled mb-4">
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #198754 !important;">
+                                                    <i class="fas fa-video text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">15 Kamera</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #0dcaf0 !important;">
+                                                    <i class="fas fa-brain text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">AI Tespit (24.7 FPS)</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #6f42c1 !important;">
+                                                    <i class="fas fa-bell text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">Gelişmiş Bildirimler</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #fd7e14 !important;">
+                                                    <i class="fas fa-chart-line text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">Detaylı Raporlar</span>
+                                            </div>
+                                        </ul>
+                                        
+                                        <button class="btn btn-primary btn-lg w-100 rounded-pill shadow-sm" onclick="selectPlan('professional')">
+                                            <i class="fas fa-crown me-2"></i>Seç
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Enterprise Plan -->
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100 border-0 shadow-sm" style="border-radius: 16px; transition: all 0.3s ease;">
+                                    <div class="card-body text-center p-4">
+                                        <div class="mb-3">
+                                            <div class="rounded-circle bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                                <i class="fas fa-building text-danger" style="font-size: 24px;"></i>
+                                            </div>
+                                        </div>
+                                        <h5 class="card-title fw-bold text-dark mb-2">Enterprise</h5>
+                                        <p class="text-muted small mb-3">Büyük kurumlar için endüstriyel AI tespit sistemi</p>
+                                        
+                                        <div class="mb-4">
+                                            <span class="h3 fw-bold text-primary">₺999</span>
+                                            <span class="text-muted">/ay</span>
+                                        </div>
+                                        
+                                        <ul class="list-unstyled mb-4">
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #198754 !important;">
+                                                    <i class="fas fa-video text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">Sınırsız Kamera</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #0dcaf0 !important;">
+                                                    <i class="fas fa-brain text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">AI Tespit (24.7 FPS)</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #6f42c1 !important;">
+                                                    <i class="fas fa-bell text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">Özel Bildirimler</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #fd7e14 !important;">
+                                                    <i class="fas fa-chart-line text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">Gelişmiş Analitik</span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
+                                                <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #dc3545 !important;">
+                                                    <i class="fas fa-headset text-white"></i>
+                                                </div>
+                                                <span class="fw-semibold">7/24 Destek</span>
+                                            </div>
+                                        </ul>
+                                        
+                                        <button class="btn btn-outline-danger btn-lg w-100 rounded-pill shadow-sm" onclick="selectPlan('enterprise')">
+                                            <i class="fas fa-building me-2"></i>Seç
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Features Comparison Table -->
+                        <div class="table-responsive mt-4">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Özellik</th>
+                                        <th class="text-center">Starter</th>
+                                        <th class="text-center">Professional</th>
+                                        <th class="text-center">Enterprise</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><i class="fas fa-video me-2"></i>Kamera Sayısı</td>
+                                        <td class="text-center">5</td>
+                                        <td class="text-center">15</td>
+                                        <td class="text-center">Sınırsız</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-brain me-2"></i>AI Tespit Hızı</td>
+                                        <td class="text-center">24.7 FPS</td>
+                                        <td class="text-center">24.7 FPS</td>
+                                        <td class="text-center">24.7 FPS</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-bell me-2"></i>Bildirimler</td>
+                                        <td class="text-center">Temel</td>
+                                        <td class="text-center">Gelişmiş</td>
+                                        <td class="text-center">Özel</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-chart-line me-2"></i>Raporlar</td>
+                                        <td class="text-center">Temel</td>
+                                        <td class="text-center">Detaylı</td>
+                                        <td class="text-center">Gelişmiş</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-headset me-2"></i>Destek</td>
+                                        <td class="text-center">E-posta</td>
+                                        <td class="text-center">E-posta + Chat</td>
+                                        <td class="text-center">7/24 Telefon</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Important Information -->
+                        <div class="alert alert-info mt-4" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-info-circle me-3" style="font-size: 24px;"></i>
+                                <div>
+                                    <h6 class="alert-heading mb-2">Önemli Bilgiler</h6>
+                                    <ul class="mb-0">
+                                        <li>Plan değişikliği anında etkili olur</li>
+                                        <li>Yeni plan ücreti orantılı olarak hesaplanır</li>
+                                        <li>İlk 30 gün ücretsiz deneme süresi</li>
+                                        <li>İstediğiniz zaman planınızı değiştirebilirsiniz</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light" style="border-radius: 0 0 20px 20px;">
+                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>İptal
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" onclick="confirmPlanUpgrade()">
+                        <i class="fas fa-check me-2"></i>Planı Değiştir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedPlan = null;
+        const companyId = '{{ company_id }}';
+
+        // Load subscription data
+        function loadSubscriptionData() {
+            fetch(`/api/company/${companyId}/subscription`)
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        const subscription = result.subscription;
+                        
+                        // Update plan details
+                        document.getElementById('plan-type').textContent = subscription.subscription_type.toUpperCase();
+                        document.getElementById('start-date').textContent = subscription.subscription_start || 'Belirtilmemiş';
+                        document.getElementById('end-date').textContent = subscription.subscription_end || 'Belirtilmemiş';
+                        
+                        // Update status
+                        const statusElement = document.getElementById('status');
+                        if (subscription.is_active) {
+                            statusElement.textContent = 'Aktif';
+                            statusElement.className = 'badge bg-success ms-2';
+                        } else {
+                            statusElement.textContent = 'Süresi Dolmuş';
+                            statusElement.className = 'badge bg-danger ms-2';
+                        }
+                        
+                        // Update camera usage
+                        document.getElementById('used-cameras').textContent = subscription.used_cameras || 0;
+                        document.getElementById('max-cameras').textContent = subscription.max_cameras || 0;
+                        
+                        // Update progress bar
+                        const usagePercentage = subscription.usage_percentage || 0;
+                        const progressBar = document.getElementById('usage-progress');
+                        progressBar.style.width = `${usagePercentage}%`;
+                        progressBar.textContent = `${usagePercentage}%`;
+                        
+                        if (usagePercentage > 80) {
+                            progressBar.className = 'progress-bar bg-danger';
+                        } else if (usagePercentage > 60) {
+                            progressBar.className = 'progress-bar bg-warning';
+                        } else {
+                            progressBar.className = 'progress-bar bg-success';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Abonelik bilgileri yükleme hatası:', error);
+                });
+        }
+
+        // Open upgrade modal
+        function openUpgradeModal() {
+            const modal = new bootstrap.Modal(document.getElementById('upgradePlanModal'));
+            modal.show();
+        }
+
+        // Select plan
+        function selectPlan(plan) {
+            selectedPlan = plan;
+            
+            // Update button styles
+            document.querySelectorAll('[onclick^="selectPlan"]').forEach(btn => {
+                btn.className = btn.className.replace('btn-primary', 'btn-outline-primary');
+                btn.className = btn.className.replace('btn-success', 'btn-outline-success');
+                btn.className = btn.className.replace('btn-danger', 'btn-outline-danger');
+            });
+            
+            // Highlight selected plan
+            const selectedBtn = document.querySelector(`[onclick="selectPlan('${plan}')"]`);
+            if (selectedBtn) {
+                selectedBtn.className = selectedBtn.className.replace('btn-outline-', 'btn-');
+            }
+        }
+
+        // Confirm plan upgrade
+        function confirmPlanUpgrade() {
+            if (!selectedPlan) {
+                alert('Lütfen bir plan seçin');
+                return;
+            }
+            
+            fetch(`/api/company/${companyId}/subscription/change-plan`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    new_plan: selectedPlan
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('Plan başarıyla değiştirildi!');
+                    bootstrap.Modal.getInstance(document.getElementById('upgradePlanModal')).hide();
+                    loadSubscriptionData(); // Reload data
+                } else {
+                    alert('Plan değiştirme hatası: ' + result.error);
+                }
+            })
+            .catch(error => {
+                console.error('Plan değiştirme hatası:', error);
+                alert('Plan değiştirme sırasında bir hata oluştu');
+            });
+        }
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSubscriptionData();
+        });
+    </script>
+</body>
+</html> 
