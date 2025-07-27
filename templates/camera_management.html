@@ -651,8 +651,30 @@
                 const testResult = await testResponse.json();
                 
                 if (testResult.success) {
-                    showAlert('Kamera başarıyla eklendi!', 'success');
-                    this.reset();
+                    // Kamera ekleme
+                    const addResponse = await fetch(`/api/company/{{ company_id }}/cameras`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const addResult = await addResponse.json();
+                    
+                    if (addResult.success) {
+                        showAlert('Kamera başarıyla eklendi!', 'success');
+                        this.reset();
+                        // Kamera listesini yenile
+                        if (typeof loadCameras === 'function') {
+                            loadCameras();
+                        }
+                    } else {
+                        // Limit kontrolü
+                        if (addResult.limit_reached) {
+                            showAlert(`❌ Kamera limiti aşıldı! Mevcut: ${addResult.current_cameras}/${addResult.max_cameras} kamera. Planınızı yükseltmek için ayarlar sayfasını ziyaret edin.`, 'warning');
+                        } else {
+                            showAlert('Kamera ekleme başarısız: ' + addResult.error, 'danger');
+                        }
+                    }
                 } else {
                     showAlert('Kamera testi başarısız: ' + testResult.error, 'danger');
                 }
