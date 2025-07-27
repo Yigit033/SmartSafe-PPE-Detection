@@ -7751,6 +7751,12 @@ Mesaj:
                             if (targetElement) {
                                 targetElement.style.display = 'block';
                                 console.log('Section displayed:', targetSection);
+                                
+                                // Update URL hash without triggering hashchange event
+                                const currentHash = window.location.hash.substring(1);
+                                if (currentHash !== targetSection) {
+                                    history.pushState(null, null, '#' + targetSection);
+                                }
                             } else {
                                 console.error('Target section not found:', targetSection + '-section');
                             }
@@ -7760,10 +7766,34 @@ Mesaj:
                 
                 // Initialize when DOM is ready
                 if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', initializeSettingsNavigation);
+                    document.addEventListener('DOMContentLoaded', function() {
+                        initializeSettingsNavigation();
+                        handleInitialHash();
+                    });
                 } else {
                     initializeSettingsNavigation();
+                    handleInitialHash();
                 }
+                
+                // Handle URL hash on page load
+                function handleInitialHash() {
+                    const hash = window.location.hash.substring(1);
+                    if (hash) {
+                        const targetLink = document.querySelector(`[data-section="${hash}"]`);
+                        if (targetLink) {
+                            targetLink.click();
+                        }
+                    }
+                }
+                
+                // Handle hash changes
+                window.addEventListener('hashchange', function() {
+                    const hash = window.location.hash.substring(1);
+                    const targetLink = document.querySelector(`[data-section="${hash}"]`);
+                    if (targetLink) {
+                        targetLink.click();
+                    }
+                });
                 
                 // Profile Form Submission
                 document.getElementById('profileForm').addEventListener('submit', function(e) {
