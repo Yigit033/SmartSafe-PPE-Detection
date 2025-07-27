@@ -2852,6 +2852,24 @@ Mesaj:
             
             return render_template('company_profile.html', company_id=company_id, company=company_info)
 
+        @self.app.route('/company/<company_id>/subscription', methods=['GET'])
+        def subscription_page(company_id):
+            """Abonelik sayfası"""
+            user_data = self.validate_session()
+            if not user_data or user_data['company_id'] != company_id:
+                return redirect(f'/company/{company_id}/login')
+            
+            return render_template('subscription_page.html', company_id=company_id, user_data=user_data)
+
+        @self.app.route('/company/<company_id>/billing', methods=['GET'])
+        def billing_page(company_id):
+            """Fatura ve ödeme sayfası"""
+            user_data = self.validate_session()
+            if not user_data or user_data['company_id'] != company_id:
+                return redirect(f'/company/{company_id}/login')
+            
+            return render_template('billing_page.html', company_id=company_id, user_data=user_data)
+
         @self.app.route('/company/<company_id>/cameras', methods=['GET'])
         def camera_management(company_id):
             """Kamera yönetimi sayfası - Yeni Geliştirilmiş Sistem"""
@@ -10393,31 +10411,43 @@ Mesaj:
                                 const subscription = result.subscription;
                                 
                                 // Update subscription display in dashboard
-                                document.getElementById('subscription-plan').textContent = subscription.subscription_type.toUpperCase();
-                                document.getElementById('camera-usage').textContent = `${subscription.used_cameras}/${subscription.max_cameras}`;
+                                const subscriptionPlanElement = document.getElementById('subscription-plan');
+                                const cameraUsageElement = document.getElementById('camera-usage');
+                                
+                                if (subscriptionPlanElement) {
+                                    subscriptionPlanElement.textContent = subscription.subscription_type ? subscription.subscription_type.toUpperCase() : 'BASIC';
+                                }
+                                
+                                if (cameraUsageElement) {
+                                    cameraUsageElement.textContent = `${subscription.used_cameras || 0}/${subscription.max_cameras || 5}`;
+                                }
                                 
                                 // Update subscription trend
                                 const subscriptionTrend = document.getElementById('subscription-trend');
-                                if (subscription.is_active) {
-                                    subscriptionTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Aktif';
-                                    subscriptionTrend.className = 'metric-trend';
-                                } else {
-                                    subscriptionTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Süresi Dolmuş';
-                                    subscriptionTrend.className = 'metric-trend';
+                                if (subscriptionTrend) {
+                                    if (subscription.is_active) {
+                                        subscriptionTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Aktif';
+                                        subscriptionTrend.className = 'metric-trend';
+                                    } else {
+                                        subscriptionTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Süresi Dolmuş';
+                                        subscriptionTrend.className = 'metric-trend';
+                                    }
                                 }
                                 
                                 // Update usage trend
                                 const usageTrend = document.getElementById('usage-trend');
-                                const usagePercentage = subscription.usage_percentage;
-                                if (usagePercentage > 80) {
-                                    usageTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Limit Yakın';
-                                    usageTrend.className = 'metric-trend';
-                                } else if (usagePercentage > 60) {
-                                    usageTrend.innerHTML = '<i class="fas fa-info trend-neutral"></i> Orta';
-                                    usageTrend.className = 'metric-trend';
-                                } else {
-                                    usageTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Normal';
-                                    usageTrend.className = 'metric-trend';
+                                if (usageTrend) {
+                                    const usagePercentage = subscription.usage_percentage || 0;
+                                    if (usagePercentage > 80) {
+                                        usageTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Limit Yakın';
+                                        usageTrend.className = 'metric-trend';
+                                    } else if (usagePercentage > 60) {
+                                        usageTrend.innerHTML = '<i class="fas fa-info trend-neutral"></i> Orta';
+                                        usageTrend.className = 'metric-trend';
+                                    } else {
+                                        usageTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Normal';
+                                        usageTrend.className = 'metric-trend';
+                                    }
                                 }
                             }
                         })
