@@ -5439,7 +5439,10 @@ Mesaj:
                                         </select>
                                     </div>
                                 </div>
-                                <div class="d-grid">
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-info" onclick="smartDetectCamera()">
+                                        <i class="fas fa-brain"></i> Akıllı Tespit
+                                    </button>
                                     <button type="button" class="btn btn-warning" onclick="testCameraConnection()">
                                         <i class="fas fa-check"></i> Bağlantıyı Test Et
                                     </button>
@@ -5778,46 +5781,82 @@ Mesaj:
                     
                     // Test başlatıldığında UI güncelle
                     testButton.disabled = true;
-                    testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test Ediliyor...';
+                    testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Akıllı Test Ediliyor...';
                     testResults.style.display = 'block';
                     testResults.innerHTML = `
                         <div class="alert alert-info">
-                            <i class="fas fa-clock"></i> Kamera bağlantısı test ediliyor...
+                            <i class="fas fa-brain"></i> Akıllı kamera tespiti ve bağlantı testi yapılıyor...
                         </div>
                     `;
                     
-                    fetch(`/api/company/${companyId}/cameras/test`, {
+                    // Önce akıllı tespit dene
+                    fetch(`/api/company/${companyId}/cameras/smart-test`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(data)
+                        body: JSON.stringify({
+                            ip_address: data.ip_address,
+                            camera_name: data.name || 'Test Camera'
+                        })
                     })
                     .then(response => response.json())
                     .then(result => {
                         if (result.success) {
+                            // Akıllı tespit başarılı - formu otomatik doldur
+                            if (result.detected_model) {
+                                Object.keys(result.detected_model).forEach(key => {
+                                    const input = document.querySelector(`[name="${key}"]`);
+                                    if (input && result.detected_model[key]) {
+                                        input.value = result.detected_model[key];
+                                    }
+                                });
+                            }
+                            
                             testResults.innerHTML = `
                                 <div class="alert alert-success">
-                                    <h6><i class="fas fa-check-circle"></i> Bağlantı Başarılı!</h6>
+                                    <h6><i class="fas fa-check-circle"></i> Akıllı Tespit Başarılı!</h6>
                                     <ul class="mb-0">
-                                        <li><strong>Durum:</strong> ${result.status}</li>
-                                        <li><strong>Protokol:</strong> ${result.protocol}</li>
-                                        <li><strong>Çözünürlük:</strong> ${result.resolution || 'Bilinmiyor'}</li>
-                                        <li><strong>Bağlantı Süresi:</strong> ${result.connection_time}ms</li>
-                                        ${result.quality_score ? `<li><strong>Kalite Skoru:</strong> ${result.quality_score}/100</li>` : ''}
+                                        <li><strong>Tespit Edilen Model:</strong> ${result.detected_model?.name || 'Bilinmiyor'}</li>
+                                        <li><strong>Üretici:</strong> ${result.detected_model?.manufacturer || 'Bilinmiyor'}</li>
+                                        <li><strong>Protokol:</strong> ${result.detected_model?.default_rtsp || result.detected_model?.default_http || 'Bilinmiyor'}</li>
+                                        <li><strong>Port:</strong> ${result.detected_model?.ports?.[0] || 'Bilinmiyor'}</li>
+                                        <li><strong>Bağlantı Süresi:</strong> ${result.connection_time || 0}ms</li>
+                                        <li><strong>Kalite:</strong> ${result.stream_quality || 'İyi'}</li>
                                     </ul>
+                                    <div class="mt-2">
+                                        <small class="text-success">
+                                            <i class="fas fa-magic"></i> Kamera ayarları otomatik olarak dolduruldu!
+                                        </small>
+                                    </div>
                                 </div>
                             `;
                         } else {
+                            // Akıllı tespit başarısız - manuel test dene
+                            return fetch(`/api/company/${companyId}/cameras/test`, {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify(data)
+                            });
+                        }
+                    })
+                    .then(response => {
+                        if (response && !response.ok) {
+                            return response.json();
+                        }
+                        return null;
+                    })
+                    .then(result => {
+                        if (result && !result.success) {
                             testResults.innerHTML = `
-                                <div class="alert alert-danger">
-                                    <h6><i class="fas fa-times-circle"></i> Bağlantı Başarısız!</h6>
-                                    <p><strong>Hata:</strong> ${result.error}</p>
+                                <div class="alert alert-warning">
+                                    <h6><i class="fas fa-exclamation-triangle"></i> Manuel Test Gerekli!</h6>
+                                    <p><strong>Akıllı tespit başarısız:</strong> ${result.error || 'Bilinmeyen hata'}</p>
                                     <div class="mt-2">
                                         <small><strong>Öneriler:</strong></small>
                                         <ul class="mb-0">
+                                            <li>Kamera ayarlarını manuel olarak kontrol edin</li>
                                             <li>IP adresinin doğru olduğundan emin olun</li>
                                             <li>Kamera ve bilgisayarın aynı ağda olduğunu kontrol edin</li>
                                             <li>Kullanıcı adı ve şifrenin doğru olduğunu kontrol edin</li>
-                                            <li>Kameranın açık ve erişilebilir olduğunu kontrol edin</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -5836,7 +5875,103 @@ Mesaj:
                     .finally(() => {
                         // Test bittiğinde UI'yi eski haline getir
                         testButton.disabled = false;
-                        testButton.innerHTML = '<i class="fas fa-check"></i> Bağlantıyı Test Et';
+                        testButton.innerHTML = '<i class="fas fa-brain"></i> Akıllı Test Et';
+                    });
+                }
+                
+                function smartDetectCamera() {
+                    const ipAddress = document.querySelector('input[name="ip_address"]').value;
+                    const cameraName = document.querySelector('input[name="name"]').value || 'Test Camera';
+                    
+                    if (!ipAddress) {
+                        alert('❌ IP adresi gerekli!');
+                        return;
+                    }
+                    
+                    const smartButton = document.querySelector('button[onclick="smartDetectCamera()"]');
+                    const testResults = document.getElementById('testResults');
+                    
+                    // Akıllı tespit başlatıldığında UI güncelle
+                    smartButton.disabled = true;
+                    smartButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tespit Ediliyor...';
+                    testResults.style.display = 'block';
+                    testResults.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-search"></i> Kamera modeli tespit ediliyor...
+                        </div>
+                    `;
+                    
+                    fetch(`/api/company/${companyId}/cameras/smart-discover`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            ip_address: ipAddress,
+                            camera_name: cameraName
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success && result.detected_cameras && result.detected_cameras.length > 0) {
+                            const camera = result.detected_cameras[0];
+                            
+                            // Formu otomatik doldur
+                            if (camera.detected_model) {
+                                Object.keys(camera.detected_model).forEach(key => {
+                                    const input = document.querySelector(`[name="${key}"]`);
+                                    if (input && camera.detected_model[key]) {
+                                        input.value = camera.detected_model[key];
+                                    }
+                                });
+                            }
+                            
+                            testResults.innerHTML = `
+                                <div class="alert alert-success">
+                                    <h6><i class="fas fa-check-circle"></i> Kamera Tespit Edildi!</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>Model:</strong> ${camera.detected_model?.name || 'Bilinmiyor'}</li>
+                                        <li><strong>Üretici:</strong> ${camera.detected_model?.manufacturer || 'Bilinmiyor'}</li>
+                                        <li><strong>IP:</strong> ${camera.ip_address}</li>
+                                        <li><strong>Port:</strong> ${camera.detected_model?.ports?.[0] || 'Bilinmiyor'}</li>
+                                        <li><strong>Güven Skoru:</strong> ${camera.confidence_score || 0}%</li>
+                                    </ul>
+                                    <div class="mt-2">
+                                        <small class="text-success">
+                                            <i class="fas fa-magic"></i> Kamera ayarları otomatik olarak dolduruldu!
+                                        </small>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            testResults.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <h6><i class="fas fa-exclamation-triangle"></i> Kamera Tespit Edilemedi!</h6>
+                                    <p>Kamera otomatik olarak tespit edilemedi. Manuel ayarları kontrol edin.</p>
+                                    <div class="mt-2">
+                                        <small><strong>Öneriler:</strong></small>
+                                        <ul class="mb-0">
+                                            <li>IP adresinin doğru olduğundan emin olun</li>
+                                            <li>Kameranın açık ve erişilebilir olduğunu kontrol edin</li>
+                                            <li>Kamera ve bilgisayarın aynı ağda olduğunu kontrol edin</li>
+                                            <li>Manuel ayarları kullanarak kamera ekleyin</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Akıllı tespit hatası:', error);
+                        testResults.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-times-circle"></i> Tespit Hatası!</h6>
+                                <p>Kamera tespiti sırasında bir hata oluştu: ${error.message}</p>
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        // Tespit bittiğinde UI'yi eski haline getir
+                        smartButton.disabled = false;
+                        smartButton.innerHTML = '<i class="fas fa-brain"></i> Akıllı Tespit';
                     });
                 }
                 

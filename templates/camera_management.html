@@ -92,9 +92,77 @@
             display: inline-block;
             font-size: 0.8em;
         }
+        
+        /* Navbar Styles */
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .nav-link {
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            color: #667eea !important;
+        }
+        
+        .nav-link.active {
+            color: #667eea !important;
+            font-weight: 600;
+        }
+        
+        .btn-outline-danger {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        
+        .btn-outline-danger:hover {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
     </style>
 </head>
 <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
+                <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link fw-bold">
+                    <i class="fas fa-building text-primary"></i> 
+                    {{ user_data.company_name }}
+                </span>
+                <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a class="nav-link active" href="/company/{{ company_id }}/cameras">
+                    <i class="fas fa-video"></i> Kameralar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/users">
+                    <i class="fas fa-users"></i> Kullanıcılar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/reports">
+                    <i class="fas fa-chart-line"></i> Raporlar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/settings">
+                    <i class="fas fa-cog"></i> Ayarlar
+                </a>
+                <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Çıkış
+                </button>
+            </div>
+        </div>
+    </nav>
+
     <div class="container mt-5">
         <h1 class="text-center mb-5">
             <i class="fas fa-video me-3"></i>
@@ -564,6 +632,29 @@
             setTimeout(() => {
                 alert.remove();
             }, 5000);
+        }
+        
+        // Logout function
+        function logout() {
+            if (confirm('Çıkış yapmak istediğinizden emin misiniz?')) {
+                fetch('/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        window.location.href = '/';
+                    } else {
+                        alert('Çıkış yapılırken bir hata oluştu.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Logout error:', error);
+                    alert('Çıkış yapılırken bir hata oluştu.');
+                });
+            }
         }
     </script>
 </body>
