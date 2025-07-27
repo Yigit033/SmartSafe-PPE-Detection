@@ -92,10 +92,8 @@ pygame==2.5.2
 # Smart Camera System Dependencies
 dnspython>=2.4.0  # DNS resolution for camera detection
 certifi>=2023.7.22  # SSL certificate verification
-dataclasses>=0.6  # Python 3.6 compatibility for dataclasses
-concurrent-futures>=3.1.1  # ThreadPoolExecutor for parallel camera scanning
 
-# Camera Integration Dependencies
-ipaddress>=1.0.23  # IP address manipulation
-urllib3>=2.0.0  # HTTP client for camera connections
-requests>=2.31.0  # HTTP requests for camera testing 
+# Note: The following packages are built-in to Python 3.7+ and don't need to be installed:
+# - concurrent.futures (built-in since Python 3.2)
+# - dataclasses (built-in since Python 3.7)
+# - ipaddress (built-in since Python 3.3) 
