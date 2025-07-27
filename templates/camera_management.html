@@ -1015,26 +1015,90 @@
                     <div class="alert alert-success">
                         <h5><i class="fas fa-check-circle me-2"></i>Bağlantı Başarılı!</h5>
                         <p><strong>Yanıt Süresi:</strong> ${result.test_results.response_time}</p>
-                        <p><strong>Çözünürlük:</strong> ${result.test_results.resolution}</p>
-                        <p><strong>FPS:</strong> ${result.test_results.fps}</p>
+                        <p><strong>Çözünürlük:</strong> ${result.test_results.resolution || 'Bilinmiyor'}</p>
+                        <p><strong>FPS:</strong> ${result.test_results.fps || 'Bilinmiyor'}</p>
                         <p><strong>Kalite:</strong> ${result.test_results.quality}</p>
                         <p><strong>Test Süresi:</strong> ${result.test_results.test_duration}</p>
+                        ${result.camera_info && result.camera_info.working_endpoint ? 
+                            `<p><strong>Çalışan Endpoint:</strong> <code>${result.camera_info.working_endpoint}</code></p>` : ''}
                     </div>
                 `;
             } else {
+                let detailsHtml = '';
+                if (result.test_details) {
+                    detailsHtml = `
+                        <div class="mt-3">
+                            <h6>Detaylı Test Raporu:</h6>
+                            <div class="bg-light p-3 rounded">
+                                ${result.test_details.endpoints_tested ? `
+                                    <strong>Test Edilen Endpoint'ler:</strong>
+                                    <ul class="mt-2">
+                                        ${result.test_details.endpoints_tested.map(endpoint => 
+                                            `<li><code>${endpoint}</code></li>`
+                                        ).join('')}
+                                    </ul>
+                                ` : ''}
+                                
+                                ${result.test_details.connection_steps ? `
+                                    <strong>Bağlantı Adımları:</strong>
+                                    <ul class="mt-2">
+                                        ${result.test_details.connection_steps.map(step => 
+                                            `<li>${step}</li>`
+                                        ).join('')}
+                                    </ul>
+                                ` : ''}
+                                
+                                ${result.test_details.network_analysis ? `
+                                    <strong>Ağ Analizi:</strong>
+                                    <ul class="mt-2">
+                                        <li>DNS Çözümleme: ${result.test_details.network_analysis.dns_resolution ? '✅' : '❌'}</li>
+                                        <li>Port Açık: ${result.test_details.network_analysis.port_open ? '✅' : '❌'}</li>
+                                        <li>Firewall Test: ${result.test_details.network_analysis.firewall_test ? '✅' : '❌'}</li>
+                                        ${result.test_details.network_analysis.error ? `<li class="text-danger">Hata: ${result.test_details.network_analysis.error}</li>` : ''}
+                                    </ul>
+                                ` : ''}
+                                
+                                ${result.test_details.camera_analysis ? `
+                                    <strong>Kamera Analizi:</strong>
+                                    <ul class="mt-2">
+                                        <li>Web Arayüzü: ${result.test_details.camera_analysis.web_interface ? '✅' : '❌'}</li>
+                                        <li>Authentication: ${result.test_details.camera_analysis.authentication ? '✅' : '❌'}</li>
+                                        <li>Protocol Desteği: ${result.test_details.camera_analysis.protocol_support ? '✅' : '❌'}</li>
+                                        ${result.test_details.camera_analysis.error ? `<li class="text-danger">Hata: ${result.test_details.camera_analysis.error}</li>` : ''}
+                                    </ul>
+                                ` : ''}
+                                
+                                ${result.test_details.system_analysis ? `
+                                    <strong>Sistem Analizi:</strong>
+                                    <ul class="mt-2">
+                                        <li>OpenCV: ${result.test_details.system_analysis.opencv_available ? '✅' : '❌'}</li>
+                                        <li>Requests: ${result.test_details.system_analysis.requests_available ? '✅' : '❌'}</li>
+                                        <li>Platform: ${result.test_details.system_analysis.platform}</li>
+                                        ${result.test_details.system_analysis.opencv_error ? `<li class="text-danger">OpenCV: ${result.test_details.system_analysis.opencv_error}</li>` : ''}
+                                        ${result.test_details.system_analysis.requests_error ? `<li class="text-danger">Requests: ${result.test_details.system_analysis.requests_error}</li>` : ''}
+                                    </ul>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 container.innerHTML = `
                     <div class="alert alert-danger">
                         <h5><i class="fas fa-times-circle me-2"></i>Bağlantı Başarısız</h5>
                         <p><strong>Hata:</strong> ${result.error}</p>
-                        <p><strong>Test Süresi:</strong> ${result.test_results.test_duration}</p>
+                        <p><strong>Test Süresi:</strong> ${result.test_results ? result.test_results.test_duration : 'Bilinmiyor'}</p>
+                        ${detailsHtml}
                         <div class="mt-3">
                             <h6>Olası Çözümler:</h6>
                             <ul>
                                 <li>IP adresini kontrol edin</li>
-                                <li>Port numarasını kontrol edin</li>
+                                <li>Port numarasını kontrol edin (8080, 80, 554, 37777)</li>
                                 <li>Kullanıcı adı ve şifreyi kontrol edin</li>
                                 <li>Kamera ağa bağlı mı kontrol edin</li>
                                 <li>Firewall ayarlarını kontrol edin</li>
+                                <li>Kamera web arayüzüne tarayıcıdan erişmeyi deneyin</li>
+                                <li>Farklı endpoint'leri deneyin (/video, /shot.jpg, /mjpeg)</li>
                             </ul>
                         </div>
                     </div>

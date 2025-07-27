@@ -3614,9 +3614,12 @@ Mesaj:
             return None
     
     def _basic_camera_test(self, camera_data):
-        """Basit kamera testi (RealCameraManager olmayan durumlar için)"""
+        """Gelişmiş kamera testi - Tüm sorun türleri için kapsamlı analiz"""
         import time
         import requests
+        import socket
+        import subprocess
+        import platform
         start_time = time.time()
         
         # Extract camera info from form data
@@ -3632,69 +3635,141 @@ Mesaj:
             'stream_quality': 'unknown',
             'supported_features': [],
             'camera_info': {},
-            'error_message': ''
+            'error_message': '',
+            'test_details': {
+                'endpoints_tested': [],
+                'protocols_tested': [],
+                'connection_steps': [],
+                'network_analysis': {},
+                'system_analysis': {},
+                'camera_analysis': {}
+            }
         }
         
         try:
-            # Build camera URL
-            if username and password:
-                if protocol == 'rtsp':
-                    camera_url = f"rtsp://{username}:{password}@{ip_address}:{port}/video"
-                else:
-                    camera_url = f"http://{username}:{password}@{ip_address}:{port}/video"
-            else:
-                if protocol == 'rtsp':
-                    camera_url = f"rtsp://{ip_address}:{port}/video"
-                else:
-                    camera_url = f"http://{ip_address}:{port}/video"
+            # 1. Önce temel bağlantı testi
+            test_result['test_details']['connection_steps'].append('Temel ağ bağlantısı test ediliyor...')
+            if not self._test_network_connectivity(ip_address, port):
+                test_result['error_message'] = f'IP adresi {ip_address}:{port} erişilebilir değil'
+                test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
+                return test_result
             
-            # Test HTTP connection first
-            if protocol == 'http':
-                try:
-                    auth = None
-                    if username and password:
-                        auth = (username, password)
-                    
-                    response = requests.get(f"http://{ip_address}:{port}", 
-                                          auth=auth, timeout=5)
-                    if response.status_code == 200:
-                        test_result['success'] = True
-                        test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
-                        test_result['stream_quality'] = 'good'
-                        test_result['supported_features'] = ['http_stream']
-                        test_result['camera_info'] = {
-                            'ip': ip_address,
-                            'port': port,
-                            'protocol': protocol
-                        }
-                        return test_result
-                except Exception:
-                    pass
+            # 2. HTTP endpoint'leri test et
+            test_result['test_details']['connection_steps'].append('HTTP endpoint\'leri test ediliyor...')
+            http_endpoints = [
+                '/', '/video', '/shot.jpg', '/mjpeg', '/stream', '/live',
+                '/camera', '/webcam', '/video.mjpg', '/video.mjpeg'
+            ]
             
-            # Test with OpenCV as fallback
-            cap = cv2.VideoCapture(camera_url)
-            if cap.isOpened():
-                ret, frame = cap.read()
-                if ret and frame is not None:
+            working_endpoint = None
+            for endpoint in http_endpoints:
+                if self._test_http_endpoint(ip_address, port, endpoint, username, password):
+                    working_endpoint = endpoint
+                    test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ✅')
+                    break
+                else:
+                    test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
+            
+            # 3. RTSP endpoint'leri test et
+            test_result['test_details']['connection_steps'].append('RTSP endpoint\'leri test ediliyor...')
+            rtsp_endpoints = [
+                '/video', '/stream', '/live', '/camera', '/webcam'
+            ]
+            
+            if not working_endpoint:
+                for endpoint in rtsp_endpoints:
+                    if self._test_rtsp_endpoint(ip_address, port, endpoint, username, password):
+                        working_endpoint = f"rtsp://{ip_address}:{port}{endpoint}"
+                        test_result['test_details']['endpoints_tested'].append(f'RTSP: {endpoint} ✅')
+                        break
+                    else:
+                        test_result['test_details']['endpoints_tested'].append(f'RTSP: {endpoint} ❌')
+            
+            # 4. OpenCV ile video stream testi
+            if working_endpoint:
+                test_result['test_details']['connection_steps'].append('Video stream test ediliyor...')
+                if self._test_video_stream(working_endpoint, test_result):
                     test_result['success'] = True
                     test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
                     test_result['stream_quality'] = 'good'
-                    test_result['supported_features'] = ['video_stream']
+                    test_result['supported_features'] = ['video_stream', 'http_stream']
                     test_result['camera_info'] = {
                         'ip': ip_address,
                         'port': port,
                         'protocol': protocol,
-                        'resolution': f"{frame.shape[1]}x{frame.shape[0]}"
+                        'working_endpoint': working_endpoint
                     }
-                    cap.release()
+                    return test_result
+                else:
+                    test_result['error_message'] = 'Video stream alınamadı'
             else:
-                test_result['error_message'] = 'Kamera bağlantısı kurulamadı'
+                test_result['error_message'] = 'Hiçbir endpoint çalışmıyor. Kamera ayarlarını kontrol edin.'
                 
         except Exception as e:
             test_result['error_message'] = f'Kamera test hatası: {str(e)}'
+            test_result['test_details']['connection_steps'].append(f'Hata: {str(e)}')
         
         test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
         return test_result
+    
+    def _test_network_connectivity(self, ip_address, port):
+        """Temel ağ bağlantısını test et"""
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((ip_address, port))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
+    def _test_http_endpoint(self, ip_address, port, endpoint, username, password):
+        """HTTP endpoint'i test et"""
+        try:
+            auth = None
+            if username and password:
+                auth = (username, password)
+            
+            url = f"http://{ip_address}:{port}{endpoint}"
+            response = requests.get(url, auth=auth, timeout=5)
+            return response.status_code == 200
+        except:
+            return False
+    
+    def _test_rtsp_endpoint(self, ip_address, port, endpoint, username, password):
+        """RTSP endpoint'i test et"""
+        try:
+            if username and password:
+                rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{endpoint}"
+            else:
+                rtsp_url = f"rtsp://{ip_address}:{port}{endpoint}"
+            
+            cap = cv2.VideoCapture(rtsp_url)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                cap.release()
+                return ret and frame is not None
+            return False
+        except:
+            return False
+    
+    def _test_video_stream(self, stream_url, test_result):
+        """Video stream'i test et"""
+        try:
+            cap = cv2.VideoCapture(stream_url)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    test_result['camera_info']['resolution'] = f"{frame.shape[1]}x{frame.shape[0]}"
+                    test_result['camera_info']['fps'] = cap.get(cv2.CAP_PROP_FPS)
+                    cap.release()
+                    return True
+                cap.release()
+            return False
+        except Exception as e:
+            test_result['test_details']['connection_steps'].append(f'Video stream hatası: {str(e)}')
+            return False
     
     def camera_worker(self, camera_key, camera_id):
         """Kamera worker thread'i"""
