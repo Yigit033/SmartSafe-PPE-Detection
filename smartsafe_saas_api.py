@@ -845,7 +845,7 @@ Mesaj:
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 
                 # Son 24 saat içindeki ihlalleri getir
-                if self.db_adapter.db_type == 'postgresql':
+                if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
                     time_filter = "v.timestamp >= NOW() - INTERVAL '24 hours'"
                 else:
                     time_filter = "v.timestamp >= datetime('now', '-24 hours')"
@@ -2793,6 +2793,65 @@ Mesaj:
                     'message': f'Kamera durumu değiştirilirken hata oluştu: {str(e)}'
                 }), 500
         
+        @self.app.route('/company/<company_id>/profile', methods=['GET'])
+        def company_profile(company_id):
+            """Şirket profil sayfası"""
+            user_data = self.validate_session()
+            if not user_data or user_data['company_id'] != company_id:
+                return redirect(f'/company/{company_id}/login')
+            
+            # Şirket bilgilerini getir
+            try:
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT company_name, sector, contact_person, email, phone, address,
+                           subscription_type, subscription_start, subscription_end, max_cameras
+                    FROM companies 
+                    WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                company_data = cursor.fetchone()
+                conn.close()
+                
+                if company_data:
+                    if hasattr(company_data, 'keys'):  # PostgreSQL RealDictRow
+                        company_info = {
+                            'company_name': company_data['company_name'],
+                            'sector': company_data['sector'],
+                            'contact_person': company_data['contact_person'],
+                            'email': company_data['email'],
+                            'phone': company_data['phone'],
+                            'address': company_data['address'],
+                            'subscription_type': company_data['subscription_type'],
+                            'subscription_start': company_data['subscription_start'],
+                            'subscription_end': company_data['subscription_end'],
+                            'max_cameras': company_data['max_cameras']
+                        }
+                    else:  # SQLite tuple
+                        company_info = {
+                            'company_name': company_data[0],
+                            'sector': company_data[1],
+                            'contact_person': company_data[2],
+                            'email': company_data[3],
+                            'phone': company_data[4],
+                            'address': company_data[5],
+                            'subscription_type': company_data[6],
+                            'subscription_start': company_data[7],
+                            'subscription_end': company_data[8],
+                            'max_cameras': company_data[9]
+                        }
+                else:
+                    company_info = {}
+                
+            except Exception as e:
+                logger.error(f"❌ Şirket bilgileri alınamadı: {e}")
+                company_info = {}
+            
+            return render_template('company_profile.html', company_id=company_id, company=company_info)
+
         @self.app.route('/company/<company_id>/cameras', methods=['GET'])
         def camera_management(company_id):
             """Kamera yönetimi sayfası - Yeni Geliştirilmiş Sistem"""
@@ -8520,64 +8579,64 @@ Mesaj:
                     
                     // Wait a bit for DOM to be fully ready
                     setTimeout(() => {
-                    const navLinks = document.querySelectorAll('.settings-nav .nav-link');
-                    const sections = document.querySelectorAll('.settings-section');
-                    
-                    console.log('Found nav links:', navLinks.length);
-                    console.log('Found sections:', sections.length);
-                    
-                    if (navLinks.length === 0) {
-                        console.error('No navigation links found');
-                        return;
-                    }
-                    
-                    if (sections.length === 0) {
-                        console.error('No sections found');
-                        return;
-                    }
-                    
-                    navLinks.forEach(link => {
-                        link.addEventListener('click', function(e) {
-                            e.preventDefault();
+                        const navLinks = document.querySelectorAll('.nav-link[data-section]');
+                        const sections = document.querySelectorAll('.settings-section');
+                        
+                        console.log('Found nav links:', navLinks.length);
+                        console.log('Found sections:', sections.length);
+                        
+                        if (navLinks.length === 0) {
+                            console.error('No navigation links found');
+                            return;
+                        }
+                        
+                        if (sections.length === 0) {
+                            console.error('No sections found');
+                            return;
+                        }
+                        
+                        navLinks.forEach(link => {
+                            link.addEventListener('click', function(e) {
+                                e.preventDefault();
                                 e.stopPropagation();
-                            console.log('Nav link clicked:', this.getAttribute('data-section'));
-                            
-                            // Remove active class from all nav links
-                            navLinks.forEach(nl => nl.classList.remove('active'));
-                            
-                            // Add active class to clicked nav link
-                            this.classList.add('active');
-                            
-                            // Hide all sections
-                            sections.forEach(section => {
-                                section.style.display = 'none';
-                            });
-                            
-                            // Show target section
-                            const targetSection = this.getAttribute('data-section');
-                            const targetElement = document.getElementById(targetSection + '-section');
-                            console.log('Looking for element with ID:', targetSection + '-section');
-                            console.log('Found target element:', targetElement);
-                            
-                            if (targetElement) {
-                                targetElement.style.display = 'block';
-                                console.log('Section displayed:', targetSection);
+                                console.log('Nav link clicked:', this.getAttribute('data-section'));
+                                
+                                // Remove active class from all nav links
+                                navLinks.forEach(nl => nl.classList.remove('active'));
+                                
+                                // Add active class to clicked nav link
+                                this.classList.add('active');
+                                
+                                // Hide all sections
+                                sections.forEach(section => {
+                                    section.style.display = 'none';
+                                });
+                                
+                                // Show target section
+                                const targetSection = this.getAttribute('data-section');
+                                const targetElement = document.getElementById(targetSection + '-section');
+                                console.log('Looking for element with ID:', targetSection + '-section');
+                                console.log('Found target element:', targetElement);
+                                
+                                if (targetElement) {
+                                    targetElement.style.display = 'block';
+                                    console.log('Section displayed:', targetSection);
                                     
                                     // Update URL hash without triggering hashchange event
                                     const currentHash = window.location.hash.substring(1);
                                     if (currentHash !== targetSection) {
                                         history.pushState(null, null, '#' + targetSection);
                                     }
-                            } else {
-                                console.error('Target section not found:', targetSection + '-section');
-                            }
+                                } else {
+                                    console.error('Target section not found:', targetSection + '-section');
+                                }
+                            });
                         });
-                    });
                         
                         // Also add click handlers to nav links for better compatibility
                         document.addEventListener('click', function(e) {
-                            if (e.target.closest('.settings-nav .nav-link')) {
-                                const link = e.target.closest('.settings-nav .nav-link');
+                            if (e.target.closest('.nav-link[data-section]')) {
+                                const link = e.target.closest('.nav-link[data-section]');
                                 const targetSection = link.getAttribute('data-section');
                                 if (targetSection) {
                                     e.preventDefault();
@@ -8626,10 +8685,21 @@ Mesaj:
                 // Handle URL hash on page load
                 function handleInitialHash() {
                     const hash = window.location.hash.substring(1);
+                    console.log('Initial hash:', hash);
                     if (hash) {
                         const targetLink = document.querySelector(`[data-section="${hash}"]`);
                         if (targetLink) {
+                            console.log('Found target link for hash:', hash);
                             targetLink.click();
+                        } else {
+                            console.log('No target link found for hash:', hash);
+                        }
+                    } else {
+                        // Default to profile section if no hash
+                        const profileLink = document.querySelector('[data-section="profile"]');
+                        if (profileLink) {
+                            console.log('Defaulting to profile section');
+                            profileLink.click();
                         }
                     }
                 }
@@ -8637,9 +8707,13 @@ Mesaj:
                 // Handle hash changes
                 window.addEventListener('hashchange', function() {
                     const hash = window.location.hash.substring(1);
+                    console.log('Hash changed to:', hash);
                     const targetLink = document.querySelector(`[data-section="${hash}"]`);
                     if (targetLink) {
+                        console.log('Found target link for hash change:', hash);
                         targetLink.click();
+                    } else {
+                        console.log('No target link found for hash change:', hash);
                     }
                 });
                 
