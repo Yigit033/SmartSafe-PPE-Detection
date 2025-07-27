@@ -22,7 +22,7 @@ Werkzeug>=2.3.7  # Required by Flask
 SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.0
 redis>=5.0.1
-dnspython>=2.4.0  # Added for DNS resolution
+dnspython>=2.4.0  # DNS resolution for camera detection
 certifi>=2023.7.22  # SSL certificate verification
 
 # Security & Authentication
@@ -82,15 +82,9 @@ APScheduler>=3.10.4
 redis>=5.0.1
 prometheus-client>=0.19.0
 
-# Database & SQLAlchemy
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-
-# Environment Variables
-python-dotenv>=1.0.0
 
 # Additional Python Standard Library Extensions
-pathlib2>=2.3.0 
+pathlib2>=2.3.0
 
 # Audio Support
 pygame==2.5.2

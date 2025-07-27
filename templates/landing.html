@@ -90,7 +90,7 @@
             min-height: 100vh;
             display: flex;
             align-items: center;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 40%, #334155 100%);
             color: white;
             position: relative;
             overflow: hidden;
@@ -101,13 +101,14 @@
             position: absolute;
             width: 200%;
             height: 200%;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect fill="rgba(255,255,255,0.05)" width="50" height="50" x="0" y="0"/></svg>');
-            animation: moveBackground 30s linear infinite;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><defs><linearGradient id="aiGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:rgba(59,130,246,0.08);stop-opacity:1" /><stop offset="100%" style="stop-color:rgba(147,51,234,0.04);stop-opacity:1" /></linearGradient></defs><g fill="url(%23aiGradient)"><path d="M20,20 L40,20 L40,40 L20,40 Z M60,60 L80,60 L80,80 L60,80 Z M100,100 L120,100 L120,120 L100,120 Z M140,140 L160,140 L160,160 L140,160 Z"/><circle cx="50" cy="50" r="3"/><circle cx="150" cy="150" r="2"/><circle cx="100" cy="30" r="2.5"/><circle cx="30" cy="170" r="2"/><circle cx="170" cy="100" r="2.5"/><path d="M10,10 L25,10 L25,25 L10,25 Z M90,90 L105,90 L105,105 L90,105 Z M130,130 L145,130 L145,145 L130,145 Z"/></g></svg>');
+            animation: moveBackground 40s linear infinite;
         }
 
         @keyframes moveBackground {
-            0% { transform: translate(0, 0); }
-            100% { transform: translate(-50%, -50%); }
+            0% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-25%, -25%) rotate(180deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
         .sector-card {
@@ -1259,18 +1260,18 @@
                     <h1 class="display-4 fw-bold mb-4" data-translate="hero_title">
                         Workplace Safety with AI
                     </h1>
-                    <p class="lead mb-4" data-translate="hero_description">
+                    <p class="lead mb-5" data-translate="hero_description">
                         Smart security system that monitors personal protective equipment (PPE) usage 
                         in real-time and prevents workplace accidents in industrial facilities.
                     </p>
-                    <div class="d-flex gap-3">
+                    <div class="d-flex gap-3 mb-4">
                         <a href="/app" class="btn btn-primary" data-translate="get_started">
                             Get Started
                         </a>
                     </div>
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
-                    <div class="position-relative rounded-4 shadow-lg overflow-hidden">
+                    <div class="position-relative rounded-4 shadow-lg overflow-hidden pt-3">
                         <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png">
                             <source src="/static/videos/hero-video.webm" type="video/webm">
                             <source src="/static/videos/hero-video.mp4" type="video/mp4">
@@ -2443,11 +2444,11 @@
             particles: {
                 number: { value: 80, density: { enable: true, value_area: 800 } },
                 color: { value: '#ffffff' },
-                shape: { type: 'circle' },
-                opacity: { value: 0.5, random: false },
+                shape: { type: 'triangle' },
+                opacity: { value: 0.6, random: false },
                 size: { value: 3, random: true },
-                line_linked: { enable: true, distance: 150, color: '#ffffff', opacity: 0.4, width: 1 },
-                move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
+                line_linked: { enable: true, distance: 150, color: '#ffffff', opacity: 0.5, width: 1 },
+                move: { enable: true, speed: 3, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
             },
             interactivity: {
                 detect_on: 'canvas',
