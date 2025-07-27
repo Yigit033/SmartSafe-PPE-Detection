@@ -3662,13 +3662,31 @@ Mesaj:
             ]
             
             working_endpoint = None
+            auth_required = False
+            
             for endpoint in http_endpoints:
                 if self._test_http_endpoint(ip_address, port, endpoint, username, password):
                     working_endpoint = endpoint
                     test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ✅')
                     break
                 else:
-                    test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
+                    # Authentication gerekli mi kontrol et
+                    try:
+                        url = f"http://{ip_address}:{port}{endpoint}"
+                        response = requests.get(url, timeout=5)
+                        if response.status_code == 401:
+                            auth_required = True
+                            test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} 🔐 (Auth gerekli)')
+                        else:
+                            test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
+                    except:
+                        test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
+            
+            # Authentication gerekliyse kullanıcıya bildir
+            if auth_required and not username and not password:
+                test_result['error_message'] = 'Kamera authentication gerektiriyor. Kullanıcı adı ve şifre girin.'
+                test_result['connection_time'] = round((time.time() - start_time) * 1000, 2)
+                return test_result
             
             # 3. RTSP endpoint'leri test et
             test_result['test_details']['connection_steps'].append('RTSP endpoint\'leri test ediliyor...')
@@ -3717,11 +3735,17 @@ Mesaj:
         import socket
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
+            sock.settimeout(5)
             result = sock.connect_ex((ip_address, port))
             sock.close()
-            return result == 0
-        except:
+            if result == 0:
+                print(f"✅ Ağ bağlantısı başarılı: {ip_address}:{port}")
+                return True
+            else:
+                print(f"❌ Ağ bağlantısı başarısız: {ip_address}:{port}")
+                return False
+        except Exception as e:
+            print(f"❌ Ağ bağlantı hatası: {e}")
             return False
     
     def _test_http_endpoint(self, ip_address, port, endpoint, username, password):
@@ -3733,8 +3757,17 @@ Mesaj:
             
             url = f"http://{ip_address}:{port}{endpoint}"
             response = requests.get(url, auth=auth, timeout=5)
-            return response.status_code == 200
-        except:
+            if response.status_code == 200:
+                print(f"✅ HTTP endpoint başarılı: {url}")
+                return True
+            elif response.status_code == 401:
+                print(f"❌ Authentication gerekli: {url}")
+                return False
+            else:
+                print(f"❌ HTTP endpoint başarısız: {url} (Status: {response.status_code})")
+                return False
+        except Exception as e:
+            print(f"❌ HTTP endpoint hatası: {url} - {e}")
             return False
     
     def _test_rtsp_endpoint(self, ip_address, port, endpoint, username, password):
@@ -3745,29 +3778,95 @@ Mesaj:
             else:
                 rtsp_url = f"rtsp://{ip_address}:{port}{endpoint}"
             
+            print(f"🔍 RTSP test ediliyor: {rtsp_url}")
             cap = cv2.VideoCapture(rtsp_url)
             if cap.isOpened():
                 ret, frame = cap.read()
                 cap.release()
-                return ret and frame is not None
-            return False
-        except:
+                if ret and frame is not None:
+                    print(f"✅ RTSP endpoint başarılı: {rtsp_url}")
+                    return True
+                else:
+                    print(f"❌ RTSP frame okunamadı: {rtsp_url}")
+                    return False
+            else:
+                print(f"❌ RTSP bağlantısı açılamadı: {rtsp_url}")
+                return False
+        except Exception as e:
+            print(f"❌ RTSP endpoint hatası: {rtsp_url} - {e}")
             return False
     
     def _test_video_stream(self, stream_url, test_result):
         """Video stream'i test et"""
         try:
+            print(f"🎥 Video stream test ediliyor: {stream_url}")
+            
+            # Önce OpenCV ile dene
             cap = cv2.VideoCapture(stream_url)
             if cap.isOpened():
                 ret, frame = cap.read()
                 if ret and frame is not None:
-                    test_result['camera_info']['resolution'] = f"{frame.shape[1]}x{frame.shape[0]}"
-                    test_result['camera_info']['fps'] = cap.get(cv2.CAP_PROP_FPS)
+                    resolution = f"{frame.shape[1]}x{frame.shape[0]}"
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    print(f"✅ Video stream başarılı: {resolution}, FPS: {fps}")
+                    test_result['camera_info']['resolution'] = resolution
+                    test_result['camera_info']['fps'] = fps
                     cap.release()
                     return True
-                cap.release()
+                else:
+                    print(f"❌ Video frame okunamadı: {stream_url}")
+                    cap.release()
+            else:
+                print(f"❌ Video stream açılamadı: {stream_url}")
+            
+            # OpenCV başarısızsa, shot endpoint'ini dene
+            if '/video' in stream_url:
+                shot_url = stream_url.replace('/video', '/shot.jpg')
+                print(f"📸 Shot endpoint deneniyor: {shot_url}")
+                
+                try:
+                    # URL'den authentication bilgilerini çıkar
+                    if '@' in stream_url:
+                        auth_part = stream_url.split('@')[0].replace('http://', '')
+                        username, password = auth_part.split(':')
+                        auth = (username, password)
+                    else:
+                        auth = None
+                    
+                    response = requests.get(shot_url, auth=auth, timeout=5)
+                    if response.status_code == 200:
+                        print("✅ Shot endpoint çalışıyor")
+                        
+                        # Shot'ı geçici dosyaya kaydet
+                        import tempfile
+                        import os
+                        
+                        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+                            f.write(response.content)
+                            temp_file = f.name
+                        
+                        # Shot'ı OpenCV ile oku
+                        img = cv2.imread(temp_file)
+                        if img is not None:
+                            resolution = f"{img.shape[1]}x{img.shape[0]}"
+                            print(f"✅ Shot okundu: {resolution}")
+                            test_result['camera_info']['resolution'] = resolution
+                            test_result['camera_info']['fps'] = 1  # Shot için FPS 1
+                            test_result['camera_info']['stream_type'] = 'shot'
+                            
+                            # Geçici dosyayı sil
+                            os.unlink(temp_file)
+                            return True
+                        else:
+                            print("❌ Shot okunamadı")
+                            os.unlink(temp_file)
+                            
+                except Exception as e:
+                    print(f"❌ Shot test hatası: {e}")
+            
             return False
         except Exception as e:
+            print(f"❌ Video stream hatası: {stream_url} - {e}")
             test_result['test_details']['connection_steps'].append(f'Video stream hatası: {str(e)}')
             return False
     
