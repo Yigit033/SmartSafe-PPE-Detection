@@ -219,6 +219,189 @@
         .camera-info strong {
             color: #333;
         }
+        
+        /* Profil Dropdown Stilleri */
+        .profile-dropdown {
+            min-width: 280px;
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            padding: 0;
+            margin-top: 10px;
+        }
+        
+        .profile-dropdown .dropdown-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+            border: none;
+        }
+        
+        .profile-avatar {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .profile-avatar-large {
+            width: 48px;
+            height: 48px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+        
+        .profile-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .profile-dropdown .dropdown-item {
+            padding: 12px 20px;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .profile-dropdown .dropdown-item:hover {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            transform: translateX(5px);
+        }
+        
+        .profile-dropdown .dropdown-item i {
+            width: 20px;
+            text-align: center;
+        }
+        
+        .profile-dropdown .dropdown-divider {
+            margin: 0;
+            border-color: #e9ecef;
+        }
+        
+        /* Kamera Tablosu Stilleri */
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            border: none;
+            padding: 15px 12px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .table tbody tr {
+            transition: all 0.3s ease;
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        .table tbody tr:hover {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .table tbody td {
+            padding: 12px;
+            vertical-align: middle;
+            border: none;
+        }
+        
+        .camera-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-testing {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .camera-actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .camera-actions .btn {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            border-radius: 6px;
+        }
+        
+        .camera-actions .btn i {
+            font-size: 0.75rem;
+        }
+        
+        .camera-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .search-box {
+            border-radius: 20px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .search-box:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .search-box .input-group-text {
+            background: transparent;
+            border: none;
+            color: #6c757d;
+        }
+        
+        .search-box .form-control {
+            border: none;
+            box-shadow: none;
+        }
+        
+        .search-box .form-control:focus {
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -229,10 +412,6 @@
                 <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
             </a>
             <div class="navbar-nav ms-auto">
-                <span class="nav-link fw-bold">
-                    <i class="fas fa-building text-primary"></i> 
-                    {{ user_data.company_name }}
-                </span>
                 <a class="nav-link" href="/company/{{ company_id }}/dashboard">
                     <i class="fas fa-tachometer-alt"></i> Dashboard
                 </a>
@@ -248,9 +427,51 @@
                 <a class="nav-link" href="/company/{{ company_id }}/settings">
                     <i class="fas fa-cog"></i> Ayarlar
                 </a>
-                <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i> Çıkış
-                </button>
+                
+                <!-- Profil Dropdown -->
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="profile-avatar me-2">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <span class="profile-name">{{ user_data.company_name }}</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                        <li class="dropdown-header">
+                            <div class="d-flex align-items-center">
+                                <div class="profile-avatar-large me-3">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold">{{ user_data.company_name }}</div>
+                                    <small class="text-muted">{{ company_id }}</small>
+                                </div>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                <i class="fas fa-user me-2"></i> Şirket Profili
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </nav>
@@ -268,19 +489,75 @@
                     <i class="fas fa-video me-2"></i>
                     Mevcut Kameralar
                 </h3>
-                <button class="btn btn-primary" onclick="refreshCameras()">
-                    <i class="fas fa-sync-alt me-2"></i>
-                    Yenile
-                </button>
+                <div class="d-flex gap-2">
+                    <div class="input-group search-box" style="width: 300px;">
+                        <span class="input-group-text">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" id="cameraSearch" class="form-control" placeholder="Kamera ara...">
+                    </div>
+                    <button class="btn btn-primary" onclick="refreshCameras()">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        Yenile
+                    </button>
+                </div>
             </div>
             
-            <div id="camerasList" class="row">
-                <!-- Kameralar buraya yüklenecek -->
-                <div class="col-12 text-center">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Yükleniyor...</span>
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="camerasTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th style="width: 50px;">
+                                        <i class="fas fa-video"></i>
+                                    </th>
+                                    <th>Kamera Adı</th>
+                                    <th>IP Adresi</th>
+                                    <th>Konum</th>
+                                    <th>Durum</th>
+                                    <th>Son Aktivite</th>
+                                    <th style="width: 200px;">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="camerasTableBody">
+                                <!-- Kameralar buraya yüklenecek -->
+                                <tr>
+                                    <td colspan="7" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Yükleniyor...</span>
+                                        </div>
+                                        <p class="mt-2 mb-0">Kamera listesi yükleniyor...</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                    <p class="mt-2">Kamera listesi yükleniyor...</p>
+                </div>
+            </div>
+            
+            <!-- Kamera Detay Modal -->
+            <div class="modal fade" id="cameraDetailModal" tabindex="-1" aria-labelledby="cameraDetailModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="cameraDetailModalLabel">
+                                <i class="fas fa-video me-2"></i>Kamera Detayları
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="cameraDetailContent">
+                                <!-- Kamera detayları buraya yüklenecek -->
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                            <button type="button" class="btn btn-primary" id="editCameraBtn">
+                                <i class="fas fa-edit me-2"></i>Düzenle
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -834,61 +1111,67 @@
         }
         
         function displayCameras(cameras) {
-            const camerasList = document.getElementById('camerasList');
+            const camerasTableBody = document.getElementById('camerasTableBody');
             
             if (cameras.length === 0) {
-                camerasList.innerHTML = `
-                    <div class="col-12 text-center">
-                        <p class="text-muted">Henüz kamera eklenmemiş.</p>
-                        <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
-                    </div>
+                camerasTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <i class="fas fa-video fa-3x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">Henüz kamera eklenmemiş.</p>
+                            <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
+                        </td>
+                    </tr>
                 `;
                 return;
             }
             
-            camerasList.innerHTML = cameras.map(camera => `
-                <div class="col-lg-6 col-xl-4">
-                    <div class="camera-card">
-                        <div class="camera-info">
-                            <h5>
-                                <span class="camera-status ${camera.status === 'active' ? 'online' : 'offline'}"></span>
-                                ${camera.camera_name}
-                            </h5>
-                            <p><strong>IP:</strong> ${camera.ip_address || 'N/A'}</p>
-                            <p><strong>Konum:</strong> ${camera.location || 'N/A'}</p>
-                            <p><strong>Durum:</strong> ${camera.status === 'active' ? 'Aktif' : 'Pasif'}</p>
-                            <p><strong>Son Güncelleme:</strong> ${new Date(camera.updated_at || camera.created_at).toLocaleString('tr-TR')}</p>
-                        </div>
-                        
-                        <div class="camera-stream" id="stream-${camera.camera_id}">
-                            <div class="text-center text-muted">
-                                <i class="fas fa-video fa-3x mb-2"></i>
-                                <p>Görüntü yükleniyor...</p>
+            camerasTableBody.innerHTML = cameras.map(camera => {
+                const statusClass = camera.status === 'active' ? 'status-online' : 'status-offline';
+                const statusText = camera.status === 'active' ? 'Aktif' : 'Pasif';
+                const lastActivity = new Date(camera.updated_at || camera.created_at).toLocaleString('tr-TR');
+                
+                return `
+                    <tr data-camera-id="${camera.camera_id}">
+                        <td>
+                            <div class="camera-icon">
+                                <i class="fas fa-video"></i>
                             </div>
-                        </div>
-                        
-                        <div class="camera-actions">
-                            <button class="btn btn-primary btn-sm" onclick="testCamera('${camera.camera_id}')">
-                                <i class="fas fa-play me-1"></i>Test Et
-                            </button>
-                            <button class="btn btn-info btn-sm" onclick="viewStream('${camera.camera_id}')">
-                                <i class="fas fa-eye me-1"></i>Görüntüle
-                            </button>
-                            <button class="btn btn-warning btn-sm" onclick="editCamera('${camera.camera_id}')">
-                                <i class="fas fa-edit me-1"></i>Düzenle
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteCamera('${camera.camera_id}')">
-                                <i class="fas fa-trash me-1"></i>Sil
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            
-            // Kamera görüntülerini yükle
-            cameras.forEach(camera => {
-                loadCameraStream(camera);
-            });
+                        </td>
+                        <td>
+                            <strong>${camera.camera_name}</strong>
+                        </td>
+                        <td>
+                            <code>${camera.ip_address || 'N/A'}</code>
+                        </td>
+                        <td>${camera.location || 'N/A'}</td>
+                        <td>
+                            <span class="camera-status ${statusClass}" id="status-${camera.camera_id}">
+                                <i class="fas fa-circle me-1"></i>${statusText}
+                            </span>
+                        </td>
+                        <td>
+                            <small class="text-muted">${lastActivity}</small>
+                        </td>
+                        <td>
+                            <div class="camera-actions">
+                                <button class="btn btn-primary btn-sm" onclick="testCamera('${camera.camera_id}')" title="Test Et">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <button class="btn btn-info btn-sm" onclick="viewCameraDetails('${camera.camera_id}')" title="Detaylar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-warning btn-sm" onclick="editCamera('${camera.camera_id}')" title="Düzenle">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteCamera('${camera.camera_id}')" title="Sil">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
         
         function loadCameraStream(camera) {
@@ -917,9 +1200,96 @@
             return `${protocol}://${camera.ip_address}:${port}${path}`;
         }
         
+        function viewCameraDetails(cameraId) {
+            // Kamera detaylarını yükle
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const camera = data.camera;
+                    const modal = new bootstrap.Modal(document.getElementById('cameraDetailModal'));
+                    
+                    document.getElementById('cameraDetailContent').innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-info-circle text-primary me-2"></i>Kamera Bilgileri</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Kamera Adı:</strong></td><td>${camera.camera_name}</td></tr>
+                                    <tr><td><strong>IP Adresi:</strong></td><td><code>${camera.ip_address || 'N/A'}</code></td></tr>
+                                    <tr><td><strong>Konum:</strong></td><td>${camera.location || 'N/A'}</td></tr>
+                                    <tr><td><strong>Durum:</strong></td><td>
+                                        <span class="camera-status ${camera.status === 'active' ? 'status-online' : 'status-offline'}">
+                                            <i class="fas fa-circle me-1"></i>${camera.status === 'active' ? 'Aktif' : 'Pasif'}
+                                        </span>
+                                    </td></tr>
+                                    <tr><td><strong>Protokol:</strong></td><td>${camera.protocol || 'HTTP'}</td></tr>
+                                    <tr><td><strong>Port:</strong></td><td>${camera.port || '80'}</td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-video text-success me-2"></i>Canlı Görüntü</h6>
+                                <div id="cameraStreamContainer" class="text-center" style="height: 200px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                    <div>
+                                        <i class="fas fa-video fa-2x text-muted mb-2"></i>
+                                        <p class="text-muted mb-0">Görüntü yükleniyor...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <h6><i class="fas fa-clock text-warning me-2"></i>Zaman Bilgileri</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Oluşturulma:</strong></td><td>${new Date(camera.created_at).toLocaleString('tr-TR')}</td></tr>
+                                    <tr><td><strong>Son Güncelleme:</strong></td><td>${new Date(camera.updated_at || camera.created_at).toLocaleString('tr-TR')}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Kamera görüntüsünü yükle
+                    loadCameraStreamForModal(camera);
+                    
+                    modal.show();
+                } else {
+                    alert('Kamera detayları yüklenemedi: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Kamera detayları yükleme hatası:', error);
+                alert('Kamera detayları yüklenirken bir hata oluştu.');
+            });
+        }
+        
+        function loadCameraStreamForModal(camera) {
+            const streamContainer = document.getElementById('cameraStreamContainer');
+            if (!streamContainer) return;
+            
+            const streamUrl = generateStreamUrl(camera);
+            
+            if (streamUrl) {
+                streamContainer.innerHTML = `
+                    <img src="${streamUrl}" alt="${camera.camera_name}" 
+                         style="max-width: 100%; max-height: 100%; border-radius: 8px;"
+                         onload="this.style.display='block'" 
+                         onerror="this.parentElement.innerHTML='<div><i class=\\'fas fa-exclamation-triangle fa-2x text-warning mb-2\\'></i><p class=\\'text-muted mb-0\\'>Görüntü alınamadı</p></div>'">
+                `;
+            } else {
+                streamContainer.innerHTML = `
+                    <div>
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                        <p class="text-muted mb-0">Stream URL bulunamadı</p>
+                    </div>
+                `;
+            }
+        }
+        
         function testCamera(cameraId) {
-            const statusElement = document.querySelector(`#stream-${cameraId}`).closest('.camera-card').querySelector('.camera-status');
-            statusElement.className = 'camera-status testing';
+            const statusElement = document.getElementById(`status-${cameraId}`);
+            if (statusElement) {
+                statusElement.className = 'camera-status status-testing';
+                statusElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Test Ediliyor';
+            }
             
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/test`, {
                 method: 'POST',
@@ -930,15 +1300,18 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    statusElement.className = 'camera-status online';
+                    statusElement.className = 'camera-status status-online';
+                    statusElement.innerHTML = '<i class="fas fa-circle me-1"></i>Aktif';
                     showAlert('✅ Kamera bağlantısı başarılı!', 'success');
                 } else {
-                    statusElement.className = 'camera-status offline';
+                    statusElement.className = 'camera-status status-offline';
+                    statusElement.innerHTML = '<i class="fas fa-circle me-1"></i>Pasif';
                     showAlert('❌ Kamera bağlantısı başarısız: ' + data.error, 'danger');
                 }
             })
             .catch(error => {
-                statusElement.className = 'camera-status offline';
+                statusElement.className = 'camera-status status-offline';
+                statusElement.innerHTML = '<i class="fas fa-circle me-1"></i>Pasif';
                 showAlert('❌ Test sırasında hata oluştu', 'danger');
             });
         }
@@ -976,9 +1349,53 @@
             }
         }
         
+        // Arama fonksiyonu
+        document.getElementById('cameraSearch').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const tableRows = document.querySelectorAll('#camerasTableBody tr');
+            
+            tableRows.forEach(row => {
+                const cameraName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                const ipAddress = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                const location = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                
+                if (cameraName.includes(searchTerm) || ipAddress.includes(searchTerm) || location.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+        
         function refreshCameras() {
             loadCameras();
         }
+        
+        // Arama fonksiyonu
+        function filterCameras() {
+            const searchTerm = document.getElementById('cameraSearch').value.toLowerCase();
+            const tableRows = document.querySelectorAll('#camerasTableBody tr');
+            
+            tableRows.forEach(row => {
+                const cameraName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                const ipAddress = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                const location = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                
+                if (cameraName.includes(searchTerm) || ipAddress.includes(searchTerm) || location.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+        
+        // Arama input event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('cameraSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterCameras);
+            }
+        });
         
         // Sayfa yüklendiğinde kameraları yükle
         document.addEventListener('DOMContentLoaded', function() {

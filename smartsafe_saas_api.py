@@ -2235,7 +2235,7 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Unauthorized'}), 401
                 
                 # Kamerayı veritabanından al
-                camera = self.multitenant_system.get_camera_by_id(camera_id, company_id)
+                camera = self.db.get_camera_by_id(camera_id, company_id)
                 if not camera:
                     return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
                 
@@ -2251,7 +2251,7 @@ Mesaj:
                     password=camera.get('password', '')
                 )
                 
-                result = self.camera_manager.test_camera_connection(camera_source)
+                result = self.get_camera_manager().test_camera_connection(camera_source)
                 
                 return jsonify(result)
                 
@@ -2268,7 +2268,7 @@ Mesaj:
                     return redirect(f'/company/{company_id}/login')
                 
                 # Kamerayı veritabanından al
-                camera = self.multitenant_system.get_camera_by_id(camera_id, company_id)
+                camera = self.db.get_camera_by_id(camera_id, company_id)
                 if not camera:
                     return "Kamera bulunamadı", 404
                 
@@ -2494,6 +2494,28 @@ Mesaj:
                     'error': str(e)
                 }), 500
         
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>', methods=['GET'])
+        def get_camera_details(company_id, camera_id):
+            """Kamera detaylarını getir"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                # Kamera detaylarını veritabanından al
+                camera = self.db.get_camera_by_id(camera_id, company_id)
+                if not camera:
+                    return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
+                
+                return jsonify({
+                    'success': True,
+                    'camera': camera
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Kamera detayları hatası: {e}")
+                return jsonify({'success': False, 'error': 'Kamera detayları alınamadı'}), 500
+
         @self.app.route('/api/company/<company_id>/cameras/<camera_id>/stream', methods=['GET'])
         def get_camera_stream(company_id, camera_id):
             """Kamera stream URL'si getir"""
@@ -2534,12 +2556,12 @@ Mesaj:
                 logger.info(f"🗑️ Deleting camera: {camera_id} for company: {company_id}")
                 
                 # Önce veritabanından kamerayı sil
-                success, message = self.db.delete_camera(company_id, camera_id)
+                success = self.db.delete_camera(camera_id, company_id)
                 
                 if not success:
                     return jsonify({
                         'success': False,
-                        'message': message
+                        'message': 'Kamera silinemedi'
                     }), 400
                 
                 # Kamera yöneticisinden kamerayı ayır
@@ -5557,6 +5579,74 @@ Mesaj:
                     height: 60px;
                     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                 }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
             </style>
         </head>
         <body>
@@ -5566,10 +5656,6 @@ Mesaj:
                         <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
                     </a>
                     <div class="navbar-nav ms-auto">
-                        <span class="nav-link fw-bold">
-                            <i class="fas fa-building text-primary"></i> 
-                            {{ user_data.company_name }}
-                        </span>
                         <a class="btn btn-outline-primary btn-sm me-2" href="/company/{{ company_id }}/settings">
                             <i class="fas fa-cog"></i> Ayarlar
                         </a>
@@ -5582,9 +5668,51 @@ Mesaj:
                         <a class="btn btn-outline-warning btn-sm me-2" href="/company/{{ company_id }}/cameras">
                             <i class="fas fa-video"></i> Kameralar
                         </a>
-                        <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                            <i class="fas fa-sign-out-alt"></i> Çıkış
-                        </button>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="btn btn-outline-dark btn-sm dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-muted">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </nav>
@@ -5609,7 +5737,7 @@ Mesaj:
                 
                 <!-- Ana İstatistikler -->
                 <div class="row mb-4">
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl-2 col-md-6">
                         <div class="stat-card text-center">
                             <div class="stat-icon text-primary">
                                 <i class="fas fa-video"></i>
@@ -5621,7 +5749,7 @@ Mesaj:
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl-2 col-md-6">
                         <div class="stat-card text-center">
                             <div class="stat-icon text-success">
                                 <i class="fas fa-hard-hat"></i>
@@ -5633,7 +5761,7 @@ Mesaj:
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl-2 col-md-6">
                         <div class="stat-card text-center">
                             <div class="stat-icon text-warning">
                                 <i class="fas fa-exclamation-triangle"></i>
@@ -5645,7 +5773,7 @@ Mesaj:
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl-2 col-md-6">
                         <div class="stat-card text-center">
                             <div class="stat-icon text-info">
                                 <i class="fas fa-users"></i>
@@ -5654,6 +5782,30 @@ Mesaj:
                             <div class="stat-label">Aktif Çalışan</div>
                             <div class="metric-trend" id="workers-trend">
                                 <i class="fas fa-minus trend-neutral"></i> Sabit
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-secondary">
+                                <i class="fas fa-crown"></i>
+                            </div>
+                            <div class="stat-value" id="subscription-plan">--</div>
+                            <div class="stat-label">Abonelik Planı</div>
+                            <div class="metric-trend" id="subscription-trend">
+                                <i class="fas fa-check trend-up"></i> Aktif
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-dark">
+                                <i class="fas fa-video"></i>
+                            </div>
+                            <div class="stat-value" id="camera-usage">--</div>
+                            <div class="stat-label">Kamera Kullanımı</div>
+                            <div class="metric-trend" id="usage-trend">
+                                <i class="fas fa-info trend-neutral"></i> Limit
                             </div>
                         </div>
                     </div>
@@ -10157,6 +10309,46 @@ Mesaj:
                         })
                         .catch(error => {
                             console.error('Error loading compliance report:', error);
+                        });
+                    
+                    // Load subscription info
+                    fetch(`/api/company/${companyId}/subscription`)
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success) {
+                                const subscription = result.subscription;
+                                
+                                // Update subscription display in dashboard
+                                document.getElementById('subscription-plan').textContent = subscription.subscription_type.toUpperCase();
+                                document.getElementById('camera-usage').textContent = `${subscription.used_cameras}/${subscription.max_cameras}`;
+                                
+                                // Update subscription trend
+                                const subscriptionTrend = document.getElementById('subscription-trend');
+                                if (subscription.is_active) {
+                                    subscriptionTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Aktif';
+                                    subscriptionTrend.className = 'metric-trend';
+                                } else {
+                                    subscriptionTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Süresi Dolmuş';
+                                    subscriptionTrend.className = 'metric-trend';
+                                }
+                                
+                                // Update usage trend
+                                const usageTrend = document.getElementById('usage-trend');
+                                const usagePercentage = subscription.usage_percentage;
+                                if (usagePercentage > 80) {
+                                    usageTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Limit Yakın';
+                                    usageTrend.className = 'metric-trend';
+                                } else if (usagePercentage > 60) {
+                                    usageTrend.innerHTML = '<i class="fas fa-info trend-neutral"></i> Orta';
+                                    usageTrend.className = 'metric-trend';
+                                } else {
+                                    usageTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Normal';
+                                    usageTrend.className = 'metric-trend';
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Abonelik bilgileri yükleme hatası:', error);
                         });
                 }
                 
