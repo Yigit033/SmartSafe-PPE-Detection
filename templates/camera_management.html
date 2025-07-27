@@ -127,6 +127,98 @@
             background-color: #dc3545;
             border-color: #dc3545;
         }
+        
+        /* Kamera Kartları */
+        .camera-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .camera-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        
+        .camera-status {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .camera-status.online {
+            background-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+        
+        .camera-status.offline {
+            background-color: #dc3545;
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+        }
+        
+        .camera-status.testing {
+            background-color: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .camera-stream {
+            width: 100%;
+            height: 200px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        
+        .camera-stream img, .camera-stream video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .camera-actions .btn {
+            flex: 1;
+            min-width: 120px;
+        }
+        
+        .camera-info {
+            margin-bottom: 15px;
+        }
+        
+        .camera-info h5 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .camera-info p {
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .camera-info strong {
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -169,11 +261,35 @@
             SmartSafe AI - Kamera Yönetimi
         </h1>
         
+        <!-- Mevcut Kameralar Bölümü -->
+        <div class="existing-cameras-section mb-5">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3>
+                    <i class="fas fa-video me-2"></i>
+                    Mevcut Kameralar
+                </h3>
+                <button class="btn btn-primary" onclick="refreshCameras()">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Yenile
+                </button>
+            </div>
+            
+            <div id="camerasList" class="row">
+                <!-- Kameralar buraya yüklenecek -->
+                <div class="col-12 text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p class="mt-2">Kamera listesi yükleniyor...</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Akıllı Tespit Bölümü -->
         <div class="smart-detection-section">
             <h3 class="mb-4">
                 <i class="fas fa-magic me-2"></i>
-                Akıllı Kamera Tespiti
+                Yeni Kamera Ekleme
             </h3>
             <p class="mb-4">Sadece IP adresi ile kameranızı otomatik olarak tespit edin ve yapılandırın.</p>
             
@@ -285,7 +401,11 @@
                         <option value="generic">Generic IP Camera</option>
                         <option value="uniview">Uniview</option>
                         <option value="android_ip_webcam">Android IP Webcam</option>
+                        <option value="ip_webcam_pro">IP Webcam Pro</option>
                         <option value="raspberry_pi_camera">Raspberry Pi Camera</option>
+                        <option value="xmeye">Xmeye</option>
+                        <option value="hikvision_dvr">Hikvision DVR/NVR</option>
+                        <option value="dahua_nvr">Dahua NVR</option>
                     </select>
                     <div id="modelInfo" class="mt-2" style="display: none;">
                         <small class="text-muted">
@@ -364,10 +484,30 @@
                 ports: [8080, 80, 443],
                 path: '/shot.jpg'
             },
+            'ip_webcam_pro': {
+                features: ['Mobil Kamera', 'Ses', 'Hareket Algılama', 'PTZ Simülasyonu'],
+                ports: [8080, 80, 443, 8000],
+                path: '/shot.jpg'
+            },
             'raspberry_pi_camera': {
                 features: ['Hareket Algılama', 'Kayıt'],
                 ports: [8080, 80, 443, 8000],
                 path: '/stream.mjpg'
+            },
+            'xmeye': {
+                features: ['PTZ', 'Gece Görüşü', 'Hareket Algılama', 'Ses'],
+                ports: [554, 80, 8080, 443, 8000, 9000],
+                path: '/videostream.cgi'
+            },
+            'hikvision_dvr': {
+                features: ['DVR/NVR', 'Çoklu Kanal', 'Kayıt', 'Playback'],
+                ports: [80, 554, 8000, 8080, 443],
+                path: '/ISAPI/Streaming/channels/101'
+            },
+            'dahua_nvr': {
+                features: ['NVR', 'Çoklu Kanal', 'Kayıt', 'Playback'],
+                ports: [80, 554, 37777, 443],
+                path: '/cam/realmonitor'
             }
         };
         
@@ -633,6 +773,195 @@
                 alert.remove();
             }, 5000);
         }
+        
+        // Kamera Yönetimi Fonksiyonları
+        function loadCameras() {
+            const camerasList = document.getElementById('camerasList');
+            camerasList.innerHTML = `
+                <div class="col-12 text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p class="mt-2">Kamera listesi yükleniyor...</p>
+                </div>
+            `;
+            
+            fetch(`/api/company/{{ company_id }}/cameras`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.cameras) {
+                        displayCameras(data.cameras);
+                    } else {
+                        camerasList.innerHTML = `
+                            <div class="col-12 text-center">
+                                <p class="text-muted">Henüz kamera eklenmemiş.</p>
+                                <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Kamera yükleme hatası:', error);
+                    camerasList.innerHTML = `
+                        <div class="col-12 text-center">
+                            <p class="text-danger">Kamera listesi yüklenirken hata oluştu.</p>
+                            <button class="btn btn-primary" onclick="loadCameras()">Tekrar Dene</button>
+                        </div>
+                    `;
+                });
+        }
+        
+        function displayCameras(cameras) {
+            const camerasList = document.getElementById('camerasList');
+            
+            if (cameras.length === 0) {
+                camerasList.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p class="text-muted">Henüz kamera eklenmemiş.</p>
+                        <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            camerasList.innerHTML = cameras.map(camera => `
+                <div class="col-lg-6 col-xl-4">
+                    <div class="camera-card">
+                        <div class="camera-info">
+                            <h5>
+                                <span class="camera-status ${camera.status === 'active' ? 'online' : 'offline'}"></span>
+                                ${camera.camera_name}
+                            </h5>
+                            <p><strong>IP:</strong> ${camera.ip_address || 'N/A'}</p>
+                            <p><strong>Konum:</strong> ${camera.location || 'N/A'}</p>
+                            <p><strong>Durum:</strong> ${camera.status === 'active' ? 'Aktif' : 'Pasif'}</p>
+                            <p><strong>Son Güncelleme:</strong> ${new Date(camera.updated_at || camera.created_at).toLocaleString('tr-TR')}</p>
+                        </div>
+                        
+                        <div class="camera-stream" id="stream-${camera.camera_id}">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-video fa-3x mb-2"></i>
+                                <p>Görüntü yükleniyor...</p>
+                            </div>
+                        </div>
+                        
+                        <div class="camera-actions">
+                            <button class="btn btn-primary btn-sm" onclick="testCamera('${camera.camera_id}')">
+                                <i class="fas fa-play me-1"></i>Test Et
+                            </button>
+                            <button class="btn btn-info btn-sm" onclick="viewStream('${camera.camera_id}')">
+                                <i class="fas fa-eye me-1"></i>Görüntüle
+                            </button>
+                            <button class="btn btn-warning btn-sm" onclick="editCamera('${camera.camera_id}')">
+                                <i class="fas fa-edit me-1"></i>Düzenle
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCamera('${camera.camera_id}')">
+                                <i class="fas fa-trash me-1"></i>Sil
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Kamera görüntülerini yükle
+            cameras.forEach(camera => {
+                loadCameraStream(camera);
+            });
+        }
+        
+        function loadCameraStream(camera) {
+            const streamContainer = document.getElementById(`stream-${camera.camera_id}`);
+            if (!streamContainer) return;
+            
+            // Kamera stream URL'sini oluştur
+            const streamUrl = generateStreamUrl(camera);
+            
+            if (streamUrl) {
+                streamContainer.innerHTML = `
+                    <img src="${streamUrl}" alt="${camera.camera_name}" 
+                         onload="this.style.display='block'" 
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-center text-muted\\'><i class=\\'fas fa-exclamation-triangle fa-2x mb-2\\'></i><p>Görüntü alınamadı</p></div>'">
+                `;
+            }
+        }
+        
+        function generateStreamUrl(camera) {
+            if (!camera.ip_address) return null;
+            
+            const protocol = camera.protocol || 'http';
+            const port = camera.port || 80;
+            const path = camera.stream_path || '/video';
+            
+            return `${protocol}://${camera.ip_address}:${port}${path}`;
+        }
+        
+        function testCamera(cameraId) {
+            const statusElement = document.querySelector(`#stream-${cameraId}`).closest('.camera-card').querySelector('.camera-status');
+            statusElement.className = 'camera-status testing';
+            
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusElement.className = 'camera-status online';
+                    showAlert('✅ Kamera bağlantısı başarılı!', 'success');
+                } else {
+                    statusElement.className = 'camera-status offline';
+                    showAlert('❌ Kamera bağlantısı başarısız: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                statusElement.className = 'camera-status offline';
+                showAlert('❌ Test sırasında hata oluştu', 'danger');
+            });
+        }
+        
+        function viewStream(cameraId) {
+            // Yeni pencerede stream'i aç
+            window.open(`/api/company/{{ company_id }}/cameras/${cameraId}/stream`, '_blank');
+        }
+        
+        function editCamera(cameraId) {
+            // Kamera düzenleme modal'ını aç
+            showAlert('🔧 Kamera düzenleme özelliği yakında eklenecek!', 'info');
+        }
+        
+        function deleteCamera(cameraId) {
+            if (confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) {
+                fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ Kamera başarıyla silindi!', 'success');
+                        loadCameras(); // Listeyi yenile
+                    } else {
+                        showAlert('❌ Kamera silinirken hata oluştu: ' + data.error, 'danger');
+                    }
+                })
+                .catch(error => {
+                    showAlert('❌ Silme işlemi sırasında hata oluştu', 'danger');
+                });
+            }
+        }
+        
+        function refreshCameras() {
+            loadCameras();
+        }
+        
+        // Sayfa yüklendiğinde kameraları yükle
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCameras();
+        });
         
         // Logout function
         function logout() {

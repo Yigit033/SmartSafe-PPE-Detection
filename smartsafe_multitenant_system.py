@@ -977,8 +977,36 @@ class MultiTenantDatabase:
             logger.error(f"ERROR: Kamera listesi getirme hatasi: {e}")
             return []
     
-    def delete_camera(self, company_id: str, camera_id: str) -> Tuple[bool, str]:
-        """Kamera sil"""
+    def get_camera_by_id(self, camera_id: str, company_id: str) -> Optional[Dict]:
+        """ID ile kamerayı getir"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
+                SELECT * FROM cameras 
+                WHERE camera_id = {placeholder} AND company_id = {placeholder} AND status = 'active'
+            ''', (camera_id, company_id))
+            
+            camera = cursor.fetchone()
+            conn.close()
+            
+            if camera:
+                if hasattr(camera, 'keys'):  # PostgreSQL RealDictRow
+                    return dict(camera)
+                else:  # SQLite tuple
+                    columns = [desc[0] for desc in cursor.description]
+                    return dict(zip(columns, camera))
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"ERROR: Kamera getirme hatasi: {e}")
+            return None
+    
+    def delete_camera(self, camera_id: str, company_id: str) -> bool:
+        """Kamerayı sil (basitleştirilmiş)"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -992,7 +1020,7 @@ class MultiTenantDatabase:
             
             if not cursor.fetchone():
                 conn.close()
-                return False, "Kamera bulunamadı"
+                return False
             
             # Kamerayı sil (soft delete)
             if self.db_adapter.db_type == 'postgresql':
@@ -1010,11 +1038,11 @@ class MultiTenantDatabase:
             
             conn.commit()
             conn.close()
-            return True, "Kamera başarıyla silindi"
+            return True
             
         except Exception as e:
             logger.error(f"ERROR: Kamera silme hatasi: {e}")
-            return False, str(e)
+            return False
     
     def get_company_stats(self, company_id: str) -> Dict:
         """Enhanced şirket istatistikleri"""

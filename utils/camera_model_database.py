@@ -216,6 +216,30 @@ class CameraModelDatabase:
                 fps_support=[30, 25, 15, 10],
                 codec_support=['MJPEG', 'H.264']
             ),
+            'ip_webcam_pro': CameraModelInfo(
+                name='IP Webcam Pro',
+                manufacturer='Android',
+                ports=[8080, 80, 443, 8000],
+                paths=[
+                    '/shot.jpg',
+                    '/video',
+                    '/audio',
+                    '/settings',
+                    '/status',
+                    '/videofeed',
+                    '/mjpegfeed',
+                    '/stream.mjpg',
+                    '/image.jpg'
+                ],
+                headers=['Server: IP Webcam Pro', 'Server: IP Webcam', 'Server: Android'],
+                default_rtsp='rtsp://{ip}:8080/video',
+                default_http='http://{ip}:8080/shot.jpg',
+                default_credentials={'username': '', 'password': ''},
+                features=['mobile_camera', 'audio', 'motion_detection', 'ptz_simulation'],
+                resolution_support=['1920x1080', '1280x720', '640x480', '320x240'],
+                fps_support=[30, 25, 15, 10],
+                codec_support=['MJPEG', 'H.264', 'H.265']
+            ),
             'raspberry_pi_camera': CameraModelInfo(
                 name='Raspberry Pi Camera',
                 manufacturer='Raspberry Pi',

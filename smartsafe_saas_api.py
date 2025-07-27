@@ -753,13 +753,18 @@ Mesaj:
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 
                 # Son 24 saat içindeki ihlalleri getir
+                if self.db_adapter.db_type == 'postgresql':
+                    time_filter = "v.timestamp >= NOW() - INTERVAL '24 hours'"
+                else:
+                    time_filter = "v.timestamp >= datetime('now', '-24 hours')"
+                
                 cursor.execute(f"""
                     SELECT v.violation_type, v.missing_ppe, v.severity, v.timestamp, 
                            c.camera_name, v.image_path, v.resolved
                     FROM violations v
                     JOIN cameras c ON v.camera_id = c.camera_id
                     WHERE v.company_id = {placeholder} 
-                    AND v.timestamp >= datetime('now', '-24 hours')
+                    AND {time_filter}
                     ORDER BY v.timestamp DESC
                     LIMIT 10
                 """, (company_id,))
@@ -2129,6 +2134,93 @@ Mesaj:
                     'error': str(e)
                 }), 500
         
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/test', methods=['POST'])
+        def test_specific_camera(company_id, camera_id):
+            """Belirli bir kamerayı test et"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data['company_id'] != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+                
+                # Kamerayı veritabanından al
+                camera = self.multitenant_system.get_camera_by_id(camera_id, company_id)
+                if not camera:
+                    return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
+                
+                # Kamera testi
+                from utils.camera_integration_manager import CameraSource
+                camera_source = CameraSource(
+                    name=camera['camera_name'],
+                    ip_address=camera['ip_address'],
+                    port=camera.get('port', 80),
+                    protocol=camera.get('protocol', 'http'),
+                    stream_path=camera.get('stream_path', '/video'),
+                    username=camera.get('username', ''),
+                    password=camera.get('password', '')
+                )
+                
+                result = self.camera_manager.test_camera_connection(camera_source)
+                
+                return jsonify(result)
+                
+            except Exception as e:
+                logger.error(f"Camera test error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/stream')
+        def camera_stream(company_id, camera_id):
+            """Kamera stream sayfası"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data['company_id'] != company_id:
+                    return redirect(f'/company/{company_id}/login')
+                
+                # Kamerayı veritabanından al
+                camera = self.multitenant_system.get_camera_by_id(camera_id, company_id)
+                if not camera:
+                    return "Kamera bulunamadı", 404
+                
+                # Stream URL'sini oluştur
+                protocol = camera.get('protocol', 'http')
+                port = camera.get('port', 80)
+                stream_path = camera.get('stream_path', '/video')
+                stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+                
+                return f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>{camera['camera_name']} - Canlı Görüntü</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        body {{ margin: 0; padding: 20px; background: #000; color: white; font-family: Arial, sans-serif; }}
+                        .stream-container {{ text-align: center; }}
+                        .stream-title {{ margin-bottom: 20px; font-size: 24px; }}
+                        .stream-video {{ max-width: 100%; height: auto; border-radius: 10px; }}
+                        .stream-info {{ margin-top: 20px; font-size: 14px; color: #ccc; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="stream-container">
+                        <div class="stream-title">{camera['camera_name']} - Canlı Görüntü</div>
+                        <img src="{stream_url}" alt="Kamera Görüntüsü" class="stream-video" 
+                             onerror="this.style.display='none'; document.body.innerHTML='<div style=\\'text-align:center;padding:50px\\'><h2>Görüntü alınamadı</h2><p>Kamera bağlantısını kontrol edin</p></div>'">
+                        <div class="stream-info">
+                            <p>IP: {camera['ip_address']} | Konum: {camera.get('location', 'N/A')}</p>
+                            <p>Son güncelleme: {camera.get('updated_at', 'N/A')}</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                
+            except Exception as e:
+                logger.error(f"Camera stream error: {e}")
+                return "Stream yüklenirken hata oluştu", 500
+        
+
+        
         @self.app.route('/api/company/<company_id>/cameras/groups', methods=['GET'])
         def get_camera_groups(company_id):
             """Kamera gruplarını getir"""
@@ -3224,16 +3316,7 @@ Mesaj:
             except Exception as e:
                 return jsonify({'success': False, 'error': str(e)}), 500
 
-        @self.app.route('/api/company/<company_id>/camera-stream/<camera_id>')
-        def camera_stream(company_id, camera_id):
-            """SaaS Kamera Stream Endpoint"""
-            user_data = self.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'error': 'Yetkisiz erişim'}), 401
-            
-            camera_key = f"{company_id}_{camera_id}"
-            return Response(self.generate_saas_frames(camera_key, company_id, camera_id),
-                           mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
         @self.app.route('/api/company/<company_id>/detection-status/<camera_id>')
         def detection_status(company_id, camera_id):
@@ -7710,58 +7793,98 @@ Mesaj:
                 function initializeSettingsNavigation() {
                     console.log('Initializing Settings Navigation');
                     
-                    const navLinks = document.querySelectorAll('.settings-nav .nav-link');
-                    const sections = document.querySelectorAll('.settings-section');
-                    
-                    console.log('Found nav links:', navLinks.length);
-                    console.log('Found sections:', sections.length);
-                    
-                    if (navLinks.length === 0) {
-                        console.error('No navigation links found');
-                        return;
-                    }
-                    
-                    if (sections.length === 0) {
-                        console.error('No sections found');
-                        return;
-                    }
-                    
-                    navLinks.forEach(link => {
-                        link.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            console.log('Nav link clicked:', this.getAttribute('data-section'));
-                            
-                            // Remove active class from all nav links
-                            navLinks.forEach(nl => nl.classList.remove('active'));
-                            
-                            // Add active class to clicked nav link
-                            this.classList.add('active');
-                            
-                            // Hide all sections
-                            sections.forEach(section => {
-                                section.style.display = 'none';
-                            });
-                            
-                            // Show target section
-                            const targetSection = this.getAttribute('data-section');
-                            const targetElement = document.getElementById(targetSection + '-section');
-                            console.log('Looking for element with ID:', targetSection + '-section');
-                            console.log('Found target element:', targetElement);
-                            
-                            if (targetElement) {
-                                targetElement.style.display = 'block';
-                                console.log('Section displayed:', targetSection);
+                    // Wait a bit for DOM to be fully ready
+                    setTimeout(() => {
+                        const navLinks = document.querySelectorAll('.settings-nav .nav-link');
+                        const sections = document.querySelectorAll('.settings-section');
+                        
+                        console.log('Found nav links:', navLinks.length);
+                        console.log('Found sections:', sections.length);
+                        
+                        if (navLinks.length === 0) {
+                            console.error('No navigation links found');
+                            return;
+                        }
+                        
+                        if (sections.length === 0) {
+                            console.error('No sections found');
+                            return;
+                        }
+                        
+                        navLinks.forEach(link => {
+                            link.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('Nav link clicked:', this.getAttribute('data-section'));
                                 
-                                // Update URL hash without triggering hashchange event
-                                const currentHash = window.location.hash.substring(1);
-                                if (currentHash !== targetSection) {
-                                    history.pushState(null, null, '#' + targetSection);
+                                // Remove active class from all nav links
+                                navLinks.forEach(nl => nl.classList.remove('active'));
+                                
+                                // Add active class to clicked nav link
+                                this.classList.add('active');
+                                
+                                // Hide all sections
+                                sections.forEach(section => {
+                                    section.style.display = 'none';
+                                });
+                                
+                                // Show target section
+                                const targetSection = this.getAttribute('data-section');
+                                const targetElement = document.getElementById(targetSection + '-section');
+                                console.log('Looking for element with ID:', targetSection + '-section');
+                                console.log('Found target element:', targetElement);
+                                
+                                if (targetElement) {
+                                    targetElement.style.display = 'block';
+                                    console.log('Section displayed:', targetSection);
+                                    
+                                    // Update URL hash without triggering hashchange event
+                                    const currentHash = window.location.hash.substring(1);
+                                    if (currentHash !== targetSection) {
+                                        history.pushState(null, null, '#' + targetSection);
+                                    }
+                                } else {
+                                    console.error('Target section not found:', targetSection + '-section');
                                 }
-                            } else {
-                                console.error('Target section not found:', targetSection + '-section');
+                            });
+                        });
+                        
+                        // Also add click handlers to nav links for better compatibility
+                        document.addEventListener('click', function(e) {
+                            if (e.target.closest('.settings-nav .nav-link')) {
+                                const link = e.target.closest('.settings-nav .nav-link');
+                                const targetSection = link.getAttribute('data-section');
+                                if (targetSection) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    
+                                    // Remove active class from all nav links
+                                    navLinks.forEach(nl => nl.classList.remove('active'));
+                                    
+                                    // Add active class to clicked nav link
+                                    link.classList.add('active');
+                                    
+                                    // Hide all sections
+                                    sections.forEach(section => {
+                                        section.style.display = 'none';
+                                    });
+                                    
+                                    // Show target section
+                                    const targetElement = document.getElementById(targetSection + '-section');
+                                    if (targetElement) {
+                                        targetElement.style.display = 'block';
+                                        console.log('Section displayed via event delegation:', targetSection);
+                                        
+                                        // Update URL hash
+                                        const currentHash = window.location.hash.substring(1);
+                                        if (currentHash !== targetSection) {
+                                            history.pushState(null, null, '#' + targetSection);
+                                        }
+                                    }
+                                }
                             }
                         });
-                    });
+                    }, 100);
                 }
                 
                 // Initialize when DOM is ready
