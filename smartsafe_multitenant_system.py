@@ -928,7 +928,7 @@ class MultiTenantDatabase:
                        username, password, resolution, fps, status, last_detection,
                        created_at
                 FROM cameras
-                WHERE company_id = {placeholder} AND status = 'active'
+                WHERE company_id = {placeholder}
             ''', (company_id,))
             
             cameras = []

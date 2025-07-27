@@ -8605,11 +8605,15 @@ Mesaj:
                         
                         if (navLinks.length === 0) {
                             console.error('No navigation links found');
+                            // Try again after a short delay
+                            setTimeout(initializeSettingsNavigation, 200);
                             return;
                         }
                         
                         if (sections.length === 0) {
                             console.error('No sections found');
+                            // Try again after a short delay
+                            setTimeout(initializeSettingsNavigation, 200);
                             return;
                         }
                         
@@ -8647,6 +8651,12 @@ Mesaj:
                                     }
                                 } else {
                                     console.error('Target section not found:', targetSection + '-section');
+                                    // Try to find the section with a different approach
+                                    const allSections = document.querySelectorAll('[id$="-section"]');
+                                    console.log('All sections found:', allSections.length);
+                                    allSections.forEach(section => {
+                                        console.log('Section ID:', section.id);
+                                    });
                                 }
                             });
                         });
@@ -8689,17 +8699,6 @@ Mesaj:
                     }, 100);
                 }
                 
-                // Initialize when DOM is ready
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', function() {
-                        initializeSettingsNavigation();
-                        handleInitialHash();
-                    });
-                } else {
-                    initializeSettingsNavigation();
-                    handleInitialHash();
-                }
-                
                 // Handle URL hash on page load
                 function handleInitialHash() {
                     const hash = window.location.hash.substring(1);
@@ -8720,6 +8719,20 @@ Mesaj:
                             profileLink.click();
                         }
                     }
+                }
+                
+                // Initialize when DOM is ready
+                function initializeSettings() {
+                    console.log('Initializing settings page...');
+                    initializeSettingsNavigation();
+                    handleInitialHash();
+                }
+                
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initializeSettings);
+                } else {
+                    // If DOM is already loaded, wait a bit more to ensure everything is ready
+                    setTimeout(initializeSettings, 100);
                 }
                 
                 // Handle hash changes
