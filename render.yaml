@@ -62,8 +62,8 @@ services:
         value: "--access-logfile - --error-logfile - --capture-output"
     disks:
       - name: smartsafe-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+        mountPath: /opt/render/project/src/data
+        sizeGB: 1
       - name: smartsafe-ssl
         mountPath: /opt/render/project/src/ssl
         sizeGB: 1
