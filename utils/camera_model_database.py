@@ -234,6 +234,28 @@ class CameraModelDatabase:
                 resolution_support=['1280x720', '640x480'],
                 fps_support=[30, 25, 15],
                 codec_support=['MJPEG', 'H.264']
+            ),
+            'xmeye': CameraModelInfo(
+                name='Xmeye IP Camera',
+                manufacturer='Xmeye',
+                ports=[554, 80, 8080, 443, 8000, 9000],
+                paths=[
+                    '/videostream.cgi',
+                    '/snapshot.cgi',
+                    '/cgi-bin/video.jpg',
+                    '/cgi-bin/snapshot.cgi',
+                    '/cgi-bin/videostream.cgi',
+                    '/video',
+                    '/shot.jpg'
+                ],
+                headers=['Server: Xmeye', 'Server: Xmeye-Webs', 'Server: uc-httpd'],
+                default_rtsp='rtsp://{ip}:554/videostream.cgi',
+                default_http='http://{ip}:80/videostream.cgi',
+                default_credentials={'username': 'admin', 'password': 'admin'},
+                features=['night_vision', 'motion_detection', 'audio', 'ptz'],
+                resolution_support=['1920x1080', '1280x720', '640x480', '320x240'],
+                fps_support=[30, 25, 15, 10],
+                codec_support=['H.264', 'MJPEG', 'H.265']
             )
         }
         
