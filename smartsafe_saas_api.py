@@ -2505,7 +2505,7 @@ Mesaj:
             except Exception as e:
                 logger.error(f"❌ Kamera detayları hatası: {e}")
                 return jsonify({'success': False, 'error': 'Kamera detayları alınamadı'}), 500
-
+        
         @self.app.route('/api/company/<company_id>/cameras/<camera_id>/stream', methods=['GET'])
         def get_camera_stream(company_id, camera_id):
             """Kamera stream URL'si getir"""
@@ -2859,7 +2859,7 @@ Mesaj:
                 return redirect(f'/company/{company_id}/login')
             
             return render_template('billing_page.html', company_id=company_id, user_data=user_data)
-
+        
         @self.app.route('/company/<company_id>/cameras', methods=['GET'])
         def camera_management(company_id):
             """Kamera yönetimi sayfası - Yeni Geliştirilmiş Sistem"""
@@ -8762,68 +8762,68 @@ Mesaj:
                     // Wait a bit for DOM to be fully ready
                     setTimeout(() => {
                         const navLinks = document.querySelectorAll('.nav-link[data-section]');
-                        const sections = document.querySelectorAll('.settings-section');
-                        
-                        console.log('Found nav links:', navLinks.length);
-                        console.log('Found sections:', sections.length);
-                        
-                        if (navLinks.length === 0) {
-                            console.error('No navigation links found');
+                    const sections = document.querySelectorAll('.settings-section');
+                    
+                    console.log('Found nav links:', navLinks.length);
+                    console.log('Found sections:', sections.length);
+                    
+                    if (navLinks.length === 0) {
+                        console.error('No navigation links found');
                             // Try again after a short delay
                             setTimeout(initializeSettingsNavigation, 200);
-                            return;
-                        }
-                        
-                        if (sections.length === 0) {
-                            console.error('No sections found');
+                        return;
+                    }
+                    
+                    if (sections.length === 0) {
+                        console.error('No sections found');
                             // Try again after a short delay
                             setTimeout(initializeSettingsNavigation, 200);
-                            return;
-                        }
-                        
-                        navLinks.forEach(link => {
-                            link.addEventListener('click', function(e) {
-                                e.preventDefault();
+                        return;
+                    }
+                    
+                    navLinks.forEach(link => {
+                        link.addEventListener('click', function(e) {
+                            e.preventDefault();
                                 e.stopPropagation();
-                                console.log('Nav link clicked:', this.getAttribute('data-section'));
-                                
-                                // Remove active class from all nav links
-                                navLinks.forEach(nl => nl.classList.remove('active'));
-                                
-                                // Add active class to clicked nav link
-                                this.classList.add('active');
-                                
-                                // Hide all sections
-                                sections.forEach(section => {
-                                    section.style.display = 'none';
-                                });
-                                
-                                // Show target section
-                                const targetSection = this.getAttribute('data-section');
-                                const targetElement = document.getElementById(targetSection + '-section');
-                                console.log('Looking for element with ID:', targetSection + '-section');
-                                console.log('Found target element:', targetElement);
-                                
-                                if (targetElement) {
-                                    targetElement.style.display = 'block';
-                                    console.log('Section displayed:', targetSection);
+                            console.log('Nav link clicked:', this.getAttribute('data-section'));
+                            
+                            // Remove active class from all nav links
+                            navLinks.forEach(nl => nl.classList.remove('active'));
+                            
+                            // Add active class to clicked nav link
+                            this.classList.add('active');
+                            
+                            // Hide all sections
+                            sections.forEach(section => {
+                                section.style.display = 'none';
+                            });
+                            
+                            // Show target section
+                            const targetSection = this.getAttribute('data-section');
+                            const targetElement = document.getElementById(targetSection + '-section');
+                            console.log('Looking for element with ID:', targetSection + '-section');
+                            console.log('Found target element:', targetElement);
+                            
+                            if (targetElement) {
+                                targetElement.style.display = 'block';
+                                console.log('Section displayed:', targetSection);
                                     
                                     // Update URL hash without triggering hashchange event
                                     const currentHash = window.location.hash.substring(1);
                                     if (currentHash !== targetSection) {
                                         history.pushState(null, null, '#' + targetSection);
                                     }
-                                } else {
-                                    console.error('Target section not found:', targetSection + '-section');
+                            } else {
+                                console.error('Target section not found:', targetSection + '-section');
                                     // Try to find the section with a different approach
                                     const allSections = document.querySelectorAll('[id$="-section"]');
                                     console.log('All sections found:', allSections.length);
                                     allSections.forEach(section => {
                                         console.log('Section ID:', section.id);
                                     });
-                                }
-                            });
+                            }
                         });
+                    });
                         
                         // Also add click handlers to nav links for better compatibility
                         document.addEventListener('click', function(e) {

@@ -42,6 +42,16 @@ class DatabaseAdapter:
         """Get database configuration from environment"""
         database_url = os.getenv('DATABASE_URL')
         
+        # Check for DATABASE_URL first (Render.com uses this)
+        if database_url and database_url.startswith('postgresql://'):
+            logger.info("✅ Using DATABASE_URL for PostgreSQL connection")
+            return DatabaseConfig(
+                database_url=database_url,
+                database_type='postgresql',
+                connection_params={'database_url': database_url}
+            )
+        
+        # Check for Supabase environment variables
         if os.getenv('SUPABASE_URL'):
             # Production: PostgreSQL (Supabase)
             host = os.getenv('SUPABASE_URL')
@@ -68,6 +78,7 @@ class DatabaseAdapter:
                 connection_params=connection_params
             )
         else:
+            logger.info("ℹ️ No PostgreSQL configuration found, using SQLite")
             return self._get_sqlite_config()
     
     def _get_sqlite_config(self) -> DatabaseConfig:
@@ -82,7 +93,14 @@ class DatabaseAdapter:
         """Get database connection with retry mechanism"""
         try:
             if self.db_type == 'postgresql':
-                return self.secure_connector.get_connection()
+                # Check if we have DATABASE_URL
+                if 'database_url' in self.config.connection_params:
+                    # Use DATABASE_URL directly
+                    import psycopg2
+                    return psycopg2.connect(self.config.connection_params['database_url'])
+                else:
+                    # Use secure connector for Supabase
+                    return self.secure_connector.get_connection()
             else:
                 conn = sqlite3.connect(
                     self.config.database_url,
