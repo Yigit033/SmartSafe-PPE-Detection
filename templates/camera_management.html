@@ -1163,29 +1163,52 @@
                 </div>
             `;
             
-            fetch(`/api/company/{{ company_id }}/cameras`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.cameras) {
-                        displayCameras(data.cameras);
-                    } else {
-                        camerasList.innerHTML = `
-                            <div class="col-12 text-center">
-                                <p class="text-muted">Henüz kamera eklenmemiş.</p>
-                                <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
-                            </div>
-                        `;
-                    }
-                })
-                .catch(error => {
-                    console.error('Kamera yükleme hatası:', error);
+            fetch(`/api/company/{{ company_id }}/cameras`, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (response.status === 401) {
+                    // Session hatası - login sayfasına yönlendir
+                    console.log('Session expired, redirecting to login...');
+                    window.location.href = '/login';
+                    return;
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Camera data:', data);
+                if (data && data.success && data.cameras) {
+                    displayCameras(data.cameras);
+                } else if (data && data.cameras && data.cameras.length === 0) {
                     camerasList.innerHTML = `
                         <div class="col-12 text-center">
-                            <p class="text-danger">Kamera listesi yüklenirken hata oluştu.</p>
-                            <button class="btn btn-primary" onclick="loadCameras()">Tekrar Dene</button>
+                            <p class="text-muted">Henüz kamera eklenmemiş.</p>
+                            <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
                         </div>
                     `;
-                });
+                } else {
+                    camerasList.innerHTML = `
+                        <div class="col-12 text-center">
+                            <p class="text-muted">Henüz kamera eklenmemiş.</p>
+                            <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Kamera yükleme hatası:', error);
+                camerasList.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p class="text-danger">Kamera listesi yüklenirken hata oluştu.</p>
+                        <button class="btn btn-primary" onclick="loadCameras()">Tekrar Dene</button>
+                    </div>
+                `;
+            });
         }
         
         function displayCameras(cameras) {

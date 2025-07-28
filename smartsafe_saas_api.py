@@ -746,7 +746,9 @@ Mesaj:
             """Şirket kameralarını getir - Unified Database Source"""
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
-                return jsonify({'error': 'Yetkisiz erişim'}), 401
+                # Session yoksa veya yanlış company_id ise
+                logger.warning(f"Session validation failed for company {company_id}")
+                return jsonify({'error': 'Yetkisiz erişim', 'session_expired': True}), 401
             
             try:
                 # Unified approach: Database'den kameraları al
