@@ -1163,13 +1163,7 @@
                 </div>
             `;
             
-            fetch(`/api/company/{{ company_id }}/cameras`, {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
+            fetch(`/api/company/{{ company_id }}/cameras`)
             .then(response => {
                 console.log('Response status:', response.status);
                 if (response.status === 401) {
