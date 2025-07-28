@@ -193,7 +193,7 @@ class SmartSafeSaaSAPI:
                     subscription_end = result['subscription_end']
                     subscription_info = {
                         'subscription_type': result['subscription_type'] or 'basic',
-                        'max_cameras': result['max_cameras'] or 5,
+                        'max_cameras': result['max_cameras'] or 25,
                         'created_at': result['created_at'] if result['created_at'] else None,
                         'company_name': result['company_name'],
                         'sector': result['sector'],
@@ -203,7 +203,7 @@ class SmartSafeSaaSAPI:
                     subscription_end = result[1]
                     subscription_info = {
                         'subscription_type': result[0] or 'basic',
-                        'max_cameras': result[2] or 5,
+                        'max_cameras': result[2] or 25,
                         'created_at': result[3] if result[3] else None,
                         'company_name': result[4],
                         'sector': result[5],
@@ -226,7 +226,7 @@ class SmartSafeSaaSAPI:
                     'subscription_end': subscription_end.isoformat() if subscription_end else None,
                     'is_active': is_active,
                     'days_remaining': days_remaining,
-                    'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 5)) * 100
+                    'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 25)) * 100
                 })
                 
                 return {
@@ -397,9 +397,9 @@ Mesaj:
                 # Abonelik planı seçimi
                 subscription_plan = request.form.get('subscription_plan', 'starter')
                 plan_prices = {
-                    'starter': {'monthly': 99, 'cameras': 5},
-                    'professional': {'monthly': 299, 'cameras': 15},
-                    'enterprise': {'monthly': 599, 'cameras': 50}
+                    'starter': {'monthly': 99, 'cameras': 25},
+                    'professional': {'monthly': 299, 'cameras': 100},
+                    'enterprise': {'monthly': 599, 'cameras': 500}
                 }
                 
                 if subscription_plan in plan_prices:
@@ -407,7 +407,7 @@ Mesaj:
                     data['max_cameras'] = plan_prices[subscription_plan]['cameras']
                 else:
                     data['subscription_type'] = 'starter'
-                    data['max_cameras'] = 5
+                    data['max_cameras'] = 25
                 
                 # Doğrulama
                 required_fields = ['company_name', 'sector', 'contact_person', 'email', 'password']
@@ -3090,9 +3090,9 @@ Mesaj:
                 
                 # Plan fiyatları
                 plan_prices = {
-                    'starter': {'monthly': 99, 'cameras': 5, 'name': 'Starter'},
-                    'professional': {'monthly': 299, 'cameras': 15, 'name': 'Professional'},
-                    'enterprise': {'monthly': 599, 'cameras': 50, 'name': 'Enterprise'}
+                    'starter': {'monthly': 99, 'cameras': 25, 'name': 'Starter'},
+                    'professional': {'monthly': 299, 'cameras': 100, 'name': 'Professional'},
+                    'enterprise': {'monthly': 599, 'cameras': 500, 'name': 'Enterprise'}
                 }
                 
                 if new_plan not in plan_prices:
@@ -9213,19 +9213,19 @@ Mesaj:
                         'starter': {
                             name: 'Starter',
                             price: '$99/ay',
-                            cameras: '5 Kamera',
+                            cameras: '25 Kamera',
                             features: ['Temel Güvenlik', 'Email Destek', 'Temel Raporlar']
                         },
                         'professional': {
                             name: 'Professional',
                             price: '$299/ay',
-                            cameras: '15 Kamera',
+                            cameras: '100 Kamera',
                             features: ['Gelişmiş Güvenlik', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Bildirimler']
                         },
                         'enterprise': {
                             name: 'Enterprise',
                             price: '$599/ay',
-                            cameras: '50 Kamera',
+                            cameras: '500 Kamera',
                             features: ['Maksimum Güvenlik', 'Öncelikli Destek', 'Özel Raporlar', 'API Erişimi', 'Çoklu Kullanıcı']
                         }
                     };
@@ -10596,7 +10596,7 @@ Mesaj:
                                 }
                                 
                                 if (cameraUsageElement) {
-                                    cameraUsageElement.textContent = `${subscription.used_cameras || 0}/${subscription.max_cameras || 5}`;
+                                    cameraUsageElement.textContent = `${subscription.used_cameras || 0}/${subscription.max_cameras || 25}`;
                                 }
                                 
                                 // Update subscription trend

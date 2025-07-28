@@ -125,7 +125,7 @@ class DatabaseAdapter:
                     email TEXT UNIQUE NOT NULL,
                     phone TEXT,
                     address TEXT,
-                    max_cameras INTEGER DEFAULT 5,
+                    max_cameras INTEGER DEFAULT 25,
                     subscription_type TEXT DEFAULT 'basic',
                     subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     subscription_end TIMESTAMP,

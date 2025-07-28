@@ -289,7 +289,7 @@ class MultiTenantDatabase:
                     email TEXT UNIQUE NOT NULL,
                     phone TEXT,
                     address TEXT,
-                    max_cameras INTEGER DEFAULT 5,
+                    max_cameras INTEGER DEFAULT 25,
                     subscription_type TEXT DEFAULT 'basic',
                     subscription_start DATETIME DEFAULT CURRENT_TIMESTAMP,
                     subscription_end DATETIME,
@@ -539,7 +539,7 @@ class MultiTenantDatabase:
                 company_id, company_data['company_name'], company_data['sector'],
                 company_data['contact_person'], company_data['email'], 
                 company_data.get('phone', ''), company_data.get('address', ''),
-                company_data.get('max_cameras', 5), company_data.get('subscription_type', 'basic'),
+                company_data.get('max_cameras', 25), company_data.get('subscription_type', 'basic'),
                 subscription_end, api_key, ppe_json
             ))
             
@@ -1320,7 +1320,7 @@ def main():
         'email': 'info@abc-insaat.com',
         'phone': '0212 555 0123',
         'address': 'İstanbul',
-        'max_cameras': 10,
+                    'max_cameras': 100,
         'subscription_type': 'premium',
         'password': 'admin123'
     }

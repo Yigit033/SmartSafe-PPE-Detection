@@ -70,7 +70,7 @@ const translations = {
 
         // Monitoring Features
         multi_camera_support: "Multi-Camera Support",
-        multi_camera_desc: "Simultaneous monitoring and analysis of up to 16 cameras.",
+        multi_camera_desc: "Simultaneous monitoring and analysis of up to 100+ cameras.",
         ip_camera_integration: "IP Camera Integration",
         auto_load_balancing: "Automatic Load Balancing",
         continuous_monitoring: "Continuous Monitoring",
@@ -382,7 +382,7 @@ const translations = {
 
         // Monitoring Features
         multi_camera_support: "Çoklu Kamera Desteği",
-        multi_camera_desc: "16 kameraya kadar eş zamanlı izleme ve analiz kapasitesi.",
+        multi_camera_desc: "100+ kameraya kadar eş zamanlı izleme ve analiz kapasitesi.",
         ip_camera_integration: "IP Kamera Entegrasyonu",
         auto_load_balancing: "Otomatik Yük Dengeleme",
         continuous_monitoring: "Kesintisiz İzleme",
