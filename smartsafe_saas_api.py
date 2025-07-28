@@ -2185,18 +2185,13 @@ Mesaj:
                         # Kamera başarıyla tespit edildi, test et
                         config = detection_result['config']
                         
-                        # RealCameraManager ile test et
-                        from camera_integration_manager import RealCameraManager
-                        camera_manager = RealCameraManager()
-                        
-                        test_result = camera_manager.test_real_camera_connection(
-                            name=camera_name,
+                        # Gelişmiş kamera testi
+                        from simple_camera_test import enhanced_camera_test
+                        test_result = enhanced_camera_test(
                             ip_address=ip_address,
-                            port=config['port'],
-                            protocol=config['protocol'],
-                            stream_path=config['path'],
-                            username=config['credentials']['username'],
-                            password=config['credentials']['password']
+                            port=config.get('port', 8080),
+                            username=config.get('credentials', {}).get('username', ''),
+                            password=config.get('credentials', {}).get('password', '')
                         )
                         
                         return jsonify({
@@ -2239,19 +2234,14 @@ Mesaj:
                 if not camera:
                     return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
                 
-                # Kamera testi
-                from utils.camera_integration_manager import CameraSource
-                camera_source = CameraSource(
-                    name=camera['camera_name'],
+                # Gelişmiş kamera testi
+                from simple_camera_test import enhanced_camera_test
+                result = enhanced_camera_test(
                     ip_address=camera['ip_address'],
-                    port=camera.get('port', 80),
-                    protocol=camera.get('protocol', 'http'),
-                    stream_path=camera.get('stream_path', '/video'),
+                    port=camera.get('port', 8080),
                     username=camera.get('username', ''),
                     password=camera.get('password', '')
                 )
-                
-                result = self.get_camera_manager().test_camera_connection(camera_source)
                 
                 return jsonify(result)
                 
