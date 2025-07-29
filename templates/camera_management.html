@@ -1166,6 +1166,8 @@
             fetch(`/api/company/{{ company_id }}/cameras`)
             .then(response => {
                 console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                console.log('Company ID:', '{{ company_id }}');
                 if (response.status === 401) {
                     // Session hatası - login sayfasına yönlendir
                     console.log('Session expired, redirecting to login...');
@@ -1196,9 +1198,11 @@
             })
             .catch(error => {
                 console.error('Kamera yükleme hatası:', error);
+                console.error('Error details:', error.message);
                 camerasList.innerHTML = `
                     <div class="col-12 text-center">
                         <p class="text-danger">Kamera listesi yüklenirken hata oluştu.</p>
+                        <p class="text-muted">Hata: ${error.message}</p>
                         <button class="btn btn-primary" onclick="loadCameras()">Tekrar Dene</button>
                     </div>
                 `;
