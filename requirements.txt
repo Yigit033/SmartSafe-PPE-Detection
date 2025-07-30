@@ -4,9 +4,10 @@ opencv-python-headless>=4.8.0
 numpy>=1.21.0
 Pillow>=9.0.0
 
-# Deep Learning Framework (CPU optimized)
-torch>=2.0.0
-torchvision>=0.15.0
+# Deep Learning Framework (CPU optimized - NO CUDA)
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch>=2.0.0+cpu
+torchvision>=0.15.0+cpu
 ultralytics>=8.0.0
 
 # Web Framework
@@ -44,14 +45,6 @@ seaborn>=0.12.0
 pyyaml>=6.0
 python-dotenv>=1.0.0
 
-# Security & Authentication
-werkzeug>=2.3.7
-PyJWT>=2.8.0
-cryptography>=41.0.7
-bcrypt>=4.0.0
-pyotp>=2.8.0
-pathlib2>=2.3.0
-
 # HTTP & Networking
 requests>=2.31.0
 urllib3>=2.0.0
@@ -71,29 +64,44 @@ tqdm>=4.64.0
 openpyxl>=3.1.0
 qrcode>=7.4.0
 
-# Advanced Validation
-email-validator>=2.0.0
-
 # Logging
 loguru>=0.7.2
-
-# Enterprise Features
-APScheduler>=3.10.4
-redis>=5.0.1
-prometheus-client>=0.19.0
-
-
-# Additional Python Standard Library Extensions
-pathlib2>=2.3.0
 
 # Audio Support
 pygame==2.5.2
 
-# Smart Camera System Dependencies
-dnspython>=2.4.0  # DNS resolution for camera detection
-certifi>=2023.7.22  # SSL certificate verification
+# Additional Python Standard Library Extensions
+pathlib2>=2.3.0
 
 # Note: The following packages are built-in to Python 3.7+ and don't need to be installed:
 # - concurrent.futures (built-in since Python 3.2)
 # - dataclasses (built-in since Python 3.7)
-# - ipaddress (built-in since Python 3.3) 
+# - ipaddress (built-in since Python 3.3)
+# - uuid (built-in)
+# - traceback (built-in)
+# - gc (built-in)
+# - socket (built-in)
+# - base64 (built-in)
+# - queue (built-in)
+# - collections (built-in)
+# - deque (built-in)
+# - io (built-in)
+# - BytesIO (built-in)
+# - threading (built-in)
+# - time (built-in)
+# - datetime (built-in)
+# - timedelta (built-in)
+# - json (built-in)
+# - os (built-in)
+# - logging (built-in)
+# - typing (built-in)
+# - pathlib (built-in)
+# - zipfile (built-in)
+# - subprocess (built-in)
+# - platform (built-in)
+# - tempfile (built-in)
+# - random (built-in)
+# - ssl (built-in)
+# - dns (provided by dnspython) 
+
+
