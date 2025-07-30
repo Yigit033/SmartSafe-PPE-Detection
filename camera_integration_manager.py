@@ -444,9 +444,9 @@ class SmartCameraDetector:
             {'port': 8000, 'path': '/stream', 'protocol': 'http'}
         ]
     
-    def smart_detect_camera(self, ip_address: str, timeout: int = 5) -> Dict[str, Any]:
+    def smart_detect_camera(self, ip_address: str, timeout: int = 3) -> Dict[str, Any]:
         """
-        Akıllı kamera tespiti - IP adresinden otomatik konfigürasyon
+        Akıllı kamera tespiti - Basitleştirilmiş versiyon
         
         Args:
             ip_address: Kamera IP adresi
@@ -477,21 +477,56 @@ class SmartCameraDetector:
                 result['error'] = "IP adresi erişilebilir değil"
                 return result
             
-            # 2. Kamera modeli tespiti
-            model_info = self._detect_camera_model(ip_address, timeout)
-            if model_info:
-                result['detected_model'] = model_info['model']
-                result['detection_confidence'] = model_info['confidence']
+            # 2. Basit konfigürasyon tespiti (model tespiti olmadan)
+            logger.info(f"🔍 Quick configuration detection for {ip_address}")
             
-            # 3. Çalışan port ve protokol tespiti
-            working_config = self._find_working_config(ip_address, model_info, timeout)
-            if working_config:
-                result.update(working_config)
-                result['success'] = True
-            else:
-                result['error'] = "Çalışan kamera konfigürasyonu bulunamadı"
+            # 8080 portu için Android IP Webcam varsayılanı
+            if self._test_http_stream(f"http://{ip_address}:8080/shot.jpg", 2):
+                result.update({
+                    'success': True,
+                    'detected_model': 'android_ipwebcam',
+                    'protocol': 'http',
+                    'port': 8080,
+                    'path': '/shot.jpg',
+                    'stream_url': f"http://{ip_address}:8080/shot.jpg",
+                    'mjpeg_url': f"http://{ip_address}:8080/shot.jpg",
+                    'detection_confidence': 0.8
+                })
+                logger.info(f"✅ Quick detection successful: Android IP Webcam on port 8080")
+                return result
             
-            logger.info(f"✅ Smart detection complete: {result['detected_model']} - {result['protocol']}://{ip_address}:{result['port']}{result['path']}")
+            # 8080 portu için video endpoint
+            if self._test_http_stream(f"http://{ip_address}:8080/video", 2):
+                result.update({
+                    'success': True,
+                    'detected_model': 'generic_ip',
+                    'protocol': 'http',
+                    'port': 8080,
+                    'path': '/video',
+                    'stream_url': f"http://{ip_address}:8080/video",
+                    'mjpeg_url': f"http://{ip_address}:8080/shot.jpg",
+                    'detection_confidence': 0.7
+                })
+                logger.info(f"✅ Quick detection successful: Generic IP Camera on port 8080")
+                return result
+            
+            # 80 portu için test
+            if self._test_http_stream(f"http://{ip_address}:80/video", 2):
+                result.update({
+                    'success': True,
+                    'detected_model': 'generic_ip',
+                    'protocol': 'http',
+                    'port': 80,
+                    'path': '/video',
+                    'stream_url': f"http://{ip_address}:80/video",
+                    'mjpeg_url': f"http://{ip_address}:80/shot.jpg",
+                    'detection_confidence': 0.7
+                })
+                logger.info(f"✅ Quick detection successful: Generic IP Camera on port 80")
+                return result
+            
+            result['error'] = "Çalışan kamera konfigürasyonu bulunamadı"
+            logger.warning(f"❌ Quick detection failed for {ip_address}")
             return result
             
         except Exception as e:
@@ -500,50 +535,81 @@ class SmartCameraDetector:
             return result
     
     def _ping_test(self, ip_address: str) -> bool:
-        """Ping testi"""
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            result = sock.connect_ex((ip_address, 80))
-            sock.close()
-            return result == 0
-        except:
-            return False
-    
-    def _detect_camera_model(self, ip_address: str, timeout: int) -> Optional[Dict]:
-        """Kamera modelini tespit et"""
-        for model, info in self.camera_database.items():
+        """Ping testi - Yaygın portları test et"""
+        common_ports = [80, 8080, 554, 8000, 443]
+        
+        for port in common_ports:
             try:
-                # HTTP endpoint'lerini test et
-                for port in info['ports']:
-                    if port in [80, 8080, 8000]:  # HTTP portları
-                        for endpoint in info.get('auth_endpoints', ['/']):
-                            url = f"http://{ip_address}:{port}{endpoint}"
-                            try:
-                                response = requests.get(url, timeout=timeout)
-                                if response.status_code == 200:
-                                    content = response.text.lower()
-                                    
-                                    # Header kontrolü
-                                    if any(header.lower() in str(response.headers).lower() for header in info['headers']):
-                                        return {
-                                            'model': model,
-                                            'confidence': 0.9,
-                                            'info': info
-                                        }
-                                    
-                                    # İçerik kontrolü
-                                    if model in content or info['name'].lower() in content:
-                                        return {
-                                            'model': model,
-                                            'confidence': 0.8,
-                                            'info': info
-                                        }
-                            except:
-                                continue
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                result = sock.connect_ex((ip_address, port))
+                sock.close()
+                if result == 0:
+                    logger.info(f"✅ Ping test başarılı: {ip_address}:{port}")
+                    return True
             except:
                 continue
         
+        logger.warning(f"❌ Ping test başarısız: {ip_address} - Hiçbir port açık değil")
+        return False
+    
+    def _detect_camera_model(self, ip_address: str, timeout: int) -> Optional[Dict]:
+        """Kamera modelini tespit et - Hızlandırılmış versiyon"""
+        logger.info(f"🔍 Model detection started for {ip_address}")
+        
+        # Hızlı test için sadece yaygın portları test et
+        quick_ports = [8080, 80, 554]
+        
+        for port in quick_ports:
+            try:
+                # Basit HTTP testi
+                url = f"http://{ip_address}:{port}/"
+                response = requests.get(url, timeout=2)  # 2 saniye timeout
+                
+                if response.status_code == 200:
+                    content = response.text.lower()
+                    headers = str(response.headers).lower()
+                    
+                    # Android IP Webcam tespiti (en yaygın)
+                    if 'ip webcam' in content or 'ipwebcam' in content or 'android' in content:
+                        logger.info(f"✅ Android IP Webcam detected on port {port}")
+                        return {
+                            'model': 'android_ipwebcam',
+                            'confidence': 0.9,
+                            'info': self.camera_database['android_ipwebcam']
+                        }
+                    
+                    # Hikvision tespiti
+                    if 'hikvision' in content or 'app-webs' in headers:
+                        logger.info(f"✅ Hikvision detected on port {port}")
+                        return {
+                            'model': 'hikvision',
+                            'confidence': 0.9,
+                            'info': self.camera_database['hikvision']
+                        }
+                    
+                    # Dahua tespiti
+                    if 'dahua' in content or 'dahuahttp' in headers:
+                        logger.info(f"✅ Dahua detected on port {port}")
+                        return {
+                            'model': 'dahua',
+                            'confidence': 0.9,
+                            'info': self.camera_database['dahua']
+                        }
+                    
+                    # Generic IP Camera (varsayılan)
+                    logger.info(f"✅ Generic IP Camera detected on port {port}")
+                    return {
+                        'model': 'generic_ip',
+                        'confidence': 0.7,
+                        'info': self.camera_database['generic_ip']
+                    }
+                    
+            except Exception as e:
+                logger.debug(f"❌ Port {port} test failed: {e}")
+                continue
+        
+        logger.warning(f"❌ No camera model detected for {ip_address}")
         return None
     
     def _find_working_config(self, ip_address: str, model_info: Optional[Dict], timeout: int) -> Optional[Dict]:
@@ -643,21 +709,20 @@ class SmartCameraDetector:
             return False
     
     def _test_http_stream(self, http_url: str, timeout: int) -> bool:
-        """HTTP stream test et"""
+        """HTTP stream test et - Basitleştirilmiş versiyon"""
         try:
+            logger.debug(f"🔍 Testing HTTP stream: {http_url}")
             response = requests.get(http_url, timeout=timeout)
-            if response.status_code == 200:
-                # MJPEG veya video stream kontrolü
-                content_type = response.headers.get('content-type', '').lower()
-                if 'image' in content_type or 'video' in content_type or 'multipart' in content_type:
-                    return True
-                
-                # Content length kontrolü
-                if len(response.content) > 1000:  # Büyük response
-                    return True
             
+            # 200, 401, 403 gibi status kodları kabul et (authentication gerekebilir)
+            if response.status_code in [200, 401, 403]:
+                logger.debug(f"✅ HTTP stream test successful: {http_url} (Status: {response.status_code})")
+                return True
+            
+            logger.debug(f"❌ HTTP stream test failed: {http_url} (Status: {response.status_code})")
             return False
-        except:
+        except Exception as e:
+            logger.debug(f"❌ HTTP stream test error: {http_url} - {e}")
             return False
 
 class ProfessionalCameraManager:
@@ -778,11 +843,18 @@ class ProfessionalCameraManager:
             camera_config.last_connection_test = datetime.now()
             camera_config.connection_status = test_result['connection_status']
             
+            # Success kontrolü ekle
+            if test_result['connection_status'] == 'connected':
+                test_result['success'] = True
+            else:
+                test_result['success'] = False
+            
             logger.info(f"✅ Camera test complete: {camera_config.name} - {test_result['connection_status']}")
             
         except Exception as e:
             test_result['error_message'] = str(e)
             test_result['connection_status'] = 'failed'
+            test_result['success'] = False
             logger.error(f"❌ Camera test failed: {camera_config.name} - {e}")
         
         return test_result
@@ -792,13 +864,29 @@ class ProfessionalCameraManager:
         result = {}
         
         try:
-            # Test basic HTTP connection
-            response = requests.get(config.connection_url, timeout=config.timeout)
+            # Authentication header'ı ekle
+            headers = {}
+            if config.username and config.password:
+                import base64
+                credentials = base64.b64encode(f"{config.username}:{config.password}".encode()).decode()
+                headers['Authorization'] = f'Basic {credentials}'
+            
+            # Test basic HTTP connection with authentication
+            response = requests.get(config.connection_url, headers=headers, timeout=config.timeout)
             if response.status_code == 200:
                 result['features']['mjpeg_support'] = True
                 
-                # Test video stream
+                # Test video stream with authentication
                 video_url = config.connection_url.replace('/shot.jpg', '/video')
+                cap = cv2.VideoCapture(video_url)
+                
+                # Authentication için URL'yi güncelle
+                if config.username and config.password:
+                    if 'http://' in video_url:
+                        video_url = video_url.replace('http://', f'http://{config.username}:{config.password}@')
+                    elif 'https://' in video_url:
+                        video_url = video_url.replace('https://', f'https://{config.username}:{config.password}@')
+                
                 cap = cv2.VideoCapture(video_url)
                 
                 if cap.isOpened():
@@ -830,7 +918,27 @@ class ProfessionalCameraManager:
                 
         except Exception as e:
             result['connection_status'] = 'failed'
-            result['error_message'] = str(e)
+            error_msg = str(e)
+            
+            # Detaylı hata mesajları
+            if 'timeout' in error_msg.lower():
+                result['error_message'] = 'Bağlantı zaman aşımı. IP adresi ve port numarasını kontrol edin.'
+            elif 'connection refused' in error_msg.lower():
+                result['error_message'] = 'Bağlantı reddedildi. Kamera açık mı ve port doğru mu?'
+            elif 'no route to host' in error_msg.lower():
+                result['error_message'] = 'IP adresine ulaşılamıyor. Ağ bağlantısını kontrol edin.'
+            elif 'name or service not known' in error_msg.lower():
+                result['error_message'] = 'Geçersiz IP adresi formatı.'
+            elif 'authentication' in error_msg.lower():
+                result['error_message'] = 'Kimlik doğrulama hatası. Kullanıcı adı ve şifreyi kontrol edin.'
+            elif '404' in error_msg.lower():
+                result['error_message'] = 'Stream path bulunamadı. Farklı endpoint deneyin (/video, /shot.jpg).'
+            elif '403' in error_msg.lower():
+                result['error_message'] = 'Erişim reddedildi. Yetkilendirme gerekli.'
+            elif '401' in error_msg.lower():
+                result['error_message'] = 'Kimlik doğrulama gerekli. Kullanıcı adı ve şifreyi kontrol edin.'
+            else:
+                result['error_message'] = f'Bağlantı hatası: {error_msg}'
         
         return result
     

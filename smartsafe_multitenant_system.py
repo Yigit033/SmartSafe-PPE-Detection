@@ -249,21 +249,66 @@ class MultiTenantDatabase:
                     logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
             
             # Updated_at kolonu kontrolü
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.columns 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'cameras'
-                    AND column_name = 'updated_at'
-                );
-            """)
-            
-            updated_at_exists = cursor.fetchone()[0]
-            
-            if not updated_at_exists:
-                logger.info("🔧 Cameras tablosuna updated_at kolonu ekleniyor...")
-                cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-                logger.info("✅ Updated_at kolonu eklendi")
+            try:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'cameras'
+                        AND column_name = 'updated_at'
+                    );
+                """)
+                
+                updated_at_exists = cursor.fetchone()[0]
+                
+                if not updated_at_exists:
+                    logger.info("🔧 Cameras tablosuna updated_at kolonu ekleniyor...")
+                    cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                    logger.info("✅ Updated_at kolonu eklendi")
+                else:
+                    logger.info("✅ Updated_at kolonu zaten mevcut")
+            except Exception as e:
+                logger.error(f"❌ Updated_at kolonu kontrolü hatası: {e}")
+                # Son çare - tabloyu yeniden oluştur
+                try:
+                    logger.info("🔧 Son çare: Cameras tablosunu updated_at ile yeniden oluşturuyor...")
+                    cursor.execute('DROP TABLE IF EXISTS cameras_backup')
+                    cursor.execute('CREATE TABLE cameras_backup AS SELECT * FROM cameras')
+                    cursor.execute('DROP TABLE cameras CASCADE')
+                    cursor.execute('''
+                        CREATE TABLE cameras (
+                            camera_id TEXT PRIMARY KEY,
+                            company_id TEXT NOT NULL,
+                            camera_name TEXT NOT NULL,
+                            location TEXT NOT NULL,
+                            ip_address TEXT,
+                            port INTEGER DEFAULT 554,
+                            rtsp_url TEXT,
+                            username TEXT,
+                            password TEXT,
+                            resolution TEXT DEFAULT '1920x1080',
+                            fps INTEGER DEFAULT 25,
+                            status TEXT DEFAULT 'active',
+                            last_detection TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    # Veri varsa geri yükle
+                    cursor.execute('SELECT COUNT(*) FROM cameras_backup')
+                    backup_count = cursor.fetchone()[0]
+                    if backup_count > 0:
+                        cursor.execute('''
+                            INSERT INTO cameras (camera_id, company_id, camera_name, location, 
+                                               ip_address, rtsp_url, username, password, 
+                                               resolution, fps, status, last_detection, 
+                                               created_at, updated_at, port)
+                            SELECT *, 554 FROM cameras_backup
+                        ''')
+                    cursor.execute('DROP TABLE cameras_backup')
+                    logger.info("✅ Cameras tablosu updated_at kolonu ile yeniden oluşturuldu")
+                except Exception as e2:
+                    logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
             
             conn.commit()
             conn.close()
@@ -343,8 +388,7 @@ class MultiTenantDatabase:
                     last_detection DATETIME,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                    UNIQUE(company_id, camera_name)
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id)
                 )
             ''')
             
@@ -447,6 +491,23 @@ class MultiTenantDatabase:
                     logger.info("✅ Migration: required_ppe column added successfully")
             except Exception as e:
                 logger.info(f"Migration info: {e}")
+            
+            # Migration: Add updated_at column to cameras table if it doesn't exist
+            try:
+                cursor.execute("PRAGMA table_info(cameras)")
+                camera_columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'updated_at' not in camera_columns:
+                    logger.info("🔧 Adding updated_at column to cameras table...")
+                    cursor.execute('''
+                        ALTER TABLE cameras 
+                        ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    ''')
+                    
+                    conn.commit()
+                    logger.info("✅ Migration: updated_at column added to cameras table")
+            except Exception as e:
+                logger.info(f"Cameras migration info: {e}")
             
             # Database migration - eksik kolonları ekle
             try:
@@ -599,8 +660,8 @@ class MultiTenantDatabase:
             if result:
                 logger.info(f"🔍 Auth debug - Result length: {len(result)}")
                 
-                # PostgreSQL RealDictRow için sözlük erişimi kullan
-                if hasattr(result, 'keys'):  # RealDictRow veya dict
+                # PostgreSQL ve SQLite için uyumlu kontrol
+                if hasattr(result, 'keys') and hasattr(result, 'get'):  # PostgreSQL RealDictRow
                     password_hash = result.get('password_hash')
                     logger.info(f"🔍 Auth debug - Password hash: {password_hash}")
                     
@@ -620,7 +681,7 @@ class MultiTenantDatabase:
                             logger.error("❌ Password verification failed")
                     else:
                         logger.error("❌ Password hash not found or empty")
-                else:  # Liste formatı (SQLite için)
+                else:  # SQLite Row veya liste formatı
                     logger.info(f"🔍 Auth debug - Password hash: {result[4] if len(result) > 4 else 'INDEX_ERROR'}")
                     
                     if len(result) > 4 and result[4]:
@@ -755,22 +816,50 @@ class MultiTenantDatabase:
             (success, message/camera_id)
         """
         try:
+            logger.info(f"🔧 DATABASE ADD CAMERA STARTED")
+            logger.info(f"📋 Company ID: {company_id}")
+            logger.info(f"📹 Camera data: {camera_data}")
+            
             conn = self.get_connection()
             if conn is None:
+                logger.error(f"❌ Database connection failed")
                 return False, "Veritabanı bağlantısı başarısız"
                 
             cursor = conn.cursor()
+            logger.info(f"💾 Database connection established")
             
             # Unique camera ID oluştur
             camera_id = f"CAM_{uuid.uuid4().hex[:8].upper()}"
+            logger.info(f"🆔 Generated camera ID: {camera_id}")
             
             # RTSP URL oluştur
             ip_address = camera_data.get('ip_address', '')
+            
+            # IP adresi kontrolü
+            if not ip_address:
+                logger.error("❌ IP adresi eksik")
+                return False, "IP adresi gerekli"
+            
+            # IP adresi format kontrolü
+            import re
+            ip_pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+            if not re.match(ip_pattern, ip_address):
+                logger.error(f"❌ Geçersiz IP adresi formatı: {ip_address}")
+                return False, f"'{ip_address}' geçerli bir IP adresi değil. Örnek: 192.168.1.100"
+            
             port = camera_data.get('port', 8080)
             username = camera_data.get('username', '')
             password = camera_data.get('password', '')
             protocol = camera_data.get('protocol', 'http')
             stream_path = camera_data.get('stream_path', '/video')
+            
+            logger.info(f"📝 Camera details:")
+            logger.info(f"   - IP: {ip_address}")
+            logger.info(f"   - Port: {port}")
+            logger.info(f"   - Protocol: {protocol}")
+            logger.info(f"   - Stream Path: {stream_path}")
+            logger.info(f"   - Username: {username}")
+            logger.info(f"   - Password: {'*' * len(password) if password else 'None'}")
             
             # RTSP URL formatı
             if username and password:
@@ -794,16 +883,22 @@ class MultiTenantDatabase:
             # Placeholder belirleme
             placeholder = self.get_placeholder()
             
-            # Önce mevcut kamera var mı kontrol et
+            # Önce mevcut kamera var mı kontrol et (sadece active kameralar)
+            camera_name = camera_data.get('name', camera_data.get('camera_name', 'Real Camera'))
+            logger.info(f"🔍 Checking for existing camera with name: {camera_name}")
+            
             cursor.execute(f'''
                 SELECT camera_id FROM cameras 
-                WHERE company_id = {placeholder} AND camera_name = {placeholder}
-            ''', (company_id, camera_data.get('name', camera_data.get('camera_name', 'Real Camera'))))
+                WHERE company_id = {placeholder} AND camera_name = {placeholder} AND status = 'active'
+            ''', (company_id, camera_name))
             
             existing_camera = cursor.fetchone()
             if existing_camera:
+                logger.warning(f"⚠️ Camera with name '{camera_name}' already exists")
                 conn.close()
-                return False, "Bu isimde kamera zaten mevcut"
+                return False, f"'{camera_name}' isimli kamera zaten mevcut. Farklı bir isim kullanın."
+            
+            logger.info(f"✅ No existing camera found with this name")
             
             # Production database için temel kolonları kullan
             basic_columns = [
@@ -814,7 +909,7 @@ class MultiTenantDatabase:
             basic_values = [
                 camera_id, 
                 company_id, 
-                camera_data.get('name', camera_data.get('camera_name', 'Real Camera')),
+                camera_name,
                 camera_data.get('location', 'Genel'),
                 ip_address,
                 rtsp_url,
@@ -824,6 +919,13 @@ class MultiTenantDatabase:
                 camera_data.get('fps', 25),
                 'active'
             ]
+            
+            logger.info(f"📊 Prepared values:")
+            logger.info(f"   - Camera Name: {camera_name}")
+            logger.info(f"   - Location: {camera_data.get('location', 'Genel')}")
+            logger.info(f"   - RTSP URL: {rtsp_url}")
+            logger.info(f"   - Resolution: {resolution}")
+            logger.info(f"   - FPS: {camera_data.get('fps', 25)}")
             
             # Dinamik olarak mevcut kolonları kontrol et
             try:
@@ -928,7 +1030,7 @@ class MultiTenantDatabase:
                        username, password, resolution, fps, status, last_detection,
                        created_at
                 FROM cameras
-                WHERE company_id = {placeholder}
+                WHERE company_id = {placeholder} AND status != 'deleted'
             ''', (company_id,))
             
             cameras = []
@@ -986,7 +1088,7 @@ class MultiTenantDatabase:
             placeholder = self.get_placeholder()
             cursor.execute(f'''
                 SELECT * FROM cameras 
-                WHERE camera_id = {placeholder} AND company_id = {placeholder} AND status = 'active'
+                WHERE camera_id = {placeholder} AND company_id = {placeholder} AND status != 'deleted'
             ''', (camera_id, company_id))
             
             camera = cursor.fetchone()
@@ -1005,6 +1107,95 @@ class MultiTenantDatabase:
             logger.error(f"ERROR: Kamera getirme hatasi: {e}")
             return None
     
+    def update_camera(self, camera_id: str, company_id: str, camera_data: Dict) -> bool:
+        """Kamerayı güncelle"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Önce kameranın bu şirkete ait olduğunu doğrula
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
+                SELECT camera_name FROM cameras 
+                WHERE company_id = {placeholder} AND camera_id = {placeholder} AND status != 'deleted'
+            ''', (company_id, camera_id))
+            
+            if not cursor.fetchone():
+                conn.close()
+                return False
+            
+            # Kamerayı güncelle
+            if self.db_adapter.db_type == 'postgresql':
+                try:
+                    cursor.execute(f'''
+                        UPDATE cameras 
+                        SET camera_name = {placeholder}, location = {placeholder}, ip_address = {placeholder},
+                            port = {placeholder}, protocol = {placeholder}, stream_path = {placeholder},
+                            username = {placeholder}, password = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                        WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                    ''', (
+                        camera_data.get('name', ''),
+                        camera_data.get('location', ''),
+                        camera_data.get('ip_address', ''),
+                        camera_data.get('port', 8080),
+                        camera_data.get('protocol', 'http'),
+                        camera_data.get('stream_path', '/video'),
+                        camera_data.get('username', ''),
+                        camera_data.get('password', ''),
+                        company_id, camera_id
+                    ))
+                except Exception as e:
+                    logger.error(f"❌ PostgreSQL update hatası: {e}")
+                    # Updated_at kolonu yoksa ekle
+                    if "updated_at" in str(e).lower():
+                        logger.info("🔧 Updated_at kolonu ekleniyor...")
+                        cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                        # Tekrar dene
+                        cursor.execute(f'''
+                            UPDATE cameras 
+                            SET camera_name = {placeholder}, location = {placeholder}, ip_address = {placeholder},
+                                port = {placeholder}, protocol = {placeholder}, stream_path = {placeholder},
+                                username = {placeholder}, password = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                            WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                        ''', (
+                            camera_data.get('name', ''),
+                            camera_data.get('location', ''),
+                            camera_data.get('ip_address', ''),
+                            camera_data.get('port', 8080),
+                            camera_data.get('protocol', 'http'),
+                            camera_data.get('stream_path', '/video'),
+                            camera_data.get('username', ''),
+                            camera_data.get('password', ''),
+                            company_id, camera_id
+                        ))
+            else:
+                cursor.execute(f'''
+                    UPDATE cameras 
+                    SET camera_name = {placeholder}, location = {placeholder}, ip_address = {placeholder},
+                        port = {placeholder}, protocol = {placeholder}, stream_path = {placeholder},
+                        username = {placeholder}, password = {placeholder}, updated_at = datetime('now')
+                    WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                ''', (
+                    camera_data.get('name', ''),
+                    camera_data.get('location', ''),
+                    camera_data.get('ip_address', ''),
+                    camera_data.get('port', 8080),
+                    camera_data.get('protocol', 'http'),
+                    camera_data.get('stream_path', '/video'),
+                    camera_data.get('username', ''),
+                    camera_data.get('password', ''),
+                    company_id, camera_id
+                ))
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ Updated camera: {camera_data.get('name', 'Unknown')}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Kamera güncelleme hatası: {e}")
+            return False
+    
     def delete_camera(self, camera_id: str, company_id: str) -> bool:
         """Kamerayı sil (basitleştirilmiş)"""
         try:
@@ -1015,7 +1206,7 @@ class MultiTenantDatabase:
             placeholder = self.get_placeholder()
             cursor.execute(f'''
                 SELECT camera_name FROM cameras 
-                WHERE company_id = {placeholder} AND camera_id = {placeholder} AND status = 'active'
+                WHERE company_id = {placeholder} AND camera_id = {placeholder} AND status != 'deleted'
             ''', (company_id, camera_id))
             
             if not cursor.fetchone():
@@ -1024,11 +1215,24 @@ class MultiTenantDatabase:
             
             # Kamerayı sil (soft delete)
             if self.db_adapter.db_type == 'postgresql':
-                cursor.execute(f'''
-                    UPDATE cameras 
-                    SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
-                    WHERE company_id = {placeholder} AND camera_id = {placeholder}
-                ''', (company_id, camera_id))
+                try:
+                    cursor.execute(f'''
+                        UPDATE cameras 
+                        SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+                        WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                    ''', (company_id, camera_id))
+                except Exception as e:
+                    logger.error(f"❌ PostgreSQL delete hatası: {e}")
+                    # Updated_at kolonu yoksa ekle
+                    if "updated_at" in str(e).lower():
+                        logger.info("🔧 Updated_at kolonu ekleniyor...")
+                        cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                        # Tekrar dene
+                        cursor.execute(f'''
+                            UPDATE cameras 
+                            SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+                            WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                        ''', (company_id, camera_id))
             else:
                 cursor.execute(f'''
                     UPDATE cameras 
@@ -1042,6 +1246,69 @@ class MultiTenantDatabase:
             
         except Exception as e:
             logger.error(f"ERROR: Kamera silme hatasi: {e}")
+            return False
+    
+    def update_camera_status(self, camera_id: str, company_id: str, new_status: str) -> bool:
+        """Kamera durumunu güncelle (aktif/pasif)"""
+        try:
+            logger.info(f"🔄 Updating camera status: {camera_id} to {new_status}")
+            
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            
+            # Kameranın var olduğunu kontrol et
+            cursor.execute(f'''
+                SELECT camera_name, status FROM cameras 
+                WHERE company_id = {placeholder} AND camera_id = {placeholder}
+            ''', (company_id, camera_id))
+            
+            result = cursor.fetchone()
+            if not result:
+                logger.error(f"❌ Camera not found in database: {camera_id}")
+                conn.close()
+                return False
+            
+            current_status = result[1] if len(result) > 1 else 'unknown'
+            logger.info(f"📹 Current status in DB: {current_status}, updating to: {new_status}")
+            
+            # Durumu güncelle
+            if self.db_adapter.db_type == 'postgresql':
+                try:
+                    cursor.execute(f'''
+                        UPDATE cameras 
+                        SET status = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                        WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                    ''', (new_status, company_id, camera_id))
+                except Exception as e:
+                    logger.error(f"❌ PostgreSQL status update hatası: {e}")
+                    # Updated_at kolonu yoksa ekle
+                    if "updated_at" in str(e).lower():
+                        logger.info("🔧 Updated_at kolonu ekleniyor...")
+                        cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                        # Tekrar dene
+                        cursor.execute(f'''
+                            UPDATE cameras 
+                            SET status = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                            WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                        ''', (new_status, company_id, camera_id))
+            else:
+                cursor.execute(f'''
+                    UPDATE cameras 
+                    SET status = {placeholder}, updated_at = datetime('now')
+                    WHERE company_id = {placeholder} AND camera_id = {placeholder}
+                ''', (new_status, company_id, camera_id))
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ Camera status updated successfully in database")
+            return True
+            
+        except Exception as e:
+            logger.error(f"ERROR: Kamera status güncelleme hatasi: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
     def get_company_stats(self, company_id: str) -> Dict:
@@ -1067,7 +1334,7 @@ class MultiTenantDatabase:
             
             # PostgreSQL RealDictRow için sözlük erişimi kullan
             if detection_stats:
-                if hasattr(detection_stats, 'keys'):  # RealDictRow veya dict
+                if hasattr(detection_stats, 'keys') and hasattr(detection_stats, 'get'):  # RealDictRow veya dict
                     total_detections = detection_stats.get('total_detections') or 0
                     total_people = detection_stats.get('total_people') or 0
                     compliant_people = detection_stats.get('compliant_people') or 0
@@ -1088,10 +1355,10 @@ class MultiTenantDatabase:
             ''', (company_id,))
             
             active_cameras_result = cursor.fetchone()
-            if hasattr(active_cameras_result, 'keys'):  # RealDictRow
+            if hasattr(active_cameras_result, 'keys') and hasattr(active_cameras_result, 'values'):  # RealDictRow
                 # PostgreSQL'de COUNT(*) sonucu 'count' değil, doğrudan değer döner
                 active_cameras = list(active_cameras_result.values())[0] if active_cameras_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 active_cameras = active_cameras_result[0] if active_cameras_result else 0
             
             # Bugünkü ihlal sayısı
@@ -1107,9 +1374,9 @@ class MultiTenantDatabase:
                 ''', (company_id,))
             
             today_violations_result = cursor.fetchone()
-            if hasattr(today_violations_result, 'keys'):  # RealDictRow
+            if hasattr(today_violations_result, 'keys') and hasattr(today_violations_result, 'values'):  # RealDictRow
                 today_violations = list(today_violations_result.values())[0] if today_violations_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 today_violations = today_violations_result[0] if today_violations_result else 0
             
             # Dünkü istatistikler (trend hesaplama için)
@@ -1125,9 +1392,9 @@ class MultiTenantDatabase:
                 ''', (company_id,))
             
             yesterday_violations_result = cursor.fetchone()
-            if hasattr(yesterday_violations_result, 'keys'):  # RealDictRow
+            if hasattr(yesterday_violations_result, 'keys') and hasattr(yesterday_violations_result, 'values'):  # RealDictRow
                 yesterday_violations = list(yesterday_violations_result.values())[0] if yesterday_violations_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 yesterday_violations = yesterday_violations_result[0] if yesterday_violations_result else 0
             
             # Geçen haftaki kamera sayısı
@@ -1143,9 +1410,9 @@ class MultiTenantDatabase:
                 ''', (company_id,))
             
             last_week_cameras_result = cursor.fetchone()
-            if hasattr(last_week_cameras_result, 'keys'):  # RealDictRow
+            if hasattr(last_week_cameras_result, 'keys') and hasattr(last_week_cameras_result, 'values'):  # RealDictRow
                 last_week_cameras = list(last_week_cameras_result.values())[0] if last_week_cameras_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 last_week_cameras = last_week_cameras_result[0] if last_week_cameras_result else 0
             
             # Compliance trend (son 7 günün ortalaması)
@@ -1163,9 +1430,9 @@ class MultiTenantDatabase:
                 ''', (company_id,))
             
             week_compliance_result = cursor.fetchone()
-            if hasattr(week_compliance_result, 'keys'):  # RealDictRow
+            if hasattr(week_compliance_result, 'keys') and hasattr(week_compliance_result, 'values'):  # RealDictRow
                 week_compliance = list(week_compliance_result.values())[0] if week_compliance_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 week_compliance = week_compliance_result[0] if week_compliance_result else 0
             
             # Aktif çalışan sayısı (bugün tespit edilen unique kişi sayısı)
@@ -1183,9 +1450,9 @@ class MultiTenantDatabase:
                 ''', (company_id,))
             
             active_workers_result = cursor.fetchone()
-            if hasattr(active_workers_result, 'keys'):  # RealDictRow
+            if hasattr(active_workers_result, 'keys') and hasattr(active_workers_result, 'values'):  # RealDictRow
                 active_workers = list(active_workers_result.values())[0] if active_workers_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 active_workers = active_workers_result[0] if active_workers_result else 0
             
             # Aylık ihlal sayısı
@@ -1201,9 +1468,9 @@ class MultiTenantDatabase:
                 ''', (company_id,))
             
             monthly_violations_result = cursor.fetchone()
-            if hasattr(monthly_violations_result, 'keys'):  # RealDictRow
+            if hasattr(monthly_violations_result, 'keys') and hasattr(monthly_violations_result, 'values'):  # RealDictRow
                 monthly_violations = list(monthly_violations_result.values())[0] if monthly_violations_result else 0
-            else:  # Liste formatı
+            else:  # Liste formatı (SQLite için)
                 monthly_violations = monthly_violations_result[0] if monthly_violations_result else 0
             
             conn.close()

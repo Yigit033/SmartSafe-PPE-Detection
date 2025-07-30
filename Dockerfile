@@ -36,9 +36,9 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first (for better caching)
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies with retry and timeout
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --timeout 300 --retries 3 -r requirements.txt
 
 # Copy application code
 COPY . .

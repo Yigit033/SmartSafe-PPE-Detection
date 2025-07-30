@@ -793,41 +793,83 @@ Mesaj:
         @self.app.route('/api/company/<company_id>/cameras', methods=['POST'])
         def add_camera(company_id):
             """Yeni kamera ekleme"""
-            user_data = self.validate_session()
-            if not user_data or user_data['company_id'] != company_id:
-                return jsonify({'error': 'Yetkisiz erişim'}), 401
-            
             try:
-                # Abonelik limit kontrolü
-                subscription_info = self.get_subscription_info_internal(company_id)
-                if not subscription_info['success']:
-                    return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
+                logger.info(f"🚀 ADD CAMERA REQUEST STARTED")
+                logger.info(f"📋 Company ID: {company_id}")
                 
-                subscription = subscription_info['subscription']
-                current_cameras = subscription['used_cameras']
-                max_cameras = subscription['max_cameras']
+                user_data = self.validate_session()
+                logger.info(f"👤 User validation result: {user_data is not None}")
                 
-                # Limit kontrolü
-                if current_cameras >= max_cameras:
-                    return jsonify({
-                        'success': False, 
-                        'error': f'Kamera limiti aşıldı! Mevcut: {current_cameras}/{max_cameras}',
-                        'limit_reached': True,
-                        'current_cameras': current_cameras,
-                        'max_cameras': max_cameras,
-                        'subscription_type': subscription['subscription_type']
-                    }), 403
+                if not user_data or user_data['company_id'] != company_id:
+                    logger.error(f"❌ Unauthorized access attempt")
+                    return jsonify({'error': 'Yetkisiz erişim'}), 401
                 
-                data = request.json
-                success, result = self.db.add_camera(company_id, data)
-                
-                if success:
-                    return jsonify({'success': True, 'camera_id': result})
-                else:
-                    return jsonify({'success': False, 'error': result}), 400
+                    logger.info(f"✅ User authorized successfully")
+                    
+                    # Abonelik limit kontrolü
+                    logger.info(f"🔍 Checking subscription limits...")
+                    subscription_info = self.get_subscription_info_internal(company_id)
+                    logger.info(f"📊 Subscription info: {subscription_info}")
+                        
+                    if not subscription_info['success']:
+                        logger.error(f"❌ Subscription info failed: {subscription_info}")
+                        return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
+                    
+                    subscription = subscription_info['subscription']
+                    current_cameras = subscription['used_cameras']
+                    max_cameras = subscription['max_cameras']
+                    
+                    logger.info(f"📈 Camera limits - Current: {current_cameras}, Max: {max_cameras}")
+                    
+                    # Limit kontrolü
+                    if current_cameras >= max_cameras:
+                        logger.warning(f"⚠️ Camera limit reached: {current_cameras}/{max_cameras}")
+                        return jsonify({
+                            'success': False, 
+                            'error': f'Kamera limiti aşıldı! Mevcut: {current_cameras}/{max_cameras}',
+                            'limit_reached': True,
+                            'current_cameras': current_cameras,
+                            'max_cameras': max_cameras,
+                            'subscription_type': subscription['subscription_type']
+                        }), 403
+                    
+                    logger.info(f"✅ Camera limit check passed")
+                    
+                    data = request.json
+                    logger.info(f"📹 Raw camera data received: {data}")
+                    
+                    # Veri doğrulama - Field mapping düzeltmesi
+                    required_fields = ['name', 'location', 'ip_address']  # Frontend'den gelen field isimleri
+                    missing_fields = [field for field in required_fields if not data.get(field)]
+                    
+                    if missing_fields:
+                        logger.error(f"❌ Missing required fields: {missing_fields}")
+                        return jsonify({'success': False, 'error': f'Eksik alanlar: {", ".join(missing_fields)}'}), 400
+                    
+                    logger.info(f"✅ Data validation passed")
+                    logger.info(f"📝 Camera name: {data.get('camera_name')}")
+                    logger.info(f"📍 Location: {data.get('location')}")
+                    logger.info(f"🌐 IP Address: {data.get('ip_address')}")
+                    logger.info(f"🔌 Port: {data.get('port', 'default')}")
+                    logger.info(f"🔐 Protocol: {data.get('protocol', 'default')}")
+                    
+                    # Kamera ekle
+                    logger.info(f"💾 Calling database add_camera function...")
+                    success, result = self.db.add_camera(company_id, data)
+                    logger.info(f"💾 Database result - Success: {success}, Result: {result}")
+                    
+                    if success:
+                        logger.info(f"✅ Camera added successfully with ID: {result}")
+                        return jsonify({'success': True, 'camer"a_id': result})
+                    else:
+                        logger.error(f"❌ Camera addition failed: {result}")
+                        return jsonify({'success': False, 'error': result}), 400
                     
             except Exception as e:
-                logger.error(f"❌ Kamera ekleme hatası: {e}")
+                logger.error(f"💥 EXCEPTION in add_camera: {e}")
+                logger.error(f"💥 Exception type: {type(e)}")
+                import traceback
+                logger.error(f"💥 Full traceback: {traceback.format_exc()}")
                 return jsonify({'success': False, 'error': 'Kamera eklenemedi'}), 500
         
         # Şirket uyarıları API
@@ -2183,22 +2225,35 @@ Mesaj:
                     
                     if detection_result['success']:
                         # Kamera başarıyla tespit edildi, test et
-                        config = detection_result['config']
+                        port = detection_result.get('port', 8080)
+                        protocol = detection_result.get('protocol', 'http')
+                        path = detection_result.get('path', '/video')
                         
-                        # Gelişmiş kamera testi
-                        from simple_camera_test import enhanced_camera_test
-                        test_result = enhanced_camera_test(
-                            ip_address=ip_address,
-                            port=config.get('port', 8080),
-                            username=config.get('credentials', {}).get('username', ''),
-                            password=config.get('credentials', {}).get('password', '')
+                        # Basic kamera testi
+                        from camera_integration_manager import CameraSource
+                        import time
+                        
+                        # Connection URL oluştur
+                        connection_url = f"{protocol}://{ip_address}:{port}{path}"
+                        
+                        # CameraSource object oluştur
+                        camera_config = CameraSource(
+                            camera_id=f"SMART_TEST_{int(time.time())}",
+                            name="Smart Detected Camera",
+                            source_type='ip_webcam',
+                            connection_url=connection_url,
+                            username='',
+                            password='',
+                            timeout=10
                         )
+                        
+                        test_result = self.get_camera_manager().test_camera_connection(camera_config)
                         
                         return jsonify({
                             'success': True,
                             'detection_info': detection_result,
                             'connection_test': test_result,
-                            'message': f"Kamera tespit edildi: {detection_result['model']} (Güven: {detection_result['confidence']:.1%})"
+                            'message': f"Kamera tespit edildi: {detection_result.get('detected_model', 'unknown')} (Güven: {detection_result.get('detection_confidence', 0):.1%})"
                         })
                     else:
                         return jsonify({
@@ -2221,6 +2276,186 @@ Mesaj:
                     'error': str(e)
                 }), 500
         
+        @self.app.route('/api/company/<company_id>/cameras/quick-test', methods=['POST'])
+        def quick_test_camera(company_id):
+            """Hızlı kamera testi - 2 saniye timeout"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                ip_address = data.get('ip_address')
+                port = data.get('port', 8080)
+                protocol = data.get('protocol', 'http')
+                stream_path = data.get('stream_path', '/video')
+                username = data.get('username', '')
+                password = data.get('password', '')
+                
+                if not ip_address:
+                    return jsonify({'success': False, 'error': 'IP adresi gerekli'}), 400
+                
+                logger.info(f"⚡ Quick camera test for {ip_address}:{port}")
+                
+                try:
+                    import requests
+                    import time
+                    
+                    start_time = time.time()
+                    
+                    # Hızlı HTTP testi
+                    url = f"{protocol}://{ip_address}:{port}{stream_path}"
+                    headers = {}
+                    
+                    if username and password:
+                        import base64
+                        credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+                        headers['Authorization'] = f"Basic {credentials}"
+                    
+                    response = requests.get(url, headers=headers, timeout=2)
+                    test_duration = (time.time() - start_time) * 1000
+                    
+                    if response.status_code in [200, 401, 403]:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Hızlı bağlantı testi başarılı',
+                            'test_results': {
+                                'response_time': f"{test_duration:.1f}ms",
+                                'status_code': response.status_code,
+                                'test_duration': f"{test_duration / 1000:.1f}"
+                            }
+                        })
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': f'HTTP {response.status_code}',
+                            'test_results': {
+                                'test_duration': f"{test_duration / 1000:.1f}"
+                            }
+                        })
+                        
+                except requests.exceptions.Timeout:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Bağlantı zaman aşımı (2 saniye)',
+                        'test_results': {
+                            'test_duration': '2.0'
+                        }
+                    })
+                except requests.exceptions.ConnectionError:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Bağlantı hatası - Port kapalı veya erişilemiyor',
+                        'test_results': {
+                            'test_duration': '0.1'
+                        }
+                    })
+                except Exception as e:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Hızlı test hatası: {str(e)}',
+                        'test_results': {
+                            'test_duration': '0.1'
+                        }
+                    })
+                    
+            except Exception as e:
+                logger.error(f"❌ Quick test API error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+
+        @self.app.route('/api/company/<company_id>/cameras/manual-test', methods=['POST'])
+        def manual_test_camera(company_id):
+            """Basit manuel kamera testi - 3 saniye timeout"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                data = request.get_json()
+                ip_address = data.get('ip_address')
+                port = data.get('port', 8080)
+                protocol = data.get('protocol', 'http')
+                stream_path = data.get('stream_path', '/video')
+                username = data.get('username', '')
+                password = data.get('password', '')
+                
+                if not ip_address:
+                    return jsonify({'success': False, 'error': 'IP adresi gerekli'}), 400
+                
+                logger.info(f"⚡ Simple manual camera test for {ip_address}:{port}")
+                
+                try:
+                    import requests
+                    import time
+                    
+                    start_time = time.time()
+                    
+                    # Basit HTTP testi
+                    url = f"{protocol}://{ip_address}:{port}{stream_path}"
+                    headers = {}
+                    
+                    if username and password:
+                        import base64
+                        credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+                        headers['Authorization'] = f"Basic {credentials}"
+                    
+                    response = requests.get(url, headers=headers, timeout=3)
+                    test_duration = (time.time() - start_time) * 1000
+                    
+                    if response.status_code in [200, 401, 403]:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Kamera bağlantısı başarılı',
+                            'test_results': {
+                                'response_time': f"{test_duration:.1f}ms",
+                                'status_code': response.status_code,
+                                'test_duration': f"{test_duration / 1000:.1f}"
+                            }
+                        })
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': f'HTTP {response.status_code}',
+                            'test_results': {
+                                'test_duration': f"{test_duration / 1000:.1f}"
+                            }
+                        })
+                        
+                except requests.exceptions.Timeout:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Bağlantı zaman aşımı (3 saniye)',
+                        'test_results': {
+                            'test_duration': '3.0'
+                        }
+                    })
+                except requests.exceptions.ConnectionError:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Bağlantı hatası - Port kapalı veya erişilemiyor',
+                        'test_results': {
+                            'test_duration': '0.1'
+                        }
+                    })
+                except Exception as e:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Test hatası: {str(e)}',
+                        'test_results': {
+                            'test_duration': '0.1'
+                        }
+                    })
+                    
+            except Exception as e:
+                logger.error(f"❌ Manual test API error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
         @self.app.route('/api/company/<company_id>/cameras/<camera_id>/test', methods=['POST'])
         def test_specific_camera(company_id, camera_id):
             """Belirli bir kamerayı test et"""
@@ -2231,22 +2466,66 @@ Mesaj:
                 
                 # Kamerayı veritabanından al
                 camera = self.db.get_camera_by_id(camera_id, company_id)
+                logger.info(f"🔍 Camera details for {camera_id}: {camera}")
                 if not camera:
                     return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
                 
-                # Gelişmiş kamera testi
-                from simple_camera_test import enhanced_camera_test
-                result = enhanced_camera_test(
-                    ip_address=camera['ip_address'],
-                    port=camera.get('port', 8080),
-                    username=camera.get('username', ''),
-                    password=camera.get('password', '')
-                )
+                # Basic kamera testi
+                result = self.get_camera_manager().test_camera_connection({
+                    'ip_address': camera['ip_address'],
+                    'port': camera.get('port', 8080),
+                    'username': camera.get('username', ''),
+                    'password': camera.get('password', '')
+                })
                 
                 return jsonify(result)
                 
             except Exception as e:
                 logger.error(f"Camera test error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/toggle', methods=['POST'])
+        def toggle_camera_status(company_id, camera_id):
+            """Kamera durumunu aktif/pasif yap"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data['company_id'] != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+                
+                logger.info(f"🔄 Toggle request for camera: {camera_id}, company: {company_id}")
+                
+                # Kamerayı veritabanından al
+                camera = self.db.get_camera_by_id(camera_id, company_id)
+                if not camera:
+                    logger.error(f"❌ Camera not found: {camera_id} for company: {company_id}")
+                    return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
+                
+                logger.info(f"📹 Current camera status: {camera.get('status', 'unknown')}")
+                
+                # Yeni durumu belirle
+                current_status = camera.get('status', 'active')
+                new_status = 'inactive' if current_status == 'active' else 'active'
+                
+                logger.info(f"🔄 Toggling camera status from '{current_status}' to '{new_status}'")
+                
+                # Kamerayı güncelle
+                success = self.db.update_camera_status(camera_id, company_id, new_status)
+                
+                if success:
+                    logger.info(f"✅ Camera status updated successfully to: {new_status}")
+                    return jsonify({
+                        'success': True,
+                        'message': f'Kamera durumu {new_status} olarak güncellendi',
+                        'new_status': new_status
+                    })
+                else:
+                    logger.error(f"❌ Failed to update camera status to: {new_status}")
+                    return jsonify({'success': False, 'error': 'Kamera durumu güncellenemedi'}), 500
+                
+            except Exception as e:
+                logger.error(f"Camera toggle error: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 return jsonify({'success': False, 'error': str(e)}), 500
         
         @self.app.route('/api/company/<company_id>/cameras/<camera_id>/stream')
@@ -2545,7 +2824,15 @@ Mesaj:
                 
                 logger.info(f"🗑️ Deleting camera: {camera_id} for company: {company_id}")
                 
-                # Önce veritabanından kamerayı sil
+                # Önce kameranın var olup olmadığını kontrol et
+                camera_exists = self.db.get_camera_by_id(camera_id, company_id)
+                if not camera_exists:
+                    return jsonify({
+                        'success': False,
+                        'message': 'Kamera bulunamadı veya zaten silinmiş'
+                    }), 404
+                
+                # Veritabanından kamerayı sil
                 success = self.db.delete_camera(camera_id, company_id)
                 
                 if not success:
@@ -2591,24 +2878,30 @@ Mesaj:
                 data = request.get_json()
                 logger.info(f"✏️ Updating camera: {camera_id} for company: {company_id}")
                 
-                # Güncellenecek alanları hazırla
-                update_fields = {}
-                if 'name' in data:
-                    update_fields['name'] = data['name']
-                if 'rtsp_url' in data:
-                    update_fields['rtsp_url'] = data['rtsp_url']
-                if 'enabled' in data:
-                    update_fields['enabled'] = data['enabled']
-                if 'resolution' in data:
-                    update_fields['resolution'] = data['resolution']
-                if 'fps' in data:
-                    update_fields['fps'] = data['fps']
+                logger.info(f"📝 Received data: {data}")
                 
-                if not update_fields:
+                # Database'de kamerayı güncelle - frontend field names'i kullan
+                camera_data = {
+                    'name': data.get('camera_name', data.get('name', '')),
+                    'location': data.get('camera_location', data.get('location', '')),
+                    'ip_address': data.get('camera_ip', data.get('ip_address', '')),
+                    'port': data.get('camera_port', data.get('port', 8080)),
+                    'protocol': data.get('camera_protocol', data.get('protocol', 'http')),
+                    'stream_path': data.get('camera_path', data.get('stream_path', '/video')),
+                    'username': data.get('camera_username', data.get('username', '')),
+                    'password': data.get('camera_password', data.get('password', ''))
+                }
+                
+                logger.info(f"📝 Processed camera data: {camera_data}")
+                
+                # Database update
+                success = self.db.update_camera(camera_id, company_id, camera_data)
+                
+                if not success:
                     return jsonify({
                         'success': False,
-                        'message': 'Güncellenecek alan bulunamadı'
-                    }), 400
+                        'message': 'Veritabanında kamera güncellenemedi'
+                    }), 500
                 
                 try:
                     from camera_integration_manager import get_camera_manager
@@ -2618,41 +2911,34 @@ Mesaj:
                     if camera_id in camera_manager.camera_configs:
                         config = camera_manager.camera_configs[camera_id]
                         
-                        if 'name' in update_fields:
-                            config.name = update_fields['name']
-                        if 'rtsp_url' in update_fields:
-                            config.connection_url = update_fields['rtsp_url']
-                        if 'enabled' in update_fields:
-                            config.enabled = update_fields['enabled']
-                            
-                            # Kamerayı etkinleştir/devre dışı bırak
-                            if update_fields['enabled'] and config.connection_status != 'connected':
-                                camera_manager.connect_camera(config)
-                            elif not update_fields['enabled'] and config.connection_status == 'connected':
-                                camera_manager.disconnect_camera(camera_id)
+                        if camera_data['name']:
+                            config.name = camera_data['name']
+                        if camera_data['ip_address']:
+                            config.connection_url = f"{camera_data['protocol']}://{camera_data['ip_address']}:{camera_data['port']}{camera_data['stream_path']}"
                         
-                        if 'resolution' in update_fields:
-                            res_parts = update_fields['resolution'].split('x')
+                        # Resolution ve FPS güncelleme (eğer varsa)
+                        if 'resolution' in data:
+                            res_parts = data['resolution'].split('x')
                             if len(res_parts) == 2:
                                 config.resolution = (int(res_parts[0]), int(res_parts[1]))
                         
-                        if 'fps' in update_fields:
-                            config.fps = int(update_fields['fps'])
+                        if 'fps' in data:
+                            config.fps = int(data['fps'])
                     
                     return jsonify({
                         'success': True,
                         'message': 'Kamera başarıyla güncellendi',
                         'camera_id': camera_id,
-                        'updated_fields': list(update_fields.keys())
+                        'updated_fields': list(camera_data.keys())
                     })
                         
                 except ImportError:
-                    # Fallback: Simülasyon modu
+                    # Fallback: Sadece database güncellemesi
                     return jsonify({
                         'success': True,
-                        'message': 'Kamera başarıyla güncellendi (Simülasyon)',
+                        'message': 'Kamera başarıyla güncellendi',
                         'camera_id': camera_id,
-                        'updated_fields': list(update_fields.keys())
+                        'updated_fields': list(camera_data.keys())
                     })
                     
             except Exception as e:
@@ -3667,10 +3953,10 @@ Mesaj:
                         if response.status_code == 401:
                             auth_required = True
                             test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} 🔐 (Auth gerekli)')
-                        else:
                             test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
-                    except:
+                    except Exception as e:
                         test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
+                        test_result['test_details']['connection_steps'].append(f'Hata: {str(e)}')
             
             # Authentication gerekliyse kullanıcıya bildir
             if auth_required and not username and not password:
@@ -6183,9 +6469,9 @@ Mesaj:
                                     <i class="fas fa-video"></i> 
                                     Kamera Durumu
                                 </h5>
-                                <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+                                <a href="/company/{{ company_id }}/cameras" class="btn btn-light btn-sm">
                                     <i class="fas fa-plus"></i> Yeni Kamera
-                                </button>
+                                </a>
                             </div>
                             <div class="card-body">
                                 <div class="camera-grid" id="cameras-grid">
@@ -6217,135 +6503,7 @@ Mesaj:
                 <i class="fas fa-sync-alt"></i>
             </button>
             
-            <!-- Kamera Ekleme Modal -->
-            <div class="modal fade" id="addCameraModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">
-                                <i class="fas fa-plus"></i> Yeni Kamera Ekle
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="addCameraForm">
-                                <!-- Yardım Bölümü -->
-                                <div class="alert alert-info">
-                                    <h6><i class="fas fa-info-circle"></i> Kamera Bilgilerini Nasıl Bulabilirim?</h6>
-                                    <ul class="mb-0">
-                                        <li><strong>IP Adresi:</strong> Kameranızın ağ ayarları menüsünden veya router admin panelinden</li>
-                                        <li><strong>Port:</strong> Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</li>
-                                        <li><strong>Kullanıcı/Şifre:</strong> Kamera web arayüzü için giriş bilgileri</li>
-                                        <li><strong>Test Önerisi:</strong> Önce "Bağlantıyı Test Et" yapın, sonra ekleyin</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Kamera Adı *</label>
-                                        <input type="text" class="form-control" name="camera_name" placeholder="Örnek: Ana Giriş Kamerası" required>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Lokasyon *</label>
-                                        <input type="text" class="form-control" name="location" placeholder="Örnek: Ana Giriş, Üretim Alanı" required>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">IP Adresi *</label>
-                                        <input type="text" class="form-control" name="ip_address" placeholder="192.168.1.11" required>
-                                        <div class="form-text">Kameranızın ağ ayarlarından IP adresini bulabilirsiniz</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Port</label>
-                                        <input type="number" class="form-control" name="port" placeholder="8080" value="8080">
-                                        <div class="form-text">Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Protokol</label>
-                                        <select class="form-select" name="protocol">
-                                            <option value="http">HTTP (IP Webcam, Web Kameraları)</option>
-                                            <option value="rtsp">RTSP (Profesyonel IP Kameraları)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Stream Yolu</label>
-                                        <input type="text" class="form-control" name="stream_path" placeholder="/video" value="/video">
-                                        <div class="form-text">Yaygın yollar: /video, /stream1, /live</div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Kullanıcı Adı</label>
-                                        <input type="text" class="form-control" name="username" placeholder="admin">
-                                        <div class="form-text">Kamera web arayüzü için kullanıcı adı</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Şifre</label>
-                                        <input type="password" class="form-control" name="password" placeholder="Kamera parolanız">
-                                        <div class="form-text">Güvenlik için varsayılan parolayı değiştirin</div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Kimlik Doğrulama Türü</label>
-                                        <select class="form-select" name="auth_type">
-                                            <option value="basic">Basic Auth</option>
-                                            <option value="digest">Digest Auth</option>
-                                            <option value="none">Kimlik Doğrulama Yok</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Çözünürlük</label>
-                                        <select class="form-select" name="resolution">
-                                            <option value="640x480">640x480 (VGA)</option>
-                                            <option value="1280x720">1280x720 (HD)</option>
-                                            <option value="1920x1080">1920x1080 (Full HD)</option>
-                                            <option value="3840x2160">3840x2160 (4K)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">FPS (Saniye/Kare)</label>
-                                        <select class="form-select" name="fps">
-                                            <option value="15">15 FPS</option>
-                                            <option value="20">20 FPS</option>
-                                            <option value="25">25 FPS</option>
-                                            <option value="30" selected>30 FPS</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Grup</label>
-                                        <select class="form-select" name="group_id">
-                                            <option value="">Grup Seçin</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="d-grid gap-2">
-                                    <button type="button" class="btn btn-info" onclick="smartDetectCamera()">
-                                        <i class="fas fa-brain"></i> Akıllı Tespit
-                                    </button>
-                                    <button type="button" class="btn btn-warning" onclick="testCameraConnection()">
-                                        <i class="fas fa-check"></i> Bağlantıyı Test Et
-                                    </button>
-                                </div>
-                                <div id="testResults" class="mt-3" style="display: none;">
-                                    <!-- Test results will appear here -->
-                                </div>
-                            </form>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                            <button type="button" class="btn btn-primary" onclick="addCamera()">
-                                <i class="fas fa-plus"></i> Kamera Ekle
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
             
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
             <script>
@@ -6462,9 +6620,9 @@ Mesaj:
                                         <p class="text-muted">Henüz kamera eklenmemiş</p>
                                         <p class="text-muted">Kamera eklemek için:</p>
                                         <div class="d-flex gap-2 justify-content-center">
-                                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+                                        <a href="/company/${companyId}/cameras" class="btn btn-primary">
                                                 <i class="fas fa-plus"></i> Buradan Ekle
-                                        </button>
+                                        </a>
                                             <button class="btn btn-success" onclick="syncCameras()">
                                                 <i class="fas fa-sync"></i> Kamera Keşfet & Sync
                                         </button>
@@ -6860,39 +7018,7 @@ Mesaj:
                     });
                 }
                 
-                function addCamera() {
-                    const formData = new FormData(document.getElementById('addCameraForm'));
-                    const data = Object.fromEntries(formData);
-                    
-                    fetch(`/api/company/${companyId}/cameras`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(data)
-                    })
-                    .then(response => response.json())
-                    .then(result => {
-                        if (result.success) {
-                            alert('✅ Kamera başarıyla eklendi!');
-                            loadCameras();
-                            loadStats();
-                            bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
-                            document.getElementById('addCameraForm').reset();
-                            // Test sonuçlarını temizle
-                            document.getElementById('testResults').style.display = 'none';
-                        } else {
-                            // Limit kontrolü
-                            if (result.limit_reached) {
-                                alert(`❌ Kamera limiti aşıldı! Mevcut: ${result.current_cameras}/${result.max_cameras} kamera.\n\nPlanınızı yükseltmek için ayarlar sayfasını ziyaret edin.`);
-                        } else {
-                            alert('❌ Hata: ' + result.error);
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Kamera eklenirken hata:', error);
-                        alert('❌ Bir hata oluştu!');
-                    });
-                }
+
                 
                 // Video Feed Fonksiyonları
                 let detectionActive = false;
@@ -11140,9 +11266,9 @@ Mesaj:
                             <i class="fas fa-plus-circle fa-3x text-primary mb-3"></i>
                             <h5>Manuel Ekleme</h5>
                             <p class="mb-3">Kamera bilgilerini manuel olarak ekleyin</p>
-                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+                            <a href="/company/${companyId}/cameras" class="btn btn-primary">
                                 <i class="fas fa-plus"></i> Kamera Ekle
-                            </button>
+                            </a>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -11202,132 +11328,7 @@ Mesaj:
                 </div>
             </div>
             
-            <!-- Add Camera Modal -->
-            <div class="modal fade" id="addCameraModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">
-                                <i class="fas fa-plus"></i> Yeni Kamera Ekle
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="addCameraForm">
-                                <!-- Yardım Bölümü -->
-                                <div class="alert alert-info">
-                                    <h6><i class="fas fa-info-circle"></i> Kamera Bilgilerini Nasıl Bulabilirim?</h6>
-                                    <ul class="mb-0">
-                                        <li><strong>IP Adresi:</strong> Kameranızın ağ ayarları menüsünden veya router admin panelinden</li>
-                                        <li><strong>Port:</strong> Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</li>
-                                        <li><strong>Kullanıcı/Şifre:</strong> Kamera web arayüzü için giriş bilgileri</li>
-                                        <li><strong>Test Önerisi:</strong> Önce "Bağlantıyı Test Et" yapın, sonra ekleyin</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Kamera Adı *</label>
-                                        <input type="text" class="form-control" name="camera_name" placeholder="Örnek: Ana Giriş Kamerası" required>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Lokasyon *</label>
-                                        <input type="text" class="form-control" name="location" placeholder="Örnek: Ana Giriş, Üretim Alanı" required>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">IP Adresi *</label>
-                                        <input type="text" class="form-control" name="ip_address" placeholder="192.168.1.11" required>
-                                        <div class="form-text">Kameranızın ağ ayarlarından IP adresini bulabilirsiniz</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Port</label>
-                                        <input type="number" class="form-control" name="port" placeholder="8080" value="8080">
-                                        <div class="form-text">Yaygın portlar: 80, 8080 (HTTP), 554 (RTSP)</div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Protokol</label>
-                                        <select class="form-select" name="protocol">
-                                            <option value="http">HTTP (IP Webcam, Web Kameraları)</option>
-                                            <option value="rtsp">RTSP (Profesyonel IP Kameraları)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Stream Yolu</label>
-                                        <input type="text" class="form-control" name="stream_path" placeholder="/video" value="/video">
-                                        <div class="form-text">Yaygın yollar: /video, /stream1, /live</div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Kullanıcı Adı</label>
-                                        <input type="text" class="form-control" name="username" placeholder="admin">
-                                        <div class="form-text">Kamera web arayüzü için kullanıcı adı</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Şifre</label>
-                                        <input type="password" class="form-control" name="password" placeholder="Kamera parolanız">
-                                        <div class="form-text">Güvenlik için varsayılan parolayı değiştirin</div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Kimlik Doğrulama Türü</label>
-                                        <select class="form-select" name="auth_type">
-                                            <option value="basic">Basic Auth</option>
-                                            <option value="digest">Digest Auth</option>
-                                            <option value="none">Kimlik Doğrulama Yok</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Çözünürlük</label>
-                                        <select class="form-select" name="resolution">
-                                            <option value="640x480">640x480 (VGA)</option>
-                                            <option value="1280x720">1280x720 (HD)</option>
-                                            <option value="1920x1080">1920x1080 (Full HD)</option>
-                                            <option value="3840x2160">3840x2160 (4K)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">FPS (Saniye/Kare)</label>
-                                        <select class="form-select" name="fps">
-                                            <option value="15">15 FPS</option>
-                                            <option value="20">20 FPS</option>
-                                            <option value="25">25 FPS</option>
-                                            <option value="30" selected>30 FPS</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                    <label class="form-label">Grup</label>
-                                    <select class="form-select" name="group_id">
-                                        <option value="">Grup Seçin</option>
-                                    </select>
-                                    </div>
-                                </div>
-                                <div class="d-grid">
-                                    <button type="button" class="btn btn-warning" onclick="testCameraConnection()">
-                                        <i class="fas fa-check"></i> Bağlantıyı Test Et
-                                    </button>
-                                </div>
-                                <div id="testResults" class="mt-3" style="display: none;">
-                                    <!-- Test results will appear here -->
-                                </div>
-                            </form>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                            <button type="button" class="btn btn-primary" onclick="addCamera()">
-                                <i class="fas fa-plus"></i> Kamera Ekle
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
             
             <!-- Discovery Modal -->
             <div class="modal fade" id="discoveryModal" tabindex="-1">
@@ -11707,35 +11708,7 @@ Mesaj:
                 }
                 
                 // Add Camera
-                function addCamera() {
-                    const form = document.getElementById('addCameraForm');
-                    const formData = new FormData(form);
-                    const data = {};
-                    formData.forEach((value, key) => { data[key] = value; });
-                    
-                    fetch(`/api/company/${companyId}/cameras`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(data)
-                    })
-                    .then(response => response.json())
-                    .then(result => {
-                        if (result.success) {
-                            alert('✅ Kamera başarıyla eklendi!');
-                            bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
-                            form.reset();
-                            // Test sonuçlarını temizle
-                            document.getElementById('testResults').style.display = 'none';
-                            loadCameras();
-                        } else {
-                            alert('❌ Hata: ' + result.error);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Kamera ekleme hatası:', error);
-                        alert('❌ Kamera ekleme sırasında bir hata oluştu');
-                    });
-                }
+
                 
                 // Create Group
                 function createGroup() {
@@ -11807,60 +11780,87 @@ Mesaj:
                 
                 // Test Camera
                 function testCamera(cameraId) {
-                    // Kamera bilgilerini al
-                    const camera = cameras.find(c => c.camera_id === cameraId);
-                    if (!camera) {
-                        alert('❌ Kamera bilgileri bulunamadı');
-                        return;
-                    }
-                    
-                    // Test başlat
-                    const testButton = document.querySelector(`button[onclick="testCamera('${cameraId}')"]`);
-                    if (testButton) {
-                        testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test Ediliyor...';
-                        testButton.disabled = true;
-                    }
-                    
-                    fetch(`/api/company/${companyId}/cameras/test`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            rtsp_url: camera.rtsp_url,
-                            name: camera.name
-                        })
-                    })
+                    // Kamera bilgilerini API'den al
+                    fetch(`/api/company/${companyId}/cameras/${cameraId}`)
                     .then(response => response.json())
                     .then(data => {
-                        if (data.success) {
-                            const testResults = data.test_results;
-                            let message = `✅ Kamera Test Sonucu: ${camera.name}\\n\\n`;
-                            message += `🔗 Bağlantı: ${testResults.connection_status}\\n`;
-                            message += `⏱️ Yanıt Süresi: ${testResults.response_time}\\n`;
-                            message += `📐 Çözünürlük: ${testResults.resolution}\\n`;
-                            message += `🎥 FPS: ${testResults.fps}\\n`;
-                            message += `📊 Kaynak Türü: ${testResults.source_type}\\n`;
-                            
-                            if (testResults.error_message) {
-                                message += `\\n❌ Hata: ${testResults.error_message}`;
-                            }
-                            
-                            alert(message);
-                        } else {
-                            alert(`❌ Test Hatası: ${data.message}`);
+                        if (!data.success || !data.camera) {
+                            alert('❌ Kamera bilgileri bulunamadı');
+                            return;
                         }
+                        
+                        const camera = data.camera;
+                    
+                        // Test başlat
+                        const testButton = document.querySelector(`button[onclick="testCamera('${cameraId}')"]`);
+                        if (testButton) {
+                            testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test Ediliyor...';
+                            testButton.disabled = true;
+                        }
+                        
+                        // RTSP URL'yi oluştur veya mevcut olanı kullan
+                        let rtspUrl = camera.rtsp_url;
+                        if (!rtspUrl && camera.ip_address) {
+                            const protocol = camera.protocol || 'rtsp';
+                            const port = camera.port || 554;
+                            const path = camera.stream_path || '/stream';
+                            rtspUrl = `${protocol}://${camera.ip_address}:${port}${path}`;
+                        }
+                        
+                        if (!rtspUrl) {
+                            alert('❌ Kamera bağlantı bilgileri eksik. Lütfen kamera ayarlarını kontrol edin.');
+                            if (testButton) {
+                                testButton.innerHTML = '<i class="fas fa-vial"></i>';
+                                testButton.disabled = false;
+                            }
+                            return;
+                        }
+                        
+                        fetch(`/api/company/${companyId}/cameras/test`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                rtsp_url: rtspUrl,
+                                name: camera.camera_name || camera.name || `Kamera ${cameraId}`
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                const testResults = data.test_results;
+                                let message = `✅ Kamera Test Sonucu: ${camera.camera_name || camera.name || `Kamera ${cameraId}`}\\n\\n`;
+                                message += `🔗 Bağlantı: ${testResults.connection_status}\\n`;
+                                message += `⏱️ Yanıt Süresi: ${testResults.response_time}\\n`;
+                                message += `📐 Çözünürlük: ${testResults.resolution}\\n`;
+                                message += `🎥 FPS: ${testResults.fps}\\n`;
+                                message += `📊 Kaynak Türü: ${testResults.source_type}\\n`;
+                                
+                                if (testResults.error_message) {
+                                    message += `\\n❌ Hata: ${testResults.error_message}`;
+                                }
+                                
+                                alert(message);
+                            } else {
+                                alert(`❌ Test Hatası: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Test camera error:', error);
+                            alert('❌ Kamera test edilirken bir hata oluştu');
+                        })
+                        .finally(() => {
+                            // Test butonunu eski haline getir
+                            if (testButton) {
+                                testButton.innerHTML = '<i class="fas fa-vial"></i>';
+                                testButton.disabled = false;
+                            }
+                        });
                     })
                     .catch(error => {
-                        console.error('Test camera error:', error);
-                        alert('❌ Kamera test edilirken bir hata oluştu');
-                    })
-                    .finally(() => {
-                        // Test butonunu eski haline getir
-                        if (testButton) {
-                            testButton.innerHTML = '<i class="fas fa-vial"></i>';
-                            testButton.disabled = false;
-                        }
+                        console.error('Camera fetch error:', error);
+                        alert('❌ Kamera bilgileri alınırken hata oluştu');
                     });
                 }
                 

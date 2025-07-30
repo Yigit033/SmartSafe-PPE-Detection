@@ -144,25 +144,33 @@
         }
         
         .camera-status {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+            white-space: nowrap;
+            min-width: 60px;
+            justify-content: center;
         }
         
         .camera-status.online {
-            background-color: #28a745;
-            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+            background-color: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+            border: 1px solid rgba(40, 167, 69, 0.3);
         }
         
         .camera-status.offline {
-            background-color: #dc3545;
-            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 1px solid rgba(220, 53, 69, 0.3);
         }
         
         .camera-status.testing {
-            background-color: #ffc107;
+            background-color: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
             animation: pulse 1.5s infinite;
         }
         
@@ -402,6 +410,180 @@
         .search-box .form-control:focus {
             box-shadow: none;
         }
+
+        /* Mevcut Kameralar Bölümü - Compact ve Modern */
+        .existing-cameras-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .existing-cameras-section h3 {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            margin: 0;
+            padding: 1rem 1.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .existing-cameras-section .d-flex {
+            padding: 1rem 1.5rem;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        /* Compact Table Styling */
+        .table-responsive {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .table {
+            margin: 0;
+            font-size: 0.875rem;
+        }
+
+        .table thead th {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.75rem 1rem;
+            border: none;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: background-color 0.2s ease;
+        }
+
+        .table tbody tr:hover {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .table tbody td {
+            padding: 0.75rem 1rem;
+            vertical-align: middle;
+            border: none;
+            color: #374151;
+        }
+
+        /* Compact Camera Status */
+        .camera-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-testing {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        /* Compact Action Buttons */
+        .camera-actions .btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            margin: 0 0.125rem;
+        }
+
+        /* Compact Search Box */
+        .search-box {
+            max-width: 250px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            transition: all 0.2s ease;
+        }
+
+        .search-box:focus-within {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+        .search-box .input-group-text {
+            background: transparent;
+            border: none;
+            color: #6c757d;
+        }
+
+        .search-box .form-control {
+            border: none;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .search-box .form-control:focus {
+            box-shadow: none;
+        }
+
+        /* Compact Refresh Button */
+        .btn-primary {
+            background: #667eea;
+            border-color: #667eea;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            border-color: #5a6fd8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Compact Loading State */
+        .table tbody tr .spinner-border {
+            width: 1rem;
+            height: 1rem;
+            border-width: 0.125rem;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .table-responsive {
+                max-height: 300px;
+            }
+            
+            .table thead th,
+            .table tbody td {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.75rem;
+            }
+            
+            .camera-actions .btn {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.625rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -595,7 +777,7 @@
                 <div class="col-md-6">
                     <button id="quickTestBtn" class="btn btn-outline-light btn-lg w-100">
                         <i class="fas fa-bolt me-2"></i>
-                        Hızlı Test
+                        Hızlı Test (2 sn)
                     </button>
                 </div>
             </div>
@@ -604,7 +786,7 @@
         </div>
         
         <!-- Manuel Kamera Ekleme -->
-        <div class="camera-form">
+        <div class="camera-form camera-form-section">
             <h3 class="mb-4">
                 <i class="fas fa-cogs me-2"></i>
                 Manuel Kamera Ekleme
@@ -612,16 +794,22 @@
             
             <form id="cameraForm">
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Kamera Adı *</label>
                             <input type="text" id="cameraName" class="form-control" required>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">IP Adresi *</label>
                             <input type="text" id="cameraIP" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Konum *</label>
+                            <input type="text" id="cameraLocation" class="form-control" placeholder="Örn: Giriş, Dış Mekan, Ofis" required>
                         </div>
                     </div>
                 </div>
@@ -655,13 +843,13 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Kullanıcı Adı</label>
-                            <input type="text" id="cameraUsername" class="form-control">
+                            <input type="text" id="cameraUsername" class="form-control" placeholder="Kamera kullanıcı adı (opsiyonel)">
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Parola</label>
-                            <input type="password" id="cameraPassword" class="form-control">
+                            <input type="password" id="cameraPassword" class="form-control" placeholder="Kamera parolası (opsiyonel)">
                         </div>
                     </div>
                 </div>
@@ -694,16 +882,22 @@
                 </div>
                 
                 <div class="row mt-4">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <button type="button" id="testBtn" class="btn btn-warning btn-lg w-100">
                             <i class="fas fa-vial me-2"></i>
                             Bağlantıyı Test Et
                         </button>
                     </div>
-                    <div class="col-md-6">
-                        <button type="submit" class="btn btn-success btn-lg w-100">
-                            <i class="fas fa-save me-2"></i>
-                            Kamerayı Ekle
+                    <div class="col-md-4">
+                        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-plus me-2"></i>
+                            Kamera Ekle
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="button" id="cancelBtn" class="btn btn-secondary btn-lg w-100" onclick="cancelEdit()" style="display: none;">
+                            <i class="fas fa-times me-2"></i>
+                            İptal Et
                         </button>
                     </div>
                 </div>
@@ -842,9 +1036,9 @@
         
         // Hızlı test
         document.getElementById('quickTestBtn').addEventListener('click', async function() {
-            const ip = document.getElementById('smartIP').value;
+            const formData = getFormData();
             
-            if (!ip) {
+            if (!formData.ip_address) {
                 showAlert('IP adresi gerekli!', 'warning');
                 return;
             }
@@ -852,21 +1046,15 @@
             showLoading(true);
             
             try {
-                const response = await fetch(`/api/company/{{ company_id }}/cameras/test`, {
+                console.log('⚡ Quick test starting...');
+                const response = await fetch(`/api/company/{{ company_id }}/cameras/quick-test`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: 'Hızlı Test Kamera',
-                        ip_address: ip,
-                        port: 8080,
-                        protocol: 'http',
-                        stream_path: '/video',
-                        username: 'admin',
-                        password: 'admin'
-                    })
+                    body: JSON.stringify(formData)
                 });
                 
                 const result = await response.json();
+                console.log('⚡ Quick test result:', result);
                 showTestResult(result);
                 
             } catch (error) {
@@ -878,7 +1066,9 @@
         
         // Manuel test
         document.getElementById('testBtn').addEventListener('click', async function() {
+            console.log('🎯 Test button clicked from event listener!');
             const formData = getFormData();
+            console.log('📝 Form data from test button:', formData);
             
             if (!formData.ip_address || !formData.name) {
                 showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
@@ -888,13 +1078,18 @@
             showLoading(true);
             
             try {
-                const response = await fetch(`/api/company/{{ company_id }}/cameras/test`, {
+                console.log('🔧 Sending test request...');
+                const response = await fetch(`/api/company/{{ company_id }}/cameras/manual-test`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
                 
+                console.log('📡 Test response status:', response.status);
                 const result = await response.json();
+                console.log('📡 Test result:', result);
+                console.log('📡 Test result type:', typeof result);
+                console.log('📡 Test result keys:', Object.keys(result));
                 showTestResult(result);
                 
             } catch (error) {
@@ -905,96 +1100,274 @@
         });
         
         // Form submit
-        document.getElementById('cameraForm').addEventListener('submit', async function(e) {
+        console.log('🔧 Setting up form submit event listener...');
+        const cameraForm = document.getElementById('cameraForm');
+        console.log('📋 Camera form element:', cameraForm);
+        
+        cameraForm.addEventListener('submit', async function(e) {
+            console.log('🎯 Form submit event triggered!');
             e.preventDefault();
             
             const formData = getFormData();
             
-            if (!formData.ip_address || !formData.name) {
+            if (!formData.camera_ip || !formData.camera_name) {
                 showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
                 return;
             }
             
+            // Kamera ekleme işlemini başlat
+            await addCameraToSystem(formData);
+        });
+        
+        // Alternatif: Click event for submit button
+        const submitBtn = cameraForm.querySelector('button[type="submit"]');
+        const addCameraBtn = document.getElementById('addCameraBtn');
+        
+        if (submitBtn) {
+            console.log('🔧 Setting up submit button click event...');
+            submitBtn.addEventListener('click', async function(e) {
+                console.log('🎯 Submit button clicked!');
+                e.preventDefault();
+                
+                const formData = getFormData();
+                console.log('📝 Form data from click:', formData);
+                
+                if (!formData.camera_ip || !formData.camera_name) {
+                    showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
+                    return;
+                }
+                
+                // Kamera ekleme işlemini başlat
+                await addCameraToSystem(formData);
+            });
+        }
+        
+        // Ekstra: ID ile de click event ekle
+        if (addCameraBtn) {
+            console.log('🔧 Setting up addCameraBtn click event...');
+            addCameraBtn.addEventListener('click', async function(e) {
+                console.log('🎯 Add camera button clicked from event listener!');
+                e.preventDefault();
+                
+                const formData = getFormData();
+                console.log('📝 Form data from addCameraBtn click:', formData);
+                
+                if (!formData.camera_ip || !formData.camera_name) {
+                    showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
+                    return;
+                }
+                
+                console.log('🚀 Starting camera addition from event listener...');
+                // Kamera ekleme işlemini başlat
+                await addCameraToSystem(formData);
+            });
+        }
+        
+        // Kamera ekleme fonksiyonu
+        async function addCameraToSystem(formData) {
+            console.log('🚀 Starting camera addition process...');
+            
             showLoading(true);
             
             try {
-                // Önce test et
-                const testResponse = await fetch(`/api/company/{{ company_id }}/cameras/test`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
-                });
+                // Edit modu kontrolü
+                const cameraForm = document.getElementById('cameraForm');
+                const isEditMode = cameraForm.dataset.editMode === 'true';
+                const editCameraId = cameraForm.dataset.editCameraId;
                 
-                const testResult = await testResponse.json();
-                
-                if (testResult.success) {
-                    // Kamera ekleme
+                if (isEditMode && editCameraId) {
+                    console.log('🔄 Updating camera:', editCameraId);
+                    console.log('📝 Form data:', formData);
+                    
+                    // Kamera güncelleme
+                    const updateResponse = await fetch(`/api/company/{{ company_id }}/cameras/${editCameraId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    console.log('Update response status:', updateResponse.status);
+                    
+                    if (!updateResponse.ok) {
+                        throw new Error(`HTTP ${updateResponse.status}: ${updateResponse.statusText}`);
+                    }
+                    
+                    const updateResult = await updateResponse.json();
+                    console.log('Update result:', updateResult);
+                    
+                    if (updateResult.success) {
+                        showAlert('✅ Kamera başarıyla güncellendi!', 'success');
+                        
+                        // Edit modunu sıfırla
+                        cameraForm.dataset.editMode = 'false';
+                        delete cameraForm.dataset.editCameraId;
+                        cameraForm.reset();
+                        
+                        // Submit butonunu geri al
+                        const submitBtn = cameraForm.querySelector('button[type="submit"]');
+                        if (submitBtn) {
+                            submitBtn.innerHTML = '<i class="fas fa-plus"></i> Kamera Ekle';
+                            submitBtn.className = 'btn btn-primary btn-lg w-100';
+                        }
+                        
+                        // Hide cancel button
+                        const cancelBtn = document.getElementById('cancelBtn');
+                        if (cancelBtn) {
+                            cancelBtn.style.display = 'none';
+                        }
+                        
+                        // Kamera listesini yenile
+                        setTimeout(() => {
+                            if (typeof loadCameras === 'function') {
+                                loadCameras();
+                            }
+                        }, 500);
+                    } else {
+                        showAlert('❌ Kamera güncelleme başarısız: ' + (updateResult.error || updateResult.message || 'Bilinmeyen hata'), 'danger');
+                    }
+                } else {
+                    // Yeni kamera ekleme
+                    console.log('📹 Adding camera with data:', formData);
+                    
                     const addResponse = await fetch(`/api/company/{{ company_id }}/cameras`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(formData)
                     });
                     
+                    console.log('📡 Add camera response status:', addResponse.status);
+                    
+                    if (!addResponse.ok) {
+                        throw new Error(`HTTP ${addResponse.status}: ${addResponse.statusText}`);
+                    }
+                    
                     const addResult = await addResponse.json();
+                    console.log('📡 Add camera result:', addResult);
                     
                     if (addResult.success) {
-                        showAlert('Kamera başarıyla eklendi!', 'success');
-                        this.reset();
+                        showAlert('✅ Kamera başarıyla eklendi!', 'success');
+                        cameraForm.reset();
+                        
                         // Kamera listesini yenile
-                        if (typeof loadCameras === 'function') {
-                            loadCameras();
-                        }
+                        setTimeout(() => {
+                            if (typeof loadCameras === 'function') {
+                                loadCameras();
+                            }
+                        }, 500);
                     } else {
                         // Limit kontrolü
                         if (addResult.limit_reached) {
                             showAlert(`❌ Kamera limiti aşıldı! Mevcut: ${addResult.current_cameras}/${addResult.max_cameras} kamera. Planınızı yükseltmek için ayarlar sayfasını ziyaret edin.`, 'warning');
                         } else {
-                            showAlert('Kamera ekleme başarısız: ' + addResult.error, 'danger');
+                            // Detaylı hata mesajları
+                            let errorMessage = '❌ Kamera ekleme başarısız';
+                            if (addResult.error) {
+                                if (addResult.error.includes('Eksik alanlar')) {
+                                    errorMessage = `❌ ${addResult.error}. Lütfen tüm gerekli alanları doldurun.`;
+                                } else if (addResult.error.includes('Bu isimde kamera zaten mevcut')) {
+                                    errorMessage = `❌ ${addResult.error}. Farklı bir kamera adı kullanın.`;
+                                } else if (addResult.error.includes('IP adresi')) {
+                                    errorMessage = `❌ ${addResult.error}. Geçerli bir IP adresi girin.`;
+                                } else if (addResult.error.includes('bağlantı')) {
+                                    errorMessage = `❌ ${addResult.error}. Kamera bağlantısını kontrol edin.`;
+                                } else if (addResult.error.includes('Yetkisiz erişim')) {
+                                    errorMessage = `❌ ${addResult.error}. Lütfen tekrar giriş yapın.`;
+                                } else {
+                                    errorMessage = `❌ ${addResult.error}`;
+                                }
+                            }
+                            showAlert(errorMessage, 'danger');
                         }
                     }
-                } else {
-                    showAlert('Kamera testi başarısız: ' + testResult.error, 'danger');
                 }
                 
             } catch (error) {
-                showAlert('Kamera ekleme hatası: ' + error.message, 'danger');
+                console.error('Camera operation error:', error);
+                showAlert('❌ İşlem hatası: ' + error.message, 'danger');
             } finally {
                 showLoading(false);
             }
-        });
+        }
         
         function getFormData() {
             return {
-                name: document.getElementById('cameraName').value,
-                ip_address: document.getElementById('cameraIP').value,
-                port: parseInt(document.getElementById('cameraPort').value),
-                protocol: document.getElementById('cameraProtocol').value,
-                stream_path: document.getElementById('cameraPath').value,
-                username: document.getElementById('cameraUsername').value,
-                password: document.getElementById('cameraPassword').value
+                camera_name: document.getElementById('cameraName').value,
+                camera_location: document.getElementById('cameraLocation').value || 'Genel',
+                camera_ip: document.getElementById('cameraIP').value,
+                camera_port: parseInt(document.getElementById('cameraPort').value),
+                camera_protocol: document.getElementById('cameraProtocol').value,
+                camera_path: document.getElementById('cameraPath').value,
+                camera_username: document.getElementById('cameraUsername').value,
+                camera_password: document.getElementById('cameraPassword').value
             };
         }
         
+        // Onclick fonksiyonu
+        async function addCameraFromForm() {
+            console.log('🎯 addCameraFromForm() called from onclick!');
+            const formData = getFormData();
+            console.log('📝 Form data from onclick:', formData);
+            
+            // Form validasyonu
+            if (!formData.camera_name || formData.camera_name.trim() === '') {
+                showAlert('❌ Kamera adı gerekli!', 'warning');
+                return;
+            }
+            
+            if (!formData.camera_location || formData.camera_location.trim() === '') {
+                showAlert('❌ Konum gerekli!', 'warning');
+                return;
+            }
+            
+            if (!formData.camera_ip || formData.camera_ip.trim() === '') {
+                showAlert('❌ IP adresi gerekli!', 'warning');
+                return;
+            }
+            
+            // IP adresi format kontrolü
+            const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            if (!ipPattern.test(formData.camera_ip)) {
+                showAlert('❌ Geçersiz IP adresi formatı! Örnek: 192.168.1.100', 'warning');
+                return;
+            }
+            
+            // Port kontrolü
+            if (formData.camera_port < 1 || formData.camera_port > 65535) {
+                showAlert('❌ Port numarası 1-65535 arasında olmalı!', 'warning');
+                return;
+            }
+            
+            console.log('🚀 Starting camera addition from onclick...');
+            // Kamera ekleme işlemini başlat
+            await addCameraToSystem(formData);
+        }
+        
         function showSmartResult(result) {
+            console.log('🎯 showSmartResult called with:', result);
             const container = document.getElementById('smartResult');
             
             if (result.success) {
+                console.log('✅ Smart detection successful');
+                const detectionInfo = result.detection_info;
+                console.log('📋 Detection info:', detectionInfo);
+                
                 container.innerHTML = `
                     <div class="alert alert-success">
                         <h5><i class="fas fa-check-circle me-2"></i>Kamera Tespit Edildi!</h5>
-                        <p><strong>Model:</strong> ${result.detection_info.model}</p>
-                        <p><strong>Güven:</strong> ${(result.detection_info.confidence * 100).toFixed(1)}%</p>
-                        <p><strong>Protokol:</strong> ${result.detection_info.config.protocol}</p>
-                        <p><strong>Port:</strong> ${result.detection_info.config.port}</p>
-                        <p><strong>Path:</strong> ${result.detection_info.config.path}</p>
+                        <p><strong>Model:</strong> ${detectionInfo.detected_model || 'Bilinmiyor'}</p>
+                        <p><strong>Güven:</strong> ${((detectionInfo.detection_confidence || 0) * 100).toFixed(1)}%</p>
+                        <p><strong>Protokol:</strong> ${detectionInfo.protocol || 'http'}</p>
+                        <p><strong>Port:</strong> ${detectionInfo.port || 8080}</p>
+                        <p><strong>Path:</strong> ${detectionInfo.path || '/video'}</p>
                         <div class="mt-3">
-                            <button class="btn btn-primary" onclick="fillFormFromDetection('${result.detection_info.config.protocol}', ${result.detection_info.config.port}, '${result.detection_info.config.path}')">
+                            <button class="btn btn-primary" onclick="fillFormFromDetection('${detectionInfo.protocol || 'http'}', ${detectionInfo.port || 8080}, '${detectionInfo.path || '/video'}')">
                                 <i class="fas fa-magic me-2"></i>Formu Doldur
                             </button>
                         </div>
                     </div>
                 `;
             } else {
+                console.log('❌ Smart detection failed');
                 container.innerHTML = `
                     <div class="alert alert-danger">
                         <h5><i class="fas fa-exclamation-triangle me-2"></i>Tespit Başarısız</h5>
@@ -1008,9 +1381,12 @@
         }
         
         function showTestResult(result) {
+            console.log('🎯 showTestResult called with:', result);
             const container = document.getElementById('testResult');
+            console.log('📋 Test result container:', container);
             
             if (result.success) {
+                console.log('✅ Success case - creating success HTML');
                 container.innerHTML = `
                     <div class="alert alert-success">
                         <h5><i class="fas fa-check-circle me-2"></i>Bağlantı Başarılı!</h5>
@@ -1023,20 +1399,27 @@
                             `<p><strong>Çalışan Endpoint:</strong> <code>${result.camera_info.working_endpoint}</code></p>` : ''}
                     </div>
                 `;
-                            } else {
-                    let detailsHtml = '';
-                    let authWarning = '';
-                    
-                    // Authentication uyarısı
-                    if (result.error_message && result.error_message.includes('authentication')) {
-                        authWarning = `
-                            <div class="alert alert-warning" role="alert">
-                                <strong>🔐 Authentication Gerekli!</strong><br>
-                                Bu kamera kullanıcı adı ve şifre gerektiriyor.<br>
-                                Lütfen kamera bilgilerini girin ve tekrar test edin.
-                            </div>
-                        `;
-                    }
+                console.log('✅ Success HTML created');
+                                        } else {
+                console.log('❌ Error case - creating error HTML');
+                console.log('❌ Error details:', result.error);
+                console.log('❌ Error message:', result.error_message);
+                console.log('❌ Test results:', result.test_results);
+                console.log('❌ Test details:', result.test_details);
+                
+                let detailsHtml = '';
+                let authWarning = '';
+                
+                // Authentication uyarısı
+                if (result.error_message && result.error_message.includes('authentication')) {
+                    authWarning = `
+                        <div class="alert alert-warning" role="alert">
+                            <strong>🔐 Authentication Gerekli!</strong><br>
+                            Bu kamera kullanıcı adı ve şifre gerektiriyor.<br>
+                            Lütfen kamera bilgilerini girin ve tekrar test edin.
+                        </div>
+                    `;
+                }
                     
                     if (result.test_details) {
                         detailsHtml = `
@@ -1097,7 +1480,8 @@
                     `;
                 }
                 
-                container.innerHTML = `
+                console.log('❌ Creating error HTML content...');
+                const errorHtml = `
                     <div class="alert alert-danger">
                         <h5><i class="fas fa-times-circle me-2"></i>Bağlantı Başarısız</h5>
                         <p><strong>Hata:</strong> ${result.error}</p>
@@ -1117,6 +1501,35 @@
                         </div>
                     </div>
                 `;
+                console.log('❌ Error HTML content:', errorHtml);
+                container.innerHTML = errorHtml;
+                console.log('❌ Error HTML set to container');
+            console.log('🎯 Container display after set:', container.style.display);
+            console.log('🎯 Container innerHTML length:', container.innerHTML.length);
+            console.log('🎯 Container offsetHeight:', container.offsetHeight);
+            console.log('🎯 Container is visible:', container.offsetHeight > 0);
+            console.log('🎯 Container className:', container.className);
+            console.log('🎯 Container computed style:', window.getComputedStyle(container).display);
+            console.log('🎯 Container computed visibility:', window.getComputedStyle(container).visibility);
+            
+            // Container'ı görünür yap
+            container.style.display = 'block';
+            container.style.visibility = 'visible';
+            container.style.opacity = '1';
+            
+            console.log('🎯 Container display after fix:', container.style.display);
+            console.log('🎯 Container computed style after fix:', window.getComputedStyle(container).display);
+            console.log('🎯 Container offsetHeight after fix:', container.offsetHeight);
+            
+            // Container'ı zorla görünür yap
+            setTimeout(() => {
+                container.style.display = 'block';
+                container.style.visibility = 'visible';
+                container.style.opacity = '1';
+                console.log('🎯 Container display after timeout:', container.style.display);
+                console.log('🎯 Container computed style after timeout:', window.getComputedStyle(container).display);
+                console.log('🎯 Container offsetHeight after timeout:', container.offsetHeight);
+            }, 100);
             }
             
             container.style.display = 'block';
@@ -1153,64 +1566,171 @@
         
         // Kamera Yönetimi Fonksiyonları
         function loadCameras() {
-            const camerasList = document.getElementById('camerasList');
-            camerasList.innerHTML = `
-                <div class="col-12 text-center">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Yükleniyor...</span>
-                    </div>
-                    <p class="mt-2">Kamera listesi yükleniyor...</p>
-                </div>
-            `;
+            console.log('🔍 loadCameras function called');
             
-            fetch(`/api/company/{{ company_id }}/cameras`)
+            // Element'i tekrar kontrol et
+            const camerasTableBody = document.getElementById('camerasTableBody');
+            
+            if (!camerasTableBody) {
+                console.error('❌ camerasTableBody element not found in loadCameras!');
+                console.error('❌ Available elements with "camera" in ID:');
+                document.querySelectorAll('[id*="camera"]').forEach(el => {
+                    console.error('  -', el.id);
+                });
+                console.error('❌ Available tbody elements:');
+                document.querySelectorAll('tbody').forEach((tbody, index) => {
+                    console.error(`  Tbody ${index}:`, tbody.id || 'no id');
+                });
+                console.error('❌ Available table elements:');
+                document.querySelectorAll('table').forEach((table, index) => {
+                    console.error(`  Table ${index}:`, table.id || 'no id');
+                    const tbody = table.querySelector('tbody');
+                    if (tbody) {
+                        console.error(`    Tbody id:`, tbody.id || 'no id');
+                    }
+                });
+                return;
+            }
+            
+            console.log('📋 camerasTableBody found:', camerasTableBody);
+            console.log('📋 camerasTableBody.innerHTML length:', camerasTableBody.innerHTML.length);
+            console.log('📋 camerasTableBody.offsetHeight:', camerasTableBody.offsetHeight);
+            
+            // Element'in yazılabilir olduğunu kontrol et
+            try {
+                const testDiv = document.createElement('div');
+                testDiv.style.display = 'none';
+                camerasTableBody.appendChild(testDiv);
+                camerasTableBody.removeChild(testDiv);
+                console.log('✅ camerasTableBody is writable');
+            } catch (error) {
+                console.error('❌ camerasTableBody is not writable:', error);
+                return;
+            }
+            
+            try {
+                camerasTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Yükleniyor...</span>
+                            </div>
+                            <p class="mt-2">Kamera listesi yükleniyor...</p>
+                        </td>
+                    </tr>
+                `;
+                console.log('✅ Loading state set successfully');
+            } catch (error) {
+                console.error('❌ Error setting loading state:', error);
+                return;
+            }
+            
+            const apiUrl = `/api/company/{{ company_id }}/cameras?t=${Date.now()}`;
+            console.log('🌐 Fetching from URL:', apiUrl);
+            
+            fetch(apiUrl)
             .then(response => {
-                console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
-                console.log('Company ID:', '{{ company_id }}');
+                console.log('📡 Response received:', response);
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response headers:', response.headers);
+                console.log('📡 Company ID:', '{{ company_id }}');
+                
                 if (response.status === 401) {
+                    console.error('❌ Unauthorized - Session expired');
                     // Session hatası - login sayfasına yönlendir
-                    console.log('Session expired, redirecting to login...');
                     window.location.href = '/login';
-                    return;
+                    throw new Error('Unauthorized');
                 }
+                
+                if (!response.ok) {
+                    console.error('❌ Response not ok:', response.status, response.statusText);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 return response.json();
             })
             .then(data => {
-                console.log('Camera data:', data);
-                if (data && data.success && data.cameras) {
+                console.log('📊 Data received:', data);
+                console.log('📊 Data type:', typeof data);
+                console.log('📊 Data keys:', Object.keys(data || {}));
+                console.log('📊 Cameras array:', data?.cameras);
+                console.log('📊 Camera count:', data?.cameras?.length || 0);
+                
+                if (data && data.cameras && Array.isArray(data.cameras) && data.cameras.length > 0) {
+                    console.log('✅ Cameras found, displaying...');
                     displayCameras(data.cameras);
-                } else if (data && data.cameras && data.cameras.length === 0) {
-                    camerasList.innerHTML = `
-                        <div class="col-12 text-center">
-                            <p class="text-muted">Henüz kamera eklenmemiş.</p>
-                            <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
-                        </div>
-                    `;
                 } else {
-                    camerasList.innerHTML = `
-                        <div class="col-12 text-center">
-                            <p class="text-muted">Henüz kamera eklenmemiş.</p>
-                            <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
-                        </div>
-                    `;
+                    console.log('ℹ️ No cameras found, showing empty state');
+                    try {
+                        camerasTableBody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="fas fa-video fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted mb-0">Henüz kamera eklenmemiş.</p>
+                                    <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
+                                </td>
+                            </tr>
+                        `;
+                        console.log('✅ Empty state set successfully');
+                    } catch (error) {
+                        console.error('❌ Error setting empty state:', error);
+                    }
                 }
             })
             .catch(error => {
-                console.error('Kamera yükleme hatası:', error);
-                console.error('Error details:', error.message);
-                camerasList.innerHTML = `
-                    <div class="col-12 text-center">
-                        <p class="text-danger">Kamera listesi yüklenirken hata oluştu.</p>
-                        <p class="text-muted">Hata: ${error.message}</p>
-                        <button class="btn btn-primary" onclick="loadCameras()">Tekrar Dene</button>
-                    </div>
-                `;
+                console.error('❌ Camera loading error:', error);
+                console.error('❌ Error name:', error.name);
+                console.error('❌ Error message:', error.message);
+                console.error('❌ Error stack:', error.stack);
+                
+                try {
+                    camerasTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                                <h5 class="text-danger">Kamera listesi yüklenemedi</h5>
+                                <p class="text-muted">Hata: ${error.message}</p>
+                                <div class="mt-3">
+                                    <button class="btn btn-primary me-2" onclick="loadCameras()">
+                                        <i class="fas fa-sync-alt me-2"></i>Tekrar Dene
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="checkSession()">
+                                        <i class="fas fa-user me-2"></i>Session Kontrolü
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    console.log('✅ Error state set successfully');
+                } catch (innerError) {
+                    console.error('❌ Error setting error state:', innerError);
+                }
+            });
+        }
+        
+        // Session kontrolü fonksiyonu
+        function checkSession() {
+            console.log('🔍 Checking session...');
+            fetch('/api/company/{{ company_id }}/cameras')
+            .then(response => {
+                console.log('📡 Session check response:', response.status);
+                if (response.status === 401) {
+                    alert('Session süresi dolmuş. Login sayfasına yönlendiriliyorsunuz.');
+                    window.location.href = '/login';
+                } else {
+                    alert(`Session durumu: ${response.status}`);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Session check error:', error);
+                alert('Session kontrolü sırasında hata: ' + error.message);
             });
         }
         
         function displayCameras(cameras) {
+            console.log('🎥 Displaying cameras:', cameras);
             const camerasTableBody = document.getElementById('camerasTableBody');
+            console.log('📋 Table body element:', camerasTableBody);
             
             if (cameras.length === 0) {
                 camerasTableBody.innerHTML = `
@@ -1245,9 +1765,16 @@
                         </td>
                         <td>${camera.location || 'N/A'}</td>
                         <td>
-                            <span class="camera-status ${statusClass}" id="status-${camera.camera_id}">
-                                <i class="fas fa-circle me-1"></i>${statusText}
-                            </span>
+                            <div class="d-flex align-items-center">
+                                <span class="camera-status ${statusClass}" id="status-${camera.camera_id}">
+                                    <i class="fas fa-circle me-1"></i>${statusText}
+                                </span>
+                                <button class="btn btn-sm ${camera.status === 'active' ? 'btn-warning' : 'btn-success'} ms-3" 
+                                        onclick="toggleCameraStatus('${camera.camera_id}')" 
+                                        title="${camera.status === 'active' ? 'Pasif Yap' : 'Aktif Yap'}">
+                                    <i class="fas fa-${camera.status === 'active' ? 'pause' : 'play'}"></i>
+                                </button>
+                            </div>
                         </td>
                         <td>
                             <small class="text-muted">${lastActivity}</small>
@@ -1415,38 +1942,216 @@
             });
         }
         
+        function toggleCameraStatus(cameraId) {
+            console.log('🔄 Toggling camera status:', cameraId);
+            
+            // Find the status element and toggle button more reliably
+            const statusElement = document.getElementById(`status-${cameraId}`);
+            const toggleButton = document.querySelector(`button[onclick="toggleCameraStatus('${cameraId}')"]`);
+            
+            if (!statusElement) {
+                console.error('❌ Status element not found for camera:', cameraId);
+                showAlert('❌ Kamera durumu elementi bulunamadı', 'danger');
+                return;
+            }
+            
+            if (!toggleButton) {
+                console.error('❌ Toggle button not found for camera:', cameraId);
+                showAlert('❌ Kamera toggle butonu bulunamadı', 'danger');
+                return;
+            }
+            
+            // Prevent multiple rapid clicks
+            if (toggleButton.disabled) {
+                console.log('🔄 Toggle already in progress, ignoring click');
+                return;
+            }
+            
+            // Store current status for fallback
+            const currentStatus = statusElement.innerHTML.includes('Aktif') ? 'active' : 'inactive';
+            
+            // Show loading state
+            statusElement.className = 'camera-status status-testing';
+            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Güncelleniyor';
+            toggleButton.disabled = true;
+            
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                console.log('Toggle response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Toggle response data:', data);
+                
+                if (data.success) {
+                    const newStatus = data.new_status;
+                    const statusText = newStatus === 'active' ? 'Aktif' : 'Pasif';
+                    const statusClass = newStatus === 'active' ? 'status-online' : 'status-offline';
+                    
+                    // Update status element
+                    statusElement.className = `camera-status ${statusClass}`;
+                    statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
+                    
+                    // Update toggle button
+                    toggleButton.className = `btn btn-sm ${newStatus === 'active' ? 'btn-warning' : 'btn-success'} ms-2`;
+                    toggleButton.innerHTML = `<i class="fas fa-${newStatus === 'active' ? 'pause' : 'play'}"></i>`;
+                    toggleButton.title = newStatus === 'active' ? 'Pasif Yap' : 'Aktif Yap';
+                    toggleButton.disabled = false;
+                    
+                    showAlert(`✅ Kamera durumu ${statusText} olarak güncellendi!`, 'success');
+                    
+                    // Add small delay to prevent race conditions
+                    setTimeout(() => {
+                        toggleButton.disabled = false;
+                    }, 1000);
+                } else {
+                    // Error fallback - restore previous state
+                    const statusText = currentStatus === 'active' ? 'Aktif' : 'Pasif';
+                    const statusClass = currentStatus === 'active' ? 'status-online' : 'status-offline';
+                    
+                    statusElement.className = `camera-status ${statusClass}`;
+                    statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
+                    toggleButton.disabled = false;
+                    
+                    showAlert('❌ Kamera durumu güncellenemedi: ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Toggle camera status error:', error);
+                
+                // Error fallback - restore previous state
+                const statusText = currentStatus === 'active' ? 'Aktif' : 'Pasif';
+                const statusClass = currentStatus === 'active' ? 'status-online' : 'status-offline';
+                
+                statusElement.className = `camera-status ${statusClass}`;
+                statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
+                toggleButton.disabled = false;
+                
+                showAlert('❌ Kamera durumu güncellenirken hata oluştu', 'danger');
+            });
+        }
+        
         function viewStream(cameraId) {
             // Yeni pencerede stream'i aç
             window.open(`/api/company/{{ company_id }}/cameras/${cameraId}/stream`, '_blank');
         }
         
         function editCamera(cameraId) {
-            // Kamera düzenleme modal'ını aç
-            showAlert('🔧 Kamera düzenleme özelliği yakında eklenecek!', 'info');
+            console.log('🔧 Editing camera:', cameraId);
+            
+            // Show loading state
+            showAlert('📝 Kamera bilgileri yükleniyor...', 'info');
+            
+            // Kamera bilgilerini getir
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`)
+            .then(response => {
+                console.log('Edit response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Edit camera data:', data);
+                if (data.success && data.camera) {
+                    const camera = data.camera;
+                    console.log('Camera details:', camera);
+                    
+                    // Form alanlarını doldur - field mapping'i düzelt
+                    const form = document.getElementById('cameraForm');
+                    
+                    // Clear form first
+                    form.reset();
+                    
+                    // Map camera data to form fields correctly
+                    document.getElementById('cameraName').value = camera.camera_name || camera.name || '';
+                    document.getElementById('cameraIP').value = camera.ip_address || '';
+                    document.getElementById('cameraPort').value = camera.port || 8080;
+                    document.getElementById('cameraProtocol').value = camera.protocol || 'http';
+                    document.getElementById('cameraPath').value = camera.stream_path || '/video';
+                    document.getElementById('cameraUsername').value = camera.username || '';
+                    document.getElementById('cameraPassword').value = camera.password || '';
+                    document.getElementById('cameraLocation').value = camera.location || '';
+                    
+                    // Set edit mode
+                    form.dataset.editMode = 'true';
+                    form.dataset.editCameraId = cameraId;
+                    
+                    // Update submit button
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    const cancelBtn = document.getElementById('cancelBtn');
+                    
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="fas fa-save"></i> Güncelle';
+                        submitBtn.className = 'btn btn-warning btn-lg w-100';
+                    }
+                    
+                    // Show cancel button
+                    if (cancelBtn) {
+                        cancelBtn.style.display = 'block';
+                    }
+                    
+                    // Scroll to form
+                    const formSection = document.querySelector('.camera-form-section');
+                    if (formSection) {
+                        formSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                    
+                    showAlert('📝 Kamera düzenleme modu aktif. Değişiklikleri yapıp "Güncelle" butonuna tıklayın.', 'info');
+                } else {
+                    showAlert('❌ Kamera bilgileri yüklenemedi: ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Kamera bilgileri yükleme hatası:', error);
+                showAlert('❌ Kamera bilgileri yüklenirken hata oluştu: ' + error.message, 'danger');
+            });
         }
         
-        function deleteCamera(cameraId) {
-            if (confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) {
-                fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showAlert('✅ Kamera başarıyla silindi!', 'success');
-                        loadCameras(); // Listeyi yenile
-                    } else {
-                        showAlert('❌ Kamera silinirken hata oluştu: ' + data.error, 'danger');
-                    }
-                })
-                .catch(error => {
-                    showAlert('❌ Silme işlemi sırasında hata oluştu', 'danger');
-                });
+                    function deleteCamera(cameraId) {
+                if (confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) {
+                    fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => {
+                        console.log('Delete response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Delete response data:', data);
+                        if (data.success) {
+                            showAlert('✅ Kamera başarıyla silindi!', 'success');
+                            // Hemen listeyi yenile
+                            console.log('🔄 Reloading cameras after delete...');
+                            // Önce mevcut kamerayı DOM'dan kaldır
+                            const cameraRow = document.querySelector(`tr[data-camera-id="${cameraId}"]`);
+                            if (cameraRow) {
+                                console.log('🗑️ Removing camera row from DOM:', cameraId);
+                                cameraRow.remove();
+                            }
+                            // Sonra listeyi yenile
+                            setTimeout(() => {
+                                console.log('🔄 Calling loadCameras()...');
+                                loadCameras();
+                            }, 100);
+                        } else {
+                            showAlert('❌ Kamera silinirken hata oluştu: ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Delete error:', error);
+                        showAlert('❌ Silme işlemi sırasında hata oluştu: ' + error.message, 'danger');
+                    });
+                }
             }
-        }
         
         // Arama fonksiyonu
         document.getElementById('cameraSearch').addEventListener('input', function(e) {
@@ -1467,6 +2172,7 @@
         });
         
         function refreshCameras() {
+            console.log('🔄 Refresh cameras triggered');
             loadCameras();
         }
         
@@ -1494,12 +2200,24 @@
             if (searchInput) {
                 searchInput.addEventListener('input', filterCameras);
             }
+            
+            // Sayfa yüklendiğinde kameraları otomatik yükle
+            console.log('📄 DOM loaded, automatically loading cameras...');
+            setTimeout(() => {
+                loadCameras();
+            }, 300); // 300ms gecikme ile yükle
         });
         
-        // Sayfa yüklendiğinde kameraları yükle
-        document.addEventListener('DOMContentLoaded', function() {
-            loadCameras();
-        });
+        // Sayfa yüklendiğinde kameraları otomatik yükle
+        window.onload = function() {
+            console.log('🚀 Window loaded, automatically loading cameras...');
+            // Otomatik yükleme aktif
+            setTimeout(() => {
+                loadCameras();
+            }, 500); // 500ms gecikme ile yükle
+        };
+
+
         
         // Logout function
         function logout() {
@@ -1521,6 +2239,62 @@
                     console.error('Logout error:', error);
                     alert('Çıkış yapılırken bir hata oluştu.');
                 });
+            }
+        }
+
+        function cancelEdit() {
+            console.log('❌ Canceling edit mode');
+            
+            const cameraForm = document.getElementById('cameraForm');
+            if (cameraForm) {
+                // Reset edit mode
+                cameraForm.dataset.editMode = 'false';
+                delete cameraForm.dataset.editCameraId;
+                cameraForm.reset();
+                
+                // Reset submit button
+                const submitBtn = cameraForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<i class="fas fa-plus"></i> Kamera Ekle';
+                    submitBtn.className = 'btn btn-primary btn-lg w-100';
+                }
+                
+                // Hide cancel button
+                const cancelBtn = document.getElementById('cancelBtn');
+                if (cancelBtn) {
+                    cancelBtn.style.display = 'none';
+                }
+                
+                showAlert('❌ Düzenleme iptal edildi', 'info');
+            }
+        }
+        
+        function resetForm() {
+            console.log('🔄 Resetting form');
+            
+            const cameraForm = document.getElementById('cameraForm');
+            if (cameraForm) {
+                // Reset form
+                cameraForm.reset();
+                
+                // Reset edit mode
+                cameraForm.dataset.editMode = 'false';
+                delete cameraForm.dataset.editCameraId;
+                
+                // Reset submit button
+                const submitBtn = cameraForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<i class="fas fa-plus"></i> Kamera Ekle';
+                    submitBtn.className = 'btn btn-primary btn-lg w-100';
+                }
+                
+                // Hide cancel button
+                const cancelBtn = document.getElementById('cancelBtn');
+                if (cancelBtn) {
+                    cancelBtn.style.display = 'none';
+                }
+                
+                showAlert('🔄 Form sıfırlandı', 'info');
             }
         }
     </script>
