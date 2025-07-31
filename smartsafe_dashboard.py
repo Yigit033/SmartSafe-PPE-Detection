@@ -262,9 +262,8 @@ class DashboardManager:
                                 <div class="mb-3">
                                     <label class="form-label">Kamera Seç:</label>
                                     <select class="form-select" id="camera-select">
-                                        <option value="0">Kamera 1 - Ana Giriş</option>
-                                        <option value="1">Kamera 2 - İnşaat Sahası</option>
-                                        <option value="2">Kamera 3 - Depo Alanı</option>
+                                        <option value="CAM_26875D37">Cam 2 - Ana Kamera</option>
+                                        <option value="CAM_A7069D2F">Cam 11 - İkinci Kamera</option>
                                     </select>
                                 </div>
                             </div>
@@ -387,29 +386,80 @@ class DashboardManager:
             const camera = document.getElementById('camera-select').value;
             const mode = document.getElementById('detection-mode').value;
             
-            fetch('/api/start-detection', {
+            // Doğru endpoint ve parametreler
+            fetch('/api/company/COMP_FF311516/start-detection', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({camera: camera, mode: mode})
+                body: JSON.stringify({
+                    camera_id: camera,
+                    mode: mode,
+                    confidence: 0.6
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if(data.success) {
                     showAlert('Tespit başlatıldı!', 'success');
+                    // Kamera görüntüsünü güncelle
+                    updateCameraDisplay();
                 } else {
                     showAlert('Hata: ' + data.error, 'danger');
                 }
+            })
+            .catch(error => {
+                showAlert('Bağlantı hatası: ' + error.message, 'danger');
             });
+        }
+        
+        function updateCameraDisplay() {
+            const cameraDisplay = document.getElementById('camera-display');
+            const camera = document.getElementById('camera-select').value;
+            
+            if (cameraDisplay) {
+                cameraDisplay.innerHTML = `
+                    <div class="text-center">
+                        <i class="fas fa-video fa-3x text-success mb-3"></i>
+                        <h5>PPE Detection Aktif</h5>
+                        <p class="text-muted">Kamera ${camera} - Gerçek zamanlı tespit yapılıyor</p>
+                        <div class="mt-3">
+                            <span class="badge bg-success me-2">Aktif</span>
+                            <span class="badge bg-info">İnşaat Modu</span>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         function stopDetection() {
-            fetch('/api/stop-detection', {method: 'POST'})
-                .then(response => response.json())
-                .then(data => {
-                    if(data.success) {
-                        showAlert('Tespit durduruldu!', 'info');
-                    }
-                });
+            fetch('/api/company/COMP_FF311516/stop-detection', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    showAlert('Tespit durduruldu!', 'info');
+                    // Kamera görüntüsünü sıfırla
+                    resetCameraDisplay();
+                } else {
+                    showAlert('Hata: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                showAlert('Bağlantı hatası: ' + error.message, 'danger');
+            });
+        }
+        
+        function resetCameraDisplay() {
+            const cameraDisplay = document.getElementById('camera-display');
+            if (cameraDisplay) {
+                cameraDisplay.innerHTML = `
+                    <div class="text-center">
+                        <i class="fas fa-camera fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Kamera görüntüsü burada görünecek</p>
+                    </div>
+                `;
+            }
         }
 
         function showAlert(message, type) {

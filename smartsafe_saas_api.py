@@ -7303,7 +7303,7 @@ Mesaj:
                     fetch(`/api/company/${companyId}/start-detection`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({camera: camera, mode: mode})
+                        body: JSON.stringify({camera_id: camera, detection_mode: mode, confidence: 0.6})
                     })
                     .then(response => response.json())
                     .then(data => {
@@ -12563,118 +12563,6 @@ smartsafe_requests_total 100
         # Return the app instance for gunicorn to handle
         return self.app
 
-def main():
-    """Ana fonksiyon - Sadece development mode için"""
-    print("🌐 SmartSafe AI - SaaS Multi-Tenant API Server")
-    print("=" * 60)
-    print("✅ Multi-tenant şirket yönetimi")
-    print("✅ Şirket bazlı veri ayrımı")
-    print("✅ Güvenli oturum yönetimi")
-    print("✅ Kamera yönetimi")
-    print("✅ Responsive web arayüzü")
-    print("=" * 60)
-    print("🚀 Development Server başlatılıyor...")
-    
-    try:
-        api_server = SmartSafeSaaSAPI()
-        app = api_server.app
-        
-        # Development mode - Flask development server
-        port = int(os.environ.get('PORT', 10000))
-        logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
-        app.run(host='0.0.0.0', port=port, debug=False)  # Debug=False for memory optimization
-            
-    except KeyboardInterrupt:
-        logger.info("🛑 SaaS API Server stopped by user")
-    except Exception as e:
-        logger.error(f"❌ SaaS API Server error: {e}")
-        return 1
-    
-    return 0
-
-# =============================================================================
-# PRODUCTION APP INSTANCE - Bu obje Gunicorn tarafından kullanılır
-# =============================================================================
-print("🔧 Creating global Flask app for production deployment...")
-
-# Global app variable for Gunicorn
-app = None
-
-def create_app():
-    """Factory function to create Flask app"""
-    global app
-    try:
-        api_server = SmartSafeSaaSAPI()
-        app = api_server.app
-        print(f"✅ Global Flask app created successfully: {app}")
-        print(f"📍 App name: {app.name}")
-        print(f"📍 Environment: {app.config.get('ENV', 'production')}")
-        print("🚀 Ready for WSGI server (Gunicorn)")
-        print("📌 Gunicorn will use this 'app' object directly")
-        return app
-    except Exception as e:
-        print(f"❌ Critical error creating Flask app: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        # Emergency fallback app
-        from flask import Flask
-        app = Flask(__name__)
-        
-        @app.route('/health')
-        def health():
-            return {'status': 'error', 'message': 'Emergency fallback app - main app failed to initialize'}
-        
-        @app.route('/')
-        def index():
-            return {'status': 'error', 'message': 'Main application failed to start'}
-        
-        print("⚠️ Emergency fallback Flask app created")
-        return app
-
-# Create the app instance
-app = create_app()
-
-if __name__ == "__main__":
-    # RENDER.COM OPTIMIZED FLASK SERVER
-    print("🚀 RENDER.COM - Starting optimized Flask server...")
-    
-    try:
-        api_server = SmartSafeSaaSAPI()
-        app = api_server.app
-        
-        # Render.com automatic port detection
-        port = int(os.environ.get('PORT', 10000))  # Render.com default port
-        host = '0.0.0.0'
-        
-        # Platform detection - Render.com focused
-        if os.environ.get('RENDER'):
-            platform = "Render.com (Production)"
-        else:
-            platform = "Local Development"
-        print(f"🌐 Platform: {platform}")
-        print(f"🌐 Starting server on {host}:{port}")
-        print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
-        print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
-        
-        # RENDER.COM OPTIMIZED FLASK SERVER
-        app.run(
-            host=host, 
-            port=port, 
-            debug=False, 
-            threaded=True,
-            use_reloader=False,  # Render.com optimization
-            use_debugger=False   # Production safety
-        )
-        
-    except Exception as e:
-        print(f"❌ Server start error: {e}")
-        import traceback
-        traceback.print_exc()
-        # Exit with error code for Render.com
-        import sys
-        sys.exit(1)
-
     def saas_detection_worker(self, camera_key, camera_id, company_id, detection_mode, confidence=0.5):
         """SaaS Profesyonel Detection Worker"""
         logger.info(f"🚀 SaaS Detection başlatılıyor - Kamera: {camera_id}, Şirket: {company_id}")
@@ -13472,7 +13360,7 @@ if __name__ == "__main__":
                 },
                 body: JSON.stringify({
                     camera_id: currentCameraId,
-                    mode: 'ppe',
+                    detection_mode: 'ppe',
                     confidence: confidence
                 })
             })
@@ -13660,6 +13548,120 @@ if __name__ == "__main__":
 </html>
         '''
 
+def main():
+    """Ana fonksiyon - Sadece development mode için"""
+    print("🌐 SmartSafe AI - SaaS Multi-Tenant API Server")
+    print("=" * 60)
+    print("✅ Multi-tenant şirket yönetimi")
+    print("✅ Şirket bazlı veri ayrımı")
+    print("✅ Güvenli oturum yönetimi")
+    print("✅ Kamera yönetimi")
+    print("✅ Responsive web arayüzü")
+    print("=" * 60)
+    print("🚀 Development Server başlatılıyor...")
+    
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        
+        # Development mode - Flask development server
+        port = int(os.environ.get('PORT', 10000))
+        logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
+        app.run(host='0.0.0.0', port=port, debug=False)  # Debug=False for memory optimization
+            
+    except KeyboardInterrupt:
+        logger.info("🛑 SaaS API Server stopped by user")
+    except Exception as e:
+        logger.error(f"❌ SaaS API Server error: {e}")
+        return 1
+    
+    return 0
+
+# =============================================================================
+# PRODUCTION APP INSTANCE - Bu obje Gunicorn tarafından kullanılır
+# =============================================================================
+print("🔧 Creating global Flask app for production deployment...")
+
+# Global app variable for Gunicorn
+app = None
+
+def create_app():
+    """Factory function to create Flask app"""
+    global app
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        print(f"✅ Global Flask app created successfully: {app}")
+        print(f"📍 App name: {app.name}")
+        print(f"📍 Environment: {app.config.get('ENV', 'production')}")
+        print("🚀 Ready for WSGI server (Gunicorn)")
+        print("📌 Gunicorn will use this 'app' object directly")
+        return app
+    except Exception as e:
+        print(f"❌ Critical error creating Flask app: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Emergency fallback app
+        from flask import Flask
+        app = Flask(__name__)
+        
+        @app.route('/health')
+        def health():
+            return {'status': 'error', 'message': 'Emergency fallback app - main app failed to initialize'}
+        
+        @app.route('/')
+        def index():
+            return {'status': 'error', 'message': 'Main application failed to start'}
+        
+        print("⚠️ Emergency fallback Flask app created")
+        return app
+
+# Create the app instance
+app = create_app()
+
+if __name__ == "__main__":
+    # RENDER.COM OPTIMIZED FLASK SERVER
+    print("🚀 RENDER.COM - Starting optimized Flask server...")
+    
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        
+        # Render.com automatic port detection
+        port = int(os.environ.get('PORT', 10000))  # Render.com default port
+        host = '0.0.0.0'
+        
+        # Platform detection - Render.com focused
+        if os.environ.get('RENDER'):
+            platform = "Render.com (Production)"
+        else:
+            platform = "Local Development"
+        print(f"🌐 Platform: {platform}")
+        print(f"🌐 Starting server on {host}:{port}")
+        print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
+        print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
+        
+        # RENDER.COM OPTIMIZED FLASK SERVER
+        app.run(
+            host=host, 
+            port=port, 
+            debug=False, 
+            threaded=True,
+            use_reloader=False,  # Render.com optimization
+            use_debugger=False   # Production safety
+        )
+        
+    except Exception as e:
+        print(f"❌ Server start error: {e}")
+        import traceback
+        traceback.print_exc()
+        # Exit with error code for Render.com
+        import sys
+        sys.exit(1)
+
+    
+    
 
 
 
