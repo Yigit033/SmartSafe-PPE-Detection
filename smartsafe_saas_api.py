@@ -2700,9 +2700,16 @@ Mesaj:
         def proxy_camera_stream(company_id, camera_id):
             """Kamera stream'ini proxy ile getir - CORS sorunlarını çözer"""
             try:
-                user_data = self.validate_session()
-                if not user_data or user_data['company_id'] != company_id:
-                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                # Session kontrolü - Render.com debug için
+                try:
+                    user_data = self.validate_session()
+                    logger.info(f"🔍 Session check for company {company_id}: {user_data}")
+                    if not user_data or user_data.get('company_id') != company_id:
+                        logger.warning(f"❌ Session validation failed for company {company_id}")
+                        return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                except Exception as e:
+                    logger.error(f"❌ Session validation error: {e}")
+                    return jsonify({'success': False, 'error': 'Oturum kontrolü hatası'}), 401
                 
                 # Kamerayı veritabanından al
                 camera = self.db.get_camera_by_id(camera_id, company_id)
@@ -2716,11 +2723,11 @@ Mesaj:
                 username = camera.get('username', '')
                 password = camera.get('password', '')
                 
-                # URL oluştur
+                # URL oluştur - HTTP kullan (kamera IP'leri genelde HTTP)
                 if username and password:
-                    stream_url = f"{protocol}://{username}:{password}@{camera['ip_address']}:{port}{stream_path}"
+                    stream_url = f"http://{username}:{password}@{camera['ip_address']}:{port}{stream_path}"
                 else:
-                    stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+                    stream_url = f"http://{camera['ip_address']}:{port}{stream_path}"
                 
                 # Alternatif URL'ler
                 alternative_urls = [
@@ -2783,9 +2790,16 @@ Mesaj:
         def proxy_camera_snapshot(company_id, camera_id):
             """Kamera snapshot'ını proxy ile getir - CORS sorunlarını çözer"""
             try:
-                user_data = self.validate_session()
-                if not user_data or user_data['company_id'] != company_id:
-                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                # Session kontrolü - Render.com debug için
+                try:
+                    user_data = self.validate_session()
+                    logger.info(f"🔍 Session check for company {company_id}: {user_data}")
+                    if not user_data or user_data.get('company_id') != company_id:
+                        logger.warning(f"❌ Session validation failed for company {company_id}")
+                        return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                except Exception as e:
+                    logger.error(f"❌ Session validation error: {e}")
+                    return jsonify({'success': False, 'error': 'Oturum kontrolü hatası'}), 401
                 
                 # Kamerayı veritabanından al
                 camera = self.db.get_camera_by_id(camera_id, company_id)
