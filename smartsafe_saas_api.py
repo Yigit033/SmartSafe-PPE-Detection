@@ -169,6 +169,7 @@ class SmartSafeSaaSAPI:
     
     def get_subscription_info_internal(self, company_id):
         """Internal subscription info - session kontrolü olmadan"""
+        from datetime import datetime
         try:
             conn = self.db.get_connection()
             cursor = conn.cursor()
@@ -796,74 +797,102 @@ Mesaj:
             try:
                 logger.info(f"🚀 ADD CAMERA REQUEST STARTED")
                 logger.info(f"📋 Company ID: {company_id}")
+                logger.info(f"📡 Request method: {request.method}")
+                logger.info(f"📡 Request headers: {dict(request.headers)}")
+                logger.info(f"📡 Request data: {request.get_data()}")
+                
+                # Session kontrolü
+                session_id = request.cookies.get('session_id')
+                logger.info(f"🍪 Session ID from cookie: {session_id}")
                 
                 user_data = self.validate_session()
                 logger.info(f"👤 User validation result: {user_data is not None}")
+                if user_data:
+                    logger.info(f"👤 User data: {user_data}")
                 
                 if not user_data or user_data['company_id'] != company_id:
                     logger.error(f"❌ Unauthorized access attempt")
+                    logger.error(f"❌ User data: {user_data}")
+                    logger.error(f"❌ Expected company_id: {company_id}")
                     return jsonify({'error': 'Yetkisiz erişim'}), 401
                 
-                    logger.info(f"✅ User authorized successfully")
+                logger.info(f"✅ User authorized successfully")
+                
+                # Abonelik limit kontrolü
+                logger.info(f"🔍 Checking subscription limits...")
+                subscription_info = self.get_subscription_info_internal(company_id)
+                logger.info(f"📊 Subscription info: {subscription_info}")
                     
-                    # Abonelik limit kontrolü
-                    logger.info(f"🔍 Checking subscription limits...")
-                    subscription_info = self.get_subscription_info_internal(company_id)
-                    logger.info(f"📊 Subscription info: {subscription_info}")
-                        
-                    if not subscription_info['success']:
-                        logger.error(f"❌ Subscription info failed: {subscription_info}")
-                        return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
-                    
-                    subscription = subscription_info['subscription']
-                    current_cameras = subscription['used_cameras']
-                    max_cameras = subscription['max_cameras']
-                    
-                    logger.info(f"📈 Camera limits - Current: {current_cameras}, Max: {max_cameras}")
-                    
-                    # Limit kontrolü
-                    if current_cameras >= max_cameras:
-                        logger.warning(f"⚠️ Camera limit reached: {current_cameras}/{max_cameras}")
-                        return jsonify({
-                            'success': False, 
-                            'error': f'Kamera limiti aşıldı! Mevcut: {current_cameras}/{max_cameras}',
-                            'limit_reached': True,
-                            'current_cameras': current_cameras,
-                            'max_cameras': max_cameras,
-                            'subscription_type': subscription['subscription_type']
-                        }), 403
-                    
-                    logger.info(f"✅ Camera limit check passed")
-                    
-                    data = request.json
-                    logger.info(f"📹 Raw camera data received: {data}")
-                    
-                    # Veri doğrulama - Field mapping düzeltmesi
-                    required_fields = ['name', 'location', 'ip_address']  # Frontend'den gelen field isimleri
-                    missing_fields = [field for field in required_fields if not data.get(field)]
-                    
-                    if missing_fields:
-                        logger.error(f"❌ Missing required fields: {missing_fields}")
-                        return jsonify({'success': False, 'error': f'Eksik alanlar: {", ".join(missing_fields)}'}), 400
-                    
-                    logger.info(f"✅ Data validation passed")
-                    logger.info(f"📝 Camera name: {data.get('camera_name')}")
-                    logger.info(f"📍 Location: {data.get('location')}")
-                    logger.info(f"🌐 IP Address: {data.get('ip_address')}")
-                    logger.info(f"🔌 Port: {data.get('port', 'default')}")
-                    logger.info(f"🔐 Protocol: {data.get('protocol', 'default')}")
-                    
-                    # Kamera ekle
-                    logger.info(f"💾 Calling database add_camera function...")
-                    success, result = self.db.add_camera(company_id, data)
-                    logger.info(f"💾 Database result - Success: {success}, Result: {result}")
-                    
-                    if success:
-                        logger.info(f"✅ Camera added successfully with ID: {result}")
-                        return jsonify({'success': True, 'camer"a_id': result})
-                    else:
-                        logger.error(f"❌ Camera addition failed: {result}")
-                        return jsonify({'success': False, 'error': result}), 400
+                if not subscription_info['success']:
+                    logger.error(f"❌ Subscription info failed: {subscription_info}")
+                    return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
+                
+                subscription = subscription_info['subscription']
+                current_cameras = subscription['used_cameras']
+                max_cameras = subscription['max_cameras']
+                
+                logger.info(f"📈 Camera limits - Current: {current_cameras}, Max: {max_cameras}")
+                
+                # Limit kontrolü
+                if current_cameras >= max_cameras:
+                    logger.warning(f"⚠️ Camera limit reached: {current_cameras}/{max_cameras}")
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Kamera limiti aşıldı! Mevcut: {current_cameras}/{max_cameras}',
+                        'limit_reached': True,
+                        'current_cameras': current_cameras,
+                        'max_cameras': max_cameras,
+                        'subscription_type': subscription['subscription_type']
+                    }), 403
+                
+                logger.info(f"✅ Camera limit check passed")
+                
+                data = request.json
+                logger.info(f"📹 Raw camera data received: {data}")
+                
+                # Veri doğrulama - Field mapping düzeltmesi
+                # Frontend'den gelen field isimleri: camera_name, camera_location, camera_ip, camera_port, camera_protocol, camera_path
+                # Backend'in beklediği field isimleri: name, location, ip_address, port, protocol, stream_path
+                
+                # Field mapping yap
+                mapped_data = {
+                    'name': data.get('camera_name'),
+                    'location': data.get('camera_location'),
+                    'ip_address': data.get('camera_ip'),
+                    'port': data.get('camera_port', 8080),
+                    'protocol': data.get('camera_protocol', 'http'),
+                    'stream_path': data.get('camera_path', '/video'),
+                    'username': data.get('camera_username', ''),
+                    'password': data.get('camera_password', '')
+                }
+                
+                # Required fields kontrolü
+                required_fields = ['name', 'location', 'ip_address']
+                missing_fields = [field for field in required_fields if not mapped_data.get(field)]
+                
+                if missing_fields:
+                    logger.error(f"❌ Missing required fields: {missing_fields}")
+                    return jsonify({'success': False, 'error': f'Eksik alanlar: {", ".join(missing_fields)}'}), 400
+                
+                logger.info(f"✅ Data validation passed")
+                logger.info(f"📝 Camera name: {mapped_data.get('name')}")
+                logger.info(f"📍 Location: {mapped_data.get('location')}")
+                logger.info(f"🌐 IP Address: {mapped_data.get('ip_address')}")
+                logger.info(f"🔌 Port: {mapped_data.get('port')}")
+                logger.info(f"🔐 Protocol: {mapped_data.get('protocol')}")
+                logger.info(f"📁 Stream Path: {mapped_data.get('stream_path')}")
+                
+                # Kamera ekle
+                logger.info(f"💾 Calling database add_camera function...")
+                success, result = self.db.add_camera(company_id, mapped_data)
+                logger.info(f"💾 Database result - Success: {success}, Result: {result}")
+                
+                if success:
+                    logger.info(f"✅ Camera added successfully with ID: {result}")
+                    return jsonify({'success': True, 'camera_id': result})
+                else:
+                    logger.error(f"❌ Camera addition failed: {result}")
+                    return jsonify({'success': False, 'error': result}), 400
                     
             except Exception as e:
                 logger.error(f"💥 EXCEPTION in add_camera: {e}")
@@ -2470,15 +2499,59 @@ Mesaj:
                 if not camera:
                     return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
                 
-                # Basic kamera testi
-                result = self.get_camera_manager().test_camera_connection({
-                    'ip_address': camera['ip_address'],
-                    'port': camera.get('port', 8080),
-                    'username': camera.get('username', ''),
-                    'password': camera.get('password', '')
-                })
+                # Basit HTTP testi yap
+                import requests
+                import time
                 
-                return jsonify(result)
+                start_time = time.time()
+                
+                # Test URL'sini oluştur
+                protocol = camera.get('protocol', 'http')
+                port = camera.get('port', 8080)
+                stream_path = camera.get('stream_path', '/video')
+                username = camera.get('username', '')
+                password = camera.get('password', '')
+                
+                url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+                headers = {}
+                
+                if username and password:
+                    import base64
+                    credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+                    headers['Authorization'] = f"Basic {credentials}"
+                
+                try:
+                    response = requests.get(url, headers=headers, timeout=5)
+                    test_duration = (time.time() - start_time) * 1000
+                    
+                    if response.status_code in [200, 401, 403]:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Kamera bağlantısı başarılı',
+                            'test_results': {
+                                'response_time': f"{test_duration:.1f}ms",
+                                'status_code': response.status_code,
+                                'test_duration': f"{test_duration / 1000:.1f}s"
+                            }
+                        })
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': f'HTTP {response.status_code}',
+                            'test_results': {
+                                'test_duration': f"{test_duration / 1000:.1f}s"
+                            }
+                        })
+                        
+                except requests.exceptions.RequestException as e:
+                    test_duration = (time.time() - start_time) * 1000
+                    return jsonify({
+                        'success': False,
+                        'error': f'Bağlantı hatası: {str(e)}',
+                        'test_results': {
+                            'test_duration': f"{test_duration / 1000:.1f}s"
+                        }
+                    })
                 
             except Exception as e:
                 logger.error(f"Camera test error: {e}")
@@ -2543,9 +2616,23 @@ Mesaj:
                 
                 # Stream URL'sini oluştur
                 protocol = camera.get('protocol', 'http')
-                port = camera.get('port', 80)
+                port = camera.get('port', 8080)
                 stream_path = camera.get('stream_path', '/video')
-                stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+                username = camera.get('username', '')
+                password = camera.get('password', '')
+                
+                # URL oluştur - Android IP Webcam için optimize edilmiş
+                if username and password:
+                    stream_url = f"{protocol}://{username}:{password}@{camera['ip_address']}:{port}{stream_path}"
+                else:
+                    stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+                
+                # Android IP Webcam için alternatif URL'ler
+                alternative_urls = [
+                    f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",  # Snapshot
+                    f"{protocol}://{camera['ip_address']}:{port}/video",     # Video stream
+                    f"{protocol}://{camera['ip_address']}:{port}/mjpeg",     # MJPEG
+                ]
                 
                 return f"""
                 <!DOCTYPE html>
@@ -2560,13 +2647,42 @@ Mesaj:
                         .stream-title {{ margin-bottom: 20px; font-size: 24px; }}
                         .stream-video {{ max-width: 100%; height: auto; border-radius: 10px; }}
                         .stream-info {{ margin-top: 20px; font-size: 14px; color: #ccc; }}
+                        .error-message {{ color: #ff6b6b; margin-top: 20px; }}
+                        .url-info {{ font-size: 12px; color: #888; margin-top: 10px; }}
                     </style>
+                    <script>
+                        let currentUrlIndex = 0;
+                        const streamUrls = [
+                            "{stream_url}",
+                            "{alternative_urls[0]}",
+                            "{alternative_urls[1]}",
+                            "{alternative_urls[2]}"
+                        ];
+                        
+                        function tryNextUrl() {{
+                            currentUrlIndex++;
+                            if (currentUrlIndex < streamUrls.length) {{
+                                document.getElementById('stream-img').src = streamUrls[currentUrlIndex];
+                                document.getElementById('url-info').textContent = 'Denenen URL: ' + streamUrls[currentUrlIndex];
+                            }} else {{
+                                document.getElementById('error-message').style.display = 'block';
+                                document.getElementById('url-info').textContent = 'Tüm URL\'ler denendi, görüntü alınamadı';
+                            }}
+                        }}
+                    </script>
                 </head>
                 <body>
                     <div class="stream-container">
                         <div class="stream-title">{camera['camera_name']} - Canlı Görüntü</div>
-                        <img src="{stream_url}" alt="Kamera Görüntüsü" class="stream-video" 
-                             onerror="this.style.display='none'; document.body.innerHTML='<div style=\\'text-align:center;padding:50px\\'><h2>Görüntü alınamadı</h2><p>Kamera bağlantısını kontrol edin</p></div>'">
+                        <img id="stream-img" src="{stream_url}" alt="Kamera Görüntüsü" class="stream-video" 
+                             onerror="tryNextUrl()">
+                        <div id="error-message" class="error-message" style="display: none;">
+                            <h2>Görüntü alınamadı</h2>
+                            <p>Kamera bağlantısını kontrol edin</p>
+                            <p>IP: {camera['ip_address']}:{port}</p>
+                            <p>Protokol: {protocol}</p>
+                        </div>
+                        <div id="url-info" class="url-info">Denenen URL: {stream_url}</div>
                         <div class="stream-info">
                             <p>IP: {camera['ip_address']} | Konum: {camera.get('location', 'N/A')}</p>
                             <p>Son güncelleme: {camera.get('updated_at', 'N/A')}</p>
@@ -2579,6 +2695,151 @@ Mesaj:
             except Exception as e:
                 logger.error(f"Camera stream error: {e}")
                 return "Stream yüklenirken hata oluştu", 500
+
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/proxy-stream')
+        def proxy_camera_stream(company_id, camera_id):
+            """Kamera stream'ini proxy ile getir - CORS sorunlarını çözer"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data['company_id'] != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                # Kamerayı veritabanından al
+                camera = self.db.get_camera_by_id(camera_id, company_id)
+                if not camera:
+                    return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
+                
+                # Stream URL'sini oluştur
+                protocol = camera.get('protocol', 'http')
+                port = camera.get('port', 8080)
+                stream_path = camera.get('stream_path', '/video')
+                username = camera.get('username', '')
+                password = camera.get('password', '')
+                
+                # URL oluştur
+                if username and password:
+                    stream_url = f"{protocol}://{username}:{password}@{camera['ip_address']}:{port}{stream_path}"
+                else:
+                    stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+                
+                # Alternatif URL'ler
+                alternative_urls = [
+                    f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/video",
+                    f"{protocol}://{camera['ip_address']}:{port}/mjpeg",
+                    f"{protocol}://{camera['ip_address']}:{port}/stream",
+                    f"{protocol}://{camera['ip_address']}:{port}/live",
+                    f"{protocol}://{camera['ip_address']}:{port}/camera",
+                    f"{protocol}://{camera['ip_address']}:{port}/webcam",
+                    f"{protocol}://{camera['ip_address']}:{port}/video.mjpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/image.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/snapshot.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/snapshot.cgi",
+                    f"{protocol}://{camera['ip_address']}:{port}/image.cgi"
+                ]
+                
+                # İlk URL'yi dene
+                import requests
+                from requests.auth import HTTPBasicAuth
+                
+                headers = {
+                    'User-Agent': 'SmartSafe-AI-Camera-Proxy/1.0',
+                    'Accept': 'image/*, video/*, */*'
+                }
+                
+                # Authentication
+                auth = None
+                if username and password:
+                    auth = HTTPBasicAuth(username, password)
+                
+                # İlk URL'yi dene
+                try:
+                    response = requests.get(stream_url, auth=auth, headers=headers, timeout=5, stream=True)
+                    if response.status_code == 200:
+                        return Response(response.iter_content(chunk_size=8192), 
+                                     content_type=response.headers.get('content-type', 'image/jpeg'))
+                except Exception as e:
+                    logger.warning(f"Primary stream URL failed: {e}")
+                
+                # Alternatif URL'leri dene
+                for alt_url in alternative_urls:
+                    try:
+                        response = requests.get(alt_url, auth=auth, headers=headers, timeout=5, stream=True)
+                        if response.status_code == 200:
+                            return Response(response.iter_content(chunk_size=8192), 
+                                         content_type=response.headers.get('content-type', 'image/jpeg'))
+                    except Exception as e:
+                        logger.warning(f"Alternative URL failed {alt_url}: {e}")
+                        continue
+                
+                # Hiçbiri çalışmazsa hata döndür
+                return jsonify({'success': False, 'error': 'Kamera stream alınamadı'}), 404
+                
+            except Exception as e:
+                logger.error(f"Proxy camera stream error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/proxy-snapshot')
+        def proxy_camera_snapshot(company_id, camera_id):
+            """Kamera snapshot'ını proxy ile getir - CORS sorunlarını çözer"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data['company_id'] != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                
+                # Kamerayı veritabanından al
+                camera = self.db.get_camera_by_id(camera_id, company_id)
+                if not camera:
+                    return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
+                
+                # Snapshot URL'lerini oluştur
+                protocol = camera.get('protocol', 'http')
+                port = camera.get('port', 8080)
+                username = camera.get('username', '')
+                password = camera.get('password', '')
+                
+                # Snapshot URL'leri
+                snapshot_urls = [
+                    f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/snapshot.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/image.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/snapshot.cgi",
+                    f"{protocol}://{camera['ip_address']}:{port}/image.cgi",
+                    f"{protocol}://{camera['ip_address']}:{port}/capture",
+                    f"{protocol}://{camera['ip_address']}:{port}/photo",
+                    f"{protocol}://{camera['ip_address']}:{port}/picture"
+                ]
+                
+                import requests
+                from requests.auth import HTTPBasicAuth
+                
+                headers = {
+                    'User-Agent': 'SmartSafe-AI-Camera-Proxy/1.0',
+                    'Accept': 'image/*'
+                }
+                
+                # Authentication
+                auth = None
+                if username and password:
+                    auth = HTTPBasicAuth(username, password)
+                
+                # URL'leri dene
+                for url in snapshot_urls:
+                    try:
+                        response = requests.get(url, auth=auth, headers=headers, timeout=5)
+                        if response.status_code == 200:
+                            return Response(response.content, 
+                                         content_type=response.headers.get('content-type', 'image/jpeg'))
+                    except Exception as e:
+                        logger.warning(f"Snapshot URL failed {url}: {e}")
+                        continue
+                
+                # Hiçbiri çalışmazsa hata döndür
+                return jsonify({'success': False, 'error': 'Kamera snapshot alınamadı'}), 404
+                
+            except Exception as e:
+                logger.error(f"Proxy camera snapshot error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
         
 
         

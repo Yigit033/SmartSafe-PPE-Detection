@@ -882,19 +882,21 @@
                 </div>
                 
                 <div class="row mt-4">
-                    <div class="col-md-4">
-                        <button type="button" id="testBtn" class="btn btn-warning btn-lg w-100">
+                    <div class="col-md-6">
+                        <button type="button" id="testBtn" class="btn btn-warning btn-lg w-100" style="height: 50px; font-size: 16px; font-weight: 600;">
                             <i class="fas fa-vial me-2"></i>
                             Bağlantıyı Test Et
                         </button>
                     </div>
-                    <div class="col-md-4">
-                        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100">
+                    <div class="col-md-6">
+                        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100" style="height: 50px; font-size: 16px; font-weight: 600;">
                             <i class="fas fa-plus me-2"></i>
                             Kamera Ekle
                         </button>
                     </div>
-                    <div class="col-md-4">
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6 offset-md-3">
                         <button type="button" id="cancelBtn" class="btn btn-secondary btn-lg w-100" onclick="cancelEdit()" style="display: none;">
                             <i class="fas fa-times me-2"></i>
                             İptal Et
@@ -1820,10 +1822,17 @@
             if (!camera.ip_address) return null;
             
             const protocol = camera.protocol || 'http';
-            const port = camera.port || 80;
+            const port = camera.port || 8080;  // Android IP Webcam default port
             const path = camera.stream_path || '/video';
+            const username = camera.username || '';
+            const password = camera.password || '';
             
-            return `${protocol}://${camera.ip_address}:${port}${path}`;
+            // URL oluştur - Android IP Webcam için optimize edilmiş
+            if (username && password) {
+                return `${protocol}://${username}:${password}@${camera.ip_address}:${port}${path}`;
+            } else {
+                return `${protocol}://${camera.ip_address}:${port}${path}`;
+            }
         }
         
         function viewCameraDetails(cameraId) {
@@ -1833,6 +1842,7 @@
             .then(data => {
                 if (data.success) {
                     const camera = data.camera;
+                    console.log('🔍 Camera details received:', camera);
                     const modal = new bootstrap.Modal(document.getElementById('cameraDetailModal'));
                     
                     document.getElementById('cameraDetailContent').innerHTML = `
@@ -1854,11 +1864,14 @@
                             </div>
                             <div class="col-md-6">
                                 <h6><i class="fas fa-video text-success me-2"></i>Canlı Görüntü</h6>
-                                <div id="cameraStreamContainer" class="text-center" style="height: 200px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <div id="cameraStreamContainer" class="text-center" style="height: 200px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative;">
                                     <div>
                                         <i class="fas fa-video fa-2x text-muted mb-2"></i>
                                         <p class="text-muted mb-0">Görüntü yükleniyor...</p>
                                     </div>
+                                    <button id="expandStreamBtn" class="btn btn-sm btn-outline-primary position-absolute" style="top: 10px; right: 10px; display: none;" onclick="expandStream()">
+                                        <i class="fas fa-expand"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1887,26 +1900,112 @@
             });
         }
         
+        // Global tryNextUrl fonksiyonu - Cache busting ile
+        let globalStreamUrls = [];
+        let globalCurrentUrlIndex = 0;
+        let globalStreamContainer = null;
+        let globalCamera = null;
+        
+        // Global scope'ta tanımla
+        window.tryNextUrl = function() {
+            console.log('🔄 tryNextUrl fonksiyonu çağrıldı');
+            if (globalCurrentUrlIndex < globalStreamUrls.length) {
+                const img = document.getElementById('stream-img');
+                if (img) {
+                    const timestamp = new Date().getTime();
+                    img.src = `${globalStreamUrls[globalCurrentUrlIndex]}?t=${timestamp}`;
+                    console.log(`🔄 Denenen URL ${globalCurrentUrlIndex + 1}: ${globalStreamUrls[globalCurrentUrlIndex]}`);
+                }
+                globalCurrentUrlIndex++;
+            } else {
+                // Tüm URL'ler denendi, hata göster
+                if (globalStreamContainer && globalCamera) {
+                    globalStreamContainer.innerHTML = `
+                        <div>
+                            <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                            <p class="text-muted mb-0">Görüntü alınamadı</p>
+                            <small class="text-muted">IP: ${globalCamera.ip_address}:${globalCamera.port || 8080}</small>
+                        </div>
+                    `;
+                }
+            }
+        };
+        
         function loadCameraStreamForModal(camera) {
             const streamContainer = document.getElementById('cameraStreamContainer');
             if (!streamContainer) return;
             
-            const streamUrl = generateStreamUrl(camera);
+            // Debug: Log camera data
+            console.log('🔍 Camera data for stream:', camera);
             
-            if (streamUrl) {
-                streamContainer.innerHTML = `
-                    <img src="${streamUrl}" alt="${camera.camera_name}" 
-                         style="max-width: 100%; max-height: 100%; border-radius: 8px;"
-                         onload="this.style.display='block'" 
-                         onerror="this.parentElement.innerHTML='<div><i class=\\'fas fa-exclamation-triangle fa-2x text-warning mb-2\\'></i><p class=\\'text-muted mb-0\\'>Görüntü alınamadı</p></div>'">
-                `;
-            } else {
-                streamContainer.innerHTML = `
-                    <div>
-                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
-                        <p class="text-muted mb-0">Stream URL bulunamadı</p>
+            // Global değişkenleri ayarla
+            globalStreamContainer = streamContainer;
+            globalCamera = camera;
+            globalCurrentUrlIndex = 0;
+            
+            // Alternatif URL'ler oluştur - stream_path kullan
+            const protocol = camera.protocol || 'http';
+            const port = camera.port || 8080;
+            const stream_path = camera.stream_path || '/video';
+            const username = camera.username || '';
+            const password = camera.password || '';
+            
+            console.log('🔧 Stream parameters:', { protocol, port, stream_path, username: username ? '***' : 'none' });
+            
+            const baseUrl = username && password ? 
+                `${protocol}://${username}:${password}@${camera.ip_address}:${port}` :
+                `${protocol}://${camera.ip_address}:${port}`;
+            
+            globalStreamUrls = [
+                // Proxy endpoints (CORS sorunları için)
+                `/api/company/{{ company_id }}/cameras/${camera.camera_id}/proxy-stream`,
+                `/api/company/{{ company_id }}/cameras/${camera.camera_id}/proxy-snapshot`,
+                // Direct endpoints (fallback)
+                `${baseUrl}${stream_path}`,  // Primary stream path
+                `${baseUrl}/video`,          // Video stream
+                `${baseUrl}/shot.jpg`,       // Snapshot
+                `${baseUrl}/mjpeg`,          // MJPEG
+                `${baseUrl}/stream`,         // Alternative stream
+                `${baseUrl}/live`,           // Live stream
+            ];
+            
+            // İlk URL'yi dene - Cache busting ile
+            const timestamp = new Date().getTime();
+            streamContainer.innerHTML = `
+                <img id="stream-img" src="${globalStreamUrls[0]}?t=${timestamp}" alt="${camera.camera_name}" 
+                     style="max-width: 100%; max-height: 100%; border-radius: 8px;"
+                     onload="this.style.display='block'; document.getElementById('expandStreamBtn').style.display='block';" 
+                     onerror="window.tryNextUrl()">
+                <div id="stream-error" style="display: none;">
+                    <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                    <p class="text-muted mb-0">Görüntü alınamadı</p>
+                    <small class="text-muted">IP: ${camera.ip_address}:${camera.port || 8080}</small>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-primary" onclick="retryCameraStream()">
+                            <i class="fas fa-redo"></i> Yeniden Dene
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="testCameraConnection()">
+                            <i class="fas fa-wrench"></i> Bağlantı Testi
+                        </button>
                     </div>
-                `;
+                </div>
+                <button id="expandStreamBtn" class="btn btn-sm btn-outline-primary position-absolute" style="top: 10px; right: 10px; display: none;" onclick="expandStream()">
+                    <i class="fas fa-expand"></i>
+                </button>
+            `;
+        }
+        
+        // Yeniden deneme fonksiyonu
+        function retryCameraStream() {
+            if (globalCamera) {
+                loadCameraStreamForModal(globalCamera);
+            }
+        }
+        
+        // Bağlantı testi fonksiyonu
+        function testCameraConnection() {
+            if (globalCamera) {
+                testCamera(globalCamera.camera_id);
             }
         }
         
@@ -2295,6 +2394,180 @@
                 }
                 
                 showAlert('🔄 Form sıfırlandı', 'info');
+            }
+        }
+        
+        // Canlı görüntü büyütme fonksiyonu
+        function expandStream() {
+            const streamContainer = document.getElementById('cameraStreamContainer');
+            const expandBtn = document.getElementById('expandStreamBtn');
+            const streamImg = document.getElementById('stream-img');
+            
+            if (!streamContainer || !streamImg) return;
+            
+            // Büyütme durumunu kontrol et
+            const isExpanded = streamContainer.classList.contains('expanded');
+            
+            if (!isExpanded) {
+                // Overlay oluştur
+                let overlay = document.getElementById('streamOverlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'streamOverlay';
+                    overlay.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100vw;
+                        height: 100vh;
+                        background: rgba(0,0,0,0.3);
+                        z-index: 9998;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        opacity: 0;
+                        transition: opacity 0.3s ease;
+                    `;
+                    document.body.appendChild(overlay);
+                }
+                
+                // Büyüt
+                streamContainer.style.position = 'fixed';
+                streamContainer.style.top = '50%';
+                streamContainer.style.left = '50%';
+                streamContainer.style.transform = 'translate(-50%, -50%)';
+                streamContainer.style.width = '90vw';
+                streamContainer.style.height = '90vh';
+                streamContainer.style.zIndex = '9999';
+                streamContainer.style.backgroundColor = 'transparent';
+                streamContainer.style.display = 'flex';
+                streamContainer.style.alignItems = 'center';
+                streamContainer.style.justifyContent = 'center';
+                streamContainer.style.borderRadius = '15px';
+                streamContainer.style.boxShadow = '0 20px 60px rgba(0,0,0,0.5)';
+                streamContainer.style.transition = 'all 0.3s ease';
+                streamContainer.classList.add('expanded');
+                
+                // Görüntüyü büyüt
+                streamImg.style.maxWidth = '100%';
+                streamImg.style.maxHeight = '100%';
+                streamImg.style.objectFit = 'contain';
+                streamImg.style.borderRadius = '10px';
+                streamImg.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+                
+                // Butonu güncelle - daha güzel tasarım
+                expandBtn.style.position = 'fixed';
+                expandBtn.style.top = '20px';
+                expandBtn.style.right = '20px';
+                expandBtn.style.zIndex = '10000';
+                expandBtn.className = 'btn btn-light btn-lg';
+                expandBtn.style.borderRadius = '50%';
+                expandBtn.style.width = '60px';
+                expandBtn.style.height = '60px';
+                expandBtn.style.display = 'flex';
+                expandBtn.style.alignItems = 'center';
+                expandBtn.style.justifyContent = 'center';
+                expandBtn.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)';
+                expandBtn.style.transition = 'all 0.3s ease';
+                expandBtn.innerHTML = '<i class="fas fa-compress fa-lg"></i>';
+                expandBtn.onclick = function() { expandStream(); };
+                
+                // Kapatma butonu ekle
+                let closeBtn = document.getElementById('streamCloseBtn');
+                if (!closeBtn) {
+                    closeBtn = document.createElement('button');
+                    closeBtn.id = 'streamCloseBtn';
+                    closeBtn.className = 'btn btn-danger btn-lg';
+                    closeBtn.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        left: 20px;
+                        z-index: 10000;
+                        border-radius: 50%;
+                        width: 60px;
+                        height: 60px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                        transition: all 0.3s ease;
+                    `;
+                    closeBtn.innerHTML = '<i class="fas fa-times fa-lg"></i>';
+                    closeBtn.onclick = function() { expandStream(); };
+                    document.body.appendChild(closeBtn);
+                }
+                closeBtn.style.display = 'flex';
+                
+                // Overlay'i göster
+                overlay.style.opacity = '1';
+                
+                // ESC tuşu ile kapatma
+                const escapeHandler = function(e) {
+                    if (e.key === 'Escape') {
+                        expandStream();
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                };
+                document.addEventListener('keydown', escapeHandler);
+                
+            } else {
+                // Küçült
+                streamContainer.style.position = 'relative';
+                streamContainer.style.top = '';
+                streamContainer.style.left = '';
+                streamContainer.style.transform = '';
+                streamContainer.style.width = '';
+                streamContainer.style.height = '200px';
+                streamContainer.style.zIndex = '';
+                streamContainer.style.backgroundColor = '#f8f9fa';
+                streamContainer.style.display = 'flex';
+                streamContainer.style.alignItems = 'center';
+                streamContainer.style.justifyContent = 'center';
+                streamContainer.style.borderRadius = '8px';
+                streamContainer.style.boxShadow = '';
+                streamContainer.style.transition = '';
+                streamContainer.classList.remove('expanded');
+                
+                // Görüntüyü küçült
+                streamImg.style.maxWidth = '100%';
+                streamImg.style.maxHeight = '100%';
+                streamImg.style.objectFit = '';
+                streamImg.style.borderRadius = '';
+                streamImg.style.boxShadow = '';
+                
+                // Butonu güncelle
+                expandBtn.style.position = 'absolute';
+                expandBtn.style.top = '10px';
+                expandBtn.style.right = '10px';
+                expandBtn.style.zIndex = '';
+                expandBtn.className = 'btn btn-sm btn-outline-primary';
+                expandBtn.style.borderRadius = '';
+                expandBtn.style.width = '';
+                expandBtn.style.height = '';
+                expandBtn.style.display = '';
+                expandBtn.style.alignItems = '';
+                expandBtn.style.justifyContent = '';
+                expandBtn.style.boxShadow = '';
+                expandBtn.style.transition = '';
+                expandBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                expandBtn.onclick = function() { expandStream(); };
+                
+                // Kapatma butonunu gizle
+                const closeBtn = document.getElementById('streamCloseBtn');
+                if (closeBtn) {
+                    closeBtn.style.display = 'none';
+                }
+                
+                // Overlay'i gizle
+                const overlay = document.getElementById('streamOverlay');
+                if (overlay) {
+                    overlay.style.opacity = '0';
+                    setTimeout(() => {
+                        if (overlay.parentNode) {
+                            overlay.parentNode.removeChild(overlay);
+                        }
+                    }, 300);
+                }
             }
         }
     </script>

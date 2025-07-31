@@ -205,6 +205,54 @@ class MultiTenantDatabase:
                 else:
                     logger.info("✅ Port kolonu zaten mevcut")
                     
+                # Protocol kolonu kontrolü
+                try:
+                    cursor.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'cameras'
+                            AND column_name = 'protocol'
+                        );
+                    """)
+                    
+                    protocol_exists = cursor.fetchone()[0]
+                    logger.info(f"🔍 Protocol kolonu var mı: {protocol_exists}")
+                    
+                    if not protocol_exists:
+                        logger.info("🔧 Cameras tablosuna protocol kolonu ekleniyor...")
+                        cursor.execute('ALTER TABLE cameras ADD COLUMN protocol TEXT DEFAULT \'http\'')
+                        logger.info("✅ Protocol kolonu eklendi")
+                    else:
+                        logger.info("✅ Protocol kolonu zaten mevcut")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Protocol kolonu işlemi hatası: {e}")
+                    
+                # Stream_path kolonu kontrolü
+                try:
+                    cursor.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'cameras'
+                            AND column_name = 'stream_path'
+                        );
+                    """)
+                    
+                    stream_path_exists = cursor.fetchone()[0]
+                    logger.info(f"🔍 Stream_path kolonu var mı: {stream_path_exists}")
+                    
+                    if not stream_path_exists:
+                        logger.info("🔧 Cameras tablosuna stream_path kolonu ekleniyor...")
+                        cursor.execute('ALTER TABLE cameras ADD COLUMN stream_path TEXT DEFAULT \'/video\'')
+                        logger.info("✅ Stream_path kolonu eklendi")
+                    else:
+                        logger.info("✅ Stream_path kolonu zaten mevcut")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Stream_path kolonu işlemi hatası: {e}")
+                    
             except Exception as e:
                 logger.error(f"❌ Port kolonu işlemi hatası: {e}")
                 # Son çare - tabloyu yeniden oluştur
@@ -221,6 +269,8 @@ class MultiTenantDatabase:
                             location TEXT NOT NULL,
                             ip_address TEXT,
                             port INTEGER DEFAULT 554,
+                            protocol TEXT DEFAULT 'http',
+                            stream_path TEXT DEFAULT '/video',
                             rtsp_url TEXT,
                             username TEXT,
                             password TEXT,
@@ -379,6 +429,8 @@ class MultiTenantDatabase:
                     location TEXT NOT NULL,
                     ip_address TEXT,
                     port INTEGER DEFAULT 554,
+                    protocol TEXT DEFAULT 'http',
+                    stream_path TEXT DEFAULT '/video',
                     rtsp_url TEXT,
                     username TEXT,
                     password TEXT,
@@ -391,6 +443,17 @@ class MultiTenantDatabase:
                     FOREIGN KEY (company_id) REFERENCES companies (company_id)
                 )
             ''')
+            
+            # Eksik kolonları ekle (eğer yoksa)
+            try:
+                cursor.execute("ALTER TABLE cameras ADD COLUMN protocol TEXT DEFAULT 'http'")
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute("ALTER TABLE cameras ADD COLUMN stream_path TEXT DEFAULT '/video'")
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
             
             # PPE Tespitleri tablosu (şirket bazlı)
             cursor.execute('''
@@ -883,27 +946,96 @@ class MultiTenantDatabase:
             # Placeholder belirleme
             placeholder = self.get_placeholder()
             
-            # Önce mevcut kamera var mı kontrol et (sadece active kameralar)
+            # Önce mevcut kamera var mı kontrol et (hem active hem deleted kameralar)
             camera_name = camera_data.get('name', camera_data.get('camera_name', 'Real Camera'))
             logger.info(f"🔍 Checking for existing camera with name: {camera_name}")
             
             cursor.execute(f'''
-                SELECT camera_id FROM cameras 
-                WHERE company_id = {placeholder} AND camera_name = {placeholder} AND status = 'active'
+                SELECT camera_id, status FROM cameras 
+                WHERE company_id = {placeholder} AND camera_name = {placeholder}
             ''', (company_id, camera_name))
             
             existing_camera = cursor.fetchone()
             if existing_camera:
-                logger.warning(f"⚠️ Camera with name '{camera_name}' already exists")
-                conn.close()
-                return False, f"'{camera_name}' isimli kamera zaten mevcut. Farklı bir isim kullanın."
+                existing_camera_id, existing_status = existing_camera
+                if existing_status == 'active':
+                    logger.warning(f"⚠️ Active camera with name '{camera_name}' already exists")
+                    conn.close()
+                    return False, f"'{camera_name}' isimli kamera zaten mevcut. Farklı bir isim kullanın."
+                elif existing_status == 'deleted':
+                    logger.info(f"🔄 Found deleted camera with same name '{camera_name}', will reuse the record")
+                    # Silinmiş kamerayı yeniden aktif hale getir
+                    if self.db_adapter.db_type == 'postgresql':
+                        cursor.execute(f'''
+                            UPDATE cameras 
+                            SET status = 'active', 
+                                location = {placeholder},
+                                ip_address = {placeholder},
+                                port = {placeholder},
+                                protocol = {placeholder},
+                                stream_path = {placeholder},
+                                rtsp_url = {placeholder},
+                                username = {placeholder},
+                                password = {placeholder},
+                                resolution = {placeholder},
+                                fps = {placeholder},
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE camera_id = {placeholder}
+                        ''', (
+                            camera_data.get('location', 'Genel'),
+                            ip_address,
+                            port,
+                            protocol,
+                            stream_path,
+                            rtsp_url,
+                            username,
+                            password,
+                            resolution,
+                            camera_data.get('fps', 25),
+                            existing_camera_id
+                        ))
+                    else:
+                        cursor.execute(f'''
+                            UPDATE cameras 
+                            SET status = 'active', 
+                                location = {placeholder},
+                                ip_address = {placeholder},
+                                port = {placeholder},
+                                protocol = {placeholder},
+                                stream_path = {placeholder},
+                                rtsp_url = {placeholder},
+                                username = {placeholder},
+                                password = {placeholder},
+                                resolution = {placeholder},
+                                fps = {placeholder},
+                                updated_at = datetime('now')
+                            WHERE camera_id = {placeholder}
+                        ''', (
+                            camera_data.get('location', 'Genel'),
+                            ip_address,
+                            port,
+                            protocol,
+                            stream_path,
+                            rtsp_url,
+                            username,
+                            password,
+                            resolution,
+                            camera_data.get('fps', 25),
+                            existing_camera_id
+                        ))
+                    
+                    conn.commit()
+                    conn.close()
+                    logger.info(f"✅ Successfully reactivated deleted camera: {existing_camera_id}")
+                    return True, existing_camera_id
             
             logger.info(f"✅ No existing camera found with this name")
             
             # Production database için temel kolonları kullan
             basic_columns = [
                 'camera_id', 'company_id', 'camera_name', 'location', 'ip_address',
-                'rtsp_url', 'username', 'password', 'resolution', 'fps', 'status'
+                'port', 'protocol', 'stream_path', 'rtsp_url', 'username', 'password', 
+                'resolution', 'fps', 'status'
             ]
             
             basic_values = [
@@ -912,6 +1044,9 @@ class MultiTenantDatabase:
                 camera_name,
                 camera_data.get('location', 'Genel'),
                 ip_address,
+                port,
+                protocol,
+                stream_path,
                 rtsp_url,
                 username,
                 password,
@@ -956,9 +1091,6 @@ class MultiTenantDatabase:
             
             # Ek kolonları kontrol et ve ekle
             extended_columns = {
-                'port': port,
-                'protocol': protocol,
-                'stream_path': stream_path,
                 'auth_type': camera_data.get('auth_type', 'basic'),
                 'quality': camera_data.get('quality', 80),
                 'audio_enabled': camera_data.get('audio_enabled', False),
@@ -1023,12 +1155,12 @@ class MultiTenantDatabase:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Tüm kamera bilgilerini çek (updated_at kolonu olmadan)
+            # Tüm kamera bilgilerini çek (protocol ve stream_path dahil)
             placeholder = self.get_placeholder()
             cursor.execute(f'''
                 SELECT camera_id, camera_name, location, ip_address, rtsp_url, 
                        username, password, resolution, fps, status, last_detection,
-                       created_at
+                       created_at, protocol, stream_path, port
                 FROM cameras
                 WHERE company_id = {placeholder} AND status != 'deleted'
             ''', (company_id,))
@@ -1042,7 +1174,9 @@ class MultiTenantDatabase:
                         'camera_name': row.get('camera_name'),
                         'location': row.get('location'),
                         'ip_address': row.get('ip_address'),
-                        'port': 8080,  # Default port updated to 8080
+                        'port': row.get('port', 8080),  # Use actual port from database
+                        'protocol': row.get('protocol', 'http'),  # Use actual protocol from database
+                        'stream_path': row.get('stream_path', '/video'),  # Use actual stream_path from database
                         'rtsp_url': row.get('rtsp_url'),
                         'username': row.get('username'),
                         'password': row.get('password'),
@@ -1059,7 +1193,9 @@ class MultiTenantDatabase:
                         'camera_name': row[1],
                         'location': row[2],
                         'ip_address': row[3],
-                        'port': 8080,  # Default port updated to 8080
+                        'port': row[14] if len(row) > 14 else 8080,  # Use actual port from database
+                        'protocol': row[12] if len(row) > 12 else 'http',  # Use actual protocol from database
+                        'stream_path': row[13] if len(row) > 13 else '/video',  # Use actual stream_path from database
                         'rtsp_url': row[4],
                         'username': row[5],
                         'password': row[6],
