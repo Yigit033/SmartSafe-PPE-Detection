@@ -122,6 +122,21 @@ class BaseSectorDetector(ABC):
                         'details': f"Eksik PPE: {', '.join(compliance.missing_ppe)}",
                         'risk_level': violation['risk_level']
                     })
+            else:
+                # Eğer violation_count 0 ama missing_ppe varsa, zorla ihlal ekle
+                if compliance.missing_ppe:
+                    violation = {
+                        'person_id': f'{self.sector_id.upper()[0]}W001',
+                        'missing_ppe': compliance.missing_ppe,
+                        'risk_level': 'HIGH' if len(compliance.missing_ppe) >= 2 else 'MEDIUM'
+                    }
+                    analysis['violations'].append(violation)
+                    analysis['violation_people'] = 1
+                    analysis['sector_specific'][f'{self.sector_id}_violations'].append({
+                        'type': f'{self.sector_id.title()} Güvenlik İhlali',
+                        'details': f"Eksik PPE: {', '.join(compliance.missing_ppe)}",
+                        'risk_level': violation['risk_level']
+                    })
             
             return {
                 'timestamp': hybrid_result.timestamp,
@@ -844,6 +859,543 @@ class WarehouseSectorDetector(BaseSectorDetector):
         
         return analysis
 
+class EnergySectorDetector(BaseSectorDetector):
+    """Enerji sektörü PPE detector"""
+    
+    def __init__(self, company_id: str = None):
+        super().__init__('energy', company_id)
+    
+    def load_model(self):
+        """Enerji sektörü modeli yükle"""
+        try:
+            from ultralytics import YOLO
+            self.model = YOLO('yolov8n.pt')
+            logger.info("✅ Enerji sektörü detector yüklendi")
+        except Exception as e:
+            logger.error(f"❌ Enerji detector yüklenemedi: {e}")
+            self.model = None
+    
+    def detect_ppe_fallback(self, image: np.ndarray, camera_id: str) -> Dict:
+        """Enerji sektörü PPE tespiti"""
+        try:
+            if self.model is None:
+                return self.create_fallback_result(image, camera_id)
+            
+            results = self.model(image, conf=0.75, verbose=False)
+            
+            detections = []
+            for result in results:
+                if result.boxes is not None:
+                    for box in result.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        confidence = box.conf[0].cpu().numpy()
+                        class_id = int(box.cls[0].cpu().numpy())
+                        
+                        energy_classes = {
+                            0: 'person', 1: 'gloves', 2: 'shoes', 
+                            3: 'safety_suit', 4: 'helmet', 5: 'glasses',
+                            6: 'earmuffs'
+                        }
+                        class_name = energy_classes.get(class_id, f"class_{class_id}")
+                        
+                        detections.append({
+                            'bbox': (int(x1), int(y1), int(x2), int(y2)),
+                            'confidence': float(confidence),
+                            'class_name': class_name
+                        })
+            
+            analysis = self.analyze_energy_compliance(detections, camera_id)
+            
+            return {
+                'timestamp': datetime.now(),
+                'camera_id': camera_id,
+                'detections': detections,
+                'analysis': analysis,
+                'success': True,
+                'sector': 'energy'
+            }
+            
+        except Exception as e:
+            logger.error(f"Enerji detection hatası: {e}")
+            return self.create_fallback_result(image, camera_id)
+    
+    def analyze_energy_compliance(self, detections: List[Dict], camera_id: str) -> Dict:
+        """Enerji sektörü uygunluk analizi"""
+        people = [d for d in detections if d['class_name'] == 'person']
+        
+        detected_ppe = {
+            'gloves': [d for d in detections if 'gloves' in d['class_name']],
+            'shoes': [d for d in detections if 'shoes' in d['class_name']],
+            'safety_suit': [d for d in detections if 'safety_suit' in d['class_name']],
+            'helmet': [d for d in detections if 'helmet' in d['class_name']],
+            'glasses': [d for d in detections if 'glasses' in d['class_name']],
+            'earmuffs': [d for d in detections if 'earmuffs' in d['class_name']]
+        }
+        
+        analysis = {
+            'total_people': len(people),
+            'compliant_people': 0,
+            'violation_people': 0,
+            'compliance_rate': 0.0,
+            'violations': [],
+            'sector_specific': {
+                'electrical_violations': [],
+                'critical_violations': [],
+                'penalty_amount': 0.0
+            }
+        }
+        
+        if not people:
+            return analysis
+        
+        for i, person in enumerate(people):
+            person_bbox = person['bbox']
+            
+            # Enerji sektörü zorunlu PPE kontrolü
+            has_gloves = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['gloves'])
+            has_shoes = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['shoes'])
+            has_safety_suit = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['safety_suit'])
+            has_helmet = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['helmet'])
+            
+            missing_ppe = []
+            if not has_gloves:
+                missing_ppe.append('gloves')
+            if not has_shoes:
+                missing_ppe.append('shoes')
+            if not has_safety_suit:
+                missing_ppe.append('safety_suit')
+            if not has_helmet:
+                missing_ppe.append('helmet')
+            
+            is_compliant = len(missing_ppe) == 0
+            
+            if is_compliant:
+                analysis['compliant_people'] += 1
+            else:
+                analysis['violation_people'] += 1
+                
+                violation_details = {
+                    'person_id': f'EW{i+1:03d}',
+                    'missing_ppe': missing_ppe,
+                    'electrical_risk': 'CRITICAL' if len(missing_ppe) >= 2 else 'HIGH',
+                    'penalty': sum(self.sector_config.mandatory_ppe[ppe]['penalty_per_violation'] 
+                                 for ppe in missing_ppe if ppe in self.sector_config.mandatory_ppe)
+                }
+                
+                analysis['violations'].append(violation_details)
+                analysis['sector_specific']['electrical_violations'].append({
+                    'type': 'Elektrik Güvenlik İhlali',
+                    'details': f"Eksik PPE: {', '.join(missing_ppe)}",
+                    'risk_level': violation_details['electrical_risk']
+                })
+                
+                analysis['sector_specific']['penalty_amount'] += violation_details['penalty']
+        
+        analysis['compliance_rate'] = (analysis['compliant_people'] / analysis['total_people']) * 100
+        return analysis
+
+class PetrochemicalSectorDetector(BaseSectorDetector):
+    """Petrokimya sektörü PPE detector"""
+    
+    def __init__(self, company_id: str = None):
+        super().__init__('petrochemical', company_id)
+    
+    def load_model(self):
+        """Petrokimya sektörü modeli yükle"""
+        try:
+            from ultralytics import YOLO
+            self.model = YOLO('yolov8n.pt')
+            logger.info("✅ Petrokimya sektörü detector yüklendi")
+        except Exception as e:
+            logger.error(f"❌ Petrokimya detector yüklenemedi: {e}")
+            self.model = None
+    
+    def detect_ppe_fallback(self, image: np.ndarray, camera_id: str) -> Dict:
+        """Petrokimya sektörü PPE tespiti"""
+        try:
+            if self.model is None:
+                return self.create_fallback_result(image, camera_id)
+            
+            results = self.model(image, conf=0.8, verbose=False)
+            
+            detections = []
+            for result in results:
+                if result.boxes is not None:
+                    for box in result.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        confidence = box.conf[0].cpu().numpy()
+                        class_id = int(box.cls[0].cpu().numpy())
+                        
+                        petrochemical_classes = {
+                            0: 'person', 1: 'face_mask_medical', 2: 'safety_suit', 
+                            3: 'respirator', 4: 'gloves', 5: 'helmet', 6: 'shoes'
+                        }
+                        class_name = petrochemical_classes.get(class_id, f"class_{class_id}")
+                        
+                        detections.append({
+                            'bbox': (int(x1), int(y1), int(x2), int(y2)),
+                            'confidence': float(confidence),
+                            'class_name': class_name
+                        })
+            
+            analysis = self.analyze_petrochemical_compliance(detections, camera_id)
+            
+            return {
+                'timestamp': datetime.now(),
+                'camera_id': camera_id,
+                'detections': detections,
+                'analysis': analysis,
+                'success': True,
+                'sector': 'petrochemical'
+            }
+            
+        except Exception as e:
+            logger.error(f"Petrokimya detection hatası: {e}")
+            return self.create_fallback_result(image, camera_id)
+    
+    def analyze_petrochemical_compliance(self, detections: List[Dict], camera_id: str) -> Dict:
+        """Petrokimya sektörü uygunluk analizi"""
+        people = [d for d in detections if d['class_name'] == 'person']
+        
+        detected_ppe = {
+            'face_mask': [d for d in detections if 'face_mask' in d['class_name'] or 'mask' in d['class_name']],
+            'safety_suit': [d for d in detections if 'safety_suit' in d['class_name'] or 'suit' in d['class_name']],
+            'respirator': [d for d in detections if 'respirator' in d['class_name']],
+            'gloves': [d for d in detections if 'gloves' in d['class_name']],
+            'helmet': [d for d in detections if 'helmet' in d['class_name']],
+            'shoes': [d for d in detections if 'shoes' in d['class_name']]
+        }
+        
+        analysis = {
+            'total_people': len(people),
+            'compliant_people': 0,
+            'violation_people': 0,
+            'compliance_rate': 0.0,
+            'violations': [],
+            'sector_specific': {
+                'chemical_violations': [],
+                'critical_violations': [],
+                'penalty_amount': 0.0
+            }
+        }
+        
+        if not people:
+            return analysis
+        
+        for i, person in enumerate(people):
+            person_bbox = person['bbox']
+            
+            # Petrokimya sektörü zorunlu PPE kontrolü
+            has_face_mask = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['face_mask'])
+            has_safety_suit = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['safety_suit'])
+            has_respirator = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['respirator'])
+            has_gloves = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['gloves'])
+            
+            missing_ppe = []
+            if not has_face_mask:
+                missing_ppe.append('face_mask')
+            if not has_safety_suit:
+                missing_ppe.append('safety_suit')
+            if not has_respirator:
+                missing_ppe.append('respirator')
+            if not has_gloves:
+                missing_ppe.append('gloves')
+            
+            is_compliant = len(missing_ppe) == 0
+            
+            if is_compliant:
+                analysis['compliant_people'] += 1
+            else:
+                analysis['violation_people'] += 1
+                
+                violation_details = {
+                    'person_id': f'PW{i+1:03d}',
+                    'missing_ppe': missing_ppe,
+                    'chemical_risk': 'CRITICAL' if len(missing_ppe) >= 2 else 'HIGH',
+                    'penalty': sum(self.sector_config.mandatory_ppe[ppe]['penalty_per_violation'] 
+                                 for ppe in missing_ppe if ppe in self.sector_config.mandatory_ppe)
+                }
+                
+                analysis['violations'].append(violation_details)
+                analysis['sector_specific']['chemical_violations'].append({
+                    'type': 'Kimyasal Güvenlik İhlali',
+                    'details': f"Eksik PPE: {', '.join(missing_ppe)}",
+                    'risk_level': violation_details['chemical_risk']
+                })
+                
+                analysis['sector_specific']['penalty_amount'] += violation_details['penalty']
+        
+        analysis['compliance_rate'] = (analysis['compliant_people'] / analysis['total_people']) * 100
+        return analysis
+
+class MarineSectorDetector(BaseSectorDetector):
+    """Denizcilik sektörü PPE detector"""
+    
+    def __init__(self, company_id: str = None):
+        super().__init__('marine', company_id)
+    
+    def load_model(self):
+        """Denizcilik sektörü modeli yükle"""
+        try:
+            from ultralytics import YOLO
+            self.model = YOLO('yolov8n.pt')
+            logger.info("✅ Denizcilik sektörü detector yüklendi")
+        except Exception as e:
+            logger.error(f"❌ Denizcilik detector yüklenemedi: {e}")
+            self.model = None
+    
+    def detect_ppe_fallback(self, image: np.ndarray, camera_id: str) -> Dict:
+        """Denizcilik sektörü PPE tespiti"""
+        try:
+            if self.model is None:
+                return self.create_fallback_result(image, camera_id)
+            
+            results = self.model(image, conf=0.7, verbose=False)
+            
+            detections = []
+            for result in results:
+                if result.boxes is not None:
+                    for box in result.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        confidence = box.conf[0].cpu().numpy()
+                        class_id = int(box.cls[0].cpu().numpy())
+                        
+                        marine_classes = {
+                            0: 'person', 1: 'safety_vest', 2: 'safety_suit', 
+                            3: 'helmet', 4: 'shoes', 5: 'gloves', 6: 'glasses'
+                        }
+                        class_name = marine_classes.get(class_id, f"class_{class_id}")
+                        
+                        detections.append({
+                            'bbox': (int(x1), int(y1), int(x2), int(y2)),
+                            'confidence': float(confidence),
+                            'class_name': class_name
+                        })
+            
+            analysis = self.analyze_marine_compliance(detections, camera_id)
+            
+            return {
+                'timestamp': datetime.now(),
+                'camera_id': camera_id,
+                'detections': detections,
+                'analysis': analysis,
+                'success': True,
+                'sector': 'marine'
+            }
+            
+        except Exception as e:
+            logger.error(f"Denizcilik detection hatası: {e}")
+            return self.create_fallback_result(image, camera_id)
+    
+    def analyze_marine_compliance(self, detections: List[Dict], camera_id: str) -> Dict:
+        """Denizcilik sektörü uygunluk analizi"""
+        people = [d for d in detections if d['class_name'] == 'person']
+        
+        detected_ppe = {
+            'safety_vest': [d for d in detections if 'safety_vest' in d['class_name'] or 'vest' in d['class_name']],
+            'safety_suit': [d for d in detections if 'safety_suit' in d['class_name'] or 'suit' in d['class_name']],
+            'helmet': [d for d in detections if 'helmet' in d['class_name']],
+            'shoes': [d for d in detections if 'shoes' in d['class_name']],
+            'gloves': [d for d in detections if 'gloves' in d['class_name']],
+            'glasses': [d for d in detections if 'glasses' in d['class_name']]
+        }
+        
+        analysis = {
+            'total_people': len(people),
+            'compliant_people': 0,
+            'violation_people': 0,
+            'compliance_rate': 0.0,
+            'violations': [],
+            'sector_specific': {
+                'marine_violations': [],
+                'critical_violations': [],
+                'penalty_amount': 0.0
+            }
+        }
+        
+        if not people:
+            return analysis
+        
+        for i, person in enumerate(people):
+            person_bbox = person['bbox']
+            
+            # Denizcilik sektörü zorunlu PPE kontrolü
+            has_safety_vest = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['safety_vest'])
+            has_safety_suit = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['safety_suit'])
+            has_helmet = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['helmet'])
+            has_shoes = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['shoes'])
+            
+            missing_ppe = []
+            if not has_safety_vest:
+                missing_ppe.append('safety_vest')
+            if not has_safety_suit:
+                missing_ppe.append('safety_suit')
+            if not has_helmet:
+                missing_ppe.append('helmet')
+            if not has_shoes:
+                missing_ppe.append('shoes')
+            
+            is_compliant = len(missing_ppe) == 0
+            
+            if is_compliant:
+                analysis['compliant_people'] += 1
+            else:
+                analysis['violation_people'] += 1
+                
+                violation_details = {
+                    'person_id': f'MW{i+1:03d}',
+                    'missing_ppe': missing_ppe,
+                    'marine_risk': 'HIGH' if len(missing_ppe) >= 2 else 'MEDIUM',
+                    'penalty': sum(self.sector_config.mandatory_ppe[ppe]['penalty_per_violation'] 
+                                 for ppe in missing_ppe if ppe in self.sector_config.mandatory_ppe)
+                }
+                
+                analysis['violations'].append(violation_details)
+                analysis['sector_specific']['marine_violations'].append({
+                    'type': 'Denizcilik Güvenlik İhlali',
+                    'details': f"Eksik PPE: {', '.join(missing_ppe)}",
+                    'risk_level': violation_details['marine_risk']
+                })
+                
+                analysis['sector_specific']['penalty_amount'] += violation_details['penalty']
+        
+        analysis['compliance_rate'] = (analysis['compliant_people'] / analysis['total_people']) * 100
+        return analysis
+
+class AviationSectorDetector(BaseSectorDetector):
+    """Havacılık sektörü PPE detector"""
+    
+    def __init__(self, company_id: str = None):
+        super().__init__('aviation', company_id)
+    
+    def load_model(self):
+        """Havacılık sektörü modeli yükle"""
+        try:
+            from ultralytics import YOLO
+            self.model = YOLO('yolov8n.pt')
+            logger.info("✅ Havacılık sektörü detector yüklendi")
+        except Exception as e:
+            logger.error(f"❌ Havacılık detector yüklenemedi: {e}")
+            self.model = None
+    
+    def detect_ppe_fallback(self, image: np.ndarray, camera_id: str) -> Dict:
+        """Havacılık sektörü PPE tespiti"""
+        try:
+            if self.model is None:
+                return self.create_fallback_result(image, camera_id)
+            
+            results = self.model(image, conf=0.75, verbose=False)
+            
+            detections = []
+            for result in results:
+                if result.boxes is not None:
+                    for box in result.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        confidence = box.conf[0].cpu().numpy()
+                        class_id = int(box.cls[0].cpu().numpy())
+                        
+                        aviation_classes = {
+                            0: 'person', 1: 'headset', 2: 'safety_suit', 
+                            3: 'shoes', 4: 'glasses', 5: 'gloves', 6: 'helmet'
+                        }
+                        class_name = aviation_classes.get(class_id, f"class_{class_id}")
+                        
+                        detections.append({
+                            'bbox': (int(x1), int(y1), int(x2), int(y2)),
+                            'confidence': float(confidence),
+                            'class_name': class_name
+                        })
+            
+            analysis = self.analyze_aviation_compliance(detections, camera_id)
+            
+            return {
+                'timestamp': datetime.now(),
+                'camera_id': camera_id,
+                'detections': detections,
+                'analysis': analysis,
+                'success': True,
+                'sector': 'aviation'
+            }
+            
+        except Exception as e:
+            logger.error(f"Havacılık detection hatası: {e}")
+            return self.create_fallback_result(image, camera_id)
+    
+    def analyze_aviation_compliance(self, detections: List[Dict], camera_id: str) -> Dict:
+        """Havacılık sektörü uygunluk analizi"""
+        people = [d for d in detections if d['class_name'] == 'person']
+        
+        detected_ppe = {
+            'headset': [d for d in detections if 'headset' in d['class_name']],
+            'safety_suit': [d for d in detections if 'safety_suit' in d['class_name'] or 'suit' in d['class_name']],
+            'shoes': [d for d in detections if 'shoes' in d['class_name']],
+            'glasses': [d for d in detections if 'glasses' in d['class_name']],
+            'gloves': [d for d in detections if 'gloves' in d['class_name']],
+            'helmet': [d for d in detections if 'helmet' in d['class_name']]
+        }
+        
+        analysis = {
+            'total_people': len(people),
+            'compliant_people': 0,
+            'violation_people': 0,
+            'compliance_rate': 0.0,
+            'violations': [],
+            'sector_specific': {
+                'aviation_violations': [],
+                'critical_violations': [],
+                'penalty_amount': 0.0
+            }
+        }
+        
+        if not people:
+            return analysis
+        
+        for i, person in enumerate(people):
+            person_bbox = person['bbox']
+            
+            # Havacılık sektörü zorunlu PPE kontrolü
+            has_headset = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['headset'])
+            has_safety_suit = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['safety_suit'])
+            has_shoes = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['shoes'])
+            has_glasses = any(self.boxes_overlap(person_bbox, ppe['bbox']) for ppe in detected_ppe['glasses'])
+            
+            missing_ppe = []
+            if not has_headset:
+                missing_ppe.append('headset')
+            if not has_safety_suit:
+                missing_ppe.append('safety_suit')
+            if not has_shoes:
+                missing_ppe.append('shoes')
+            if not has_glasses:
+                missing_ppe.append('glasses')
+            
+            is_compliant = len(missing_ppe) == 0
+            
+            if is_compliant:
+                analysis['compliant_people'] += 1
+            else:
+                analysis['violation_people'] += 1
+                
+                violation_details = {
+                    'person_id': f'AW{i+1:03d}',
+                    'missing_ppe': missing_ppe,
+                    'aviation_risk': 'HIGH' if len(missing_ppe) >= 2 else 'MEDIUM',
+                    'penalty': sum(self.sector_config.mandatory_ppe[ppe]['penalty_per_violation'] 
+                                 for ppe in missing_ppe if ppe in self.sector_config.mandatory_ppe)
+                }
+                
+                analysis['violations'].append(violation_details)
+                analysis['sector_specific']['aviation_violations'].append({
+                    'type': 'Havacılık Güvenlik İhlali',
+                    'details': f"Eksik PPE: {', '.join(missing_ppe)}",
+                    'risk_level': violation_details['aviation_risk']
+                })
+                
+                analysis['sector_specific']['penalty_amount'] += violation_details['penalty']
+        
+        analysis['compliance_rate'] = (analysis['compliant_people'] / analysis['total_people']) * 100
+        return analysis
+
 class SectorDetectorFactory:
     """Sektöre göre doğru detector'ı döndüren factory"""
     
@@ -867,6 +1419,14 @@ class SectorDetectorFactory:
                     cls._detectors[cache_key] = ManufacturingSectorDetector(company_id)
                 elif sector_id == 'warehouse':
                     cls._detectors[cache_key] = WarehouseSectorDetector(company_id)
+                elif sector_id == 'energy':
+                    cls._detectors[cache_key] = EnergySectorDetector(company_id)
+                elif sector_id == 'petrochemical':
+                    cls._detectors[cache_key] = PetrochemicalSectorDetector(company_id)
+                elif sector_id == 'marine':
+                    cls._detectors[cache_key] = MarineSectorDetector(company_id)
+                elif sector_id == 'aviation':
+                    cls._detectors[cache_key] = AviationSectorDetector(company_id)
                 else:
                     logger.warning(f"Bilinmeyen sektör: {sector_id}, construction detector kullanılacak")
                     cls._detectors[cache_key] = ConstructionSectorDetector(company_id)
@@ -879,7 +1439,8 @@ class SectorDetectorFactory:
     @classmethod
     def list_supported_sectors(cls) -> List[str]:
         """Desteklenen sektörleri listele"""
-        return ['construction', 'food', 'chemical', 'manufacturing', 'warehouse']
+        return ['construction', 'food', 'chemical', 'manufacturing', 'warehouse', 
+                'energy', 'petrochemical', 'marine', 'aviation']
     
     @classmethod
     def clear_cache(cls):

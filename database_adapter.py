@@ -134,26 +134,212 @@ class DatabaseAdapter:
             logger.info("🔧 Creating database tables...")
             
             # Companies table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS companies (
-                    company_id TEXT PRIMARY KEY,
-                    company_name TEXT NOT NULL,
-                    sector TEXT NOT NULL,
-                    contact_person TEXT NOT NULL,
-                    email TEXT UNIQUE NOT NULL,
-                    phone TEXT,
-                    address TEXT,
-                    max_cameras INTEGER DEFAULT 25,
-                    subscription_type TEXT DEFAULT 'basic',
-                    subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    subscription_end TIMESTAMP,
-                    status TEXT DEFAULT 'active',
-                    api_key TEXT UNIQUE,
-                    required_ppe TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS companies (
+                        company_id TEXT PRIMARY KEY,
+                        company_name TEXT NOT NULL,
+                        sector TEXT NOT NULL,
+                        contact_person TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL,
+                        phone TEXT,
+                        address TEXT,
+                        max_cameras INTEGER DEFAULT 25,
+                        subscription_type TEXT DEFAULT 'basic',
+                        subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        subscription_end TIMESTAMP,
+                        status TEXT DEFAULT 'active',
+                        api_key TEXT UNIQUE,
+                        required_ppe TEXT,
+                        profile_image TEXT,
+                        sector_config TEXT,
+                        ppe_requirements TEXT,
+                        compliance_settings TEXT,
+                        email_notifications BOOLEAN DEFAULT TRUE,
+                        sms_notifications BOOLEAN DEFAULT FALSE,
+                        push_notifications BOOLEAN DEFAULT TRUE,
+                        violation_alerts BOOLEAN DEFAULT TRUE,
+                        system_alerts BOOLEAN DEFAULT TRUE,
+                        report_notifications BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS companies (
+                        company_id VARCHAR(255) PRIMARY KEY,
+                        company_name VARCHAR(255) NOT NULL,
+                        sector VARCHAR(100) NOT NULL,
+                        contact_person VARCHAR(255) NOT NULL,
+                        email VARCHAR(255) UNIQUE NOT NULL,
+                        phone VARCHAR(50),
+                        address TEXT,
+                        max_cameras INTEGER DEFAULT 25,
+                        subscription_type VARCHAR(50) DEFAULT 'basic',
+                        subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        subscription_end TIMESTAMP,
+                        status VARCHAR(50) DEFAULT 'active',
+                        api_key VARCHAR(255) UNIQUE,
+                        required_ppe TEXT,
+                        profile_image TEXT,
+                        sector_config JSON,
+                        ppe_requirements JSON,
+                        compliance_settings JSON,
+                        email_notifications BOOLEAN DEFAULT TRUE,
+                        sms_notifications BOOLEAN DEFAULT FALSE,
+                        push_notifications BOOLEAN DEFAULT TRUE,
+                        violation_alerts BOOLEAN DEFAULT TRUE,
+                        system_alerts BOOLEAN DEFAULT TRUE,
+                        report_notifications BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            
+            # Create sector performance metrics table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS sector_performance_metrics (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT,
+                        sector_id TEXT,
+                        date TEXT,
+                        total_detections INTEGER DEFAULT 0,
+                        compliance_rate REAL,
+                        violations_count INTEGER DEFAULT 0,
+                        penalty_amount REAL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS sector_performance_metrics (
+                        id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255),
+                        sector_id VARCHAR(100),
+                        date DATE,
+                        total_detections INTEGER DEFAULT 0,
+                        compliance_rate DECIMAL(5,2),
+                        violations_count INTEGER DEFAULT 0,
+                        penalty_amount DECIMAL(10,2) DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            
+            # Create sector PPE configs table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS sector_ppe_configs (
+                        sector_id TEXT PRIMARY KEY,
+                        sector_name TEXT,
+                        mandatory_ppe TEXT,
+                        optional_ppe TEXT,
+                        detection_settings TEXT,
+                        penalty_settings TEXT,
+                        compliance_requirements TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS sector_ppe_configs (
+                        sector_id VARCHAR(100) PRIMARY KEY,
+                        sector_name VARCHAR(255),
+                        mandatory_ppe JSON,
+                        optional_ppe JSON,
+                        detection_settings JSON,
+                        penalty_settings JSON,
+                        compliance_requirements JSON,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            
+            # Add new columns if they don't exist
+            if self.db_type == 'sqlite':
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN sector_config TEXT')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN ppe_requirements TEXT')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN compliance_settings TEXT')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN email_notifications BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN sms_notifications BOOLEAN DEFAULT FALSE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN push_notifications BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN violation_alerts BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN system_alerts BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN report_notifications BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN profile_image TEXT')
+                except:
+                    pass  # Column already exists
+            else:  # PostgreSQL
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS sector_config JSON')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS ppe_requirements JSON')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS compliance_settings JSON')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS sms_notifications BOOLEAN DEFAULT FALSE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS push_notifications BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS violation_alerts BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS system_alerts BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS report_notifications BOOLEAN DEFAULT TRUE')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS profile_image TEXT')
+                except:
+                    pass  # Column already exists
             
             # Users table
             cursor.execute('''

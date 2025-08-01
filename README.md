@@ -1,286 +1,152 @@
-# 🏭 PPE Detection System - Industrial Edition
-
-<div align="center">
-
-![PPE Detection](https://img.shields.io/badge/PPE%20Detection-Industrial-blue)
-![Performance](https://img.shields.io/badge/Performance-24.7%20FPS-green)
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![Industrial](https://img.shields.io/badge/Industrial-Ready-red)
-![License](https://img.shields.io/badge/License-Commercial-red)
-
-**Industrial-grade Personal Protective Equipment detection system for workplace safety monitoring**
-
-**🎯 Real-time • ⚡ 24.7 FPS • 🔧 GPU Accelerated • 🏢 Enterprise Ready • 🏭 Industrial Deployment**
-
-</div>
-
----
-
-## 🚀 System Overview
-
-Advanced computer vision system designed for **industrial workplace safety monitoring** with industry-leading performance of up to **24.7 FPS** real-time detection and **industrial-grade reliability**.
-
-### 🏆 Key Achievements
-- ✅ **24.7 FPS** maximum detection speed
-- ✅ **37x performance improvement** over baseline
-- ✅ **GPU acceleration** with NVIDIA CUDA
-- ✅ **Multi-camera industrial deployment**
-- ✅ **24/7 reliability system**
-- ✅ **Industrial API integration**
-- ✅ **Commercial-grade reliability**
-
-## 📊 Performance Benchmarks
-
-| Detection Mode | FPS | Hardware | Use Case |
-|----------------|-----|----------|----------|
-| **Ultra-Fast** | **24.7** | CPU | High-traffic monitoring |
-| **CUDA Optimized** | **22.5** | NVIDIA GPU | Desktop deployment |
-| **Multi-Mode** | **16+** | CPU/GPU | Flexible scenarios |
-| **Enterprise** | **Variable** | Full System | Complete monitoring |
-
-## 🎯 Features
-
-### 🔥 Core Detection
-- **Person Detection**: Advanced human detection
-- **Hard Hat/Helmet**: Safety helmet recognition
-- **Safety Vest**: High-visibility vest detection
-- **Multi-PPE Support**: Expandable detection classes
-
-### ⚡ Performance Optimization
-- **GPU Acceleration**: NVIDIA CUDA support
-- **Multi-threading**: Background processing
-- **Frame Skipping**: Intelligent frame optimization
-- **Model Fusion**: Optimized neural networks
-
-### 🏢 Enterprise Features
-- **Multi-camera Support**: IP camera integration
-- **Database Logging**: SQLite/PostgreSQL support
-- **Web Dashboard**: Real-time monitoring interface
-- **Alert System**: Audio/visual notifications
-- **Export Reports**: Compliance documentation
-
-## 🏭 Industrial Features
-
-### 🎥 Multi-Camera System
-- **RTSP Stream Support**: IP camera integration
-- **Failover Mechanism**: Automatic camera reconnection
-- **Synchronized Detection**: Multi-camera coordination
-- **Load Balancing**: Distributed processing
-
-### 🔧 24/7 Reliability
-- **Auto-Restart**: Automatic system recovery
-- **Health Monitoring**: CPU, memory, disk monitoring
-- **Process Supervision**: Critical process management
-- **Alert System**: Email/SMS notifications
-
-### 🌐 Industrial API
-- **RESTful API**: System integration
-- **Real-time Data**: Live detection feeds
-- **Dashboard Interface**: Web-based monitoring
-- **SCADA Integration**: Industrial protocol support
-
-### 📊 Enterprise Analytics
-- **Compliance Reporting**: PPE compliance statistics
-- **Historical Data**: Long-term trend analysis
-- **Performance Metrics**: System health reports
-- **Export Functions**: PDF/Excel reporting
+# SmartSafe AI - PPE Detection System
 
 ## 🚀 Quick Start
 
-### 1. Industrial Launcher (Recommended)
+### Prerequisites
+- Python 3.8+
+- OpenCV
+- YOLOv8
+- Flask
+
+### Installation
 ```bash
-python industrial_launcher.py
-```
-
-### 2. Individual Systems
-```bash
-# Multi-Camera System
-python industrial_multi_camera_system.py
-
-# API Server
-python industrial_api_server.py
-
-# 24/7 Reliability
-python industrial_reliability_system.py
-```
-
-### 3. Professional Launcher (Single Mode)
-```bash
-python ppe_detection_launcher.py
-```
-
-### 4. Direct Mode Selection
-```bash
-# Maximum Speed (24.7 FPS)
-python ultra_fast_ppe_detection.py
-
-# GPU Accelerated (22.5 FPS)
-python fix_cuda_detection.py
-
-# Multi-Mode Flexible (16+ FPS)
-python optimized_ppe_detection.py
-
-# Enterprise Complete
-python real_time_detection.py
-```
-
-### 5. Performance Analysis
-```bash
-python quick_performance_test.py
-```
-
-## 🔧 Installation
-
-### System Requirements
-- **Python**: 3.8 or higher
-- **RAM**: 8GB minimum (16GB recommended)
-- **Storage**: 5GB free space
-- **Camera**: USB webcam or IP camera
-- **GPU**: NVIDIA CUDA compatible (optional)
-
-### Installation Steps
-```bash
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. Launch professional interface
-python ppe_detection_launcher.py
-
-# 3. Select detection mode and start monitoring
 ```
 
-## 🎛️ Configuration
-
-### Performance Tuning
-```python
-# Ultra-Fast Mode Settings
-FRAME_SKIP = 12          # Process every 12th frame
-INPUT_SIZE = 80          # Ultra-small input resolution
-CONFIDENCE = 0.8         # High confidence threshold
-
-# CUDA Mode Settings
-GPU_ACCELERATION = True   # Enable NVIDIA CUDA
-BATCH_SIZE = 1           # Optimized batch processing
-PRECISION = "fp16"       # Half precision for speed
-```
-
-### Detection Parameters
-```python
-# PPE Detection Settings
-PPE_CLASSES = [
-    "person",           # Person detection
-    "helmet",           # Hard hat detection
-    "safety_vest",      # High-vis vest detection
-    "face_mask",        # Face protection
-    "safety_goggles"    # Eye protection
-]
-
-DETECTION_THRESHOLD = 0.7    # Confidence threshold
-IOU_THRESHOLD = 0.5         # Non-max suppression
-```
-
-## 📈 Performance Optimization Guide
-
-### For Maximum Speed (24.7 FPS)
-1. Use `ultra_fast_ppe_detection.py`
-2. Set camera resolution to 160x120
-3. Increase frame skip to 12x
-4. Close background applications
-5. Use dedicated hardware
-
-### For Best Accuracy
-1. Use `optimized_ppe_detection.py` (Accurate Mode)
-2. Set camera resolution to 640x480+
-3. Reduce frame skip to 2-5x
-4. Enable GPU acceleration
-5. Use SH17 YOLOv9-e model
-
-## 🏭 Commercial Deployment
-
-### Production Checklist
-- [ ] Hardware requirements verified
-- [ ] Camera positioning optimized
-- [ ] Network connectivity tested
-- [ ] Database configuration completed
-- [ ] Alert system configured
-- [ ] User training completed
-- [ ] Monitoring dashboard deployed
-
-### Use Case Examples
-
-#### Manufacturing Plant
+### Database Setup
 ```bash
-python ultra_fast_ppe_detection.py
-# 24.7 FPS real-time production line monitoring
+# Database is automatically initialized when the application starts
+# All migrations are handled by database_adapter.py
+
+# Run integration tests to verify all sectors
+python test_sector_integration.py
 ```
 
-#### Construction Site
+### Start the Application
 ```bash
-python real_time_detection.py --multi-camera
-# Multi-camera deployment with database logging
+python smartsafe_saas_api.py
 ```
 
-#### Security Office
+## 📊 Supported Sectors
+
+SmartSafe AI supports **9 sectors** with specialized PPE detection:
+
+### Core Sectors
+- **Construction (İnşaat)** - Hard hat, safety vest, safety shoes
+- **Chemical (Kimya)** - Chemical suit, respirator, safety glasses
+- **Food (Gıda)** - Hair net, gloves, apron
+- **Manufacturing (İmalat)** - Safety helmet, work gloves, safety shoes
+- **Warehouse (Depo/Lojistik)** - Safety vest, safety shoes, helmet
+
+### Advanced Sectors
+- **Energy (Enerji)** - Insulated gloves, dielectric boots, arc flash suit
+- **Petrochemical (Petrokimya)** - Fire-resistant suit, gas detector, safety helmet
+- **Marine (Denizcilik & Tersane)** - Life jacket, safety helmet, work boots
+- **Aviation (Havacılık)** - High-visibility vest, safety helmet, safety shoes
+
+## 🔧 Database Management
+
+### Automatic Migration
+- `database_adapter.py` - Handles all database migrations automatically
+- `test_sector_integration.py` - Comprehensive testing for all sector integrations
+
+### Usage
 ```bash
-python fix_cuda_detection.py
-# GPU-accelerated desktop monitoring
+# Database migrations are automatic - no manual steps needed
+# Run integration tests
+python test_sector_integration.py
 ```
 
-## 🛠️ System Architecture
+## 🌐 API Endpoints
 
-```
-📊 PPE Detection System
-├── 🚀 Ultra-Fast Detection (24.7 FPS)
-├── ⚡ CUDA Optimized (22.5 FPS)
-├── 🎮 Multi-Mode Flexible (16+ FPS)
-├── 🏢 Enterprise Complete (Variable)
-└── 📈 Performance Analysis
-```
+### Core Detection
+- `POST /analyze_construction_ppe` - Construction sector PPE analysis
+- `POST /analyze_chemical_ppe` - Chemical sector PPE analysis
+- `POST /analyze_food_ppe` - Food sector PPE analysis
+- `POST /analyze_manufacturing_ppe` - Manufacturing sector PPE analysis
+- `POST /analyze_warehouse_ppe` - Warehouse sector PPE analysis
 
-## 📞 Support & Maintenance
+### Advanced Sectors
+- `POST /analyze_energy_ppe` - Energy sector PPE analysis
+- `POST /analyze_petrochemical_ppe` - Petrochemical sector PPE analysis
+- `POST /analyze_marine_ppe` - Marine sector PPE analysis
+- `POST /analyze_aviation_ppe` - Aviation sector PPE analysis
 
-### System Health Check
+## 🏗️ Architecture
+
+### Core Components
+- `smartsafe_saas_api.py` - Main Flask application with API endpoints
+- `smartsafe_sector_manager.py` - Sector configuration management
+- `smartsafe_sector_detector_factory.py` - Sector-specific detector factory
+- `database_adapter.py` - Database connection and schema management (includes automatic migrations)
+
+### Sector Integration
+Each sector has:
+- **Mandatory PPE**: Critical safety equipment required by law
+- **Optional PPE**: Additional safety equipment for enhanced protection
+- **Detection Settings**: Confidence thresholds and detection intervals
+- **Penalty Settings**: Violation penalties and escalation rules
+- **Compliance Requirements**: Minimum compliance rates and reporting
+
+## 📈 Performance
+
+- **Real-time Detection**: 30 FPS processing capability
+- **Multi-Camera Support**: Up to 25 cameras per company
+- **Sector-Specific Models**: Optimized detection for each industry
+- **Compliance Tracking**: Automated violation detection and reporting
+
+## 🔒 Security
+
+- **Session Management**: Secure company session validation
+- **API Key Authentication**: Unique keys for each company
+- **Data Encryption**: Secure storage of sensitive information
+- **Access Control**: Role-based permissions and restrictions
+
+## 🚀 Deployment
+
+### Local Development (SQLite)
 ```bash
-python ppe_detection_launcher.py
-# Built-in system diagnostics (Option 5)
+python smartsafe_saas_api.py
 ```
 
-### Troubleshooting
-- **Low FPS**: Run `quick_performance_test.py`
-- **Camera Issues**: Run `test_cameras.py`
-- **GPU Problems**: Run `fix_cuda_detection.py`
+### Production (PostgreSQL/Render.com)
+```bash
+# Database migrations are automatic
+# Start with Gunicorn
+gunicorn -w 4 -b 0.0.0.0:10000 smartsafe_saas_api:app
+```
 
-## 🏆 Success Metrics
+## 📝 Testing
 
-### Performance Achievements
-- 🥇 **24.7 FPS** - Industry-leading detection speed
-- 🥈 **22.5 FPS** - GPU-accelerated performance  
-- 🥉 **16+ FPS** - Multi-mode flexibility
-- 📈 **37x improvement** - Over baseline performance
+### Run All Tests
+```bash
+python test_sector_integration.py
+```
 
-### Commercial Features
-- ✅ Professional launcher interface
-- ✅ Comprehensive deployment guide
-- ✅ Multiple performance modes
-- ✅ Enterprise-grade features
-- ✅ Production-ready reliability
+### Test Coverage
+- ✅ All 9 sectors supported
+- ✅ Database schema compatibility (SQLite/PostgreSQL)
+- ✅ Sector detector creation
+- ✅ PPE configuration validation
+- ✅ Detection settings verification
+- ✅ Penalty configuration testing
+- ✅ Compliance requirements validation
 
-## 📋 Documentation
+## 🤝 Contributing
 
-- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Complete deployment instructions
-- **[Performance Guide](quick_performance_test.py)** - System optimization
-- **[API Documentation](docs/)** - Technical specifications
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-## 🎯 Commercial Licensing
+## 📄 License
 
-This is a **professional-grade commercial system** designed for workplace safety monitoring. Contact for licensing and enterprise deployment options.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+For support and questions:
+- Check the [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+- Review [REAL_CAMERA_DEPLOYMENT_GUIDE.md](REAL_CAMERA_DEPLOYMENT_GUIDE.md)
+- Contact the development team
 
 ---
 
-<div align="center">
-
-**© 2025 PPE Detection System - Professional Grade Workplace Safety Solution**
-
-*🔒 Stay Safe • ⚡ Stay Fast • 🏭 Stay Compliant*
-
-</div>
+**SmartSafe AI** - Professional PPE Detection for All Industries

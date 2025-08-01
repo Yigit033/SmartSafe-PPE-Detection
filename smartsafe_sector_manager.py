@@ -289,6 +289,218 @@ class SmartSafeSectorManager:
                 'critical_ppe_tolerance': 1,
                 'reporting_frequency': 'daily'
             }
+        },
+        
+        'energy': {
+            'sector_name': 'Enerji Sektörü',
+            'mandatory_ppe': {
+                'insulated_gloves': {
+                    'name': 'İzole Eldiven',
+                    'critical': True,
+                    'penalty_per_violation': 500.0,
+                    'detection_classes': ['gloves'],
+                    'priority': 1
+                },
+                'dielectric_boots': {
+                    'name': 'Dielektrik Ayakkabı',
+                    'critical': True,
+                    'penalty_per_violation': 400.0,
+                    'detection_classes': ['shoes'],
+                    'priority': 1
+                },
+                'arc_flash_suit': {
+                    'name': 'Ark Flaş Tulumu',
+                    'critical': True,
+                    'penalty_per_violation': 800.0,
+                    'detection_classes': ['safety_suit'],
+                    'priority': 1
+                },
+                'safety_helmet': {
+                    'name': 'Güvenlik Kaskı',
+                    'critical': True,
+                    'penalty_per_violation': 300.0,
+                    'detection_classes': ['helmet'],
+                    'priority': 2
+                }
+            },
+            'optional_ppe': {
+                'safety_glasses': {'name': 'Güvenlik Gözlüğü', 'bonus_points': 20},
+                'ear_protection': {'name': 'Kulak Koruyucu', 'bonus_points': 15}
+            },
+            'detection_settings': {
+                'confidence_threshold': 0.75,
+                'detection_interval': 2,
+                'violation_cooldown': 120
+            },
+            'penalty_settings': {
+                'max_penalty_per_day': 2000.0,
+                'warning_before_penalty': 1,
+                'escalation_factor': 2.5
+            },
+            'compliance_requirements': {
+                'minimum_compliance_rate': 98.0,
+                'critical_ppe_tolerance': 0,
+                'reporting_frequency': 'hourly'
+            }
+        },
+        
+        'petrochemical': {
+            'sector_name': 'Petrokimya Sektörü',
+            'mandatory_ppe': {
+                'gas_mask': {
+                    'name': 'Gaz Maskesi',
+                    'critical': True,
+                    'penalty_per_violation': 1000.0,
+                    'detection_classes': ['face_mask_medical'],
+                    'priority': 1
+                },
+                'chemical_suit': {
+                    'name': 'Kimyasal Tulum',
+                    'critical': True,
+                    'penalty_per_violation': 800.0,
+                    'detection_classes': ['safety_suit'],
+                    'priority': 1
+                },
+                'respirator': {
+                    'name': 'Solunum Cihazı',
+                    'critical': True,
+                    'penalty_per_violation': 600.0,
+                    'detection_classes': ['respirator'],
+                    'priority': 1
+                },
+                'chemical_gloves': {
+                    'name': 'Kimyasal Eldiven',
+                    'critical': True,
+                    'penalty_per_violation': 400.0,
+                    'detection_classes': ['gloves'],
+                    'priority': 2
+                }
+            },
+            'optional_ppe': {
+                'safety_helmet': {'name': 'Güvenlik Kaskı', 'bonus_points': 25},
+                'safety_shoes': {'name': 'Güvenlik Ayakkabısı', 'bonus_points': 20}
+            },
+            'detection_settings': {
+                'confidence_threshold': 0.8,
+                'detection_interval': 1,
+                'violation_cooldown': 60
+            },
+            'penalty_settings': {
+                'max_penalty_per_day': 3000.0,
+                'warning_before_penalty': 0,
+                'escalation_factor': 3.0
+            },
+            'compliance_requirements': {
+                'minimum_compliance_rate': 99.0,
+                'critical_ppe_tolerance': 0,
+                'reporting_frequency': 'realtime'
+            }
+        },
+        
+        'marine': {
+            'sector_name': 'Denizcilik & Tersane',
+            'mandatory_ppe': {
+                'life_jacket': {
+                    'name': 'Can Yeleği',
+                    'critical': True,
+                    'penalty_per_violation': 300.0,
+                    'detection_classes': ['safety_vest'],
+                    'priority': 1
+                },
+                'waterproof_clothing': {
+                    'name': 'Su Geçirmez KKD',
+                    'critical': True,
+                    'penalty_per_violation': 250.0,
+                    'detection_classes': ['safety_suit'],
+                    'priority': 1
+                },
+                'safety_helmet': {
+                    'name': 'Güvenlik Kaskı',
+                    'critical': True,
+                    'penalty_per_violation': 200.0,
+                    'detection_classes': ['helmet'],
+                    'priority': 2
+                },
+                'safety_shoes': {
+                    'name': 'Güvenlik Ayakkabısı',
+                    'critical': True,
+                    'penalty_per_violation': 150.0,
+                    'detection_classes': ['shoes'],
+                    'priority': 2
+                }
+            },
+            'optional_ppe': {
+                'gloves': {'name': 'İş Eldiveni', 'bonus_points': 10},
+                'glasses': {'name': 'Güvenlik Gözlüğü', 'bonus_points': 15}
+            },
+            'detection_settings': {
+                'confidence_threshold': 0.7,
+                'detection_interval': 3,
+                'violation_cooldown': 180
+            },
+            'penalty_settings': {
+                'max_penalty_per_day': 800.0,
+                'warning_before_penalty': 2,
+                'escalation_factor': 1.8
+            },
+            'compliance_requirements': {
+                'minimum_compliance_rate': 90.0,
+                'critical_ppe_tolerance': 0,
+                'reporting_frequency': 'daily'
+            }
+        },
+        
+        'aviation': {
+            'sector_name': 'Havacılık Sektörü',
+            'mandatory_ppe': {
+                'headset': {
+                    'name': 'Kulaklık',
+                    'critical': True,
+                    'penalty_per_violation': 400.0,
+                    'detection_classes': ['headset'],
+                    'priority': 1
+                },
+                'antistatic_clothing': {
+                    'name': 'Antistatik KKD',
+                    'critical': True,
+                    'penalty_per_violation': 350.0,
+                    'detection_classes': ['safety_suit'],
+                    'priority': 1
+                },
+                'safety_shoes': {
+                    'name': 'Güvenlik Ayakkabısı',
+                    'critical': True,
+                    'penalty_per_violation': 200.0,
+                    'detection_classes': ['shoes'],
+                    'priority': 2
+                },
+                'safety_glasses': {
+                    'name': 'Güvenlik Gözlüğü',
+                    'critical': True,
+                    'penalty_per_violation': 150.0,
+                    'detection_classes': ['glasses'],
+                    'priority': 2
+                }
+            },
+            'optional_ppe': {
+                'gloves': {'name': 'İş Eldiveni', 'bonus_points': 15},
+                'helmet': {'name': 'Güvenlik Kaskı', 'bonus_points': 20}
+            },
+            'detection_settings': {
+                'confidence_threshold': 0.75,
+                'detection_interval': 2,
+                'violation_cooldown': 120
+            },
+            'penalty_settings': {
+                'max_penalty_per_day': 1200.0,
+                'warning_before_penalty': 1,
+                'escalation_factor': 2.0
+            },
+            'compliance_requirements': {
+                'minimum_compliance_rate': 95.0,
+                'critical_ppe_tolerance': 0,
+                'reporting_frequency': 'hourly'
+            }
         }
     }
     

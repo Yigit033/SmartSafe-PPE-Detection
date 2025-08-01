@@ -107,6 +107,9 @@
                         </div>
                         <h2>Abonelik Bilgileri</h2>
                         <p class="text-muted">Mevcut planınız ve özellikleriniz</p>
+                        <button onclick="loadSubscriptionData()" class="btn btn-sm btn-outline-primary mt-2">
+                            <i class="fas fa-sync-alt"></i> Yenile
+                        </button>
                     </div>
 
                     <div class="row">
@@ -431,18 +434,47 @@
         let selectedPlan = null;
         const companyId = '{{ company_id }}';
 
-        // Load subscription data
-        function loadSubscriptionData() {
+        // Load subscription data with retry
+        function loadSubscriptionData(retryCount = 0) {
+            console.log('🔍 Loading subscription data for company:', companyId, 'retry:', retryCount);
             fetch(`/api/company/${companyId}/subscription`)
-                .then(response => response.json())
+                .then(response => {
+                    console.log('🔍 Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(result => {
+                    console.log('🔍 API response:', result);
                     if (result.success) {
                         const subscription = result.subscription;
+                        console.log('🔍 Subscription data:', subscription);
                         
                         // Update plan details
-                        document.getElementById('plan-type').textContent = subscription.subscription_type.toUpperCase();
-                        document.getElementById('start-date').textContent = subscription.subscription_start || 'Belirtilmemiş';
-                        document.getElementById('end-date').textContent = subscription.subscription_end || 'Belirtilmemiş';
+                        document.getElementById('plan-type').textContent = (subscription.subscription_type || 'BASIC').toUpperCase();
+                        
+                        // Format start date
+                        let startDate = 'Belirtilmemiş';
+                        if (subscription.subscription_start) {
+                            try {
+                                startDate = new Date(subscription.subscription_start).toLocaleDateString('tr-TR');
+                            } catch (e) {
+                                startDate = subscription.subscription_start;
+                            }
+                        }
+                        document.getElementById('start-date').textContent = startDate;
+                        
+                        // Format end date
+                        let endDate = 'Belirtilmemiş';
+                        if (subscription.subscription_end) {
+                            try {
+                                endDate = new Date(subscription.subscription_end).toLocaleDateString('tr-TR');
+                            } catch (e) {
+                                endDate = subscription.subscription_end;
+                            }
+                        }
+                        document.getElementById('end-date').textContent = endDate;
                         
                         // Update status
                         const statusElement = document.getElementById('status');
@@ -471,10 +503,50 @@
                         } else {
                             progressBar.className = 'progress-bar bg-success';
                         }
+                    } else {
+                        console.error('❌ API returned error:', result.error);
+                        // Show error message to user
+                        document.getElementById('plan-type').textContent = 'Hata';
+                        document.getElementById('start-date').textContent = result.error || 'Veri yüklenemedi';
+                        document.getElementById('end-date').textContent = result.error || 'Veri yüklenemedi';
+                        document.getElementById('status').textContent = 'Hata';
+                        document.getElementById('status').className = 'badge bg-danger ms-2';
+                        document.getElementById('used-cameras').textContent = '0';
+                        document.getElementById('max-cameras').textContent = '0';
+                        document.getElementById('usage-progress').style.width = '0%';
+                        document.getElementById('usage-progress').textContent = '0%';
+                        
+                        // Retry logic
+                        if (retryCount < 3) {
+                            console.log('🔄 Retrying in 2 seconds...');
+                            setTimeout(() => loadSubscriptionData(retryCount + 1), 2000);
+                        } else {
+                            // Show error alert after max retries
+                            alert('Abonelik bilgileri yüklenirken hata oluştu: ' + (result.error || 'Bilinmeyen hata'));
+                        }
                     }
                 })
                 .catch(error => {
-                    console.error('Abonelik bilgileri yükleme hatası:', error);
+                    console.error('❌ Abonelik bilgileri yükleme hatası:', error);
+                    // Show error message to user
+                    document.getElementById('plan-type').textContent = 'Hata';
+                    document.getElementById('start-date').textContent = 'Bağlantı hatası';
+                    document.getElementById('end-date').textContent = 'Bağlantı hatası';
+                    document.getElementById('status').textContent = 'Hata';
+                    document.getElementById('status').className = 'badge bg-danger ms-2';
+                    document.getElementById('used-cameras').textContent = '0';
+                    document.getElementById('max-cameras').textContent = '0';
+                    document.getElementById('usage-progress').style.width = '0%';
+                    document.getElementById('usage-progress').textContent = '0%';
+                    
+                    // Retry logic
+                    if (retryCount < 3) {
+                        console.log('🔄 Retrying in 2 seconds...');
+                        setTimeout(() => loadSubscriptionData(retryCount + 1), 2000);
+                    } else {
+                        // Show error alert after max retries
+                        alert('Bağlantı hatası: ' + error.message);
+                    }
                 });
         }
 
