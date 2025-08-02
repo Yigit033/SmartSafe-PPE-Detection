@@ -49,19 +49,42 @@ class PPEDetectionManager:
         try:
             logger.info("🔄 Loading PPE detection models...")
             
-            # Auto device selection
-            if device == 'auto':
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # Production CUDA handler
+            try:
+                from production_cuda_handler import get_production_cuda_handler
+                cuda_handler = get_production_cuda_handler()
+                device = cuda_handler.get_safe_device()
+                logger.info(f"✅ Production CUDA handler: {device}")
+            except ImportError:
+                # Fallback to local CUDA test
+                if device == 'auto':
+                    if torch.cuda.is_available():
+                        try:
+                            # Test CUDA functionality
+                            test_tensor = torch.zeros(1, 3, 640, 640).cuda()
+                            device = 'cuda'
+                            logger.info("✅ CUDA test passed, using GPU")
+                        except Exception as cuda_error:
+                            logger.warning(f"⚠️ CUDA test failed: {cuda_error}, falling back to CPU")
+                            device = 'cpu'
+                    else:
+                        device = 'cpu'
             
             # Load YOLOv8 models
             self.person_model = YOLO('yolov8n.pt')  # Person detection
             self.ppe_model = YOLO('yolov8n.pt')     # PPE detection (will be enhanced)
             
-            # Move to device
-            self.person_model.to(device)
-            self.ppe_model.to(device)
+            # Move to device with error handling
+            try:
+                self.person_model.to(device)
+                self.ppe_model.to(device)
+                logger.info(f"✅ Models loaded successfully on {device}")
+            except Exception as device_error:
+                logger.warning(f"⚠️ Device assignment failed: {device_error}, using CPU")
+                device = 'cpu'
+                self.person_model.to('cpu')
+                self.ppe_model.to('cpu')
             
-            logger.info(f"✅ Models loaded successfully on {device}")
             return True
             
         except Exception as e:
@@ -126,16 +149,30 @@ class PPEDetectionManager:
     def _detect_persons(self, frame: np.ndarray) -> List[List[int]]:
         """Detect persons in frame"""
         try:
-            results = self.person_model(frame, classes=[0], conf=0.5)  # class 0 = person
+            # Try CUDA first, fallback to CPU if needed
+            try:
+                results = self.person_model(frame, classes=[0], conf=0.5, verbose=False)  # class 0 = person
+            except Exception as cuda_error:
+                logger.warning(f"⚠️ CUDA detection failed: {cuda_error}, trying CPU")
+                # Force CPU detection
+                self.person_model.to('cpu')
+                results = self.person_model(frame, classes=[0], conf=0.5, verbose=False)
+            
             person_bboxes = []
             
-            for result in results:
-                if result.boxes is not None:
-                    for box in result.boxes:
-                        if box.conf > 0.5:  # Confidence threshold
-                            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                            person_bboxes.append([int(x1), int(y1), int(x2), int(y2)])
+            if results and len(results) > 0:
+                for result in results:
+                    if result.boxes is not None:
+                        for box in result.boxes:
+                            if box.conf > 0.5:  # Confidence threshold
+                                try:
+                                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                                    person_bboxes.append([int(x1), int(y1), int(x2), int(y2)])
+                                except Exception as box_error:
+                                    logger.warning(f"⚠️ Box processing error: {box_error}")
+                                    continue
             
+            logger.info(f"🔍 Detected {len(person_bboxes)} persons")
             return person_bboxes
             
         except Exception as e:
