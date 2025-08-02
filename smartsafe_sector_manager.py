@@ -579,6 +579,10 @@ class SmartSafeSectorManager:
             for sector_id, config in self.SECTOR_CONFIGS.items()
         }
     
+    def get_supported_sectors(self) -> List[str]:
+        """Desteklenen sektörleri listele"""
+        return list(self.SECTOR_CONFIGS.keys())
+    
     def register_company(self, company_name: str, sector_id: str, camera_count: int) -> Dict:
         """Yeni şirket kaydet"""
         if sector_id not in self.SECTOR_CONFIGS:
