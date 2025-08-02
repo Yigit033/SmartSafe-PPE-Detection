@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from smartsafe_multitenant_system import MultiTenantDatabase
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
 from smartsafe_sector_detector_factory import SectorDetectorFactory
+from database_adapter import get_db_adapter
 import cv2
 import numpy as np
 import base64
@@ -97,6 +98,10 @@ class SmartSafeSaaSAPI:
         
         # Multi-tenant database - Production optimized
         self.db = MultiTenantDatabase()
+        
+        # Database adapter'ı initialize et
+        self.db_adapter = get_db_adapter()
+        self.db_adapter.init_database()
         
         # Production database schema handler
         self.is_production = (os.environ.get('RENDER') or 
@@ -358,20 +363,20 @@ class SmartSafeSaaSAPI:
                 if subscription_end:
                     try:
                         if isinstance(subscription_end, str):
-                            # Handle different date formats including microseconds
-                            if 'T' in subscription_end:
-                                # ISO format with timezone
-                                subscription_end = datetime.fromisoformat(subscription_end.replace('Z', '+00:00'))
-                            elif '.' in subscription_end:
-                                # SQLite format with microseconds: '2025-08-01 22:14:59.075710'
-                                subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S.%f')
-                            else:
-                                # Standard format: '2025-08-01 22:14:59'
-                                subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S')
-                                
-                                days_remaining = (subscription_end - datetime.now()).days
-                                is_active = days_remaining > 0
-                                logger.info(f"🔍 Subscription end: {subscription_end}, days remaining: {days_remaining}, is_active: {is_active}")
+                                    # Handle different date formats including microseconds
+                                if 'T' in subscription_end:
+                                    # ISO format with timezone
+                                    subscription_end = datetime.fromisoformat(subscription_end.replace('Z', '+00:00'))
+                                elif '.' in subscription_end:
+                                    # SQLite format with microseconds: '2025-08-01 22:14:59.075710'
+                                    subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S.%f')
+                                else:
+                                    # Standard format: '2025-08-01 22:14:59'
+                                    subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S')
+                    
+                                    days_remaining = (subscription_end - datetime.now()).days
+                                    is_active = days_remaining > 0
+                                    logger.info(f"🔍 Subscription end: {subscription_end}, days remaining: {days_remaining}, is_active: {is_active}")
                     except Exception as date_error:
                         logger.error(f"❌ Date parsing error: {date_error}")
                         logger.error(f"❌ Raw subscription_end value: {subscription_end}")
@@ -603,9 +608,9 @@ Mesaj:
                     return f'''
                     <script>
                         alert("❌ Geçersiz sektör seçimi! Lütfen geçerli bir sektör seçin.");
-                        window.history.back();
-                    </script>
-                    '''
+                            window.history.back();
+                        </script>
+                        '''
                 
                 # Şirket oluştur
                 success, result = self.db.create_company(data)
@@ -1114,10 +1119,10 @@ Mesaj:
                 logger.error(f"💥 Full traceback: {traceback.format_exc()}")
                 return jsonify({'success': False, 'error': 'Kamera eklenemedi'}), 500
         
-        # Şirket uyarıları API
+        # Şirket uyarıları API - İYİLEŞTİRİLDİ: Yeni alerts tablosu kullanıyor
         @self.app.route('/api/company/<company_id>/alerts', methods=['GET'])
         def get_company_alerts(company_id):
-            """Şirket uyarıları - Gerçek verilerle"""
+            """Şirket uyarıları - Yeni alerts tablosu ile gerçek dinamik veriler"""
             user_data = self.validate_session()
             if not user_data or user_data['company_id'] != company_id:
                 return jsonify({'error': 'Yetkisiz erişim'}), 401
@@ -1128,123 +1133,220 @@ Mesaj:
                 
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 
-                # Son 24 saat içindeki ihlalleri getir
+                # Son 24 saat içindeki alerts'leri getir
                 if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
-                    time_filter = "v.timestamp >= NOW() - INTERVAL '24 hours'"
+                    time_filter = "a.created_at >= NOW() - INTERVAL '24 hours'"
                 else:
-                    time_filter = "v.timestamp >= datetime('now', '-24 hours')"
+                    time_filter = "a.created_at >= datetime('now', '-24 hours')"
                 
                 cursor.execute(f"""
-                    SELECT v.violation_type, v.missing_ppe, v.severity, v.timestamp, 
-                           c.camera_name, v.image_path, v.resolved
-                    FROM violations v
-                    JOIN cameras c ON v.camera_id = c.camera_id
-                    WHERE v.company_id = {placeholder} 
+                    SELECT a.alert_id, a.alert_type, a.severity, a.title, a.message, 
+                           a.status, a.created_at, a.camera_id, c.camera_name
+                    FROM alerts a
+                    LEFT JOIN cameras c ON a.camera_id = c.camera_id
+                    WHERE a.company_id = {placeholder} 
                     AND {time_filter}
-                    ORDER BY v.timestamp DESC
-                    LIMIT 10
+                    ORDER BY a.created_at DESC
+                    LIMIT 20
                 """, (company_id,))
                 
-                violations = cursor.fetchall()
+                alerts_data = cursor.fetchall()
                 alerts = []
                 
-                for violation in violations:
+                for alert in alerts_data:
                     # PostgreSQL Row object vs SQLite tuple compatibility
-                    if hasattr(violation, 'keys'):  # PostgreSQL Row object
-                        violation_data = {
-                            'violation_type': violation['violation_type'],
-                            'missing_ppe': violation['missing_ppe'],
-                            'severity': violation['severity'],
-                            'timestamp': violation['timestamp'],
-                            'camera_name': violation['camera_name'],
-                            'image_path': violation['image_path'],
-                            'resolved': violation['resolved']
+                    if hasattr(alert, 'keys'):  # PostgreSQL Row object
+                        alert_data = {
+                            'alert_id': alert['alert_id'],
+                            'alert_type': alert['alert_type'],
+                            'severity': alert['severity'],
+                            'title': alert['title'],
+                            'message': alert['message'],
+                            'status': alert['status'],
+                            'created_at': alert['created_at'],
+                            'camera_id': alert['camera_id'],
+                            'camera_name': alert['camera_name']
                         }
                     else:  # SQLite tuple
-                        violation_data = {
-                            'violation_type': violation[0],
-                            'missing_ppe': violation[1],
-                            'severity': violation[2],
-                            'timestamp': violation[3],
-                            'camera_name': violation[4],
-                            'image_path': violation[5],
-                            'resolved': violation[6]
+                        alert_data = {
+                            'alert_id': alert[0],
+                            'alert_type': alert[1],
+                            'severity': alert[2],
+                            'title': alert[3],
+                            'message': alert[4],
+                            'status': alert[5],
+                            'created_at': alert[6],
+                            'camera_id': alert[7],
+                            'camera_name': alert[8]
                         }
                     
                     # Timestamp'i formatla
                     try:
                         from datetime import datetime
-                        if isinstance(violation_data['timestamp'], str):
-                            dt = datetime.fromisoformat(violation_data['timestamp'].replace('Z', '+00:00'))
+                        if isinstance(alert_data['created_at'], str):
+                            dt = datetime.fromisoformat(alert_data['created_at'].replace('Z', '+00:00'))
                         else:
-                            dt = violation_data['timestamp']
+                            dt = alert_data['created_at']
                         time_str = dt.strftime('%H:%M')
                     except:
                         time_str = 'Bilinmiyor'
                     
-                    # Missing PPE listesini işle
-                    missing_ppe_list = []
-                    if violation_data['missing_ppe']:
-                        try:
-                            import json
-                            missing_ppe_list = json.loads(violation_data['missing_ppe'])
-                        except:
-                            missing_ppe_list = [violation_data['missing_ppe']]
-                    
-                    # Türkçe PPE isimleri
-                    ppe_names = {
-                        'helmet': 'Baret',
-                        'vest': 'Güvenlik Yeleği',
-                        'glasses': 'Güvenlik Gözlüğü',
-                        'gloves': 'Eldiven',
-                        'shoes': 'Güvenlik Ayakkabısı',
-                        'mask': 'Maske'
+                    # Alert severity'ye göre icon ve renk belirle
+                    severity_config = {
+                        'critical': {'icon': '🔴', 'color': 'danger'},
+                        'warning': {'icon': '🟡', 'color': 'warning'},
+                        'info': {'icon': '🔵', 'color': 'info'},
+                        'success': {'icon': '🟢', 'color': 'success'}
                     }
                     
-                    missing_ppe_tr = [ppe_names.get(ppe, ppe) for ppe in missing_ppe_list]
+                    severity_info = severity_config.get(alert_data['severity'].lower(), 
+                                                     {'icon': '🔵', 'color': 'info'})
                     
                     alerts.append({
-                        'violation_type': ' + '.join(missing_ppe_tr) + ' Eksik' if missing_ppe_tr else violation_data['violation_type'],
-                        'description': f"{', '.join(missing_ppe_tr)} kullanılmadan çalışma tespit edildi" if missing_ppe_tr else 'PPE ihlali tespit edildi',
+                        'alert_id': alert_data['alert_id'],
+                        'type': alert_data['alert_type'],
+                        'title': alert_data['title'],
+                        'message': alert_data['message'],
                         'time': time_str,
-                        'camera_name': violation_data['camera_name'],
-                        'severity': violation_data['severity'] or 'Orta',
-                        'resolved': violation_data['resolved'],
-                        'image_path': violation_data['image_path']
+                        'camera_name': alert_data['camera_name'] or 'Sistem',
+                        'severity': alert_data['severity'],
+                        'status': alert_data['status'],
+                        'icon': severity_info['icon'],
+                        'color': severity_info['color']
                     })
                 
-                                # Eğer gerçek veri yoksa demo veriler göster
+                # Eğer gerçek veri yoksa demo veriler göster
                 if not alerts:
                     alerts = [
                         {
-                            'violation_type': 'Sistem Başlatıldı',
-                            'description': 'PPE detection sistemi aktif, ihlaller burada görünecek',
+                            'alert_id': 'demo_1',
+                            'type': 'system',
+                            'title': 'Sistem Hazırlanıyor',
+                            'message': 'PPE detection sistemi hazırlanıyor, kameralar test ediliyor',
                             'time': 'Şimdi',
                             'camera_name': 'Sistem',
-                            'severity': 'Bilgi',
-                            'resolved': False,
-                            'image_path': None
+                            'severity': 'info',
+                            'status': 'active',
+                            'icon': '🔵',
+                            'color': 'info'
                         }
                     ]
                 
                 conn.close()
-                return jsonify({'alerts': alerts})
+                
+                return jsonify({
+                    'success': True,
+                    'alerts': alerts,
+                    'total_alerts': len(alerts),
+                    'active_alerts': len([a for a in alerts if a['status'] == 'active']),
+                    'resolved_alerts': len([a for a in alerts if a['status'] == 'resolved'])
+                })
                 
             except Exception as e:
                 logger.error(f"❌ Uyarılar yüklenemedi: {e}")
-                # Hata durumunda da demo veriler göster
-                demo_alerts = [
-                    {
-                        'violation_type': 'Sistem Hazırlanıyor',
-                        'description': 'PPE detection sistemi hazırlanıyor, kameralar test ediliyor',
-                        'time': 'Şimdi',
-                        'camera_name': 'Sistem',
-                        'severity': 'Bilgi',
-                        'resolved': False,
-                        'image_path': None
+                return jsonify({
+                    'success': False,
+                    'error': 'Uyarılar yüklenemedi',
+                    'alerts': []
+                }), 500
+        
+        # Real-time Alert Generation API
+        @self.app.route('/api/company/<company_id>/alerts/generate', methods=['POST'])
+        def generate_alert(company_id):
+            """Real-time alert generation - Live detection'dan gelen verilerle"""
+            user_data = self.validate_session()
+            if not user_data or user_data['company_id'] != company_id:
+                return jsonify({'error': 'Yetkisiz erişim'}), 401
+            
+            try:
+                data = request.get_json()
+                alert_type = data.get('alert_type', 'system')
+                severity = data.get('severity', 'info')
+                title = data.get('title', 'Sistem Uyarısı')
+                message = data.get('message', 'Bilinmeyen uyarı')
+                camera_id = data.get('camera_id')
+                
+                # Alert'i database'e kaydet
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                if self.db.db_adapter.db_type == 'sqlite':
+                    cursor.execute(f'''
+                        INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at)
+                        VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 'active', datetime('now'))
+                    ''', (company_id, camera_id, alert_type, severity, title, message))
+                else:  # PostgreSQL
+                    cursor.execute(f'''
+                        INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'active', NOW())
+                    ''', (company_id, camera_id, alert_type, severity, title, message))
+                
+                conn.commit()
+                conn.close()
+                
+                logger.info(f"✅ Alert generated: {title} - {message}")
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Alert başarıyla oluşturuldu',
+                    'alert': {
+                        'alert_type': alert_type,
+                        'severity': severity,
+                        'title': title,
+                        'message': message
                     }
-                ]
-                return jsonify({'alerts': demo_alerts})
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Alert generation hatası: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Alert oluşturulamadı'
+                }), 500
+        
+        # Alert Management API
+        @self.app.route('/api/company/<company_id>/alerts/<alert_id>/resolve', methods=['POST'])
+        def resolve_alert(company_id, alert_id):
+            """Alert'i çözüldü olarak işaretle"""
+            user_data = self.validate_session()
+            if not user_data or user_data['company_id'] != company_id:
+                return jsonify({'error': 'Yetkisiz erişim'}), 401
+            
+            try:
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                if self.db.db_adapter.db_type == 'sqlite':
+                    cursor.execute(f'''
+                        UPDATE alerts 
+                        SET status = 'resolved', resolved_at = datetime('now')
+                        WHERE alert_id = {placeholder} AND company_id = {placeholder}
+                    ''', (alert_id, company_id))
+                else:  # PostgreSQL
+                    cursor.execute(f'''
+                        UPDATE alerts 
+                        SET status = 'resolved', resolved_at = NOW()
+                        WHERE alert_id = %s AND company_id = %s
+                    ''', (alert_id, company_id))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Alert çözüldü olarak işaretlendi'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Alert resolve hatası: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Alert güncellenemedi'
+                }), 500
         
         # Şirket grafik verileri API
         @self.app.route('/api/company/<company_id>/chart-data', methods=['GET'])
@@ -1875,7 +1977,7 @@ Mesaj:
                 
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 
-                # Günlük ihlal sayıları
+                # Günlük ihlal sayıları - SQLite ve PostgreSQL uyumlu
                 if self.db.db_adapter.db_type == 'postgresql':
                     cursor.execute(f'''
                         SELECT DATE(timestamp) as date, COUNT(*) as count,
@@ -1887,7 +1989,7 @@ Mesaj:
                         ORDER BY DATE(timestamp) DESC
                         LIMIT 30
                     ''', (company_id, start_date.isoformat()))
-                else:
+                else:  # SQLite
                     cursor.execute(f'''
                         SELECT DATE(timestamp) as date, COUNT(*) as count,
                                GROUP_CONCAT(DISTINCT missing_ppe) as ppe_types
@@ -1985,43 +2087,15 @@ Mesaj:
                 
                 violations_data['total_violations'] = total_violations
                 
+                # Eğer gerçek veri yoksa, bilgilendirici mesaj döndür
+                if total_violations == 0:
+                    violations_data['message'] = 'Live detection başlatıldığında gerçek veriler burada görünecek'
+                    violations_data['status'] = 'waiting_for_live_data'
+                    violations_data['instruction'] = 'Dashboard\'da "Canlı Tespit Başlat" butonuna tıklayın'
+                
                 logger.info(f"✅ Violations report generated for {company_id}: {total_violations} violations")
                 
                 return jsonify({'success': True, 'data': violations_data})
-                violations = [
-                    {
-                        'date': '2025-07-05',
-                        'camera_id': 'CAM_001',
-                        'camera_name': 'Ana Giriş',
-                        'violation_type': 'helmet_missing',
-                        'violation_text': 'Baret takılmamış',
-                        'penalty': 100,
-                        'worker_id': 'W001',
-                        'confidence': 95.2
-                    },
-                    {
-                        'date': '2025-07-04',
-                        'camera_id': 'CAM_002', 
-                        'camera_name': 'İnşaat Alanı',
-                        'violation_type': 'safety_vest_missing',
-                        'violation_text': 'Güvenlik yeleği yok',
-                        'penalty': 75,
-                        'worker_id': 'W002',
-                        'confidence': 87.5
-                    },
-                    {
-                        'date': '2025-07-03',
-                        'camera_id': 'CAM_001',
-                        'camera_name': 'Ana Giriş',
-                        'violation_type': 'safety_shoes_missing',
-                        'violation_text': 'Güvenlik ayakkabısı yok',
-                        'penalty': 50,
-                        'worker_id': 'W003',
-                        'confidence': 92.1
-                    }
-                ]
-                
-                return jsonify({'success': True, 'violations': violations})
                 
             except Exception as e:
                 print(f"❌ Violations report error: {str(e)}")
@@ -2237,6 +2311,12 @@ Mesaj:
                             'violations': row[2]
                         })
                 
+                # Eğer gerçek veri yoksa, bilgilendirici mesaj ekle
+                if total_detections == 0:
+                    compliance_data['message'] = 'Live detection başlatıldığında gerçek uyumluluk verileri burada görünecek'
+                    compliance_data['status'] = 'waiting_for_live_data'
+                    compliance_data['instruction'] = 'Dashboard\'da "Canlı Tespit Başlat" butonuna tıklayın'
+                
                 logger.info(f"✅ Compliance report generated for {company_id}: {overall_compliance}% overall compliance")
                 
                 return jsonify({'success': True, 'data': compliance_data})
@@ -2247,7 +2327,7 @@ Mesaj:
         
         @self.app.route('/api/company/<company_id>/reports/export', methods=['POST'])
         def export_report(company_id):
-            """Raporu dışa aktar"""
+            """Raporu dışa aktar - SQLite ve PostgreSQL uyumlu"""
             try:
                 user_data = self.validate_session()
                 if not user_data or user_data.get('company_id') != company_id:
@@ -2256,18 +2336,102 @@ Mesaj:
                 data = request.get_json()
                 report_type = data.get('type', 'violations')
                 format_type = data.get('format', 'pdf')
+                send_email = data.get('send_email', False)
                 
-                # Örnek export işlemi
+                # Database'den rapor verilerini al
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                
+                # Rapor verilerini hazırla
+                report_data = {
+                    'company_id': company_id,
+                    'report_type': report_type,
+                    'format': format_type,
+                    'generated_at': datetime.now().isoformat(),
+                    'data': {}
+                }
+                
+                # Violations report
+                if report_type == 'violations':
+                    cursor.execute(f'''
+                        SELECT camera_id, COUNT(*) as count, MAX(timestamp) as last_violation
+                        FROM violations 
+                        WHERE company_id = {placeholder}
+                        GROUP BY camera_id
+                        ORDER BY count DESC
+                    ''', (company_id,))
+                    
+                    violations_data = cursor.fetchall()
+                    report_data['data']['violations'] = violations_data
+                
+                # Compliance report
+                elif report_type == 'compliance':
+                    cursor.execute(f'''
+                        SELECT DATE(timestamp) as date, 
+                               COUNT(*) as total_detections,
+                               SUM(CASE WHEN violations_count = 0 THEN 1 ELSE 0 END) as compliant_detections
+                        FROM detections 
+                        WHERE company_id = {placeholder}
+                        GROUP BY DATE(timestamp)
+                        ORDER BY date DESC
+                        LIMIT 30
+                    ''', (company_id,))
+                    
+                    compliance_data = cursor.fetchall()
+                    report_data['data']['compliance'] = compliance_data
+                
+                # Camera performance report
+                elif report_type == 'camera':
+                    cursor.execute(f'''
+                        SELECT camera_id,
+                               COUNT(*) as total_detections,
+                               AVG(confidence) as avg_confidence,
+                               SUM(violations_count) as total_violations
+                        FROM detections 
+                        WHERE company_id = {placeholder}
+                        GROUP BY camera_id
+                        ORDER BY total_detections DESC
+                    ''', (company_id,))
+                    
+                    camera_data = cursor.fetchall()
+                    report_data['data']['camera_performance'] = camera_data
+                
+                conn.close()
+                
+                # Raporu database'e kaydet
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                if self.db.db_adapter.db_type == 'sqlite':
+                    cursor.execute('''
+                        INSERT INTO reports (company_id, report_type, report_data, created_at)
+                        VALUES (?, ?, ?, ?)
+                    ''', (company_id, report_type, str(report_data), datetime.now()))
+                else:  # PostgreSQL
+                    cursor.execute('''
+                        INSERT INTO reports (company_id, report_type, report_data, created_at)
+                        VALUES (%s, %s, %s, %s)
+                    ''', (company_id, report_type, report_data, datetime.now()))
+                
+                conn.commit()
+                conn.close()
+                
+                # Export URL oluştur
                 export_url = f"/exports/{company_id}_{report_type}_{format_type}.{format_type}"
                 
                 return jsonify({
                     'success': True, 
-                    'message': 'Rapor oluşturuldu',
-                    'download_url': export_url
+                    'message': f'{report_type.title()} raporu başarıyla oluşturuldu',
+                    'download_url': export_url,
+                    'report_id': f"{company_id}_{report_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    'format': format_type,
+                    'send_email': send_email
                 })
                 
             except Exception as e:
-                print(f"❌ Export report error: {str(e)}")
+                logger.error(f"❌ Export report error: {str(e)}")
                 return jsonify({'success': False, 'error': str(e)}), 500
 
         @self.app.route('/api/company/<company_id>/cameras/discover', methods=['POST'])
@@ -3652,7 +3816,7 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                return redirect(f'/company/{company_id}/login')
+                    return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
@@ -3966,7 +4130,7 @@ Mesaj:
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-                
+
                     logger.info(f"✅ Session validation successful for API")
             
                 # Test database connection first
@@ -4489,11 +4653,11 @@ Mesaj:
         try:
             session_id = session.get('session_id')
             logger.info(f"🔍 Session kontrolü: session_id={session_id}")
-            
+        
             if not session_id:
                 logger.warning("⚠️ Session ID bulunamadı")
                 return None
-            
+        
             result = self.db.validate_session(session_id)
             logger.info(f"🔍 Session doğrulama sonucu: {result}")
             
@@ -5833,30 +5997,30 @@ Mesaj:
                                                     </div>
                                                     <div class="col-md-4 mb-3">
                                                         <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
-                                                            <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="construction-gloves">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="construction-gloves">
                                                             <label class="form-check-label fw-semibold" for="construction-gloves">
                                                                 <i class="fas fa-hand-paper text-info me-2"></i> Safety Gloves
-                                                                <span class="badge bg-success ms-1">Optional</span>
-                                                            </label>
-                                                        </div>
+                                                            <span class="badge bg-success ms-1">Optional</span>
+                                                        </label>
                                                     </div>
+                                                </div>
                                                     <div class="col-md-4 mb-3">
                                                         <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
-                                                            <input class="form-check-input" type="checkbox" name="optional_ppe" value="glasses" id="construction-glasses">
+                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="glasses" id="construction-glasses">
                                                             <label class="form-check-label fw-semibold" for="construction-glasses">
                                                                 <i class="fas fa-glasses text-info me-2"></i> Safety Glasses
-                                                                <span class="badge bg-success ms-1">Optional</span>
-                                                            </label>
-                                                        </div>
+                                                            <span class="badge bg-success ms-1">Optional</span>
+                                                        </label>
                                                     </div>
+                                                </div>
                                                     <div class="col-md-4 mb-3">
                                                         <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
                                                             <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_harness" id="construction-harness" checked>
                                                             <label class="form-check-label fw-semibold" for="construction-harness">
                                                                 <i class="fas fa-user-shield text-danger me-2"></i> Safety Harness
-                                                            </label>
-                                                        </div>
+                                                        </label>
                                                     </div>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -7392,8 +7556,8 @@ Mesaj:
                                                         <div class="stat-label">Uyum Oranı</div>
                                                         <div class="stat-trend" id="compliance-trend">
                                                             <small class="text-muted">→ 0%</small>
-                                                        </div>
                                                     </div>
+                                                </div>
                                                 </div>
                                                 
                                                 <!-- İYİLEŞTİRİLDİ: Enhanced Statistics -->
@@ -7469,9 +7633,9 @@ Mesaj:
                                             </a></li>
                                         </ul>
                                     </div>
-                                    <a href="/company/{{ company_id }}/cameras" class="btn btn-light btn-sm">
-                                        <i class="fas fa-plus"></i> Yeni Kamera
-                                    </a>
+                                <a href="/company/{{ company_id }}/cameras" class="btn btn-light btn-sm">
+                                    <i class="fas fa-plus"></i> Yeni Kamera
+                                </a>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -7486,7 +7650,7 @@ Mesaj:
                             <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0">
                                     <i class="fas fa-bell"></i> 
-                                    İYİLEŞTİRİLDİ: Akıllı Uyarılar
+                                    Akıllı Uyarılar
                                 </h5>
                                 <div class="d-flex gap-1">
                                     <button class="btn btn-light btn-sm" onclick="clearAlerts()" title="Uyarıları Temizle">
@@ -7518,11 +7682,11 @@ Mesaj:
                                             <div>
                                                 <strong>Sistem Hazır</strong>
                                                 <br><small class="text-muted">PPE tespit sistemi aktif ve çalışıyor</small>
-                                            </div>
-                                        </div>
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                                    </div>
                                 </div>
+                            </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    </div>
                                 
                                 <!-- İYİLEŞTİRİLDİ: Alert Statistics -->
                                 <div class="mt-3 p-2 bg-light rounded">
@@ -7865,14 +8029,14 @@ Mesaj:
                             const icon = element.querySelector('i');
                             const smallElement = element.querySelector('small');
                             if (icon && smallElement) {
-                                if (value > 0) {
-                                    icon.className = 'fas fa-arrow-up trend-up';
+                            if (value > 0) {
+                                icon.className = 'fas fa-arrow-up trend-up';
                                     smallElement.textContent = `↑ +${value}`;
-                                } else if (value < 0) {
-                                    icon.className = 'fas fa-arrow-down trend-down';
+                            } else if (value < 0) {
+                                icon.className = 'fas fa-arrow-down trend-down';
                                     smallElement.textContent = `↓ ${value}`;
-                                } else {
-                                    icon.className = 'fas fa-minus trend-neutral';
+                            } else {
+                                icon.className = 'fas fa-minus trend-neutral';
                                     smallElement.textContent = `→ 0`;
                                 }
                             }
@@ -11264,37 +11428,37 @@ Mesaj:
                 <div class="row mb-4">
                     <div class="col-md-3">
                         <div class="stat-card">
-                            <div class="stat-value compliance-good" id="overallCompliance">87.5%</div>
+                            <div class="stat-value compliance-good" id="overallCompliance">--%</div>
                             <h6 class="text-muted">Genel Uyumluluk</h6>
-                            <small class="text-success">
-                                <i class="fas fa-arrow-up"></i> +2.3% (Son hafta)
+                            <small class="text-muted" id="complianceTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
                             </small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card">
-                            <div class="stat-value text-danger" id="totalViolations">23</div>
+                            <div class="stat-value text-danger" id="totalViolations">--</div>
                             <h6 class="text-muted">Toplam İhlal</h6>
-                            <small class="text-danger">
-                                <i class="fas fa-arrow-down"></i> -15% (Son hafta)
+                            <small class="text-muted" id="violationsTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
                             </small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card">
-                            <div class="stat-value text-warning" id="totalPenalties">1,725₺</div>
+                            <div class="stat-value text-warning" id="totalPenalties">--₺</div>
                             <h6 class="text-muted">Toplam Ceza</h6>
-                            <small class="text-warning">
-                                <i class="fas fa-minus"></i> 0% (Son hafta)
+                            <small class="text-muted" id="penaltiesTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
                             </small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card">
-                            <div class="stat-value text-info" id="detectedPersons">1,247</div>
+                            <div class="stat-value text-info" id="detectedPersons">--</div>
                             <h6 class="text-muted">Tespit Edilen Kişi</h6>
-                            <small class="text-info">
-                                <i class="fas fa-arrow-up"></i> +8% (Son hafta)
+                            <small class="text-muted" id="personsTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
                             </small>
                         </div>
                     </div>
@@ -11418,29 +11582,11 @@ Mesaj:
                                     </tr>
                                 </thead>
                                                 <tbody id="cameraPerformanceTable">
-                                                    <tr>
-                                                        <td><i class="fas fa-video text-primary"></i> Ana Giriş</td>
-                                                        <td><span class="badge bg-success">89.2%</span></td>
-                                                        <td>456</td>
-                                                        <td>12</td>
-                                                        <td>94.5%</td>
-                                                        <td><span class="badge bg-success">Aktif</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td><i class="fas fa-video text-primary"></i> İnşaat Alanı</td>
-                                                        <td><span class="badge bg-warning">84.5%</span></td>
-                                                        <td>623</td>
-                                                        <td>18</td>
-                                                        <td>91.2%</td>
-                                                        <td><span class="badge bg-success">Aktif</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td><i class="fas fa-video text-primary"></i> Depo Girişi</td>
-                                                        <td><span class="badge bg-success">91.7%</span></td>
-                                                        <td>168</td>
-                                                        <td>3</td>
-                                                        <td>96.8%</td>
-                                                        <td><span class="badge bg-success">Aktif</span></td>
+                                                    <tr id="noDataRow">
+                                                        <td colspan="6" class="text-center text-muted">
+                                                            <i class="fas fa-info-circle"></i> 
+                                                            Live detection başlatıldığında kamera performans verileri burada görünecek
+                                                        </td>
                                                     </tr>
                                                 </tbody>
                             </table>
@@ -11636,10 +11782,16 @@ Mesaj:
                             if (data.success) {
                                 updateViolationsChart(data.data);
                                 updateViolationsStats(data.data);
+                                
+                                // Check if real data exists
+                                if (data.data.status === 'waiting_for_live_data') {
+                                    showWaitingMessage();
+                                }
                             }
                         })
                         .catch(error => {
                             console.error('Error loading violations report:', error);
+                            showWaitingMessage();
                         });
                     
                     // Load compliance report
@@ -11650,11 +11802,43 @@ Mesaj:
                                 updateComplianceChart(data.data);
                                 updateComplianceStats(data.data);
                                 updateCameraPerformance(data.data);
+                                
+                                // Check if real data exists
+                                if (data.data.status === 'waiting_for_live_data') {
+                                    showWaitingMessage();
+                                }
                             }
                         })
                         .catch(error => {
                             console.error('Error loading compliance report:', error);
+                            showWaitingMessage();
                         });
+                }
+                
+                // Show waiting message for live data
+                function showWaitingMessage() {
+                    const elements = [
+                        'overallCompliance', 'totalViolations', 'totalPenalties', 'detectedPersons',
+                        'complianceTrend', 'violationsTrend', 'penaltiesTrend', 'personsTrend'
+                    ];
+                    
+                    elements.forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            if (id.includes('Trend')) {
+                                element.innerHTML = '<i class="fas fa-info-circle"></i> Live detection başlatın';
+                            } else if (id.includes('Compliance')) {
+                                element.textContent = '--%';
+                            } else if (id.includes('Violations')) {
+                                element.textContent = '--';
+                            } else if (id.includes('Penalties')) {
+                                element.textContent = '--₺';
+                            } else if (id.includes('Persons')) {
+                                element.textContent = '--';
+                            }
+                        }
+                    });
+                }
                     
                     // Load subscription info
                 console.log('🔄 Abonelik bilgileri yükleniyor...');
@@ -13552,6 +13736,8 @@ smartsafe_requests_total 100
                                 else:
                                     # PPE detection başarısız, fallback kullan
                                     logger.warning(f"⚠️ PPE detection failed: {ppe_result.get('error', 'Unknown error')}")
+                                    # PPE detection başarısız, fallback kullan
+                                    logger.warning(f"⚠️ PPE detection failed: {ppe_result.get('error', 'Unknown error')}")
                                     # Fallback to old system
                                     people_detected, ppe_compliant, ppe_violations = self._run_fallback_ppe_detection(
                                         results, frame, detection_mode
@@ -13570,13 +13756,35 @@ smartsafe_requests_total 100
                                 results, frame, detection_mode
                             )
                         
-                        # İYİLEŞTİRİLDİ: Performance metrics calculation
-                        try:
-                            # Performance metrics calculation
-                            pass
-                        except Exception as result_error:
-                            logger.error(f"❌ Result processing hatası: {result_error}")
-                            continue
+                                                            # İYİLEŞTİRİLDİ: Performance metrics calculation ve Reports kayıt
+                            try:
+                                # Performance metrics calculation
+                                processing_time = time.time() - start_time
+                                fps = 1000 / processing_time if processing_time > 0 else 0
+                                
+                                # Reports tablolarına gerçek veri kaydet
+                                if people_detected > 0 or len(ppe_violations) > 0:
+                                    # Company ID ve Camera ID'yi al - session yerine parametre kullan
+                                    current_company_id = company_id  # Zaten parametre olarak geliyor
+                                    current_camera_id = camera_id    # Zaten parametre olarak geliyor
+                                    
+                                    self._save_detection_to_reports(current_company_id, current_camera_id, detection_mode, 
+                                                                    people_detected, ppe_compliant, len(ppe_violations), 
+                                                                    processing_time, confidence)
+                                    
+                                    # Real-time alert generation
+                                    self._generate_live_alerts(current_company_id, current_camera_id, people_detected, 
+                                                             ppe_compliant, len(ppe_violations), detection_mode)
+                                
+                                # Violations kaydet
+                                for violation in ppe_violations:
+                                    current_company_id = company_id  # Zaten parametre olarak geliyor
+                                    current_camera_id = camera_id    # Zaten parametre olarak geliyor
+                                    self._save_violation_to_reports(current_company_id, current_camera_id, violation)
+                                    
+                            except Exception as result_error:
+                                logger.error(f"❌ Result processing hatası: {result_error}")
+                                continue
                         
                         # İYİLEŞTİRİLDİ: Uyum oranı hesapla - Güvenli calculation
                         compliance_rate = 0
@@ -13641,57 +13849,212 @@ smartsafe_requests_total 100
         
         logger.info(f"🛑 SaaS Detection durduruldu - Kamera: {camera_id}")
 
-    def _run_fallback_ppe_detection(self, results, frame, detection_mode):
-        """Run fallback PPE detection using old system"""
-        people_detected = 0
-        ppe_compliant = 0
-        ppe_violations = []
-        
+    def _save_detection_to_reports(self, company_id, camera_id, detection_type, 
+                                  people_detected, ppe_compliant, violations_count, 
+                                  processing_time, confidence):
+        """Save detection data to reports table"""
         try:
-            for result in results:
-                if result.boxes is not None:
-                    for box in result.boxes:
-                        try:
-                            class_id = int(box.cls[0])
-                            confidence_score = float(box.conf[0])
-                            
-                            # Person detection
-                            if class_id == 0:  # person class
-                                people_detected += 1
-                                
-                                # Person bbox'ını al
-                                person_bbox = box.xyxy[0].tolist()
-                                
-                                # PPE Detection
-                                ppe_status = self.analyze_ppe_compliance(frame, person_bbox, detection_mode)
-                                
-                                if ppe_status.get('compliant', False):
-                                    ppe_compliant += 1
-                                else:
-                                    missing_ppe = ppe_status.get('missing_ppe', ['Gerekli PPE Eksik'])
-                                    violation = {
-                                        'person_id': f"person_{len(ppe_violations)}",
-                                        'missing_ppe': missing_ppe,
-                                        'confidence': float(confidence_score),
-                                        'bbox': [float(x) for x in person_bbox],
-                                        'ppe_status': {
-                                            'compliant': bool(ppe_status.get('compliant', False)),
-                                            'missing_ppe': missing_ppe,
-                                            'has_helmet': bool(ppe_status.get('has_helmet', False)),
-                                            'has_vest': bool(ppe_status.get('has_vest', False))
-                                        }
-                                    }
-                                    ppe_violations.append(violation)
-                                    
-                        except Exception as box_error:
-                            logger.error(f"❌ Box processing hatası: {box_error}")
-                            continue
-                            
+            # Database adapter kullan - SQLite ve PostgreSQL uyumlu
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            if self.db.db_adapter.db_type == 'sqlite':
+                cursor.execute(f'''
+                    INSERT INTO detections (company_id, camera_id, detection_type, confidence,
+                                          people_detected, ppe_compliant, violations_count, timestamp)
+                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, 
+                            {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ''', (company_id, camera_id, detection_type, confidence,
+                      people_detected, ppe_compliant, violations_count, datetime.now()))
+            else:  # PostgreSQL
+                cursor.execute(f'''
+                    INSERT INTO detections (company_id, camera_id, detection_type, confidence,
+                                          people_detected, ppe_compliant, violations_count, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (company_id, camera_id, detection_type, confidence,
+                      people_detected, ppe_compliant, violations_count, datetime.now()))
+            
+            conn.commit()
+            conn.close()
+            logger.debug(f"✅ Detection saved to reports: {people_detected} people, {ppe_compliant} compliant")
+            
         except Exception as e:
-            logger.error(f"❌ Fallback PPE detection error: {e}")
-        
-        return people_detected, ppe_compliant, ppe_violations
+            logger.error(f"❌ Failed to save detection to reports: {e}")
+
+    def _generate_live_alerts(self, company_id, camera_id, people_detected, ppe_compliant, violations_count, detection_mode):
+        """Real-time alert generation based on live detection results"""
+        try:
+            # Alert generation logic
+            alerts_to_generate = []
+            
+            # PPE Violation Alert
+            if violations_count > 0:
+                alerts_to_generate.append({
+                    'alert_type': 'ppe_violation',
+                    'severity': 'warning',
+                    'title': f'{violations_count} PPE İhlali Tespit Edildi',
+                    'message': f'Kamera {camera_id} üzerinde {violations_count} adet PPE ihlali tespit edildi. Acil müdahale gerekli.',
+                    'camera_id': camera_id
+                })
+            
+            # High Risk Alert
+            if violations_count >= 3:
+                alerts_to_generate.append({
+                    'alert_type': 'high_risk',
+                    'severity': 'critical',
+                    'title': 'Yüksek Riskli Durum!',
+                    'message': f'Kamera {camera_id} üzerinde {violations_count} adet PPE ihlali tespit edildi. Acil müdahale gerekli!',
+                    'camera_id': camera_id
+                })
+            
+            # Compliance Rate Alert
+            if people_detected > 0:
+                compliance_rate = (ppe_compliant / people_detected) * 100
+                if compliance_rate < 50:
+                    alerts_to_generate.append({
+                        'alert_type': 'low_compliance',
+                        'severity': 'warning',
+                        'title': 'Düşük Uyum Oranı',
+                        'message': f'Kamera {camera_id} üzerinde uyum oranı %{compliance_rate:.1f}. Eğitim gerekli.',
+                        'camera_id': camera_id
+                    })
+            
+            # System Status Alert
+            if people_detected > 0:
+                alerts_to_generate.append({
+                    'alert_type': 'system_status',
+                    'severity': 'info',
+                    'title': 'Sistem Aktif',
+                    'message': f'Kamera {camera_id} üzerinde {people_detected} kişi tespit edildi. Sistem normal çalışıyor.',
+                    'camera_id': camera_id
+                })
+            
+            # Generate alerts
+            for alert_data in alerts_to_generate:
+                try:
+                    # Alert'i database'e kaydet
+                    conn = self.db.get_connection()
+                    cursor = conn.cursor()
+                    
+                    placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                    
+                    if self.db.db_adapter.db_type == 'sqlite':
+                        cursor.execute(f'''
+                            INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at)
+                            VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 'active', datetime('now'))
+                        ''', (company_id, alert_data['camera_id'], alert_data['alert_type'], alert_data['severity'], 
+                              alert_data['title'], alert_data['message']))
+                    else:  # PostgreSQL
+                        cursor.execute(f'''
+                            INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'active', NOW())
+                        ''', (company_id, alert_data['camera_id'], alert_data['alert_type'], alert_data['severity'], 
+                              alert_data['title'], alert_data['message']))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    logger.info(f"✅ Live alert generated: {alert_data['title']} - {alert_data['message']}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Alert generation error: {e}")
+            
+        except Exception as e:
+            logger.error(f"❌ Live alert generation error: {e}")
     
+    def _save_violation_to_reports(self, company_id, camera_id, violation):
+        """Save violation data to reports table"""
+        try:
+            # Database adapter kullan - SQLite ve PostgreSQL uyumlu
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            # Violation details
+            missing_ppe = violation.get('missing_ppe', ['Unknown'])[0] if isinstance(violation.get('missing_ppe'), list) else violation.get('missing_ppe', 'Unknown')
+            violation_type = f"{missing_ppe}_missing"
+            penalty = 100  # Default penalty
+            confidence = violation.get('confidence', 0.8)
+            
+            if self.db.db_adapter.db_type == 'sqlite':
+                cursor.execute(f'''
+                    INSERT INTO violations (company_id, camera_id, worker_id, missing_ppe,
+                                          violation_type, penalty, confidence, timestamp)
+                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder},
+                            {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ''', (company_id, camera_id, violation.get('person_id', 'unknown'),
+                      missing_ppe, violation_type, penalty, confidence, datetime.now()))
+            else:  # PostgreSQL
+                cursor.execute(f'''
+                    INSERT INTO violations (company_id, camera_id, worker_id, missing_ppe,
+                                          violation_type, penalty, confidence, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (company_id, camera_id, violation.get('person_id', 'unknown'),
+                      missing_ppe, violation_type, penalty, confidence, datetime.now()))
+            
+            conn.commit()
+            conn.close()
+            logger.debug(f"✅ Violation saved to reports: {missing_ppe}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save violation to reports: {e}")
+
+    def _run_fallback_ppe_detection(self, results, frame, detection_mode):
+            """Run fallback PPE detection using old system"""
+            people_detected = 0
+            ppe_compliant = 0
+            ppe_violations = []
+            
+            try:
+                for result in results:
+                    if result.boxes is not None:
+                        for box in result.boxes:
+                            try:
+                                class_id = int(box.cls[0])
+                                confidence_score = float(box.conf[0])
+                                
+                                # Person detection
+                                if class_id == 0:  # person class
+                                    people_detected += 1
+                                    
+                                    # Person bbox'ını al
+                                    person_bbox = box.xyxy[0].tolist()
+                                    
+                                    # PPE Detection
+                                    ppe_status = self.analyze_ppe_compliance(frame, person_bbox, detection_mode)
+                                    
+                                    if ppe_status.get('compliant', False):
+                                        ppe_compliant += 1
+                                    else:
+                                        missing_ppe = ppe_status.get('missing_ppe', ['Gerekli PPE Eksik'])
+                                        violation = {
+                                            'person_id': f"person_{len(ppe_violations)}",
+                                            'missing_ppe': missing_ppe,
+                                            'confidence': float(confidence_score),
+                                            'bbox': [float(x) for x in person_bbox],
+                                            'ppe_status': {
+                                                'compliant': bool(ppe_status.get('compliant', False)),
+                                                'missing_ppe': missing_ppe,
+                                                'has_helmet': bool(ppe_status.get('has_helmet', False)),
+                                                'has_vest': bool(ppe_status.get('has_vest', False))
+                                            }
+                                        }
+                                        ppe_violations.append(violation)
+                                        
+                            except Exception as box_error:
+                                logger.error(f"❌ Box processing hatası: {box_error}")
+                                continue
+                                
+            except Exception as e:
+                logger.error(f"❌ Fallback PPE detection error: {e}")
+            
+            return people_detected, ppe_compliant, ppe_violations
+        
+
+
     def analyze_ppe_compliance(self, frame, person_bbox, detection_mode):
         """İYİLEŞTİRİLDİ: PPE uyumluluğunu analiz et - Production ready with enhanced error handling"""
         try:
@@ -13728,16 +14091,16 @@ smartsafe_requests_total 100
                     return {'compliant': False, 'missing_ppe': ['invalid_bbox_dimensions'], 'error': 'invalid_bbox_size'}
                 
                 person_roi = frame[y1:y2, x1:x2]
-                
+            
                 if person_roi.size == 0:
-                    logger.warning("⚠️ Empty ROI")
-                    return {'compliant': False, 'missing_ppe': ['empty_roi'], 'error': 'empty_roi'}
-                
+                        logger.warning("⚠️ Empty ROI")
+                        return {'compliant': False, 'missing_ppe': ['empty_roi'], 'error': 'empty_roi'}
+                    
                 # ROI boyut kontrolü
                 if person_roi.shape[0] < 20 or person_roi.shape[1] < 20:
                     logger.warning(f"⚠️ ROI too small: {person_roi.shape}")
                     return {'compliant': False, 'missing_ppe': ['roi_too_small'], 'error': 'roi_too_small'}
-                
+            
             except (ValueError, TypeError) as e:
                 logger.error(f"❌ Bbox conversion error: {e}")
                 return {'compliant': False, 'missing_ppe': ['bbox_conversion_error'], 'error': str(e)}

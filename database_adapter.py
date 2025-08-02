@@ -104,8 +104,7 @@ class DatabaseAdapter:
             else:
                 conn = sqlite3.connect(
                     self.config.database_url,
-                    timeout=timeout,
-                    check_same_thread=False
+                    timeout=timeout
                 )
                 conn.row_factory = sqlite3.Row
                 return conn
@@ -410,69 +409,135 @@ class DatabaseAdapter:
                 )
             ''')
             
-            # Detections table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS detections (
-                    detection_id TEXT PRIMARY KEY,
-                    company_id TEXT NOT NULL,
-                    camera_id TEXT NOT NULL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    total_people INTEGER,
-                    compliant_people INTEGER,
-                    violation_people INTEGER,
-                    compliance_rate REAL,
-                    confidence_score REAL,
-                    image_path TEXT,
-                    detection_data TEXT,
-                    track_id TEXT,
-                    status TEXT DEFAULT 'active',
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                    FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
-                )
-            ''')
+            # Eski detections tablosu kaldırıldı - Reports için yeni tablo kullanılıyor
             
-            # Violations table
-            if self.db_type == 'postgresql':
+            # Reports için gerekli tablolar - SQLite ve PostgreSQL uyumlu
+            if self.db_type == 'sqlite':
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS violations (
-                        violation_id TEXT PRIMARY KEY,
+                        violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         company_id TEXT NOT NULL,
                         camera_id TEXT NOT NULL,
-                        user_id TEXT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        worker_id TEXT,
+                        missing_ppe TEXT NOT NULL,
                         violation_type TEXT NOT NULL,
-                        missing_ppe TEXT,
-                        severity TEXT DEFAULT 'medium',
-                        penalty_amount REAL DEFAULT 0,
-                        image_path TEXT,
-                        resolved BOOLEAN DEFAULT FALSE,
-                        resolved_by TEXT,
-                        resolved_at TIMESTAMP,
-                        status TEXT DEFAULT 'active'
+                        penalty REAL DEFAULT 0,
+                        confidence REAL DEFAULT 0,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
                     )
                 ''')
-            else:
+                
                 cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS violations (
-                        violation_id TEXT PRIMARY KEY,
+                    CREATE TABLE IF NOT EXISTS detections (
+                        detection_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         company_id TEXT NOT NULL,
                         camera_id TEXT NOT NULL,
-                        user_id TEXT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        violation_type TEXT NOT NULL,
-                        missing_ppe TEXT,
-                        severity TEXT DEFAULT 'medium',
-                        penalty_amount REAL DEFAULT 0,
-                        image_path TEXT,
-                        resolved BOOLEAN DEFAULT 0,
-                        resolved_by TEXT,
-                        resolved_at TIMESTAMP,
+                        detection_type TEXT NOT NULL,
+                        confidence REAL DEFAULT 0,
+                        people_detected INTEGER DEFAULT 0,
+                        ppe_compliant INTEGER DEFAULT 0,
+                        violations_count INTEGER DEFAULT 0,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+                
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS reports (
+                        report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT NOT NULL,
+                        report_type TEXT NOT NULL,
+                        report_data TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+                # Alerts tablosu - Akıllı Uyarılar için
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS alerts (
+                        alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT NOT NULL,
+                        camera_id TEXT,
+                        alert_type TEXT NOT NULL,
+                        severity TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        message TEXT NOT NULL,
                         status TEXT DEFAULT 'active',
-                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                        FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        resolved_at DATETIME,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
                     )
                 ''')
+                # Detections tablosuna total_people kolonu ekle
+                try:
+                    cursor.execute('ALTER TABLE detections ADD COLUMN total_people INTEGER DEFAULT 0')
+                except Exception:
+                    pass
+            else:  # PostgreSQL - Production Ready
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS violations (
+                        violation_id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) NOT NULL,
+                        camera_id VARCHAR(255) NOT NULL,
+                        worker_id VARCHAR(255),
+                        missing_ppe VARCHAR(255) NOT NULL,
+                        violation_type VARCHAR(255) NOT NULL,
+                        penalty DECIMAL(10,2) DEFAULT 0,
+                        confidence DECIMAL(5,2) DEFAULT 0,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+                
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS detections (
+                        detection_id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) NOT NULL,
+                        camera_id VARCHAR(255) NOT NULL,
+                        detection_type VARCHAR(255) NOT NULL,
+                        confidence DECIMAL(5,2) DEFAULT 0,
+                        people_detected INTEGER DEFAULT 0,
+                        ppe_compliant INTEGER DEFAULT 0,
+                        violations_count INTEGER DEFAULT 0,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+                
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS reports (
+                        report_id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) NOT NULL,
+                        report_type VARCHAR(255) NOT NULL,
+                        report_data JSON NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+                # Alerts tablosu - Akıllı Uyarılar için
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS alerts (
+                        alert_id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) NOT NULL,
+                        camera_id VARCHAR(255),
+                        alert_type VARCHAR(255) NOT NULL,
+                        severity VARCHAR(50) NOT NULL,
+                        title VARCHAR(255) NOT NULL,
+                        message TEXT NOT NULL,
+                        status VARCHAR(50) DEFAULT 'active',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        resolved_at TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+                # Detections tablosuna total_people kolonu ekle
+                try:
+                    cursor.execute('ALTER TABLE detections ADD COLUMN total_people INTEGER DEFAULT 0')
+                except Exception:
+                    pass
             
+            # Her tablo oluşturulduktan sonra commit yap
             conn.commit()
             logger.info("✅ Database tables created successfully")
             return True
