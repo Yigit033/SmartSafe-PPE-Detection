@@ -664,6 +664,78 @@
             SmartSafe AI - Kamera Yönetimi
         </h1>
         
+        <!-- DVR Yönetimi Bölümü -->
+        <div class="dvr-management-section mb-5">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-server me-2"></i>
+                        DVR/NVR Sistem Yönetimi
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-plus-circle me-2"></i>Yeni DVR Ekle</h5>
+                            <form id="dvrAddForm">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">DVR Adı</label>
+                                        <input type="text" class="form-control" id="dvrName" placeholder="Örn: Merkez DVR" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">IP Adresi</label>
+                                        <input type="text" class="form-control" id="dvrIp" placeholder="192.168.1.100" required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Port</label>
+                                        <input type="number" class="form-control" id="dvrPort" value="80" required>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Kullanıcı Adı</label>
+                                        <input type="text" class="form-control" id="dvrUsername" value="admin" required>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Şifre</label>
+                                        <input type="password" class="form-control" id="dvrPassword" placeholder="DVR şifresi" required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">DVR Tipi</label>
+                                        <select class="form-select" id="dvrType">
+                                            <option value="generic">Genel DVR</option>
+                                            <option value="hikvision">Hikvision</option>
+                                            <option value="dahua">Dahua</option>
+                                            <option value="axis">Axis</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Maksimum Kanal</label>
+                                        <input type="number" class="form-control" id="dvrMaxChannels" value="16" min="1" max="64">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus me-2"></i>DVR Ekle
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-list me-2"></i>DVR Sistemleri</h5>
+                            <div id="dvrSystemsList">
+                                <div class="text-center text-muted py-4">
+                                    <i class="fas fa-server fa-3x mb-3"></i>
+                                    <p>Henüz DVR sistemi eklenmemiş</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Mevcut Kameralar Bölümü -->
         <div class="existing-cameras-section mb-5">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -2570,6 +2642,212 @@
                 }
             }
         }
+        
+        // === DVR YÖNETİMİ FONKSİYONLARI ===
+        
+        // DVR sistemlerini yükle
+        async function loadDVRSystems() {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/list`);
+                const data = await response.json();
+                
+                const dvrList = document.getElementById('dvrSystemsList');
+                
+                if (data.success && data.dvr_systems && data.dvr_systems.length > 0) {
+                    let html = '';
+                    data.dvr_systems.forEach(dvr => {
+                        html += `
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="mb-1">${dvr.name}</h6>
+                                            <small class="text-muted">${dvr.ip_address}:${dvr.port}</small>
+                                            <br>
+                                            <span class="badge bg-${dvr.status === 'active' ? 'success' : 'secondary'}">${dvr.status}</span>
+                                            <span class="badge bg-info ms-1">${dvr.total_channels || 0} kanal</span>
+                                        </div>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" onclick="discoverDVRChannels('${dvr.dvr_id}')" title="Kanalları Keşfet">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" onclick="startDVRStream('${dvr.dvr_id}', 1)" title="Stream Başlat">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" onclick="removeDVRSystem('${dvr.dvr_id}')" title="DVR Sil">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    dvrList.innerHTML = html;
+                } else {
+                    dvrList.innerHTML = `
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-server fa-3x mb-3"></i>
+                            <p>Henüz DVR sistemi eklenmemiş</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('DVR sistemleri yüklenirken hata:', error);
+                showAlert('DVR sistemleri yüklenirken hata oluştu', 'danger');
+            }
+        }
+        
+        // DVR sistemi ekle
+        async function addDVRSystem(event) {
+            event.preventDefault();
+            
+            const formData = {
+                dvr_id: `DVR_${document.getElementById('dvrIp').value.replace(/\./g, '_')}`,
+                name: document.getElementById('dvrName').value,
+                ip_address: document.getElementById('dvrIp').value,
+                port: parseInt(document.getElementById('dvrPort').value),
+                username: document.getElementById('dvrUsername').value,
+                password: document.getElementById('dvrPassword').value,
+                dvr_type: document.getElementById('dvrType').value,
+                protocol: 'http',
+                api_path: '/api',
+                rtsp_port: 554,
+                max_channels: parseInt(document.getElementById('dvrMaxChannels').value)
+            };
+            
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/add`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('DVR sistemi başarıyla eklendi!', 'success');
+                    document.getElementById('dvrAddForm').reset();
+                    loadDVRSystems();
+                } else {
+                    showAlert(`DVR ekleme hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('DVR ekleme hatası:', error);
+                showAlert('DVR sistemi eklenirken hata oluştu', 'danger');
+            }
+        }
+        
+        // DVR kanallarını keşfet
+        async function discoverDVRChannels(dvrId) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/discover`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`${data.count} kanal keşfedildi!`, 'success');
+                    loadDVRSystems(); // Listeyi yenile
+                } else {
+                    showAlert(`Kanal keşfi hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('Kanal keşfi hatası:', error);
+                showAlert('Kanal keşfi sırasında hata oluştu', 'danger');
+            }
+        }
+        
+        // DVR stream başlat
+        async function startDVRStream(dvrId, channel) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/camera/${channel}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ quality: 'high' })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const streamUrl = data.stream_url;
+                    showAlert(`Stream başlatıldı! RTSP URL: ${streamUrl}`, 'success');
+                    
+                    // Show stream URL in a modal or info box
+                    const streamInfo = `
+                        <div class="alert alert-info">
+                            <h6>🎥 Stream Başlatıldı</h6>
+                            <p><strong>DVR:</strong> ${dvrId}</p>
+                            <p><strong>Kanal:</strong> ${channel}</p>
+                            <p><strong>RTSP URL:</strong> <code>${streamUrl}</code></p>
+                            <p class="mb-0"><small>Bu URL'yi VLC Player veya benzeri bir uygulamada açabilirsiniz.</small></p>
+                        </div>
+                    `;
+                    
+                    // Add stream info to page
+                    const streamContainer = document.getElementById('streamInfo') || createStreamInfoContainer();
+                    streamContainer.innerHTML = streamInfo;
+                    
+                    // Don't try to open RTSP URL in browser (it won't work)
+                    console.log('RTSP URL generated:', streamUrl);
+                } else {
+                    showAlert(`Stream başlatma hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('Stream başlatma hatası:', error);
+                showAlert('Stream başlatılırken hata oluştu', 'danger');
+            }
+        }
+        
+        // Create stream info container if it doesn't exist
+        function createStreamInfoContainer() {
+            const container = document.createElement('div');
+            container.id = 'streamInfo';
+            container.className = 'mt-3';
+            document.querySelector('.dvr-section').appendChild(container);
+            return container;
+        }
+        
+        // DVR sistemi sil
+        async function removeDVRSystem(dvrId) {
+            if (!confirm('Bu DVR sistemini silmek istediğinizden emin misiniz?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/delete`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('DVR sistemi başarıyla silindi!', 'success');
+                    loadDVRSystems();
+                } else {
+                    showAlert(`DVR silme hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('DVR silme hatası:', error);
+                showAlert('DVR sistemi silinirken hata oluştu', 'danger');
+            }
+        }
+        
+        // DVR form submit event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const dvrForm = document.getElementById('dvrAddForm');
+            if (dvrForm) {
+                dvrForm.addEventListener('submit', addDVRSystem);
+            }
+            
+            // DVR sistemlerini yükle
+            loadDVRSystems();
+        });
     </script>
 </body>
 </html> 

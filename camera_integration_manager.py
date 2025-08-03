@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SmartSafe AI - Professional Camera Integration Manager
-Enterprise-grade camera management with IP Webcam, RTSP, and real camera support
+Enterprise-grade camera management with IP Webcam, RTSP, DVR/NVR, and real camera support
 """
 
 import cv2
@@ -18,10 +18,774 @@ import json
 from pathlib import Path
 import base64
 from urllib.parse import urlparse
+import xml.etree.ElementTree as ET
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+@dataclass
+class DVRConfig:
+    """DVR/NVR system configuration"""
+    dvr_id: str
+    name: str
+    ip_address: str
+    port: int = 80
+    username: str = "admin"
+    password: str = ""
+    dvr_type: str = "generic"  # generic, hikvision, dahua, axis, etc.
+    protocol: str = "http"  # http, https
+    api_path: str = "/api"
+    rtsp_port: int = 554
+    max_channels: int = 16
+    status: str = "inactive"  # active, inactive, error, testing
+    last_test_time: Optional[datetime] = None
+    connection_retries: int = 3
+    timeout: int = 10
+    
+    def get_api_url(self) -> str:
+        """Generate API URL for DVR"""
+        return f"{self.protocol}://{self.ip_address}:{self.port}{self.api_path}"
+    
+    def get_rtsp_base_url(self) -> str:
+        """Generate base RTSP URL for DVR"""
+        if self.username and self.password:
+            return f"rtsp://{self.username}:{self.password}@{self.ip_address}:{self.rtsp_port}"
+        else:
+            return f"rtsp://{self.ip_address}:{self.rtsp_port}"
+    
+    def get_auth_header(self) -> Dict[str, str]:
+        """Generate authentication header for DVR API"""
+        if self.username and self.password:
+            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+            return {"Authorization": f"Basic {credentials}"}
+        return {}
+
+@dataclass
+class DVRChannel:
+    """DVR channel configuration"""
+    channel_id: str
+    name: str
+    dvr_id: str
+    channel_number: int
+    status: str = "inactive"  # active, inactive, error
+    resolution: Tuple[int, int] = (1920, 1080)
+    fps: int = 25
+    rtsp_path: str = ""
+    http_path: str = ""
+    last_test_time: Optional[datetime] = None
+    
+    def get_rtsp_url(self, dvr_config: DVRConfig) -> str:
+        """Generate RTSP URL for this channel"""
+        base_url = dvr_config.get_rtsp_base_url()
+        if self.rtsp_path:
+            return f"{base_url}{self.rtsp_path}"
+        else:
+            # Generic RTSP path format
+            return f"{base_url}/ch{self.channel_number:02d}/main"
+    
+    def get_http_url(self, dvr_config: DVRConfig) -> str:
+        """Generate HTTP URL for this channel"""
+        base_url = f"{dvr_config.protocol}://{dvr_config.ip_address}:{dvr_config.port}"
+        if self.http_path:
+            return f"{base_url}{self.http_path}"
+        else:
+            # Generic HTTP path format
+            return f"{base_url}/ch{self.channel_number:02d}/snapshot"
+
+class DVRManager:
+    """DVR/NVR system manager with database integration"""
+    
+    def __init__(self):
+        self.dvr_systems = {}  # Memory cache
+        self.dvr_channels = {}  # Memory cache
+        self.active_streams = {}
+        self.connection_threads = {}
+        self.frame_buffers = {}
+        self.last_frames = {}
+        self.fps_counters = {}
+        
+        # Database integration
+        from database_adapter import get_db_adapter
+        self.db_adapter = get_db_adapter()
+        
+        logger.info("📺 DVR Manager initialized with database integration")
+    
+    def add_dvr_system(self, dvr_config: DVRConfig, company_id: str) -> Tuple[bool, str]:
+        """Add DVR system with database persistence"""
+        try:
+            # Check if DVR already exists
+            existing_dvr = self.db_adapter.get_dvr_system(company_id, dvr_config.dvr_id)
+            
+            if existing_dvr:
+                # Update existing DVR
+                logger.info(f"🔄 Updating existing DVR system: {dvr_config.name}")
+                dvr_data = {
+                    'name': dvr_config.name,
+                    'ip_address': dvr_config.ip_address,
+                    'port': dvr_config.port,
+                    'username': dvr_config.username,
+                    'password': dvr_config.password,
+                    'dvr_type': dvr_config.dvr_type,
+                    'protocol': dvr_config.protocol,
+                    'api_path': dvr_config.api_path,
+                    'rtsp_port': dvr_config.rtsp_port,
+                    'max_channels': dvr_config.max_channels,
+                    'status': 'active'
+                }
+                
+                success = self.db_adapter.update_dvr_system(company_id, dvr_config.dvr_id, dvr_data)
+                if success:
+                    # Update memory cache
+                    self.dvr_systems[dvr_config.dvr_id] = dvr_config
+                    logger.info(f"✅ DVR system updated: {dvr_config.name}")
+                    return True, "DVR system updated successfully"
+                else:
+                    logger.error(f"❌ Failed to update DVR system in database: {dvr_config.name}")
+                    return False, "Database update error"
+            else:
+                # Add new DVR system
+                logger.info(f"➕ Adding new DVR system: {dvr_config.name}")
+                dvr_data = {
+                    'dvr_id': dvr_config.dvr_id,
+                    'name': dvr_config.name,
+                    'ip_address': dvr_config.ip_address,
+                    'port': dvr_config.port,
+                    'username': dvr_config.username,
+                    'password': dvr_config.password,
+                    'dvr_type': dvr_config.dvr_type,
+                    'protocol': dvr_config.protocol,
+                    'api_path': dvr_config.api_path,
+                    'rtsp_port': dvr_config.rtsp_port,
+                    'max_channels': dvr_config.max_channels
+                }
+                
+                success = self.db_adapter.add_dvr_system(company_id, dvr_data)
+                if success:
+                    # Add to memory cache
+                    self.dvr_systems[dvr_config.dvr_id] = dvr_config
+                    logger.info(f"✅ DVR system added: {dvr_config.name}")
+                    return True, "DVR system added successfully"
+                else:
+                    logger.error(f"❌ Failed to add DVR system to database: {dvr_config.name}")
+                    return False, "Database error"
+                
+        except Exception as e:
+            logger.error(f"❌ Add DVR system error: {e}")
+            return False, str(e)
+    
+    def get_dvr_systems(self, company_id: str) -> List[Dict[str, Any]]:
+        """Get DVR systems from database"""
+        try:
+            # Get from database
+            db_systems = self.db_adapter.get_dvr_systems(company_id)
+            
+            # Update memory cache
+            for system in db_systems:
+                dvr_config = DVRConfig(
+                    dvr_id=system['dvr_id'],
+                    name=system['name'],
+                    ip_address=system['ip_address'],
+                    port=system['port'],
+                    username=system['username'],
+                    password=system['password'],
+                    dvr_type=system['dvr_type'],
+                    protocol=system['protocol'],
+                    api_path=system['api_path'],
+                    rtsp_port=system['rtsp_port'],
+                    max_channels=system['max_channels'],
+                    status=system['status']
+                )
+                self.dvr_systems[system['dvr_id']] = dvr_config
+            
+            return db_systems
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR systems error: {e}")
+            return []
+    
+    def remove_dvr_system(self, dvr_id: str, company_id: str) -> Tuple[bool, str]:
+        """Remove DVR system with database cleanup"""
+        try:
+            # Stop all active streams for this DVR
+            channels = self.dvr_channels.get(dvr_id, [])
+            for channel in channels:
+                channel_id = channel.channel_id
+                if channel_id in self.active_streams:
+                    self.stop_dvr_stream(channel_id)
+            
+            # Remove from memory
+            if dvr_id in self.dvr_systems:
+                del self.dvr_systems[dvr_id]
+            if dvr_id in self.dvr_channels:
+                del self.dvr_channels[dvr_id]
+            
+            # Remove from database
+            success = self.db_adapter.delete_dvr_system(company_id, dvr_id)
+            if success:
+                logger.info(f"✅ DVR system removed: {dvr_id}")
+                return True, "DVR system removed successfully"
+            else:
+                logger.error(f"❌ Failed to remove DVR system from database: {dvr_id}")
+                return False, "Database error"
+                
+        except Exception as e:
+            logger.error(f"❌ Remove DVR system error: {e}")
+            return False, str(e)
+    
+    def discover_cameras(self, dvr_id: str, company_id: str) -> List[Dict[str, Any]]:
+        """Discover cameras on DVR system with database persistence"""
+        if dvr_id not in self.dvr_systems:
+            return []
+        
+        dvr_config = self.dvr_systems[dvr_id]
+        channels = self._discover_dvr_channels(dvr_config)
+        
+        # Save channels to database
+        for channel in channels:
+            # Fix channel_id format to match expected format
+            channel_id = f"{dvr_id}_ch{channel.channel_number:02d}"
+            channel.channel_id = channel_id
+            
+            channel_data = {
+                'channel_id': channel_id,
+                'name': channel.name,
+                'channel_number': channel.channel_number,
+                'status': channel.status,
+                'resolution_width': channel.resolution[0],
+                'resolution_height': channel.resolution[1],
+                'fps': channel.fps,
+                'rtsp_path': channel.rtsp_path,
+                'http_path': channel.http_path
+            }
+            
+            success = self.db_adapter.add_dvr_channel(company_id, dvr_id, channel_data)
+            if success:
+                logger.info(f"✅ Channel {channel_id} added to database")
+            else:
+                logger.error(f"❌ Failed to add channel {channel_id} to database")
+        
+        # Update memory cache
+        self.dvr_channels[dvr_id] = channels
+        
+        return [
+            {
+                'channel_id': ch.channel_id,
+                'name': ch.name,
+                'channel_number': ch.channel_number,
+                'status': ch.status,
+                'resolution': ch.resolution,
+                'fps': ch.fps
+            }
+            for ch in channels
+        ]
+    
+    def get_dvr_channels(self, company_id: str, dvr_id: str) -> List[Dict[str, Any]]:
+        """Get DVR channels from database"""
+        try:
+            # Get from database
+            db_channels = self.db_adapter.get_dvr_channels(company_id, dvr_id)
+            
+            # Update memory cache
+            channels = []
+            for ch_data in db_channels:
+                channel = DVRChannel(
+                    channel_id=ch_data['channel_id'],
+                    name=ch_data['name'],
+                    dvr_id=ch_data['dvr_id'],
+                    channel_number=ch_data['channel_number'],
+                    status=ch_data['status'],
+                    resolution=(ch_data['resolution_width'], ch_data['resolution_height']),
+                    fps=ch_data['fps'],
+                    rtsp_path=ch_data['rtsp_path'],
+                    http_path=ch_data['http_path']
+                )
+                channels.append(channel)
+            
+            self.dvr_channels[dvr_id] = channels
+            return db_channels
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR channels error: {e}")
+            return []
+    
+    def start_stream(self, dvr_id: str, channel_number: int, company_id: str, quality: str = 'high') -> str:
+        """Start stream for a DVR channel with database tracking"""
+        if dvr_id not in self.dvr_systems:
+            raise ValueError(f"DVR system {dvr_id} not found")
+        
+        dvr_config = self.dvr_systems[dvr_id]
+        channel_id = f"{dvr_id}_ch{channel_number:02d}"
+        
+        # Find the channel
+        channels = self.dvr_channels.get(dvr_id, [])
+        channel = None
+        for ch in channels:
+            if ch.channel_number == channel_number:
+                channel = ch
+                break
+        
+        if not channel:
+            # Create a new channel if not found
+            channel = DVRChannel(
+                channel_id=channel_id,
+                name=f"Channel {channel_number}",
+                dvr_id=dvr_id,
+                channel_number=channel_number
+            )
+            # Add to channels list
+            if dvr_id not in self.dvr_channels:
+                self.dvr_channels[dvr_id] = []
+            self.dvr_channels[dvr_id].append(channel)
+            
+            # Save to database
+            channel_data = {
+                'channel_id': channel_id,
+                'name': channel.name,
+                'channel_number': channel.channel_number,
+                'status': 'active',
+                'resolution_width': 1920,
+                'resolution_height': 1080,
+                'fps': 25,
+                'rtsp_path': '',
+                'http_path': ''
+            }
+            
+            success = self.db_adapter.add_dvr_channel(company_id, dvr_id, channel_data)
+            if not success:
+                logger.warning(f"⚠️ Failed to save channel {channel_id} to database")
+        
+        # Generate RTSP URL
+        rtsp_url = channel.get_rtsp_url(dvr_config)
+        logger.info(f"🎥 Generated RTSP URL: {rtsp_url}")
+        
+        # Start the stream
+        success, _ = self.start_dvr_stream(dvr_id, channel_id)
+        if success:
+            # Track stream in database
+            stream_success = self.db_adapter.add_dvr_stream(company_id, dvr_id, channel_id, rtsp_url)
+            if stream_success:
+                logger.info(f"✅ Stream tracked in database: {channel_id}")
+            else:
+                logger.warning(f"⚠️ Failed to track stream in database: {channel_id}")
+            return rtsp_url
+        else:
+            raise Exception(f"Failed to start stream for channel {channel_number}")
+    
+    def stop_dvr_stream(self, channel_id: str, company_id: str = None) -> bool:
+        """Stop streaming from a DVR channel with database cleanup"""
+        try:
+            if channel_id in self.active_streams:
+                cap = self.active_streams[channel_id]
+                cap.release()
+                del self.active_streams[channel_id]
+            
+            if channel_id in self.connection_threads:
+                thread = self.connection_threads[channel_id]
+                thread.join(timeout=2)
+                del self.connection_threads[channel_id]
+            
+            # Update channel status in database
+            if company_id:
+                self.db_adapter.update_dvr_channel_status(company_id, channel_id, "inactive")
+            
+            # Update channel status in memory
+            for dvr_id, channels in self.dvr_channels.items():
+                for channel in channels:
+                    if channel.channel_id == channel_id:
+                        channel.status = "inactive"
+                        break
+            
+            logger.info(f"✅ DVR stream stopped: {channel_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to stop DVR stream: {e}")
+            return False
+    
+    def test_dvr_connection(self, dvr_config: DVRConfig) -> Dict[str, Any]:
+        """Test DVR connection and discover channels"""
+        logger.info(f"🔍 Testing DVR connection: {dvr_config.name} at {dvr_config.ip_address}")
+        
+        result = {
+            'success': False,
+            'dvr_id': dvr_config.dvr_id,
+            'connection_status': 'failed',
+            'channels_discovered': 0,
+            'channels': [],
+            'error': None,
+            'api_response': None,
+            'rtsp_test': False,
+            'http_test': False
+        }
+        
+        try:
+            # Test basic connectivity
+            test_url = f"{dvr_config.protocol}://{dvr_config.ip_address}:{dvr_config.port}"
+            response = requests.get(test_url, headers=dvr_config.get_auth_header(), 
+                                 timeout=dvr_config.timeout, verify=False)
+            
+            if response.status_code == 200:
+                result['http_test'] = True
+                logger.info(f"✅ HTTP connection successful to {dvr_config.ip_address}")
+                
+                # Try to discover channels
+                channels = self._discover_dvr_channels(dvr_config)
+                result['channels'] = channels
+                result['channels_discovered'] = len(channels)
+                
+                # Test RTSP connection
+                rtsp_test = self._test_dvr_rtsp(dvr_config)
+                result['rtsp_test'] = rtsp_test
+                
+                result['success'] = True
+                result['connection_status'] = 'connected'
+                
+                # Update DVR status
+                dvr_config.status = 'active'
+                dvr_config.last_test_time = datetime.now()
+                
+                logger.info(f"✅ DVR test successful: {len(channels)} channels discovered")
+                
+            else:
+                result['error'] = f"HTTP connection failed: {response.status_code}"
+                logger.warning(f"⚠️ HTTP connection failed: {response.status_code}")
+                
+        except requests.exceptions.ConnectionError:
+            result['error'] = "Connection refused - DVR may be offline"
+            logger.error(f"❌ Connection refused to {dvr_config.ip_address}")
+        except requests.exceptions.Timeout:
+            result['error'] = "Connection timeout"
+            logger.error(f"❌ Connection timeout to {dvr_config.ip_address}")
+        except Exception as e:
+            result['error'] = str(e)
+            logger.error(f"❌ DVR test failed: {e}")
+        
+        return result
+    
+    def _discover_dvr_channels(self, dvr_config: DVRConfig) -> List[DVRChannel]:
+        """Discover channels on DVR system"""
+        channels = []
+        
+        try:
+            # Try different channel discovery methods based on DVR type
+            if dvr_config.dvr_type == "hikvision":
+                channels = self._discover_hikvision_channels(dvr_config)
+            elif dvr_config.dvr_type == "dahua":
+                channels = self._discover_dahua_channels(dvr_config)
+            else:
+                # Generic discovery - try common channel paths
+                channels = self._discover_generic_channels(dvr_config)
+            
+            # Update DVR channels
+            self.dvr_channels[dvr_config.dvr_id] = channels
+            
+        except Exception as e:
+            logger.error(f"❌ Channel discovery failed: {e}")
+        
+        return channels
+    
+    def _discover_generic_channels(self, dvr_config: DVRConfig) -> List[DVRChannel]:
+        """Generic channel discovery for unknown DVR types"""
+        channels = []
+        
+        # Try common channel numbers (1-16)
+        for channel_num in range(1, dvr_config.max_channels + 1):
+            channel = DVRChannel(
+                channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
+                name=f"Channel {channel_num}",
+                dvr_id=dvr_config.dvr_id,
+                channel_number=channel_num,
+                rtsp_path=f"/ch{channel_num:02d}/main",
+                http_path=f"/ch{channel_num:02d}/snapshot"
+            )
+            channels.append(channel)
+        
+        logger.info(f"📺 Generic discovery: {len(channels)} channels configured")
+        return channels
+    
+    def _discover_hikvision_channels(self, dvr_config: DVRConfig) -> List[DVRChannel]:
+        """Discover channels on Hikvision DVR"""
+        channels = []
+        
+        try:
+            # Hikvision API endpoint for device info
+            api_url = f"{dvr_config.get_api_url()}/ISAPI/System/deviceInfo"
+            response = requests.get(api_url, headers=dvr_config.get_auth_header(), 
+                                 timeout=dvr_config.timeout, verify=False)
+            
+            if response.status_code == 200:
+                # Parse XML response
+                root = ET.fromstring(response.content)
+                device_info = {}
+                for child in root:
+                    device_info[child.tag] = child.text
+                
+                # Try to get channel count from device info
+                max_channels = int(device_info.get('deviceID', '16'))
+                
+                for channel_num in range(1, min(max_channels + 1, 17)):
+                    channel = DVRChannel(
+                        channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
+                        name=f"Hikvision Channel {channel_num}",
+                        dvr_id=dvr_config.dvr_id,
+                        channel_number=channel_num,
+                        rtsp_path=f"/Streaming/Channels/{channel_num:03d}",
+                        http_path=f"/ISAPI/Streaming/channels/{channel_num:03d}/snapshot"
+                    )
+                    channels.append(channel)
+                
+                logger.info(f"📺 Hikvision discovery: {len(channels)} channels found")
+            
+        except Exception as e:
+            logger.error(f"❌ Hikvision discovery failed: {e}")
+            # Fallback to generic discovery
+            channels = self._discover_generic_channels(dvr_config)
+        
+        return channels
+    
+    def _discover_dahua_channels(self, dvr_config: DVRConfig) -> List[DVRChannel]:
+        """Discover channels on Dahua DVR"""
+        channels = []
+        
+        try:
+            # Dahua API endpoint for device info
+            api_url = f"{dvr_config.get_api_url()}/cgi-bin/global.cgi?action=getCurrentInfo"
+            response = requests.get(api_url, headers=dvr_config.get_auth_header(), 
+                                 timeout=dvr_config.timeout, verify=False)
+            
+            if response.status_code == 200:
+                # Parse response for channel info
+                content = response.text
+                # Look for channel information in response
+                max_channels = 16  # Default for Dahua
+                
+                for channel_num in range(1, max_channels + 1):
+                    channel = DVRChannel(
+                        channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
+                        name=f"Dahua Channel {channel_num}",
+                        dvr_id=dvr_config.dvr_id,
+                        channel_number=channel_num,
+                        rtsp_path=f"/cam/realmonitor?channel={channel_num}&subtype=0",
+                        http_path=f"/cgi-bin/snapshot.cgi?channel={channel_num}"
+                    )
+                    channels.append(channel)
+                
+                logger.info(f"📺 Dahua discovery: {len(channels)} channels found")
+            
+        except Exception as e:
+            logger.error(f"❌ Dahua discovery failed: {e}")
+            # Fallback to generic discovery
+            channels = self._discover_generic_channels(dvr_config)
+        
+        return channels
+    
+    def _test_dvr_rtsp(self, dvr_config: DVRConfig) -> bool:
+        """Test RTSP connectivity to DVR"""
+        try:
+            # Test RTSP connection to first channel
+            if dvr_config.dvr_id in self.dvr_channels and self.dvr_channels[dvr_config.dvr_id]:
+                first_channel = self.dvr_channels[dvr_config.dvr_id][0]
+                rtsp_url = first_channel.get_rtsp_url(dvr_config)
+                
+                cap = cv2.VideoCapture(rtsp_url)
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret:
+                        logger.info(f"✅ RTSP test successful: {rtsp_url}")
+                        return True
+            
+            logger.warning(f"⚠️ RTSP test failed for {dvr_config.ip_address}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"❌ RTSP test error: {e}")
+            return False
+    
+    def start_dvr_stream(self, dvr_id: str, channel_id: str) -> Tuple[bool, str]:
+        """Start streaming from a DVR channel"""
+        try:
+            if dvr_id not in self.dvr_systems:
+                logger.error(f"❌ DVR system not found: {dvr_id}")
+                return False, "DVR system not found"
+            
+            dvr_config = self.dvr_systems[dvr_id]
+            channels = self.dvr_channels.get(dvr_id, [])
+            
+            logger.info(f"🔍 DVR Config: {dvr_config.ip_address}:{dvr_config.rtsp_port}")
+            logger.info(f"🔍 DVR Auth: {dvr_config.username}:{dvr_config.password}")
+            logger.info(f"🔍 Available channels: {len(channels)}")
+            
+            # Find the channel
+            channel = None
+            for ch in channels:
+                if ch.channel_id == channel_id:
+                    channel = ch
+                    break
+            
+            if not channel:
+                logger.error(f"❌ Channel not found: {channel_id}")
+                return False, "Channel not found"
+            
+            logger.info(f"🔍 Channel found: {channel.name} (Channel {channel.channel_number})")
+            
+            # Generate RTSP URL
+            rtsp_url = channel.get_rtsp_url(dvr_config)
+            logger.info(f"🔗 Primary RTSP URL: {rtsp_url}")
+            
+            # Test network connectivity first
+            import socket
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(3)
+                result = sock.connect_ex((dvr_config.ip_address, dvr_config.rtsp_port))
+                sock.close()
+                if result == 0:
+                    logger.info(f"✅ Network connectivity to {dvr_config.ip_address}:{dvr_config.rtsp_port} OK")
+                else:
+                    logger.warning(f"⚠️ Network connectivity to {dvr_config.ip_address}:{dvr_config.rtsp_port} failed")
+            except Exception as e:
+                logger.warning(f"⚠️ Network test failed: {e}")
+            
+            # Start video capture with timeout
+            cap = cv2.VideoCapture(rtsp_url)
+            
+            # Set timeout for connection
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)  # 5 second timeout
+            
+            if not cap.isOpened():
+                logger.warning(f"⚠️ Primary RTSP URL failed: {rtsp_url}")
+                
+                # Try alternative URL formats
+                alternative_urls = [
+                    f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/0",
+                    f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/1",
+                    f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main/0",
+                    f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main/1",
+                    f"rtsp://{dvr_config.username}:{dvr_config.password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main",
+                    f"rtsp://{dvr_config.username}:{dvr_config.password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/0",
+                    f"rtsp://{dvr_config.username}:{dvr_config.password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/1"
+                ]
+                
+                for i, alt_url in enumerate(alternative_urls):
+                    logger.info(f"🔄 Trying alternative URL {i+1}: {alt_url}")
+                    cap = cv2.VideoCapture(alt_url)
+                    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000)  # 3 second timeout
+                    if cap.isOpened():
+                        logger.info(f"✅ Connected using alternative URL {i+1}: {alt_url}")
+                        break
+                    else:
+                        logger.warning(f"❌ Alternative URL {i+1} failed")
+                
+                if not cap.isOpened():
+                    error_msg = f"Failed to open RTSP stream after trying {len(alternative_urls)+1} URLs"
+                    logger.error(f"❌ {error_msg}")
+                    return False, error_msg
+            
+            # Test if we can actually read frames
+            ret, frame = cap.read()
+            if not ret:
+                logger.warning(f"⚠️ RTSP connection opened but cannot read frames")
+                cap.release()
+                return False, "RTSP connection opened but cannot read frames"
+            
+            logger.info(f"✅ RTSP connection successful and frame reading works")
+            
+            self.active_streams[channel_id] = cap
+            channel.status = "active"
+            
+            # Start frame capture thread
+            thread = threading.Thread(target=self._capture_dvr_frames, args=(channel_id,))
+            thread.daemon = True
+            thread.start()
+            self.connection_threads[channel_id] = thread
+            
+            logger.info(f"✅ DVR stream started: {channel.name} ({rtsp_url})")
+            return True, "Stream started successfully"
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to start DVR stream: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            return False, str(e)
+    
+    def _capture_dvr_frames(self, channel_id: str):
+        """Capture frames from DVR channel"""
+        cap = self.active_streams.get(channel_id)
+        if not cap:
+            return
+        
+        fps_counter = []
+        start_time = time.time()
+        
+        try:
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if ret:
+                    self.frame_buffers[channel_id] = frame
+                    self.last_frames[channel_id] = datetime.now()
+                    
+                    # Calculate FPS
+                    current_time = time.time()
+                    fps_counter.append(current_time)
+                    # Keep only last 30 FPS measurements
+                    if len(fps_counter) > 30:
+                        fps_counter.pop(0)
+                    
+                    # Update FPS counter
+                    if len(fps_counter) > 1:
+                        fps = len(fps_counter) / (fps_counter[-1] - fps_counter[0])
+                        self.fps_counters[channel_id] = [fps]
+                    
+                    # Small delay to prevent excessive CPU usage
+                    time.sleep(0.01)
+                else:
+                    logger.warning(f"⚠️ Failed to read frame from {channel_id}")
+                    break
+                    
+        except Exception as e:
+            logger.error(f"❌ DVR frame capture error: {e}")
+        finally:
+            cap.release()
+            if channel_id in self.active_streams:
+                del self.active_streams[channel_id]
+    
+    def get_dvr_frame(self, channel_id: str) -> Optional[np.ndarray]:
+        """Get latest frame from DVR channel"""
+        return self.frame_buffers.get(channel_id)
+    
+    def get_dvr_status(self, dvr_id: str) -> Dict[str, Any]:
+        """Get DVR system status"""
+        if dvr_id not in self.dvr_systems:
+            return {'error': 'DVR system not found'}
+        
+        dvr_config = self.dvr_systems[dvr_id]
+        channels = self.dvr_channels.get(dvr_id, [])
+        
+        active_channels = [ch for ch in channels if ch.status == "active"]
+        
+        return {
+            'dvr_id': dvr_id,
+            'name': dvr_config.name,
+            'ip_address': dvr_config.ip_address,
+            'status': dvr_config.status,
+            'total_channels': len(channels),
+            'active_channels': len(active_channels),
+            'channels': [
+                {
+                    'channel_id': ch.channel_id,
+                    'name': ch.name,
+                    'status': ch.status,
+                    'fps': self.fps_counters.get(ch.channel_id, [0])[0] if ch.channel_id in self.fps_counters else 0
+                }
+                for ch in channels
+            ]
+        }
+    
+    def get_all_dvr_status(self) -> List[Dict[str, Any]]:
+        """Get status of all DVR systems"""
+        return [self.get_dvr_status(dvr_id) for dvr_id in self.dvr_systems.keys()]
 
 @dataclass
 class RealCameraConfig:
@@ -735,11 +1499,14 @@ class ProfessionalCameraManager:
         self.frame_buffers: Dict[str, np.ndarray] = {}
         self.last_frames: Dict[str, datetime] = {}
         
+        # DVR Integration
+        self.dvr_manager = DVRManager()
+        
         # Performance tracking
         self.fps_counters: Dict[str, List[float]] = {}
         self.connection_stats: Dict[str, Dict] = {}
         
-        logger.info("🎥 Professional Camera Manager initialized")
+        logger.info("🎥 Professional Camera Manager initialized with DVR support")
     
     def detect_ip_webcam_cameras(self, network_range: str = "192.168.1.0/24") -> List[Dict]:
         """Detect IP Webcam apps on network"""

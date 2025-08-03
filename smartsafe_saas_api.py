@@ -22,6 +22,7 @@ from smartsafe_multitenant_system import MultiTenantDatabase
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
 from smartsafe_sector_detector_factory import SectorDetectorFactory
 from database_adapter import get_db_adapter
+from camera_integration_manager import DVRConfig
 import cv2
 import numpy as np
 import base64
@@ -363,20 +364,20 @@ class SmartSafeSaaSAPI:
                 if subscription_end:
                     try:
                         if isinstance(subscription_end, str):
-                                    # Handle different date formats including microseconds
-                                if 'T' in subscription_end:
-                                    # ISO format with timezone
-                                    subscription_end = datetime.fromisoformat(subscription_end.replace('Z', '+00:00'))
-                                elif '.' in subscription_end:
-                                    # SQLite format with microseconds: '2025-08-01 22:14:59.075710'
-                                    subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S.%f')
-                                else:
-                                    # Standard format: '2025-08-01 22:14:59'
-                                    subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S')
+                            # Handle different date formats including microseconds
+                            if 'T' in subscription_end:
+                                # ISO format with timezone
+                                subscription_end = datetime.fromisoformat(subscription_end.replace('Z', '+00:00'))
+                            elif '.' in subscription_end:
+                                # SQLite format with microseconds: '2025-08-01 22:14:59.075710'
+                                subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S.%f')
+                            else:
+                                # Standard format: '2025-08-01 22:14:59'
+                                subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S')
                     
-                                    days_remaining = (subscription_end - datetime.now()).days
-                                    is_active = days_remaining > 0
-                                    logger.info(f"🔍 Subscription end: {subscription_end}, days remaining: {days_remaining}, is_active: {is_active}")
+                                days_remaining = (subscription_end - datetime.now()).days
+                                is_active = days_remaining > 0
+                                logger.info(f"🔍 Subscription end: {subscription_end}, days remaining: {days_remaining}, is_active: {is_active}")
                     except Exception as date_error:
                         logger.error(f"❌ Date parsing error: {date_error}")
                         logger.error(f"❌ Raw subscription_end value: {subscription_end}")
@@ -419,6 +420,120 @@ class SmartSafeSaaSAPI:
 
     def setup_routes(self):
         """API rotalarını ayarla"""
+        app = self.app
+
+        @app.route('/api/company/<company_id>/dvr/add', methods=['POST'])
+        def add_dvr_system(company_id):
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            data = request.get_json()
+            required_fields = ['dvr_id', 'name', 'ip_address']
+            if not all(f in data for f in required_fields):
+                return jsonify({'error': 'Eksik DVR bilgisi'}), 400
+            try:
+                dvr_config = DVRConfig(
+                    dvr_id=data['dvr_id'],
+                    name=data['name'],
+                    ip_address=data['ip_address'],
+                    port=int(data.get('port', 80)),
+                    username=data.get('username', 'admin'),
+                    password=data.get('password', ''),
+                    dvr_type=data.get('dvr_type', 'generic'),
+                    protocol=data.get('protocol', 'http'),
+                    api_path=data.get('api_path', '/api'),
+                    rtsp_port=int(data.get('rtsp_port', 554)),
+                    max_channels=int(data.get('max_channels', 16))
+                )
+                manager = self.get_camera_manager().dvr_manager
+                success, msg = manager.add_dvr_system(dvr_config, company_id)
+                return jsonify({'success': success, 'message': msg})
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500    
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/discover', methods=['POST'])
+        def discover_dvr_cameras(company_id, dvr_id):
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            try:
+                manager = self.get_camera_manager().dvr_manager
+                cameras = manager.discover_cameras(dvr_id, company_id)
+                return jsonify({
+                    'success': True,
+                    'cameras': cameras,
+                    'count': len(cameras)
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/camera/<channel>/start', methods=['POST'])
+        def start_dvr_stream(company_id, dvr_id, channel):
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            data = request.get_json() or {}
+            try:
+                manager = self.get_camera_manager()
+                if not manager or not hasattr(manager, 'dvr_manager'):
+                    return jsonify({'error': 'DVR manager not available'}), 500
+                
+                logger.info(f"🎥 Starting DVR stream for {dvr_id} channel {channel}")
+                stream_url = manager.dvr_manager.start_stream(dvr_id, int(channel), company_id, data.get('quality', 'high'))
+                
+                logger.info(f"✅ DVR stream started successfully: {stream_url}")
+                return jsonify({
+                    'success': True,
+                    'stream_url': stream_url,
+                    'dvr_id': dvr_id,
+                    'channel': channel
+                })
+            except Exception as e:
+                logger.error(f"❌ DVR stream start error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/list', methods=['GET'])
+        def list_dvr_systems(company_id):
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            try:
+                manager = self.get_camera_manager().dvr_manager
+                dvr_systems = manager.get_dvr_systems(company_id)
+                return jsonify({
+                    'success': True,
+                    'dvr_systems': dvr_systems
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/delete', methods=['DELETE'])
+        def delete_dvr_system(company_id, dvr_id):
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            try:
+                manager = self.get_camera_manager().dvr_manager
+                success, msg = manager.remove_dvr_system(dvr_id, company_id)
+                return jsonify({'success': success, 'message': msg})
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/status', methods=['GET'])
+        def get_dvr_status(company_id, dvr_id):
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            try:
+                manager = self.get_camera_manager().dvr_manager
+                status = manager.get_dvr_status(dvr_id)
+                return jsonify({
+                    'success': True,
+                    'dvr_id': dvr_id,
+                    'status': status
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
         
         # Health check endpoint for deployment
         @self.app.route('/health')
@@ -1215,7 +1330,7 @@ Mesaj:
                         'color': severity_info['color']
                     })
                 
-                # Eğer gerçek veri yoksa demo veriler göster
+                                # Eğer gerçek veri yoksa demo veriler göster
                 if not alerts:
                     alerts = [
                         {
@@ -3816,7 +3931,7 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                    return redirect(f'/company/{company_id}/login')
+                return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
@@ -4130,9 +4245,9 @@ Mesaj:
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                    
+                logger.info(f"✅ Session validation successful for API")
 
-                    logger.info(f"✅ Session validation successful for API")
-            
                 # Test database connection first
                 try:
                     conn = self.db.get_connection()
@@ -4653,20 +4768,20 @@ Mesaj:
         try:
             session_id = session.get('session_id')
             logger.info(f"🔍 Session kontrolü: session_id={session_id}")
-        
+            
             if not session_id:
                 logger.warning("⚠️ Session ID bulunamadı")
                 return None
-        
-            result = self.db.validate_session(session_id)
-            logger.info(f"🔍 Session doğrulama sonucu: {result}")
             
-            # Backward compatibility check
-            if result and isinstance(result, dict):
-                # Ensure required fields exist
-                if 'company_id' not in result:
-                    logger.warning("⚠️ Session result missing company_id")
-                    return None
+                result = self.db.validate_session(session_id)
+                logger.info(f"🔍 Session doğrulama sonucu: {result}")
+                
+                # Backward compatibility check
+                if result and isinstance(result, dict):
+                    # Ensure required fields exist
+                    if 'company_id' not in result:
+                        logger.warning("⚠️ Session result missing company_id")
+                        return None
                     
             return result
             
@@ -14093,8 +14208,8 @@ smartsafe_requests_total 100
                 person_roi = frame[y1:y2, x1:x2]
             
                 if person_roi.size == 0:
-                        logger.warning("⚠️ Empty ROI")
-                        return {'compliant': False, 'missing_ppe': ['empty_roi'], 'error': 'empty_roi'}
+                    logger.warning("⚠️ Empty ROI")
+                    return {'compliant': False, 'missing_ppe': ['empty_roi'], 'error': 'empty_roi'}
                     
                 # ROI boyut kontrolü
                 if person_roi.shape[0] < 20 or person_roi.shape[1] < 20:

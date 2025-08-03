@@ -256,6 +256,144 @@ class DatabaseAdapter:
                     )
                 ''')
             
+            # Create DVR systems table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_systems (
+                        dvr_id TEXT PRIMARY KEY,
+                        company_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        ip_address TEXT NOT NULL,
+                        port INTEGER DEFAULT 80,
+                        username TEXT DEFAULT 'admin',
+                        password TEXT DEFAULT '',
+                        dvr_type TEXT DEFAULT 'generic',
+                        protocol TEXT DEFAULT 'http',
+                        api_path TEXT DEFAULT '/api',
+                        rtsp_port INTEGER DEFAULT 554,
+                        max_channels INTEGER DEFAULT 16,
+                        status TEXT DEFAULT 'inactive',
+                        last_test_time TIMESTAMP,
+                        connection_retries INTEGER DEFAULT 3,
+                        timeout INTEGER DEFAULT 10,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_systems (
+                        dvr_id VARCHAR(255) PRIMARY KEY,
+                        company_id VARCHAR(255) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        ip_address VARCHAR(45) NOT NULL,
+                        port INTEGER DEFAULT 80,
+                        username VARCHAR(100) DEFAULT 'admin',
+                        password VARCHAR(255) DEFAULT '',
+                        dvr_type VARCHAR(50) DEFAULT 'generic',
+                        protocol VARCHAR(10) DEFAULT 'http',
+                        api_path VARCHAR(100) DEFAULT '/api',
+                        rtsp_port INTEGER DEFAULT 554,
+                        max_channels INTEGER DEFAULT 16,
+                        status VARCHAR(50) DEFAULT 'inactive',
+                        last_test_time TIMESTAMP,
+                        connection_retries INTEGER DEFAULT 3,
+                        timeout INTEGER DEFAULT 10,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
+                    )
+                ''')
+            
+            # Create DVR channels table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_channels (
+                        channel_id TEXT PRIMARY KEY,
+                        dvr_id TEXT NOT NULL,
+                        company_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        channel_number INTEGER NOT NULL,
+                        status TEXT DEFAULT 'inactive',
+                        resolution_width INTEGER DEFAULT 1920,
+                        resolution_height INTEGER DEFAULT 1080,
+                        fps INTEGER DEFAULT 25,
+                        rtsp_path TEXT DEFAULT '',
+                        http_path TEXT DEFAULT '',
+                        last_test_time TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_channels (
+                        channel_id VARCHAR(255) PRIMARY KEY,
+                        dvr_id VARCHAR(255) NOT NULL,
+                        company_id VARCHAR(255) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        channel_number INTEGER NOT NULL,
+                        status VARCHAR(50) DEFAULT 'inactive',
+                        resolution_width INTEGER DEFAULT 1920,
+                        resolution_height INTEGER DEFAULT 1080,
+                        fps INTEGER DEFAULT 25,
+                        rtsp_path VARCHAR(255) DEFAULT '',
+                        http_path VARCHAR(255) DEFAULT '',
+                        last_test_time TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
+                    )
+                ''')
+            
+            # Create DVR streams table for active streams
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_streams (
+                        stream_id TEXT PRIMARY KEY,
+                        dvr_id TEXT NOT NULL,
+                        company_id TEXT NOT NULL,
+                        channel_id TEXT NOT NULL,
+                        stream_url TEXT NOT NULL,
+                        status TEXT DEFAULT 'active',
+                        start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        end_time TIMESTAMP,
+                        fps REAL DEFAULT 0,
+                        frame_count INTEGER DEFAULT 0,
+                        error_count INTEGER DEFAULT 0,
+                        last_frame_time TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE,
+                        FOREIGN KEY (channel_id) REFERENCES dvr_channels (channel_id) ON DELETE CASCADE
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_streams (
+                        stream_id VARCHAR(255) PRIMARY KEY,
+                        dvr_id VARCHAR(255) NOT NULL,
+                        company_id VARCHAR(255) NOT NULL,
+                        channel_id VARCHAR(255) NOT NULL,
+                        stream_url TEXT NOT NULL,
+                        status VARCHAR(50) DEFAULT 'active',
+                        start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        end_time TIMESTAMP,
+                        fps DECIMAL(5,2) DEFAULT 0,
+                        frame_count INTEGER DEFAULT 0,
+                        error_count INTEGER DEFAULT 0,
+                        last_frame_time TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE,
+                        FOREIGN KEY (channel_id) REFERENCES dvr_channels (channel_id) ON DELETE CASCADE
+                    )
+                ''')
+            
             # Add new columns if they don't exist
             if self.db_type == 'sqlite':
                 try:
@@ -414,20 +552,20 @@ class DatabaseAdapter:
             # Reports için gerekli tablolar - SQLite ve PostgreSQL uyumlu
             if self.db_type == 'sqlite':
                 cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS violations (
-                        violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        CREATE TABLE IF NOT EXISTS violations (
+                            violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         company_id TEXT NOT NULL,
                         camera_id TEXT NOT NULL,
-                        worker_id TEXT,
-                        missing_ppe TEXT NOT NULL,
-                        violation_type TEXT NOT NULL,
-                        penalty REAL DEFAULT 0,
-                        confidence REAL DEFAULT 0,
-                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                            worker_id TEXT,
+                            missing_ppe TEXT NOT NULL,
+                            violation_type TEXT NOT NULL,
+                            penalty REAL DEFAULT 0,
+                            confidence REAL DEFAULT 0,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (company_id) REFERENCES companies (company_id)
                     )
                 ''')
-                
+            
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS detections (
                         detection_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -550,31 +688,368 @@ class DatabaseAdapter:
                 conn.close()
     
     def execute_query(self, query: str, params: tuple = None, fetch_all: bool = True):
-        """Execute a query with optional parameters"""
+        """Execute database query with error handling"""
         try:
             conn = self.get_connection()
+            if conn is None:
+                logger.error("❌ Database connection failed")
+                return None
+            
             cursor = conn.cursor()
+            cursor.execute(query, params or ())
             
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            
-            if query.strip().upper().startswith('SELECT'):
-                if fetch_all:
-                    result = cursor.fetchall()
-                else:
-                    result = cursor.fetchone()
-            else:
-                conn.commit()
+            # For INSERT, UPDATE, DELETE operations, return rowcount
+            if query.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')):
                 result = cursor.rowcount
+                conn.commit()
+                conn.close()
+                return result
             
+            # For SELECT operations, return data
+            if fetch_all:
+                result = cursor.fetchall()
+            else:
+                result = cursor.fetchone()
+            
+            conn.commit()
             conn.close()
             return result
             
         except Exception as e:
-            logger.error(f"❌ Query execution error: {e}")
-            raise
+            logger.error(f"❌ Database query error: {e}")
+            import traceback
+            logger.error(f"❌ Query traceback: {traceback.format_exc()}")
+            return None
+    
+    # DVR System Methods
+    def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> bool:
+        """Add DVR system to database"""
+        try:
+            logger.info(f"🔧 Adding DVR system: {dvr_data.get('name')} for company: {company_id}")
+            
+            query = '''
+                INSERT INTO dvr_systems (
+                    dvr_id, company_id, name, ip_address, port, username, password,
+                    dvr_type, protocol, api_path, rtsp_port, max_channels, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            '''
+            
+            params = (
+                dvr_data['dvr_id'],
+                company_id,
+                dvr_data['name'],
+                dvr_data['ip_address'],
+                dvr_data.get('port', 80),
+                dvr_data.get('username', 'admin'),
+                dvr_data.get('password', ''),
+                dvr_data.get('dvr_type', 'generic'),
+                dvr_data.get('protocol', 'http'),
+                dvr_data.get('api_path', '/api'),
+                dvr_data.get('rtsp_port', 554),
+                dvr_data.get('max_channels', 16),
+                'active'
+            )
+            
+            logger.info(f"🔧 SQL Query: {query}")
+            logger.info(f"🔧 Parameters: {params}")
+            
+            result = self.execute_query(query, params, fetch_all=False)
+            logger.info(f"🔧 Query result: {result}")
+            
+            if result is not None and result > 0:
+                logger.info(f"✅ DVR system added successfully: {dvr_data.get('name')}")
+                return True
+            else:
+                logger.error(f"❌ DVR system add failed: {dvr_data.get('name')} - rowcount: {result}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"❌ Add DVR system error: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            return False
+    
+    def get_dvr_systems(self, company_id: str) -> List[Dict[str, Any]]:
+        """Get all DVR systems for a company"""
+        try:
+            query = '''
+                SELECT * FROM dvr_systems 
+                WHERE company_id = ? 
+                ORDER BY created_at DESC
+            '''
+            
+            result = self.execute_query(query, (company_id,))
+            if result:
+                # Get column names
+                conn = self.get_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM dvr_systems LIMIT 1")
+                    columns = [description[0] for description in cursor.description]
+                    conn.close()
+                    
+                    # Create list of dictionaries from results
+                    dvr_systems = []
+                    for row in result:
+                        dvr_systems.append(dict(zip(columns, row)))
+                    return dvr_systems
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR systems error: {e}")
+            return []
+    
+    def get_dvr_system(self, company_id: str, dvr_id: str) -> Optional[Dict[str, Any]]:
+        """Get specific DVR system"""
+        try:
+            query = '''
+                SELECT * FROM dvr_systems 
+                WHERE company_id = ? AND dvr_id = ?
+            '''
+            
+            result = self.execute_query(query, (company_id, dvr_id), fetch_all=False)
+            if result:
+                # Get column names
+                conn = self.get_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM dvr_systems LIMIT 1")
+                    columns = [description[0] for description in cursor.description]
+                    conn.close()
+                    
+                    # Create dictionary from result
+                    return dict(zip(columns, result))
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR system error: {e}")
+            return None
+    
+    def update_dvr_system(self, company_id: str, dvr_id: str, dvr_data: Dict[str, Any]) -> bool:
+        """Update DVR system"""
+        try:
+            query = '''
+                UPDATE dvr_systems 
+                SET name = ?, ip_address = ?, port = ?, username = ?, password = ?,
+                    dvr_type = ?, protocol = ?, api_path = ?, rtsp_port = ?, 
+                    max_channels = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = ? AND dvr_id = ?
+            '''
+            
+            params = (
+                dvr_data.get('name'),
+                dvr_data.get('ip_address'),
+                dvr_data.get('port', 80),
+                dvr_data.get('username', 'admin'),
+                dvr_data.get('password', ''),
+                dvr_data.get('dvr_type', 'generic'),
+                dvr_data.get('protocol', 'http'),
+                dvr_data.get('api_path', '/api'),
+                dvr_data.get('rtsp_port', 554),
+                dvr_data.get('max_channels', 16),
+                dvr_data.get('status', 'active'),
+                company_id,
+                dvr_id
+            )
+            
+            result = self.execute_query(query, params, fetch_all=False)
+            return result is not None
+            
+        except Exception as e:
+            logger.error(f"❌ Update DVR system error: {e}")
+            return False
+    
+    def delete_dvr_system(self, company_id: str, dvr_id: str) -> bool:
+        """Delete DVR system"""
+        try:
+            query = '''
+                DELETE FROM dvr_systems 
+                WHERE company_id = ? AND dvr_id = ?
+            '''
+            
+            result = self.execute_query(query, (company_id, dvr_id), fetch_all=False)
+            return result is not None
+            
+        except Exception as e:
+            logger.error(f"❌ Delete DVR system error: {e}")
+            return False
+    
+    # DVR Channel Methods
+    def add_dvr_channel(self, company_id: str, dvr_id: str, channel_data: Dict[str, Any]) -> bool:
+        """Add DVR channel to database"""
+        try:
+            logger.info(f"🔧 Adding DVR channel: {channel_data.get('name')} for DVR: {dvr_id}")
+            
+            # Use INSERT OR REPLACE to handle conflicts
+            if self.db_type == 'sqlite':
+                query = '''
+                    INSERT OR REPLACE INTO dvr_channels (
+                        channel_id, dvr_id, company_id, name, channel_number,
+                        status, resolution_width, resolution_height, fps, rtsp_path, http_path
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    INSERT INTO dvr_channels (
+                        channel_id, dvr_id, company_id, name, channel_number,
+                        status, resolution_width, resolution_height, fps, rtsp_path, http_path
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (channel_id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        status = EXCLUDED.status,
+                        resolution_width = EXCLUDED.resolution_width,
+                        resolution_height = EXCLUDED.resolution_height,
+                        fps = EXCLUDED.fps,
+                        rtsp_path = EXCLUDED.rtsp_path,
+                        http_path = EXCLUDED.http_path,
+                        updated_at = CURRENT_TIMESTAMP
+                '''
+            
+            params = (
+                channel_data['channel_id'],
+                dvr_id,
+                company_id,
+                channel_data['name'],
+                channel_data['channel_number'],
+                channel_data.get('status', 'inactive'),
+                channel_data.get('resolution_width', 1920),
+                channel_data.get('resolution_height', 1080),
+                channel_data.get('fps', 25),
+                channel_data.get('rtsp_path', ''),
+                channel_data.get('http_path', '')
+            )
+            
+            logger.info(f"🔧 Channel SQL Query: {query}")
+            logger.info(f"🔧 Channel Parameters: {params}")
+            
+            result = self.execute_query(query, params, fetch_all=False)
+            logger.info(f"🔧 Channel Query result: {result}")
+            
+            if result is not None and result > 0:
+                logger.info(f"✅ DVR channel added successfully: {channel_data.get('name')}")
+                return True
+            else:
+                logger.error(f"❌ DVR channel add failed: {channel_data.get('name')} - rowcount: {result}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"❌ Add DVR channel error: {e}")
+            import traceback
+            logger.error(f"❌ Channel traceback: {traceback.format_exc()}")
+            return False
+    
+    def get_dvr_channels(self, company_id: str, dvr_id: str) -> List[Dict[str, Any]]:
+        """Get all channels for a DVR system"""
+        try:
+            query = '''
+                SELECT * FROM dvr_channels 
+                WHERE company_id = ? AND dvr_id = ? 
+                ORDER BY channel_number
+            '''
+            
+            result = self.execute_query(query, (company_id, dvr_id))
+            if result:
+                # Get column names
+                conn = self.get_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM dvr_channels LIMIT 1")
+                    columns = [description[0] for description in cursor.description]
+                    conn.close()
+                    
+                    # Create list of dictionaries from results
+                    channels = []
+                    for row in result:
+                        channels.append(dict(zip(columns, row)))
+                    return channels
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR channels error: {e}")
+            return []
+    
+    def update_dvr_channel_status(self, company_id: str, channel_id: str, status: str) -> bool:
+        """Update DVR channel status"""
+        try:
+            query = '''
+                UPDATE dvr_channels 
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = ? AND channel_id = ?
+            '''
+            
+            result = self.execute_query(query, (status, company_id, channel_id), fetch_all=False)
+            return result is not None
+            
+        except Exception as e:
+            logger.error(f"❌ Update DVR channel status error: {e}")
+            return False
+    
+    # DVR Stream Methods
+    def add_dvr_stream(self, company_id: str, dvr_id: str, channel_id: str, stream_url: str) -> bool:
+        """Add active DVR stream"""
+        try:
+            stream_id = f"stream_{dvr_id}_{channel_id}_{int(datetime.now().timestamp())}"
+            
+            query = '''
+                INSERT INTO dvr_streams (
+                    stream_id, dvr_id, company_id, channel_id, stream_url, status
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            '''
+            
+            params = (stream_id, dvr_id, company_id, channel_id, stream_url, 'active')
+            
+            result = self.execute_query(query, params, fetch_all=False)
+            return result is not None
+            
+        except Exception as e:
+            logger.error(f"❌ Add DVR stream error: {e}")
+            return False
+    
+    def update_dvr_stream_status(self, company_id: str, stream_id: str, status: str, fps: float = 0) -> bool:
+        """Update DVR stream status"""
+        try:
+            query = '''
+                UPDATE dvr_streams 
+                SET status = ?, fps = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = ? AND stream_id = ?
+            '''
+            
+            result = self.execute_query(query, (status, fps, company_id, stream_id), fetch_all=False)
+            return result is not None
+            
+        except Exception as e:
+            logger.error(f"❌ Update DVR stream status error: {e}")
+            return False
+    
+    def get_active_dvr_streams(self, company_id: str) -> List[Dict[str, Any]]:
+        """Get active DVR streams for a company"""
+        try:
+            query = '''
+                SELECT * FROM dvr_streams 
+                WHERE company_id = ? AND status = 'active'
+                ORDER BY start_time DESC
+            '''
+            
+            result = self.execute_query(query, (company_id,))
+            if result:
+                # Get column names
+                conn = self.get_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM dvr_streams LIMIT 1")
+                    columns = [description[0] for description in cursor.description]
+                    conn.close()
+                    
+                    # Create list of dictionaries from results
+                    streams = []
+                    for row in result:
+                        streams.append(dict(zip(columns, row)))
+                    return streams
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ Get active DVR streams error: {e}")
+            return []
 
 # Global database adapter instance
 db_adapter = DatabaseAdapter()
