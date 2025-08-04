@@ -553,9 +553,17 @@ class SmartSafeSaaSAPI:
                 # Generate stream ID
                 stream_id = f"{dvr_id}_ch{channel_number:02d}"
                 
-                # Start stream if not already active
+                # Start stream if not already active with enhanced parameters
                 if stream_id not in stream_handler.active_streams:
-                    success = stream_handler.start_stream(stream_id, rtsp_url)
+                    success = stream_handler.start_stream(
+                        stream_id=stream_id,
+                        rtsp_url=rtsp_url,
+                        ip_address=dvr_system['ip_address'],
+                        username=dvr_system['username'],
+                        password=dvr_system['password'],
+                        rtsp_port=dvr_system['rtsp_port'],
+                        channel_number=channel_number
+                    )
                     if not success:
                         return jsonify({'error': 'Failed to start stream'}), 500
                 
@@ -631,33 +639,96 @@ class SmartSafeSaaSAPI:
                     dvr_system = manager.get_dvr_system(company_id, dvr_id)
                     
                     if dvr_system:
-                        rtsp_url = f"rtsp://{dvr_system['username']}:{dvr_system['password']}@{dvr_system['ip_address']}:{dvr_system['rtsp_port']}/ch{channel_number:02d}/main"
-                        success = stream_handler.start_stream(stream_id, rtsp_url)
-                        
-                        if not success:
+                        try:
+                            rtsp_url = f"rtsp://{dvr_system['username']}:{dvr_system['password']}@{dvr_system['ip_address']}:{dvr_system['rtsp_port']}/ch{channel_number:02d}/main"
+                            success = stream_handler.start_stream(
+                                stream_id=stream_id,
+                                rtsp_url=rtsp_url,
+                                ip_address=dvr_system['ip_address'],
+                                username=dvr_system['username'],
+                                password=dvr_system['password'],
+                                rtsp_port=dvr_system['rtsp_port'],
+                                channel_number=channel_number
+                            )
+                            
+                            if not success:
+                                logger.error(f"❌ Failed to start stream: {stream_id}")
+                                return jsonify({
+                                    'success': False,
+                                    'error': 'Failed to start stream'
+                                }), 500
+                        except Exception as stream_error:
+                            logger.error(f"❌ Stream start error: {stream_error}")
                             return jsonify({
                                 'success': False,
-                                'error': 'Failed to start stream'
+                                'error': f'Stream start failed: {str(stream_error)}'
                             }), 500
+                    else:
+                        logger.error(f"❌ DVR system not found: {dvr_id}")
+                        return jsonify({
+                            'success': False,
+                            'error': 'DVR system not found'
+                        }), 404
                         
-                        # Wait a bit for stream to start
+                        # Wait longer for stream to start and become active
                         import time
-                        time.sleep(0.5)
+                        max_wait_time = 10  # 10 seconds max wait
+                        wait_interval = 0.5  # Check every 0.5 seconds
+                        
+                        for i in range(int(max_wait_time / wait_interval)):
+                            time.sleep(wait_interval)
+                            current_status = stream_handler.get_stream_status(stream_id)
+                            
+                            if current_status and current_status.get('status') == 'active':
+                                logger.info(f"✅ Stream became active after {i * wait_interval + wait_interval}s: {stream_id}")
+                                break
+                            elif current_status and current_status.get('status') == 'error':
+                                logger.error(f"❌ Stream failed to start: {stream_id}")
+                                return jsonify({
+                                    'success': False,
+                                    'error': 'Stream failed to start'
+                                }), 500
+                        
+                        # Final check
+                        final_status = stream_handler.get_stream_status(stream_id)
+                        if not final_status or final_status.get('status') != 'active':
+                            logger.error(f"❌ Stream still not active after {max_wait_time}s: {stream_id}")
+                            return jsonify({
+                                'success': False,
+                                'error': 'Stream failed to become active'
+                            }), 500
                 
-                # Get latest frame
-                frame_data = stream_handler.get_latest_frame(stream_id)
-                
-                if frame_data:
-                    return jsonify({
-                        'success': True,
-                        'frame': frame_data,
-                        'stream_id': stream_id
-                    })
-                else:
-                    return jsonify({
-                        'success': False,
-                        'error': 'No frame available'
-                    }), 404
+                # Get latest frame with retry logic
+                max_frame_retries = 3
+                for retry in range(max_frame_retries):
+                    try:
+                        frame_data = stream_handler.get_latest_frame(stream_id)
+                        
+                        if frame_data:
+                            return jsonify({
+                                'success': True,
+                                'frame': frame_data,
+                                'stream_id': stream_id
+                            })
+                        else:
+                            if retry < max_frame_retries - 1:
+                                logger.warning(f"⚠️ Frame not available, retrying... (attempt {retry + 1}/{max_frame_retries})")
+                                time.sleep(0.5)
+                            else:
+                                logger.error(f"❌ No frame available after {max_frame_retries} attempts: {stream_id}")
+                                return jsonify({
+                                    'success': False,
+                                    'error': 'No frame available'
+                                }), 404
+                    except Exception as frame_error:
+                        logger.error(f"❌ Frame retrieval error: {frame_error}")
+                        if retry < max_frame_retries - 1:
+                            time.sleep(0.5)
+                        else:
+                            return jsonify({
+                                'success': False,
+                                'error': f'Frame retrieval failed: {str(frame_error)}'
+                            }), 500
                 
             except Exception as e:
                 logger.error(f"❌ Get DVR frame error: {e}")

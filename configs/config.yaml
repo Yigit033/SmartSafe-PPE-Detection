@@ -1,15 +1,15 @@
 # PPE Detection System Configuration
 # Modern Computer Vision Pipeline Settings
 
-# Model Configuration - SH17 Dataset + YOLOv9-e
+# Model Configuration - OPTİMİZE EDİLDİ
 model:
-  name: "yolov8n"           # Changed from yolo9e to yolov8n for speed
+  name: "yolov8n"           # Optimized for speed and accuracy balance
   model_path: "yolov8n.pt"  # Lightweight model for real-time
-  input_size: [640, 640]  # Standard YOLO input resolution
-  confidence_threshold: 0.5
+  input_size: [480, 480]    # OPTİMİZE EDİLDİ: Balanced resolution
+  confidence_threshold: 0.5  # OPTİMİZE EDİLDİ: Balanced confidence
   iou_threshold: 0.45
   max_detections: 100
-  device: "cpu"             # Force CPU until CUDA fixed
+  device: "auto"            # İYİLEŞTİRİLDİ: Otomatik GPU/CPU seçimi
 
 # SH17 Dataset PPE Classes Configuration (17 classes)
 classes:
@@ -31,12 +31,13 @@ classes:
   medical_suit: 15
   safety_suit: 16
 
-# Detection Thresholds
+# Detection Thresholds - OPTİMİZE EDİLDİ
 detection:
-  min_confidence: 0.3  # Düşürüldü - daha fazla detection
+  min_confidence: 0.5  # OPTİMİZE EDİLDİ: Daha yüksek kalite
   violation_duration: 5.0  # seconds before alert
   tracking_enabled: true
   max_tracks: 50
+  frame_skip: 6  # OPTİMİZE EDİLDİ: Performance balance
 
 # Video/Camera Settings
 video:

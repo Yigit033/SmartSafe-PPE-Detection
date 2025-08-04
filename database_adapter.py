@@ -78,7 +78,7 @@ class DatabaseAdapter:
             if self.db_type == 'sqlite':
                 # Create new connection for each request to avoid thread issues
                 connection = sqlite3.connect(
-                    self.config.database_url, 
+                    self.config.database_url,
                     timeout=timeout,
                     check_same_thread=False  # Allow cross-thread usage
                 )
@@ -167,10 +167,10 @@ class DatabaseAdapter:
                         violation_alerts BOOLEAN DEFAULT TRUE,
                         system_alerts BOOLEAN DEFAULT TRUE,
                         report_notifications BOOLEAN DEFAULT TRUE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             
             # Create sector performance metrics table
             if self.db_type == 'sqlite':
@@ -528,20 +528,20 @@ class DatabaseAdapter:
             # Reports için gerekli tablolar - SQLite ve PostgreSQL uyumlu
             if self.db_type == 'sqlite':
                 cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS violations (
-                            violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id TEXT NOT NULL,
-                        camera_id TEXT NOT NULL,
-                            worker_id TEXT,
-                            missing_ppe TEXT NOT NULL,
-                            violation_type TEXT NOT NULL,
-                            penalty REAL DEFAULT 0,
-                            confidence REAL DEFAULT 0,
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (company_id) REFERENCES companies (company_id)
-                    )
-                ''')
-            
+                            CREATE TABLE IF NOT EXISTS violations (
+                                violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                company_id TEXT NOT NULL,
+                                camera_id TEXT NOT NULL,
+                                worker_id TEXT,
+                                missing_ppe TEXT NOT NULL,
+                                violation_type TEXT NOT NULL,
+                                penalty REAL DEFAULT 0,
+                                confidence REAL DEFAULT 0,
+                                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                            )
+                        ''')
+                    
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS detections (
                         detection_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -748,10 +748,10 @@ class DatabaseAdapter:
                     return None
                 
                 cursor = conn.cursor()
-                
+            
                 # Execute query
                 cursor.execute(query, params or ())
-                
+                    
                 # Handle different query types
                 if query.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')):
                     result = cursor.rowcount
@@ -763,7 +763,7 @@ class DatabaseAdapter:
                         result = cursor.fetchall()
                     else:
                         result = cursor.fetchone()
-                    
+                        
                     # Convert to list of dictionaries for better handling
                     if result and len(result) > 0:
                         columns = [description[0] for description in cursor.description]
@@ -771,9 +771,9 @@ class DatabaseAdapter:
                             result = [dict(zip(columns, row)) for row in result]
                         else:
                             result = dict(zip(columns, result))
-                    
-                    logger.info(f"✅ Query executed successfully: {len(result) if isinstance(result, list) else 1} rows returned")
-                    return result
+                        
+                        logger.info(f"✅ Query executed successfully: {len(result) if isinstance(result, list) else 1} rows returned")
+                        return result
                     
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
@@ -785,7 +785,7 @@ class DatabaseAdapter:
                     logger.error(f"❌ Database query error: {e}")
                     logger.error(f"❌ Query traceback: {traceback.format_exc()}")
                     return None
-                    
+                            
             except Exception as e:
                 logger.error(f"❌ Database query error: {e}")
                 logger.error(f"❌ Query traceback: {traceback.format_exc()}")
@@ -797,10 +797,10 @@ class DatabaseAdapter:
                         conn.close()
                     except Exception as e:
                         logger.warning(f"⚠️ Error closing SQLite connection: {e}")
-        
+
         logger.error(f"❌ Database query failed after {max_retries} attempts")
         return None
-    
+
     # DVR System Methods
     def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> bool:
         """Add DVR system to database"""
@@ -861,7 +861,7 @@ class DatabaseAdapter:
             result = self.execute_query(query, (company_id,))
             if result:
                 logger.info(f"✅ Retrieved {len(result)} DVR systems for company {company_id}")
-                return result
+            return result
             return []
             
         except Exception as e:
