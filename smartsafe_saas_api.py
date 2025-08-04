@@ -23,6 +23,7 @@ from smartsafe_construction_system import ConstructionPPEDetector, ConstructionP
 from smartsafe_sector_detector_factory import SectorDetectorFactory
 from database_adapter import get_db_adapter
 from camera_integration_manager import DVRConfig
+from dvr_ppe_integration import get_dvr_ppe_manager
 import cv2
 import numpy as np
 import base64
@@ -507,6 +508,229 @@ class SmartSafeSaaSAPI:
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
 
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/info', methods=['GET'])
+        def get_dvr_info(company_id, dvr_id):
+            """Get DVR system information"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            try:
+                manager = self.get_camera_manager().dvr_manager
+                dvr_system = manager.get_dvr_system(company_id, dvr_id)
+                if dvr_system:
+                    return jsonify({
+                        'success': True,
+                        'dvr_system': dvr_system
+                    })
+                else:
+                    return jsonify({'error': 'DVR system not found'}), 404
+            except Exception as e:
+                logger.error(f"❌ Get DVR info error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/stream/<int:channel_number>', methods=['GET', 'POST'])
+        def get_dvr_stream(company_id, dvr_id, channel_number):
+            """Get DVR stream as video for browser playback"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                # Get DVR system info
+                manager = self.get_camera_manager().dvr_manager
+                dvr_system = manager.get_dvr_system(company_id, dvr_id)
+                
+                if not dvr_system:
+                    return jsonify({'error': 'DVR system not found'}), 404
+                
+                # Generate RTSP URL
+                rtsp_url = f"rtsp://{dvr_system['username']}:{dvr_system['password']}@{dvr_system['ip_address']}:{dvr_system['rtsp_port']}/ch{channel_number:02d}/main"
+                
+                # Import stream handler
+                from dvr_stream_handler import get_stream_handler
+                stream_handler = get_stream_handler()
+                
+                # Generate stream ID
+                stream_id = f"{dvr_id}_ch{channel_number:02d}"
+                
+                # Start stream if not already active
+                if stream_id not in stream_handler.active_streams:
+                    success = stream_handler.start_stream(stream_id, rtsp_url)
+                    if not success:
+                        return jsonify({'error': 'Failed to start stream'}), 500
+                
+                # Return stream info
+                return jsonify({
+                    'success': True,
+                    'stream_id': stream_id,
+                    'rtsp_url': rtsp_url,
+                    'channel': channel_number,
+                    'status': 'active'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Get DVR stream error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/stream/<int:channel_number>/stop', methods=['POST'])
+        def stop_dvr_stream(company_id, dvr_id, channel_number):
+            """Stop DVR stream"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                # Import stream handler
+                from dvr_stream_handler import get_stream_handler
+                stream_handler = get_stream_handler()
+                
+                # Generate stream ID
+                stream_id = f"{dvr_id}_ch{channel_number:02d}"
+                
+                # Stop stream
+                success = stream_handler.stop_stream(stream_id)
+                
+                if success:
+                    return jsonify({
+                        'success': True,
+                        'stream_id': stream_id
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Failed to stop stream'
+                    }), 500
+                
+            except Exception as e:
+                logger.error(f"❌ Stop DVR stream error: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/frame/<int:channel_number>', methods=['GET'])
+        def get_dvr_frame(company_id, dvr_id, channel_number):
+            """Get latest frame from DVR stream"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                # Import stream handler
+                from dvr_stream_handler import get_stream_handler
+                stream_handler = get_stream_handler()
+                
+                # Generate stream ID
+                stream_id = f"{dvr_id}_ch{channel_number:02d}"
+                
+                # Check if stream is active
+                stream_status = stream_handler.get_stream_status(stream_id)
+                if not stream_status or stream_status.get('status') != 'active':
+                    # Try to start the stream if not active
+                    logger.info(f"🔄 Stream not active, starting: {stream_id}")
+                    
+                    # Get DVR system info
+                    manager = self.get_camera_manager().dvr_manager
+                    dvr_system = manager.get_dvr_system(company_id, dvr_id)
+                    
+                    if dvr_system:
+                        rtsp_url = f"rtsp://{dvr_system['username']}:{dvr_system['password']}@{dvr_system['ip_address']}:{dvr_system['rtsp_port']}/ch{channel_number:02d}/main"
+                        success = stream_handler.start_stream(stream_id, rtsp_url)
+                        
+                        if not success:
+                            return jsonify({
+                                'success': False,
+                                'error': 'Failed to start stream'
+                            }), 500
+                        
+                        # Wait a bit for stream to start
+                        import time
+                        time.sleep(0.5)
+                
+                # Get latest frame
+                frame_data = stream_handler.get_latest_frame(stream_id)
+                
+                if frame_data:
+                    return jsonify({
+                        'success': True,
+                        'frame': frame_data,
+                        'stream_id': stream_id
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'No frame available'
+                    }), 404
+                
+            except Exception as e:
+                logger.error(f"❌ Get DVR frame error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/channels', methods=['GET'])
+        def get_dvr_channels(company_id, dvr_id):
+            """Get DVR channels"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                # Get DVR channels from database
+                manager = self.get_camera_manager().dvr_manager
+                channels = manager.db_adapter.get_dvr_channels(company_id, dvr_id)
+                
+                if channels:
+                    return jsonify({
+                        'success': True,
+                        'channels': channels
+                    })
+                else:
+                    # Return default channels if none found
+                    default_channels = []
+                    for i in range(1, 17):  # 1-16 channels
+                        default_channels.append({
+                            'channel_id': f"{dvr_id}_ch{i:02d}",
+                            'channel_number': i,
+                            'name': f'Kamera {i}',
+                            'status': 'available'
+                        })
+                    
+                    return jsonify({
+                        'success': True,
+                        'channels': default_channels
+                    })
+                
+            except Exception as e:
+                logger.error(f"❌ Get DVR channels error: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/proxy/<int:channel_number>', methods=['GET'])
+        def proxy_dvr_stream(company_id, dvr_id, channel_number):
+            """Proxy DVR stream for browser playback"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                # Get DVR system info
+                manager = self.get_camera_manager().dvr_manager
+                dvr_system = manager.get_dvr_system(company_id, dvr_id)
+                
+                if not dvr_system:
+                    return jsonify({'error': 'DVR system not found'}), 404
+                
+                # Generate RTSP URL
+                rtsp_url = f"rtsp://{dvr_system['username']}:{dvr_system['password']}@{dvr_system['ip_address']}:{dvr_system['rtsp_port']}/ch{channel_number:02d}/main"
+                
+                # For now, return a simple response with stream info
+                # In production, you would implement actual RTSP to HLS conversion
+                return jsonify({
+                    'success': True,
+                    'message': 'Stream proxy endpoint',
+                    'rtsp_url': rtsp_url,
+                    'note': 'RTSP to HLS conversion would be implemented here'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Proxy DVR stream error: {e}")
+                return jsonify({'error': str(e)}), 500
+
         @app.route('/api/company/<company_id>/dvr/<dvr_id>/delete', methods=['DELETE'])
         def delete_dvr_system(company_id, dvr_id):
             user_data = self.validate_session()
@@ -516,7 +740,107 @@ class SmartSafeSaaSAPI:
                 manager = self.get_camera_manager().dvr_manager
                 success, msg = manager.remove_dvr_system(dvr_id, company_id)
                 return jsonify({'success': success, 'message': msg})
+                
             except Exception as e:
+                logger.error(f"❌ Delete DVR system error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        # DVR-PPE Detection API endpoints
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/detection/start', methods=['POST'])
+        def start_dvr_detection(company_id, dvr_id):
+            """Start DVR PPE detection"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                data = request.get_json()
+                channels = data.get('channels', [1])  # Default: channel 1
+                detection_mode = data.get('detection_mode', 'construction')
+                
+                dvr_ppe_manager = get_dvr_ppe_manager()
+                result = dvr_ppe_manager.start_dvr_ppe_detection(
+                    dvr_id, channels, company_id, detection_mode
+                )
+                
+                logger.info(f"🎥 DVR detection started: {result}")
+                return jsonify(result)
+                
+            except Exception as e:
+                logger.error(f"❌ Start DVR detection error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/detection/stop', methods=['POST'])
+        def stop_dvr_detection(company_id, dvr_id):
+            """Stop DVR PPE detection"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                data = request.get_json()
+                channels = data.get('channels', None)  # None = stop all channels
+                
+                dvr_ppe_manager = get_dvr_ppe_manager()
+                result = dvr_ppe_manager.stop_dvr_ppe_detection(dvr_id, channels)
+                
+                logger.info(f"🛑 DVR detection stopped: {result}")
+                return jsonify(result)
+
+            except Exception as e:
+                logger.error(f"❌ Stop DVR detection error: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/detection/status', methods=['GET'])
+        def get_dvr_detection_status(company_id, dvr_id):
+            """Get DVR detection status"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                dvr_ppe_manager = get_dvr_ppe_manager()
+                result = dvr_ppe_manager.get_dvr_detection_status(dvr_id)
+                
+                return jsonify(result)
+                
+            except Exception as e:
+                logger.error(f"❌ Get DVR detection status error: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @app.route('/api/company/<company_id>/dvr/<dvr_id>/detection/results', methods=['GET'])
+        def get_dvr_detection_results(company_id, dvr_id):
+            """Get DVR detection results"""
+            user_data = self.validate_session()
+            if not user_data:
+                return jsonify({'error': 'Unauthorized'}), 401
+            
+            try:
+                limit = request.args.get('limit', 50, type=int)
+                
+                # Get detection sessions
+                db_adapter = get_db_adapter()
+                sessions = db_adapter.get_dvr_detection_sessions(company_id, dvr_id)
+                
+                # Get recent results for each session
+                all_results = []
+                for session in sessions:
+                    if session.get('session_id'):
+                        results = db_adapter.get_dvr_detection_results(session['session_id'], limit)
+                        all_results.extend(results)
+                
+                return jsonify({
+                    'sessions': sessions,
+                    'results': all_results,
+                    'total_sessions': len(sessions),
+                    'total_results': len(all_results)
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Get DVR detection results error: {e}")
+                return jsonify({'error': str(e)}), 500
                 return jsonify({'error': str(e)}), 500
 
         @app.route('/api/company/<company_id>/dvr/<dvr_id>/status', methods=['GET'])
@@ -4773,16 +5097,16 @@ Mesaj:
                 logger.warning("⚠️ Session ID bulunamadı")
                 return None
             
-                result = self.db.validate_session(session_id)
-                logger.info(f"🔍 Session doğrulama sonucu: {result}")
+            result = self.db.validate_session(session_id)
+            logger.info(f"🔍 Session doğrulama sonucu: {result}")
+            
+            # Backward compatibility check
+            if result and isinstance(result, dict):
+                # Ensure required fields exist
+                if 'company_id' not in result:
+                    logger.warning("⚠️ Session result missing company_id")
+                    return None
                 
-                # Backward compatibility check
-                if result and isinstance(result, dict):
-                    # Ensure required fields exist
-                    if 'company_id' not in result:
-                        logger.warning("⚠️ Session result missing company_id")
-                        return None
-                    
             return result
             
         except Exception as e:
@@ -7028,7 +7352,7 @@ Mesaj:
 
                 // Email Validation for Registration
                 function validateEmailRegister(input) {
-                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/;
                     const isValid = emailRegex.test(input.value);
                     
                     if (input.value && !isValid) {
@@ -9917,7 +10241,7 @@ Mesaj:
                 
                 // Email validation function
                 function validateEmail(input) {
-                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/;
                     const isValid = emailRegex.test(input.value);
                     
                     if (input.value && !isValid) {
@@ -9960,7 +10284,7 @@ Mesaj:
             <script>
                 // Email Validation Function
                 function validateEmail(input) {
-                    const emailRegex = /^[a-zA-Z0-9._%+-çğıöşüÇĞIİÖŞÜ]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    const emailRegex = /^[a-zA-Z0-9._%+-çğıöşüÇĞIİÖŞÜ]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/;
                     const isValid = emailRegex.test(input.value);
                     
                     if (input.value && !isValid) {

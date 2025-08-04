@@ -1,7 +1,7 @@
 # SmartSafe AI PPE Detection - Render.com Optimized
 # Core Computer Vision
-opencv-python-headless>=4.8.0
-numpy>=1.21.0
+opencv-python==4.8.1.78
+numpy==1.24.3
 Pillow>=9.0.0
 
 # Deep Learning Framework (Production Ready - Auto GPU/CPU)
@@ -22,7 +22,7 @@ Werkzeug>=2.3.7  # Required by Flask
 
 # Database & Networking
 SQLAlchemy>=2.0.0
-psycopg2-binary>=2.9.0
+psycopg2-binary==2.9.7
 redis>=5.0.1
 dnspython>=2.4.0  # DNS resolution for camera detection
 certifi>=2023.7.22  # SSL certificate verification
@@ -30,7 +30,7 @@ certifi>=2023.7.22  # SSL certificate verification
 # Security & Authentication
 PyJWT>=2.8.0
 cryptography>=41.0.7
-bcrypt>=4.0.0
+bcrypt==4.0.1
 pyotp>=2.8.0
 
 # Email & Validation
@@ -44,10 +44,10 @@ seaborn>=0.12.0
 
 # Configuration & Environment
 pyyaml>=6.0
-python-dotenv>=1.0.0
+python-dotenv==1.0.0
 
 # HTTP & Networking
-requests>=2.31.0
+requests==2.31.0
 urllib3>=2.0.0
 charset-normalizer>=3.0.0
 
