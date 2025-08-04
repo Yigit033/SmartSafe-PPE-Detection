@@ -730,6 +730,105 @@
                                     <p>Henüz DVR sistemi eklenmemiş</p>
                                 </div>
                             </div>
+                            
+                            <!-- DVR Kanalları Container -->
+                            <div id="dvrChannelsContainer" class="mt-4">
+                                <!-- Keşfedilen kanallar burada gösterilecek -->
+                            </div>
+                            
+                            <!-- DVR PPE Detection Controls -->
+                            <div class="mt-4 p-3 border rounded bg-light">
+                                <h6><i class="fas fa-shield-alt me-2"></i>DVR PPE Detection</h6>
+                                
+                                <!-- Channel Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label">Kanal Seçimi:</label>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="1" id="ch1">
+                                                <label class="form-check-label" for="ch1">Kanal 1</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="2" id="ch2">
+                                                <label class="form-check-label" for="ch2">Kanal 2</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="3" id="ch3">
+                                                <label class="form-check-label" for="ch3">Kanal 3</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="4" id="ch4">
+                                                <label class="form-check-label" for="ch4">Kanal 4</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="5" id="ch5">
+                                                <label class="form-check-label" for="ch5">Kanal 5</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="6" id="ch6">
+                                                <label class="form-check-label" for="ch6">Kanal 6</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="7" id="ch7">
+                                                <label class="form-check-label" for="ch7">Kanal 7</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="8" id="ch8">
+                                                <label class="form-check-label" for="ch8">Kanal 8</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Detection Mode -->
+                                <div class="mb-3">
+                                    <label class="form-label">Detection Modu:</label>
+                                    <select class="form-select" id="dvrDetectionMode">
+                                        <option value="construction">İnşaat</option>
+                                        <option value="manufacturing">Üretim</option>
+                                        <option value="warehouse">Depo</option>
+                                        <option value="energy">Enerji</option>
+                                        <option value="petrochemical">Petrokimya</option>
+                                        <option value="marine">Denizcilik</option>
+                                        <option value="aviation">Havacılık</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-success btn-sm" onclick="startDVRDetection('DVR_192_168_1_109')">
+                                        <i class="fas fa-play me-2"></i>Detection Başlat
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" onclick="stopDVRDetection('DVR_192_168_1_109')">
+                                        <i class="fas fa-stop me-2"></i>Detection Durdur
+                                    </button>
+                                    <button class="btn btn-info btn-sm" onclick="updateDVRDetectionStatus('DVR_192_168_1_109')">
+                                        <i class="fas fa-sync me-2"></i>Durum Güncelle
+                                    </button>
+                                </div>
+                                
+                                <!-- Status Display -->
+                                <div class="mt-3" id="dvr-status-DVR_192_168_1_109">
+                                    <span class="badge bg-secondary">Durum Bekleniyor</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2648,14 +2747,19 @@
         // DVR sistemlerini yükle
         async function loadDVRSystems() {
             try {
+                console.log('🔍 Loading DVR systems...');
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/list`);
                 const data = await response.json();
+                
+                console.log('📊 DVR systems response:', data);
                 
                 const dvrList = document.getElementById('dvrSystemsList');
                 
                 if (data.success && data.dvr_systems && data.dvr_systems.length > 0) {
+                    console.log(`📋 Found ${data.dvr_systems.length} DVR systems`);
                     let html = '';
-                    data.dvr_systems.forEach(dvr => {
+                    data.dvr_systems.forEach((dvr, index) => {
+                        console.log(`📋 DVR ${index + 1}:`, dvr);
                         html += `
                             <div class="card mb-3">
                                 <div class="card-body">
@@ -2671,6 +2775,9 @@
                                             <button class="btn btn-outline-primary" onclick="discoverDVRChannels('${dvr.dvr_id}')" title="Kanalları Keşfet">
                                                 <i class="fas fa-search"></i>
                                             </button>
+                                            <button class="btn btn-outline-info" onclick="showDVRChannelLive('${dvr.dvr_id}', 1)" title="Canlı Görüntü">
+                                                <i class="fas fa-video"></i>
+                                            </button>
                                             <button class="btn btn-outline-success" onclick="startDVRStream('${dvr.dvr_id}', 1)" title="Stream Başlat">
                                                 <i class="fas fa-play"></i>
                                             </button>
@@ -2684,7 +2791,9 @@
                         `;
                     });
                     dvrList.innerHTML = html;
+                    console.log('✅ DVR systems loaded successfully');
                 } else {
+                    console.log('📋 No DVR systems found');
                     dvrList.innerHTML = `
                         <div class="text-center text-muted py-4">
                             <i class="fas fa-server fa-3x mb-3"></i>
@@ -2693,7 +2802,7 @@
                     `;
                 }
             } catch (error) {
-                console.error('DVR sistemleri yüklenirken hata:', error);
+                console.error('❌ DVR sistemleri yüklenirken hata:', error);
                 showAlert('DVR sistemleri yüklenirken hata oluştu', 'danger');
             }
         }
@@ -2740,9 +2849,10 @@
             }
         }
         
-        // DVR kanallarını keşfet
+        // DVR kanallarını keşfet ve göster
         async function discoverDVRChannels(dvrId) {
             try {
+                console.log(`🔍 Discovering channels for DVR: ${dvrId}`);
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/discover`, {
                     method: 'POST'
                 });
@@ -2750,14 +2860,91 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert(`${data.count} kanal keşfedildi!`, 'success');
-                    loadDVRSystems(); // Listeyi yenile
+                    showAlert(`✅ ${data.channels.length} kanal keşfedildi!`, 'success');
+                    displayDVRChannels(dvrId, data.channels);
                 } else {
-                    showAlert(`Kanal keşfi hatası: ${data.error}`, 'danger');
+                    showAlert(`❌ Kanal keşfi hatası: ${data.error}`, 'danger');
                 }
             } catch (error) {
-                console.error('Kanal keşfi hatası:', error);
-                showAlert('Kanal keşfi sırasında hata oluştu', 'danger');
+                console.error('❌ DVR channel discovery error:', error);
+                showAlert('DVR kanalları keşfedilirken hata oluştu', 'danger');
+            }
+        }
+        
+        // DVR kanallarını göster
+        function displayDVRChannels(dvrId, channels) {
+            const channelsContainer = document.getElementById('dvrChannelsContainer');
+            if (!channelsContainer) {
+                console.error('❌ DVR channels container not found');
+                return;
+            }
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-list"></i> DVR Kanalları (${channels.length})</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+            `;
+            
+            channels.forEach(channel => {
+                html += `
+                    <div class="col-md-3 mb-3">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Kanal ${channel.channel_number}</h6>
+                                <p class="card-text small text-muted">${channel.name}</p>
+                                <div class="btn-group btn-group-sm w-100">
+                                    <button class="btn btn-outline-info" onclick="showDVRChannelLive('${dvrId}', ${channel.channel_number})" title="Canlı Görüntü">
+                                        <i class="fas fa-video"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success" onclick="startDVRStream('${dvrId}', ${channel.channel_number})" title="Stream Başlat">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="startDVRDetectionForChannel('${dvrId}', ${channel.channel_number})" title="Detection Başlat">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            channelsContainer.innerHTML = html;
+        }
+        
+        // Belirli bir kanal için detection başlat
+        async function startDVRDetectionForChannel(dvrId, channelNumber) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channels: [channelNumber],
+                        detection_mode: 'construction'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`✅ Kanal ${channelNumber} için PPE Detection başlatıldı!`, 'success');
+                } else {
+                    showAlert(`❌ Detection hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('❌ DVR channel detection error:', error);
+                showAlert('DVR kanal detection başlatılırken hata oluştu', 'danger');
             }
         }
         
@@ -2809,33 +2996,161 @@
             const container = document.createElement('div');
             container.id = 'streamInfo';
             container.className = 'mt-3';
-            document.querySelector('.dvr-section').appendChild(container);
+            
+            // Try to find DVR section, if not found, add to body
+            const dvrSection = document.querySelector('.dvr-management-section');
+            if (dvrSection) {
+                dvrSection.appendChild(container);
+            } else {
+                // Fallback: add to the main container or body
+                const mainContainer = document.querySelector('.container') || document.body;
+                mainContainer.appendChild(container);
+            }
+            
             return container;
         }
         
         // DVR sistemi sil
         async function removeDVRSystem(dvrId) {
+            console.log('🗑️ Removing DVR system:', dvrId);
+            
             if (!confirm('Bu DVR sistemini silmek istediğinizden emin misiniz?')) {
+                console.log('❌ User cancelled DVR deletion');
                 return;
             }
             
             try {
+                console.log('📡 Sending delete request...');
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/delete`, {
                     method: 'DELETE'
+                });
+                
+                console.log('📡 Delete response status:', response.status);
+                const data = await response.json();
+                console.log('📊 Delete response data:', data);
+                
+                if (data.success) {
+                    showAlert('DVR sistemi başarıyla silindi!', 'success');
+                    console.log('✅ DVR system deleted successfully, reloading...');
+                    loadDVRSystems();
+                } else {
+                    showAlert(`DVR silme hatası: ${data.error}`, 'danger');
+                    console.error('❌ DVR deletion failed:', data.error);
+                }
+            } catch (error) {
+                console.error('❌ DVR silme hatası:', error);
+                showAlert('DVR sistemi silinirken hata oluştu', 'danger');
+            }
+        }
+        
+        // DVR PPE Detection Functions
+        async function startDVRDetection(dvrId) {
+            try {
+                const channels = getSelectedChannels();
+                const detectionMode = document.getElementById('dvrDetectionMode').value;
+                
+                if (channels.length === 0) {
+                    showAlert('Lütfen en az bir kanal seçin!', 'warning');
+                    return;
+                }
+                
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channels: channels,
+                        detection_mode: detectionMode
+                    })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert('DVR sistemi başarıyla silindi!', 'success');
-                    loadDVRSystems();
+                    showAlert(`DVR PPE Detection başlatıldı! ${data.successful_channels}/${data.total_channels} kanal aktif`, 'success');
+                    updateDVRDetectionStatus(dvrId);
                 } else {
-                    showAlert(`DVR silme hatası: ${data.error}`, 'danger');
+                    showAlert(`DVR Detection hatası: ${data.error}`, 'danger');
                 }
             } catch (error) {
-                console.error('DVR silme hatası:', error);
-                showAlert('DVR sistemi silinirken hata oluştu', 'danger');
+                console.error('DVR Detection hatası:', error);
+                showAlert('DVR PPE Detection başlatılırken hata oluştu', 'danger');
             }
+        }
+        
+        async function stopDVRDetection(dvrId) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`DVR PPE Detection durduruldu! ${data.stopped_detections.length} kanal durduruldu`, 'success');
+                    updateDVRDetectionStatus(dvrId);
+                } else {
+                    showAlert(`DVR Detection durdurma hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('DVR Detection durdurma hatası:', error);
+                showAlert('DVR PPE Detection durdurulurken hata oluştu', 'danger');
+            }
+        }
+        
+        async function getDVRDetectionStatus(dvrId) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/status`);
+                const data = await response.json();
+                
+                return data;
+            } catch (error) {
+                console.error('DVR Detection status hatası:', error);
+                return null;
+            }
+        }
+        
+        async function updateDVRDetectionStatus(dvrId) {
+            try {
+                const status = await getDVRDetectionStatus(dvrId);
+                if (status && status.active_detections) {
+                    const statusElement = document.getElementById(`dvr-status-${dvrId}`);
+                    if (statusElement) {
+                        const activeCount = status.active_detections.length || 0;
+                        const totalViolations = status.total_violations || 0;
+                        
+                        statusElement.innerHTML = `
+                            <span class="badge bg-success">${activeCount} Aktif Detection</span>
+                            <span class="badge bg-warning">${totalViolations} İhlal</span>
+                        `;
+                    }
+                } else {
+                    const statusElement = document.getElementById(`dvr-status-${dvrId}`);
+                    if (statusElement) {
+                        statusElement.innerHTML = `
+                            <span class="badge bg-secondary">Durum Bekleniyor</span>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('DVR Detection status update error:', error);
+                const statusElement = document.getElementById(`dvr-status-${dvrId}`);
+                if (statusElement) {
+                    statusElement.innerHTML = `
+                        <span class="badge bg-danger">Hata</span>
+                    `;
+                }
+            }
+        }
+        
+        function getSelectedChannels() {
+            const checkboxes = document.querySelectorAll('input[name="dvrChannels"]:checked');
+            return Array.from(checkboxes).map(cb => parseInt(cb.value));
         }
         
         // DVR form submit event listener
@@ -2848,6 +3163,506 @@
             // DVR sistemlerini yükle
             loadDVRSystems();
         });
+        
+        // DVR kanal canlı görüntüsünü göster
+        async function showDVRChannelLive(dvrId, channelNumber) {
+            try {
+                console.log(`🎥 Showing live DVR channel: ${dvrId} - Channel ${channelNumber}`);
+                
+                // Get DVR system info
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/info`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const dvr = data.dvr_system;
+                    const rtspUrl = `rtsp://${dvr.username}:${dvr.password}@${dvr.ip_address}:${dvr.rtsp_port}/ch${channelNumber.toString().padStart(2, '0')}/main`;
+                    
+                    // Create modal for live view
+                    const modalHtml = `
+                        <div class="modal fade" id="dvrLiveModal" tabindex="-1" data-dvr-id="${dvrId}" data-channel-number="${channelNumber}">
+                            <div class="modal-dialog modal-xl">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">🎥 DVR Kanal ${channelNumber} - Canlı Görüntü</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row">
+                                            <div class="col-md-8">
+                                                <div class="live-video-container" style="background: #000; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                                                    <div class="mb-3">
+                                                        <label for="channelSelector" class="form-label"><i class="fas fa-list"></i> Kanal Seçimi:</label>
+                                                        <select id="channelSelector" class="form-select" onchange="switchChannel('${dvrId}')">
+                                                            <option value="">Kanal seçin...</option>
+                                                        </select>
+                                                    </div>
+                                                    <div id="dvrVideoContainer" style="text-align: center; padding: 20px;">
+                                                        <img id="dvrLiveImage" style="max-width: 100%; max-height: 400px; border-radius: 4px;" alt="Canlı Görüntü">
+                                                        <div class="mt-2">
+                                                            <span id="streamStatus" class="badge bg-secondary">Bağlanıyor...</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-center mt-2">
+                                                        <button class="btn btn-sm btn-outline-primary" onclick="copyRTSPUrl('${rtspUrl}')">
+                                                            <i class="fas fa-copy"></i> RTSP URL'yi Kopyala
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshVideoStream('${dvrId}', ${channelNumber})">
+                                                            <i class="fas fa-sync"></i> Yenile
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-info" onclick="toggleVideoStream()">
+                                                            <i class="fas fa-play"></i> <span id="toggleText">Başlat</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h6><i class="fas fa-info-circle"></i> Stream Bilgileri</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <p><strong>DVR:</strong> ${dvr.name}</p>
+                                                        <p><strong>IP:</strong> ${dvr.ip_address}:${dvr.rtsp_port}</p>
+                                                        <p><strong>Seçili Kanal:</strong> <span id="currentChannel">${channelNumber}</span></p>
+                                                        <p><strong>RTSP URL:</strong> <small class="text-muted" id="currentRTSPUrl">${rtspUrl}</small></p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="card mt-3">
+                                                    <div class="card-header">
+                                                        <h6><i class="fas fa-shield-alt"></i> Detection Durumu</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div id="dvrDetectionStatus" class="alert alert-secondary">
+                                                            <i class="fas fa-spinner fa-spin"></i> Durum kontrol ediliyor...
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm w-100">
+                                                            <button class="btn btn-success" onclick="startDVRDetectionForChannel('${dvrId}', ${channelNumber})">
+                                                                <i class="fas fa-play"></i> Detection Başlat
+                                                            </button>
+                                                            <button class="btn btn-danger" onclick="stopDVRDetectionForChannel('${dvrId}', ${channelNumber})">
+                                                                <i class="fas fa-stop"></i> Detection Durdur
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                        <button type="button" class="btn btn-primary" onclick="fullscreenVideo()">
+                                            <i class="fas fa-expand"></i> Tam Ekran
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Add modal to page
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    
+                    // Show modal
+                    const modal = new bootstrap.Modal(document.getElementById('dvrLiveModal'));
+                    modal.show();
+                    
+                    // Load available channels
+                    loadAvailableChannels(dvrId, channelNumber);
+                    
+                    // Update detection status
+                    updateDVRDetectionStatusInModal(dvrId);
+                    
+                    // Start video stream
+                    startVideoStream(dvrId, channelNumber);
+                    
+                    // Clean up modal when closed
+                    document.getElementById('dvrLiveModal').addEventListener('hidden.bs.modal', function() {
+                        stopVideoStream();
+                        this.remove();
+                    });
+                    
+                } else {
+                    showAlert('DVR sistemi bilgisi alınamadı', 'danger');
+                }
+            } catch (error) {
+                console.error('❌ DVR live view error:', error);
+                showAlert('DVR canlı görüntü açılırken hata oluştu', 'danger');
+            }
+        }
+        
+        // Mevcut kanalları yükle
+        async function loadAvailableChannels(dvrId, currentChannel) {
+            try {
+                console.log(`🔍 Loading available channels for DVR: ${dvrId}`);
+                
+                // Get DVR channels from database
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
+                const data = await response.json();
+                
+                const channelSelector = document.getElementById('channelSelector');
+                if (channelSelector && data.success) {
+                    // Clear existing options
+                    channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
+                    
+                    // Add channel options
+                    data.channels.forEach(channel => {
+                        const option = document.createElement('option');
+                        option.value = channel.channel_number;
+                        option.textContent = `Kanal ${channel.channel_number} - ${channel.name || 'Kamera'}`;
+                        if (channel.channel_number == currentChannel) {
+                            option.selected = true;
+                        }
+                        channelSelector.appendChild(option);
+                    });
+                    
+                    console.log(`✅ Loaded ${data.channels.length} channels`);
+                } else {
+                    // Fallback: create channels 1-16
+                    console.log('⚠️ Using fallback channel list');
+                    const channelSelector = document.getElementById('channelSelector');
+                    if (channelSelector) {
+                        channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
+                        for (let i = 1; i <= 16; i++) {
+                            const option = document.createElement('option');
+                            option.value = i;
+                            option.textContent = `Kanal ${i}`;
+                            if (i == currentChannel) {
+                                option.selected = true;
+                            }
+                            channelSelector.appendChild(option);
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('❌ Load channels error:', error);
+                // Fallback to basic channel list
+                const channelSelector = document.getElementById('channelSelector');
+                if (channelSelector) {
+                    channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
+                    for (let i = 1; i <= 16; i++) {
+                        const option = document.createElement('option');
+                        option.value = i;
+                        option.textContent = `Kanal ${i}`;
+                        if (i == currentChannel) {
+                            option.selected = true;
+                        }
+                        channelSelector.appendChild(option);
+                    }
+                }
+            }
+        }
+        
+        // Kanal değiştir
+        async function switchChannel(dvrId) {
+            const channelSelector = document.getElementById('channelSelector');
+            const newChannel = channelSelector.value;
+            
+            if (!newChannel) return;
+            
+            try {
+                console.log(`🔄 Switching to channel: ${newChannel}`);
+                
+                // Stop current stream
+                stopVideoStream();
+                
+                // Update modal data
+                const modal = document.getElementById('dvrLiveModal');
+                modal.setAttribute('data-channel-number', newChannel);
+                
+                // Update current channel display
+                const currentChannelSpan = document.getElementById('currentChannel');
+                if (currentChannelSpan) {
+                    currentChannelSpan.textContent = newChannel;
+                }
+                
+                // Update RTSP URL
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/info`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const dvr = data.dvr_system;
+                    const newRtspUrl = `rtsp://${dvr.username}:${dvr.password}@${dvr.ip_address}:${dvr.rtsp_port}/ch${newChannel.toString().padStart(2, '0')}/main`;
+                    
+                    const currentRTSPUrl = document.getElementById('currentRTSPUrl');
+                    if (currentRTSPUrl) {
+                        currentRTSPUrl.textContent = newRtspUrl;
+                    }
+                    
+                    // Start new stream with new channel
+                    await startVideoStream(dvrId, parseInt(newChannel));
+                    
+                    showAlert(`✅ Kanal ${newChannel} seçildi`, 'success');
+                }
+                
+            } catch (error) {
+                console.error('❌ Switch channel error:', error);
+                showAlert('Kanal değiştirilirken hata oluştu', 'danger');
+            }
+        }
+        
+        // Video stream değişkenleri
+        let videoStreamInterval = null;
+        let isStreamActive = false;
+        let currentStreamId = null;
+        
+        // Video stream'i başlat
+        async function startVideoStream(dvrId, channelNumber) {
+            try {
+                console.log(`🎥 Starting video stream: ${dvrId} - Channel ${channelNumber}`);
+                
+                // Stop any existing stream
+                if (currentStreamId) {
+                    await stopDVRStream(dvrId, parseInt(currentStreamId.split('_ch')[1]));
+                }
+                
+                // Start new stream on server
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/stream/${channelNumber}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentStreamId = `${dvrId}_ch${channelNumber.toString().padStart(2, '0')}`;
+                    isStreamActive = true;
+                    updateStreamStatus('Aktif', 'success');
+                    
+                    // Clear any existing interval
+                    if (videoStreamInterval) {
+                        clearInterval(videoStreamInterval);
+                    }
+                    
+                    // Start frame updates with current channel number - slower rate to avoid rate limiting
+                    videoStreamInterval = setInterval(() => {
+                        // Get current channel from modal
+                        const modal = document.getElementById('dvrLiveModal');
+                        if (modal) {
+                            const currentChannel = modal.getAttribute('data-channel-number');
+                            if (currentChannel) {
+                                updateVideoFrame(dvrId, parseInt(currentChannel));
+                            } else {
+                                updateVideoFrame(dvrId, channelNumber);
+                            }
+                        } else {
+                            updateVideoFrame(dvrId, channelNumber);
+                        }
+                    }, 500); // 2 FPS instead of 10 FPS to avoid rate limiting
+                    
+                    console.log(`✅ Video stream started: ${currentStreamId} for channel ${channelNumber}`);
+                    
+                } else {
+                    updateStreamStatus('Hata', 'danger');
+                    showAlert('Video stream başlatılamadı', 'danger');
+                }
+                
+            } catch (error) {
+                console.error('❌ Start video stream error:', error);
+                updateStreamStatus('Hata', 'danger');
+            }
+        }
+        
+        // Video stream'i durdur
+        async function stopVideoStream() {
+            if (videoStreamInterval) {
+                clearInterval(videoStreamInterval);
+                videoStreamInterval = null;
+            }
+            
+            // Stop server-side stream if active
+            if (currentStreamId) {
+                try {
+                    const modal = document.getElementById('dvrLiveModal');
+                    if (modal) {
+                        const dvrId = modal.getAttribute('data-dvr-id');
+                        const channelNumber = modal.getAttribute('data-channel-number');
+                        await stopDVRStream(dvrId, parseInt(channelNumber));
+                    }
+                } catch (error) {
+                    console.error('❌ Stop server stream error:', error);
+                }
+            }
+            
+            isStreamActive = false;
+            currentStreamId = null;
+            updateStreamStatus('Durduruldu', 'secondary');
+        }
+        
+        // DVR stream'i durdur (server-side)
+        async function stopDVRStream(dvrId, channelNumber) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/stream/${channelNumber}/stop`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`✅ Server stream stopped: ${dvrId} - Channel ${channelNumber}`);
+                }
+            } catch (error) {
+                console.error('❌ Stop DVR stream error:', error);
+            }
+        }
+        
+        // Video frame'ini güncelle
+        async function updateVideoFrame(dvrId, channelNumber) {
+            if (!isStreamActive) return;
+            
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/frame/${channelNumber}`);
+                
+                if (!response.ok) {
+                    if (response.status === 429) {
+                        console.log('⚠️ Rate limited, slowing down frame updates');
+                        return;
+                    } else if (response.status === 404) {
+                        console.log('⚠️ Frame not available for channel:', channelNumber);
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.frame) {
+                    const img = document.getElementById('dvrLiveImage');
+                    if (img) {
+                        img.src = `data:image/jpeg;base64,${data.frame}`;
+                    }
+                } else {
+                    console.log('⚠️ No frame data for channel:', channelNumber);
+                }
+            } catch (error) {
+                console.error('❌ Update frame error:', error);
+                // Don't spam errors, just log once
+                if (!window.frameErrorLogged) {
+                    console.error('❌ Frame update failed, will retry later');
+                    window.frameErrorLogged = true;
+                    setTimeout(() => {
+                        window.frameErrorLogged = false;
+                    }, 5000);
+                }
+            }
+        }
+        
+        // Stream durumunu güncelle
+        function updateStreamStatus(status, type) {
+            const statusElement = document.getElementById('streamStatus');
+            if (statusElement) {
+                statusElement.textContent = status;
+                statusElement.className = `badge bg-${type}`;
+            }
+        }
+        
+        // Video stream'i yenile
+        async function refreshVideoStream(dvrId, channelNumber) {
+            stopVideoStream();
+            await startVideoStream(dvrId, channelNumber);
+            showAlert('Video stream yenileniyor...', 'info');
+        }
+        
+        // Video stream'i aç/kapat
+        function toggleVideoStream() {
+            const toggleText = document.getElementById('toggleText');
+            if (isStreamActive) {
+                stopVideoStream();
+                toggleText.textContent = 'Başlat';
+            } else {
+                // Restart stream
+                const modal = document.getElementById('dvrLiveModal');
+                if (modal) {
+                    const dvrId = modal.getAttribute('data-dvr-id');
+                    const channelNumber = modal.getAttribute('data-channel-number');
+                    startVideoStream(dvrId, channelNumber);
+                }
+                toggleText.textContent = 'Durdur';
+            }
+        }
+        
+        // RTSP URL'yi kopyala
+        function copyRTSPUrl(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                showAlert('RTSP URL kopyalandı!', 'success');
+            }).catch(() => {
+                showAlert('URL kopyalanamadı', 'danger');
+            });
+        }
+        
+        // Tam ekran modu
+        function fullscreenVideo() {
+            const container = document.getElementById('dvrVideoContainer');
+            if (container) {
+                if (container.requestFullscreen) {
+                    container.requestFullscreen();
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                } else if (container.msRequestFullscreen) {
+                    container.msRequestFullscreen();
+                }
+            }
+        }
+        
+        // Belirli bir kanal için detection durdur
+        async function stopDVRDetectionForChannel(dvrId, channelNumber) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channels: [channelNumber]
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`✅ Kanal ${channelNumber} için PPE Detection durduruldu!`, 'success');
+                    updateDVRDetectionStatusInModal(dvrId);
+                } else {
+                    showAlert(`❌ Detection durdurma hatası: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('❌ DVR channel detection stop error:', error);
+                showAlert('DVR kanal detection durdurulurken hata oluştu', 'danger');
+            }
+        }
+        
+        // Modal içinde detection durumunu güncelle
+        async function updateDVRDetectionStatusInModal(dvrId) {
+            try {
+                const status = await getDVRDetectionStatus(dvrId);
+                const statusElement = document.getElementById('dvrDetectionStatus');
+                
+                if (status && status.active_detections && status.active_detections.length > 0) {
+                    statusElement.className = 'alert alert-success';
+                    statusElement.innerHTML = `
+                        <i class="fas fa-check-circle"></i> 
+                        <strong>Aktif Detection:</strong> ${status.active_detections.length} kanal
+                        <br><small>Toplam İhlal: ${status.total_violations || 0}</small>
+                    `;
+                } else {
+                    statusElement.className = 'alert alert-warning';
+                    statusElement.innerHTML = `
+                        <i class="fas fa-pause-circle"></i> 
+                        <strong>Detection Durdu</strong>
+                        <br><small>Detection başlatmak için butona tıklayın</small>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Detection status update error:', error);
+                const statusElement = document.getElementById('dvrDetectionStatus');
+                statusElement.className = 'alert alert-danger';
+                statusElement.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    <strong>Durum alınamadı</strong>
+                `;
+            }
+        }
     </script>
 </body>
 </html> 

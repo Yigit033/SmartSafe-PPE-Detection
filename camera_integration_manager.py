@@ -175,12 +175,12 @@ class DVRManager:
             return False, str(e)
     
     def get_dvr_systems(self, company_id: str) -> List[Dict[str, Any]]:
-        """Get DVR systems from database"""
+        """Get DVR systems from database with channel count"""
         try:
             # Get from database
             db_systems = self.db_adapter.get_dvr_systems(company_id)
             
-            # Update memory cache
+            # Update memory cache and add channel count
             for system in db_systems:
                 dvr_config = DVRConfig(
                     dvr_id=system['dvr_id'],
@@ -197,6 +197,10 @@ class DVRManager:
                     status=system['status']
                 )
                 self.dvr_systems[system['dvr_id']] = dvr_config
+                
+                # Add total_channels count
+                channels = self.db_adapter.get_dvr_channels(company_id, system['dvr_id'])
+                system['total_channels'] = len(channels) if channels else 0
             
             return db_systems
             
@@ -786,6 +790,23 @@ class DVRManager:
     def get_all_dvr_status(self) -> List[Dict[str, Any]]:
         """Get status of all DVR systems"""
         return [self.get_dvr_status(dvr_id) for dvr_id in self.dvr_systems.keys()]
+    
+    def get_dvr_system(self, company_id: str, dvr_id: str) -> Optional[Dict[str, Any]]:
+        """Get specific DVR system from database"""
+        try:
+            # Get from database
+            db_system = self.db_adapter.get_dvr_system(company_id, dvr_id)
+            
+            if db_system:
+                logger.info(f"✅ Retrieved DVR system: {dvr_id}")
+                return db_system
+            else:
+                logger.warning(f"⚠️ DVR system not found: {dvr_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Get DVR system error: {e}")
+            return None
 
 @dataclass
 class RealCameraConfig:

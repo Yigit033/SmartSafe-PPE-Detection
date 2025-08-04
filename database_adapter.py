@@ -17,10 +17,16 @@ import uuid
 import secrets
 import bcrypt
 from utils.secure_database_connector import get_secure_db_connector
+import time
+import traceback
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Thread-local storage for SQLite connections
+_thread_local = threading.local()
 
 @dataclass
 class DatabaseConfig:
@@ -39,79 +45,49 @@ class DatabaseAdapter:
         logger.info(f"🗄️ Database adapter initialized: {self.db_type}")
     
     def _get_database_config(self) -> DatabaseConfig:
-        """Get database configuration from environment"""
-        database_url = os.getenv('DATABASE_URL')
-        
-        # Check for DATABASE_URL first (Render.com uses this)
-        if database_url and database_url.startswith('postgresql://'):
-            logger.info("✅ Using DATABASE_URL for PostgreSQL connection")
-            return DatabaseConfig(
-                database_url=database_url,
-                database_type='postgresql',
-                connection_params={'database_url': database_url}
-            )
-        
-        # Check for Supabase environment variables
-        if os.getenv('SUPABASE_URL'):
-            # Production: PostgreSQL (Supabase)
-            host = os.getenv('SUPABASE_URL')
-            port = os.getenv('SUPABASE_PORT', '5432')
-            dbname = os.getenv('SUPABASE_DB_NAME', 'postgres')
-            user = os.getenv('SUPABASE_USER', 'postgres')
-            password = os.getenv('SUPABASE_PASSWORD')
-            
-            if not all([host, port, dbname, user, password]):
-                logger.warning("⚠️ Missing some Supabase configuration, falling back to SQLite")
+        """Get database configuration based on environment"""
+        try:
+            # Check for PostgreSQL configuration first
+            database_url = os.getenv('DATABASE_URL')
+            if database_url and database_url.startswith('postgresql://'):
+                logger.info("✅ PostgreSQL configuration found")
+                return DatabaseConfig(
+                    database_url=database_url,
+                    database_type='postgresql',
+                    connection_params={'database_url': database_url}
+                )
+            else:
+                logger.info("ℹ️ No PostgreSQL configuration found, using SQLite")
                 return self._get_sqlite_config()
-            
-            connection_params = {
-                'host': host,
-                'port': int(port),
-                'database': dbname,
-                'user': user,
-                'password': password
-            }
-            
-            return DatabaseConfig(
-                database_url=f"postgresql://{user}:{password}@{host}:{port}/{dbname}",
-                database_type='postgresql',
-                connection_params=connection_params
-            )
-        else:
-            logger.info("ℹ️ No PostgreSQL configuration found, using SQLite")
+        except Exception as e:
+            logger.warning(f"⚠️ Database config error: {e}, falling back to SQLite")
             return self._get_sqlite_config()
     
     def _get_sqlite_config(self) -> DatabaseConfig:
-        """Get SQLite configuration for development"""
+        """Get SQLite configuration"""
+        db_path = os.getenv('SQLITE_DB_PATH', 'smartsafe_saas.db')
         return DatabaseConfig(
-            database_url='smartsafe_saas.db',
+            database_url=db_path,
             database_type='sqlite',
-            connection_params={'database': 'smartsafe_saas.db'}
+            connection_params={'database_path': db_path}
         )
     
     def get_connection(self, timeout: int = 30):
-        """Get database connection with retry mechanism"""
+        """Get database connection with thread safety"""
         try:
-            if self.db_type == 'postgresql':
-                # Check if we have DATABASE_URL
-                if 'database_url' in self.config.connection_params:
-                    # Use DATABASE_URL directly
-                    import psycopg2
-                    return psycopg2.connect(self.config.connection_params['database_url'])
-                else:
-                    # Use secure connector for Supabase
-                    return self.secure_connector.get_connection()
-            else:
-                conn = sqlite3.connect(
-                    self.config.database_url,
-                    timeout=timeout
+            if self.db_type == 'sqlite':
+                # Create new connection for each request to avoid thread issues
+                connection = sqlite3.connect(
+                    self.config.database_url, 
+                    timeout=timeout,
+                    check_same_thread=False  # Allow cross-thread usage
                 )
-                conn.row_factory = sqlite3.Row
-                return conn
-                
+                connection.row_factory = sqlite3.Row
+                return connection
+            else:  # PostgreSQL
+                return self.secure_connector.get_connection()
         except Exception as e:
-            logger.error(f"❌ Database connection failed: {e}")
-            # Don't re-raise immediately, let the caller handle it
+            logger.error(f"❌ Database connection error: {e}")
             return None
     
     def init_database(self):
@@ -675,6 +651,76 @@ class DatabaseAdapter:
                 except Exception:
                     pass
             
+            # DVR Detection Results table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_detection_results (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        stream_id TEXT NOT NULL,
+                        company_id TEXT NOT NULL,
+                        total_people INTEGER DEFAULT 0,
+                        compliant_people INTEGER DEFAULT 0,
+                        violations_count INTEGER DEFAULT 0,
+                        missing_ppe TEXT,
+                        detection_confidence REAL DEFAULT 0.0,
+                        detection_time REAL DEFAULT 0.0,
+                        frame_timestamp TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_detection_results (
+                        id SERIAL PRIMARY KEY,
+                        stream_id VARCHAR(255) NOT NULL,
+                        company_id VARCHAR(255) NOT NULL,
+                        total_people INTEGER DEFAULT 0,
+                        compliant_people INTEGER DEFAULT 0,
+                        violations_count INTEGER DEFAULT 0,
+                        missing_ppe TEXT,
+                        detection_confidence REAL DEFAULT 0.0,
+                        detection_time REAL DEFAULT 0.0,
+                        frame_timestamp TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            
+            # DVR Detection Sessions table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_detection_sessions (
+                        session_id TEXT PRIMARY KEY,
+                        dvr_id TEXT NOT NULL,
+                        company_id TEXT NOT NULL,
+                        channels TEXT NOT NULL,
+                        detection_mode TEXT NOT NULL,
+                        status TEXT DEFAULT 'active',
+                        start_time TEXT,
+                        end_time TEXT,
+                        total_frames_processed INTEGER DEFAULT 0,
+                        total_violations_detected INTEGER DEFAULT 0,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dvr_detection_sessions (
+                        session_id VARCHAR(255) PRIMARY KEY,
+                        dvr_id VARCHAR(255) NOT NULL,
+                        company_id VARCHAR(255) NOT NULL,
+                        channels TEXT NOT NULL,
+                        detection_mode VARCHAR(100) NOT NULL,
+                        status VARCHAR(50) DEFAULT 'active',
+                        start_time TIMESTAMP,
+                        end_time TIMESTAMP,
+                        total_frames_processed INTEGER DEFAULT 0,
+                        total_violations_detected INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            
             # Her tablo oluşturulduktan sonra commit yap
             conn.commit()
             logger.info("✅ Database tables created successfully")
@@ -684,42 +730,76 @@ class DatabaseAdapter:
             logger.error(f"❌ Database initialization failed: {e}")
             raise
         finally:
-            if conn:
+            # Only close connection for PostgreSQL, keep SQLite connection open for pooling
+            if conn and self.db_type != 'sqlite':
                 conn.close()
     
-    def execute_query(self, query: str, params: tuple = None, fetch_all: bool = True):
-        """Execute database query with error handling"""
-        try:
-            conn = self.get_connection()
-            if conn is None:
-                logger.error("❌ Database connection failed")
+    def execute_query(self, query: str, params: tuple = None, fetch_all: bool = True) -> Any:
+        """Execute database query with improved error handling and retry logic"""
+        max_retries = 3
+        retry_delay = 0.1  # 100ms
+        
+        for attempt in range(max_retries):
+            conn = None
+            try:
+                conn = self.get_connection()
+                if conn is None:
+                    logger.error("❌ Database connection failed")
+                    return None
+                
+                cursor = conn.cursor()
+                
+                # Execute query
+                cursor.execute(query, params or ())
+                
+                # Handle different query types
+                if query.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')):
+                    result = cursor.rowcount
+                    conn.commit()
+                    logger.info(f"✅ Query executed successfully: {result} rows affected")
+                    return result
+                else:  # SELECT queries
+                    if fetch_all:
+                        result = cursor.fetchall()
+                    else:
+                        result = cursor.fetchone()
+                    
+                    # Convert to list of dictionaries for better handling
+                    if result and len(result) > 0:
+                        columns = [description[0] for description in cursor.description]
+                        if fetch_all:
+                            result = [dict(zip(columns, row)) for row in result]
+                        else:
+                            result = dict(zip(columns, result))
+                    
+                    logger.info(f"✅ Query executed successfully: {len(result) if isinstance(result, list) else 1} rows returned")
+                    return result
+                    
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    logger.warning(f"⚠️ Database locked, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                else:
+                    logger.error(f"❌ Database query error: {e}")
+                    logger.error(f"❌ Query traceback: {traceback.format_exc()}")
+                    return None
+                    
+            except Exception as e:
+                logger.error(f"❌ Database query error: {e}")
+                logger.error(f"❌ Query traceback: {traceback.format_exc()}")
                 return None
-            
-            cursor = conn.cursor()
-            cursor.execute(query, params or ())
-            
-            # For INSERT, UPDATE, DELETE operations, return rowcount
-            if query.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')):
-                result = cursor.rowcount
-                conn.commit()
-                conn.close()
-                return result
-            
-            # For SELECT operations, return data
-            if fetch_all:
-                result = cursor.fetchall()
-            else:
-                result = cursor.fetchone()
-            
-            conn.commit()
-            conn.close()
-            return result
-            
-        except Exception as e:
-            logger.error(f"❌ Database query error: {e}")
-            import traceback
-            logger.error(f"❌ Query traceback: {traceback.format_exc()}")
-            return None
+            finally:
+                # Always close SQLite connections
+                if conn and self.db_type == 'sqlite':
+                    try:
+                        conn.close()
+                    except Exception as e:
+                        logger.warning(f"⚠️ Error closing SQLite connection: {e}")
+        
+        logger.error(f"❌ Database query failed after {max_retries} attempts")
+        return None
     
     # DVR System Methods
     def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> bool:
@@ -780,19 +860,8 @@ class DatabaseAdapter:
             
             result = self.execute_query(query, (company_id,))
             if result:
-                # Get column names
-                conn = self.get_connection()
-                if conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM dvr_systems LIMIT 1")
-                    columns = [description[0] for description in cursor.description]
-                    conn.close()
-                    
-                    # Create list of dictionaries from results
-                    dvr_systems = []
-                    for row in result:
-                        dvr_systems.append(dict(zip(columns, row)))
-                    return dvr_systems
+                logger.info(f"✅ Retrieved {len(result)} DVR systems for company {company_id}")
+                return result
             return []
             
         except Exception as e:
@@ -809,16 +878,8 @@ class DatabaseAdapter:
             
             result = self.execute_query(query, (company_id, dvr_id), fetch_all=False)
             if result:
-                # Get column names
-                conn = self.get_connection()
-                if conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM dvr_systems LIMIT 1")
-                    columns = [description[0] for description in cursor.description]
-                    conn.close()
-                    
-                    # Create dictionary from result
-                    return dict(zip(columns, result))
+                logger.info(f"✅ Retrieved DVR system: {dvr_id}")
+                return result
             return None
             
         except Exception as e:
@@ -860,14 +921,30 @@ class DatabaseAdapter:
             return False
     
     def delete_dvr_system(self, company_id: str, dvr_id: str) -> bool:
-        """Delete DVR system"""
+        """Delete DVR system and all related data"""
         try:
-            query = '''
+            # First delete related streams
+            stream_query = '''
+                DELETE FROM dvr_streams 
+                WHERE company_id = ? AND dvr_id = ?
+            '''
+            self.execute_query(stream_query, (company_id, dvr_id), fetch_all=False)
+            
+            # Then delete related channels
+            channel_query = '''
+                DELETE FROM dvr_channels 
+                WHERE company_id = ? AND dvr_id = ?
+            '''
+            self.execute_query(channel_query, (company_id, dvr_id), fetch_all=False)
+            
+            # Finally delete the DVR system
+            dvr_query = '''
                 DELETE FROM dvr_systems 
                 WHERE company_id = ? AND dvr_id = ?
             '''
             
-            result = self.execute_query(query, (company_id, dvr_id), fetch_all=False)
+            result = self.execute_query(dvr_query, (company_id, dvr_id), fetch_all=False)
+            logger.info(f"✅ DVR system deleted: {dvr_id}")
             return result is not None
             
         except Exception as e:
@@ -949,19 +1026,8 @@ class DatabaseAdapter:
             
             result = self.execute_query(query, (company_id, dvr_id))
             if result:
-                # Get column names
-                conn = self.get_connection()
-                if conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM dvr_channels LIMIT 1")
-                    columns = [description[0] for description in cursor.description]
-                    conn.close()
-                    
-                    # Create list of dictionaries from results
-                    channels = []
-                    for row in result:
-                        channels.append(dict(zip(columns, row)))
-                    return channels
+                logger.info(f"✅ Retrieved {len(result)} channels for DVR {dvr_id}")
+                return result
             return []
             
         except Exception as e:
@@ -1032,23 +1098,166 @@ class DatabaseAdapter:
             
             result = self.execute_query(query, (company_id,))
             if result:
-                # Get column names
-                conn = self.get_connection()
-                if conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM dvr_streams LIMIT 1")
-                    columns = [description[0] for description in cursor.description]
-                    conn.close()
-                    
-                    # Create list of dictionaries from results
-                    streams = []
-                    for row in result:
-                        streams.append(dict(zip(columns, row)))
-                    return streams
+                logger.info(f"✅ Retrieved {len(result)} active streams for company {company_id}")
+                return result
             return []
             
         except Exception as e:
             logger.error(f"❌ Get active DVR streams error: {e}")
+            return []
+
+    # DVR Detection Results Methods
+    def add_dvr_detection_result(self, result_data: Dict[str, Any]) -> bool:
+        """Add DVR detection result to database"""
+        try:
+            query = """
+                INSERT INTO dvr_detection_results 
+                (stream_id, company_id, total_people, compliant_people, violations_count, 
+                 missing_ppe, detection_confidence, detection_time, frame_timestamp, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            if self.db_type == 'sqlite':
+                query = query.replace('%s', '?')
+            
+            params = (
+                result_data['stream_id'],
+                result_data['company_id'],
+                result_data['total_people'],
+                result_data['compliant_people'],
+                result_data['violations_count'],
+                result_data['missing_ppe'],
+                result_data['detection_confidence'],
+                result_data['detection_time'],
+                result_data['frame_timestamp'],
+                datetime.now().isoformat()
+            )
+            
+            self.execute_query(query, params, fetch_all=False)
+            logger.info(f"✅ DVR detection result saved: {result_data['stream_id']}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Add DVR detection result error: {e}")
+            return False
+    
+    def get_dvr_detection_results(self, stream_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get DVR detection results for a stream"""
+        try:
+            query = """
+                SELECT * FROM dvr_detection_results 
+                WHERE stream_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """
+            
+            if self.db_type == 'sqlite':
+                query = query.replace('%s', '?')
+            
+            result = self.execute_query(query, (stream_id, limit))
+            
+            if result and isinstance(result, list):
+                return result
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR detection results error: {e}")
+            return []
+    
+    def add_dvr_detection_session(self, session_data: Dict[str, Any]) -> bool:
+        """Add DVR detection session to database"""
+        try:
+            if self.db_type == 'sqlite':
+                query = """
+                    INSERT OR REPLACE INTO dvr_detection_sessions 
+                    (session_id, dvr_id, company_id, channels, detection_mode, status, start_time, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """
+            else:  # PostgreSQL
+                query = """
+                    INSERT INTO dvr_detection_sessions 
+                    (session_id, dvr_id, company_id, channels, detection_mode, status, start_time, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (session_id) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        start_time = EXCLUDED.start_time
+                """
+            
+            params = (
+                session_data['session_id'],
+                session_data['dvr_id'],
+                session_data['company_id'],
+                session_data['channels'],
+                session_data['detection_mode'],
+                session_data['status'],
+                session_data['start_time'],
+                datetime.now().isoformat()
+            )
+            
+            self.execute_query(query, params, fetch_all=False)
+            logger.info(f"✅ DVR detection session saved: {session_data['session_id']}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Add DVR detection session error: {e}")
+            return False
+    
+    def update_dvr_detection_session(self, session_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update DVR detection session"""
+        try:
+            query = """
+                UPDATE dvr_detection_sessions 
+                SET status = %s, end_time = %s, updated_at = %s
+                WHERE session_id = %s
+            """
+            
+            if self.db_type == 'sqlite':
+                query = query.replace('%s', '?')
+            
+            params = (
+                update_data['status'],
+                update_data.get('end_time'),
+                datetime.now().isoformat(),
+                session_id
+            )
+            
+            self.execute_query(query, params, fetch_all=False)
+            logger.info(f"✅ DVR detection session updated: {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Update DVR detection session error: {e}")
+            return False
+    
+    def get_dvr_detection_sessions(self, company_id: str, dvr_id: str = None) -> List[Dict[str, Any]]:
+        """Get DVR detection sessions"""
+        try:
+            if dvr_id:
+                query = """
+                    SELECT * FROM dvr_detection_sessions 
+                    WHERE company_id = %s AND dvr_id = %s
+                    ORDER BY start_time DESC
+                """
+                params = (company_id, dvr_id)
+            else:
+                query = """
+                    SELECT * FROM dvr_detection_sessions 
+                    WHERE company_id = %s
+                    ORDER BY start_time DESC
+                """
+                params = (company_id,)
+            
+            if self.db_type == 'sqlite':
+                query = query.replace('%s', '?')
+            
+            result = self.execute_query(query, params)
+            
+            if result and isinstance(result, list):
+                return result
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ Get DVR detection sessions error: {e}")
             return []
 
 # Global database adapter instance
