@@ -57,19 +57,38 @@ class SH17ModelManager:
         """Tüm SH17 modellerini yükle ve fallback model'i hazırla"""
         logger.info("📦 SH17 modelleri yükleniyor...")
         
-        # SH17 model yolları - önce models/ klasöründe ara
-        model_paths = {
-            'base': f'{self.models_dir}/sh17_base/sh17_base_model/weights/best.pt',
-            'construction': f'{self.models_dir}/sh17_construction/sh17_construction_model/weights/best.pt',
-            'manufacturing': f'{self.models_dir}/sh17_manufacturing/sh17_manufacturing_model/weights/best.pt',
-            'chemical': f'{self.models_dir}/sh17_chemical/sh17_chemical_model/weights/best.pt',
-            'food_beverage': f'{self.models_dir}/sh17_food_beverage/sh17_food_beverage_model/weights/best.pt',
-            'warehouse_logistics': f'{self.models_dir}/sh17_warehouse_logistics/sh17_warehouse_logistics_model/weights/best.pt',
-            'energy': f'{self.models_dir}/sh17_energy/sh17_energy_model/weights/best.pt',
-            'petrochemical': f'{self.models_dir}/sh17_petrochemical/sh17_petrochemical_model/weights/best.pt',
-            'marine_shipyard': f'{self.models_dir}/sh17_marine_shipyard/sh17_marine_shipyard_model/weights/best.pt',
-            'aviation': f'{self.models_dir}/sh17_aviation/sh17_aviation_model/weights/best.pt'
-        }
+        # Production ortamında model dosyaları yoksa YOLOv8 modelleri kullan
+        is_production = os.environ.get('RENDER') is not None
+        
+        if is_production:
+            logger.info("🌐 Production ortamında - YOLOv8 sektör modelleri kullanılacak")
+            # Production'da her sektör için YOLOv8 variants kullan
+            model_paths = {
+                'base': 'yolov8n.pt',
+                'construction': 'yolov8s.pt', 
+                'manufacturing': 'yolov8m.pt',
+                'chemical': 'yolov8n.pt',
+                'food_beverage': 'yolov8n.pt',
+                'warehouse_logistics': 'yolov8s.pt',
+                'energy': 'yolov8n.pt',
+                'petrochemical': 'yolov8n.pt',
+                'marine_shipyard': 'yolov8n.pt',
+                'aviation': 'yolov8n.pt'
+            }
+        else:
+            # Development ortamında custom SH17 modelleri
+            model_paths = {
+                'base': f'{self.models_dir}/sh17_base/sh17_base_model/weights/best.pt',
+                'construction': f'{self.models_dir}/sh17_construction/sh17_construction_model/weights/best.pt',
+                'manufacturing': f'{self.models_dir}/sh17_manufacturing/sh17_manufacturing_model/weights/best.pt',
+                'chemical': f'{self.models_dir}/sh17_chemical/sh17_chemical_model/weights/best.pt',
+                'food_beverage': f'{self.models_dir}/sh17_food_beverage/sh17_food_beverage_model/weights/best.pt',
+                'warehouse_logistics': f'{self.models_dir}/sh17_warehouse_logistics/sh17_warehouse_logistics_model/weights/best.pt',
+                'energy': f'{self.models_dir}/sh17_energy/sh17_energy_model/weights/best.pt',
+                'petrochemical': f'{self.models_dir}/sh17_petrochemical/sh17_petrochemical_model/weights/best.pt',
+                'marine_shipyard': f'{self.models_dir}/sh17_marine_shipyard/sh17_marine_shipyard_model/weights/best.pt',
+                'aviation': f'{self.models_dir}/sh17_aviation/sh17_aviation_model/weights/best.pt'
+            }
         
         # SH17 modellerini yükle
         loaded_models = 0

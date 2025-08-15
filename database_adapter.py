@@ -105,15 +105,26 @@ class DatabaseAdapter:
                     logger.error("❌ Database initialization failed: No connection available")
                     return False
             
-            # Production-safe transaction management
+                    # Production-safe transaction management
             if self.db_type == 'postgresql':
                 try:
-                    conn.rollback()  # Önceki hatalı transaction'ı temizle
-                    logger.info("🔄 PostgreSQL transaction temizlendi")
-                except Exception:
-                    pass  # Zaten temizse hata vermez
+                    # Yeni connection al - önceki connection'ı kapat
+                    conn.close()
+                    conn = self.get_connection()
+                    logger.info("🔄 PostgreSQL fresh connection established")
+                except Exception as e:
+                    logger.warning(f"⚠️ Connection reset warning: {e}")
+                    # Fresh connection al
+                    try:
+                        conn = self.get_connection()
+                    except Exception:
+                        pass
             
-            cursor = conn.cursor()
+            # PostgreSQL için cursor oluştur
+            if self.db_type == 'postgresql':
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            else:
+                cursor = conn.cursor()
             logger.info("🔧 Creating database tables...")
             
             # Companies table
@@ -736,11 +747,20 @@ class DatabaseAdapter:
             
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
-            raise
+            try:
+                if conn:
+                    conn.rollback()
+                    logger.info("🔄 Transaction rolled back due to error")
+            except Exception as rollback_error:
+                logger.warning(f"⚠️ Rollback error: {rollback_error}")
+            return False
         finally:
-            # Only close connection for PostgreSQL, keep SQLite connection open for pooling
-            if conn and self.db_type != 'sqlite':
-                conn.close()
+            # Close connection properly
+            try:
+                if conn:
+                    conn.close()
+            except Exception:
+                pass
     
     def execute_query(self, query: str, params: tuple = None, fetch_all: bool = True) -> Any:
         """Execute database query with improved error handling and retry logic"""
