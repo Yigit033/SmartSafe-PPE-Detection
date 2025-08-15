@@ -69,7 +69,9 @@ def integrate_dvr_with_ppe_detection(self, dvr_id, channel, company_id, detectio
     """DVR stream'ini PPE detection sistemine entegre eder"""
     
     # 1. RTSP URL oluştur
-    rtsp_url = f"rtsp://nehu:yesilgross@192.168.1.109:554/ch{channel:02d}/main"
+    rtsp_url = (
+        f"rtsp://{ip}:{port}/user={username}&password={password}&channel={channel}&stream=0.sdp"
+    )
     
     # 2. Stream'i başlat
     stream_id = f"dvr_{dvr_id}_ch{channel:02d}"
