@@ -17324,6 +17324,29 @@ print("🔧 Creating global Flask app for production deployment...")
 # Global app variable for Gunicorn
 app = None
 
+def create_emergency_app():
+    """Emergency fallback Flask app for production issues"""
+    from flask import Flask, jsonify
+    emergency_app = Flask(__name__)
+    
+    @emergency_app.route('/health')
+    def health_check():
+        return jsonify({"status": "emergency_mode", "message": "System in fallback mode"})
+    
+    @emergency_app.route('/')
+    def emergency_home():
+        return "<h1>SmartSafe System - Emergency Mode</h1><p>System is initializing, please wait...</p>"
+    
+    @emergency_app.route('/api/status')
+    def api_status():
+        return jsonify({
+            "status": "emergency_fallback",
+            "message": "Main system temporarily unavailable",
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    return emergency_app
+
 def create_app():
     """Factory function to create Flask app"""
     global app
@@ -17366,6 +17389,13 @@ if __name__ == "__main__":
     try:
         api_server = SmartSafeSaaSAPI()
         app = api_server.app
+        logger.info("✅ Ana SmartSafe API başarıyla başlatıldı")
+    except Exception as main_error:
+        logger.error(f"❌ Ana API başlatma hatası: {main_error}")
+        # Emergency fallback Flask app
+        logger.warning("🚨 Emergency fallback sistem devreye giriyor...")
+        app = create_emergency_app()
+        logger.info("✅ Emergency fallback sistem başlatıldı")
         
         # Render.com automatic port detection
         port = int(os.environ.get('PORT', 10000))  # Render.com default port

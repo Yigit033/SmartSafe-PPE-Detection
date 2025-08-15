@@ -85,17 +85,30 @@ class SH17ModelManager:
             else:
                 logger.warning(f"⚠️ {sector} modeli bulunamadı: {path}")
         
-        # Fallback model yükle (yolov8n.pt)
+        # Production-ready fallback model yükle
         try:
-            fallback_path = 'yolov8n.pt'
-            if os.path.exists(fallback_path):
-                self.fallback_model = YOLO(fallback_path)
-                self.fallback_model.to(self.device)
-                logger.info(f"✅ Fallback model yüklendi: {fallback_path}")
-            else:
-                logger.warning(f"⚠️ Fallback model bulunamadı: {fallback_path}")
+            # Production ortamında otomatik YOLOv8n indirme
+            logger.info("🔄 Production ortamında YOLOv8n model indiriliyor...")
+            self.fallback_model = YOLO('yolov8n.pt')  # Otomatik indir
+            self.fallback_model.to(self.device)
+            logger.info("✅ YOLOv8n fallback model başarıyla indirildi ve yüklendi")
         except Exception as e:
-            logger.error(f"❌ Fallback model yüklenemedi: {e}")
+            logger.warning(f"⚠️ Otomatik YOLOv8n indirme hatası: {e}")
+            # Manuel fallback yolları dene
+            fallback_paths = ['yolov8n.pt', 'models/yolov8n.pt', '/app/models/yolov8n.pt']
+            for fallback_path in fallback_paths:
+                if os.path.exists(fallback_path):
+                    try:
+                        self.fallback_model = YOLO(fallback_path)
+                        self.fallback_model.to(self.device)
+                        logger.info(f"✅ Fallback model yüklendi: {fallback_path}")
+                        break
+                    except Exception as load_error:
+                        logger.warning(f"⚠️ Fallback model yükleme hatası {fallback_path}: {load_error}")
+                        continue
+            else:
+                logger.warning("⚠️ Hiç fallback model bulunamadı, basit detection sistemi aktif")
+                self.fallback_model = None
                 
         logger.info(f"📊 Toplam {loaded_models} SH17 model yüklendi")
         

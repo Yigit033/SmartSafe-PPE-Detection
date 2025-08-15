@@ -91,7 +91,7 @@ class DatabaseAdapter:
             return None
     
     def init_database(self):
-        """Initialize database tables"""
+        """Initialize database tables - Production Safe"""
         try:
             conn = self.get_connection()
             if conn is None:
@@ -104,8 +104,16 @@ class DatabaseAdapter:
                 if conn is None:
                     logger.error("❌ Database initialization failed: No connection available")
                     return False
-            cursor = conn.cursor()
             
+            # Production-safe transaction management
+            if self.db_type == 'postgresql':
+                try:
+                    conn.rollback()  # Önceki hatalı transaction'ı temizle
+                    logger.info("🔄 PostgreSQL transaction temizlendi")
+                except Exception:
+                    pass  # Zaten temizse hata vermez
+            
+            cursor = conn.cursor()
             logger.info("🔧 Creating database tables...")
             
             # Companies table
