@@ -258,4 +258,23 @@ docs/build/
 # Local configuration files
 config.local.yaml
 config.local.yml
-.env.local 
+.env.local
+
+# Dataset ve Model Klasörleri (BÜYÜK DOSYALAR)
+# Dataset images ve labels (çok büyük)
+datasets/SH17/images/
+datasets/SH17/labels/
+
+# Model weights (çok büyük)
+models/*/weights/
+models/*/*.pt
+models/*/*.pth
+
+# User uploads
+static/uploads/logos/
+static/videos/
+
+# Büyük video dosyaları
+static/videos/*.mp4
+static/videos/*.webm
+static/videos/*.avi
