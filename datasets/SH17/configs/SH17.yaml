@@ -1,0 +1,23 @@
+names:
+- person
+- head
+- face
+- glasses
+- face_mask_medical
+- face_guard
+- ear
+- earmuffs
+- hands
+- gloves
+- foot
+- shoes
+- safety_vest
+- tools
+- helmet
+- medical_suit
+- safety_suit
+nc: 17
+path: ../datasets/SH17
+test: images/test
+train: images/train
+val: images/val
