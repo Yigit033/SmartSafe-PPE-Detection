@@ -22,9 +22,9 @@ class DVRStreamHandler:
     def __init__(self):
         self.active_streams: Dict[str, Dict] = {}
         self.frame_buffers: Dict[str, list] = {}
-        self.max_buffer_size = 10
-        self.connection_timeout = 5000  # 5 seconds
-        self.read_timeout = 3000  # 3 seconds
+        self.max_buffer_size = 5  # Reduced from 10 to 5 for smoother playback
+        self.connection_timeout = 3000  # Reduced from 5000 to 3000 ms for faster connection
+        self.read_timeout = 2000  # Reduced from 3000 to 2000 ms for faster frame reading
         
         # DVR brand-specific URL patterns
         self.dvr_url_patterns = {
@@ -44,6 +44,13 @@ class DVRStreamHandler:
                 '/live/camera{channel}',
                 '/cam/realmonitor?channel={channel}&subtype=0&authbasic=1',
                 '/cam/realmonitor?channel={channel}&subtype=1&authbasic=1'
+            ],
+            # XM/Xiongmai family (and compatibles) often require credentials in query string
+            'xm': [
+                '/user={username}&password={password}&channel={channel}&stream=0.sdp',  # main stream
+                '/user={username}&password={password}&channel={channel}&stream=1.sdp',  # sub stream
+                '/live/{channel}.sdp',
+                '/h264/{channel}/main/av_stream'
             ],
             'dahua': [
                 '/cam/realmonitor?channel={channel}&subtype=0',
@@ -112,7 +119,9 @@ class DVRStreamHandler:
                     f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel}01",
                     f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel}&subtype=0",
                     f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel:02d}/main",
-                    f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel:02d}/sub"
+                    f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel:02d}/sub",
+                    # XM-style credential-in-query
+                    f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel}&stream=0.sdp",
                 ])
             
             for url in test_urls:
@@ -121,6 +130,9 @@ class DVRStreamHandler:
                     cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
                     if cap.isOpened():
                         cap.release()
+                        if 'stream=0.sdp' in url and '/user=' in url:
+                            logger.info(f"✅ Detected XM DVR via URL: {url}")
+                            return 'xm'
                         if 'ISAPI' in url:
                             logger.info(f"✅ Detected Hikvision DVR via URL: {url}")
                             return 'hikvision'
@@ -157,11 +169,23 @@ class DVRStreamHandler:
         # Generate URLs for this brand
         for pattern in patterns:
             try:
-                path = pattern.format(channel=channel_number)
-                url = f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}{path}"
+                # Support patterns that embed {username}/{password} in the path (XM style)
+                path = pattern.format(channel=channel_number, username=username, password=password)
+                if path.startswith('/user=') or 'stream=0.sdp' in path or 'stream=1.sdp' in path:
+                    # XM style requires no user:pass@ in authority
+                    url = f"rtsp://{ip_address}:{rtsp_port}{path}"
+                else:
+                    url = f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}{path}"
                 urls.append(url)
             except Exception as e:
                 logger.warning(f"⚠️ Failed to generate URL for pattern {pattern}: {e}")
+
+        # Always include the two known-good universal patterns regardless of brand
+        try:
+            urls.insert(0, f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel_number}&stream=0.sdp")
+            urls.insert(1, f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0")
+        except Exception:
+            pass
         
         # Add channel-specific variations based on channel number
         if channel_number <= 4:
@@ -200,10 +224,20 @@ class DVRStreamHandler:
         
         # Add brand-specific variations
         if brand == 'hikvision':
+            # Hikvision çoğunlukla 101,201,... biçiminde indeks kullanır
+            # channel_number 1 -> 101, 2 -> 201 ...
+            major = channel_number * 100 + 1
             urls.extend([
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel_number:02d}01",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel_number:02d}02",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel_number:02d}03"
+                # Common Hikvision ISAPI variants (case differences across firmwares)
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major+1}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major+2}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major+1}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major+2}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major+1}",
+                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major+2}"
             ])
         elif brand == 'dahua':
             urls.extend([
@@ -211,6 +245,12 @@ class DVRStreamHandler:
                 f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1&stream=1",
                 f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0&authbasic=1",
                 f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1&authbasic=1"
+            ])
+        elif brand == 'xm':
+            # Ensure XM variants are present explicitly
+            urls.extend([
+                f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel_number}&stream=0.sdp",
+                f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel_number}&stream=1.sdp",
             ])
         
         # Remove duplicates while preserving order
@@ -223,6 +263,53 @@ class DVRStreamHandler:
         
         logger.info(f"🎯 Generated {len(unique_urls)} RTSP URLs for channel {channel_number} (brand: {brand})")
         return unique_urls
+
+    def detect_available_channels(self, ip_address: str, username: str, password: str,
+                                  rtsp_port: int, max_channels: int = 32) -> List[int]:
+        """Probe DVR to detect which channel numbers are available.
+
+        Tries multiple brand-specific URL patterns per channel and returns
+        a list of channel numbers that successfully yielded at least one frame.
+        """
+        available_channels: List[int] = []
+
+        try:
+            if not self.test_network_connectivity(ip_address, rtsp_port):
+                logger.error(f"❌ No network connectivity to {ip_address}:{rtsp_port}")
+                return available_channels
+
+            for channel in range(1, max_channels + 1):
+                try:
+                    urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel)
+                    found = False
+                    for url in urls[:8]:  # limit attempts per channel for speed
+                        cap = None
+                        try:
+                            cap = cv2.VideoCapture(url)
+                            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
+                            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
+                            if cap.isOpened():
+                                ret, frame = cap.read()
+                                if ret and frame is not None:
+                                    available_channels.append(channel)
+                                    found = True
+                                    logger.info(f"✅ Channel probe success: {channel} via {url}")
+                                    break
+                        except Exception:
+                            pass
+                        finally:
+                            if cap:
+                                cap.release()
+                    if not found:
+                        logger.debug(f"ℹ️ Channel probe failed: {channel}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Channel probe error for channel {channel}: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"❌ Channel detection error: {e}")
+
+        # Ensure unique and sorted
+        return sorted(list(set(available_channels)))
     
     def test_network_connectivity(self, ip_address: str, rtsp_port: int) -> bool:
         """Test basic network connectivity to DVR"""
@@ -243,8 +330,37 @@ class DVRStreamHandler:
         """Start streaming with enhanced URL handling"""
         try:
             if stream_id in self.active_streams:
-                logger.warning(f"⚠️ Stream already active: {stream_id}")
-                return True
+                existing_status = self.active_streams[stream_id].get('status')
+                if existing_status == 'active':
+                    logger.warning(f"⚠️ Stream already active: {stream_id}")
+                    # Ensure frame buffer exists even if stream was started elsewhere
+                    if stream_id not in self.frame_buffers:
+                        self.frame_buffers[stream_id] = []
+                    return True
+                else:
+                    # Restart stream if present but not active
+                    logger.info(f"🔄 Stream {stream_id} is in status '{existing_status}', restarting...")
+                    self.active_streams[stream_id].update({
+                        'rtsp_url': rtsp_url,
+                        'status': 'starting',
+                        'start_time': time.time(),
+                        'frame_count': 0,
+                        'error_count': 0,
+                        'ip_address': ip_address,
+                        'username': username,
+                        'password': password,
+                        'rtsp_port': rtsp_port,
+                        'channel_number': channel_number
+                    })
+                    if stream_id not in self.frame_buffers:
+                        self.frame_buffers[stream_id] = []
+                    thread = threading.Thread(
+                        target=self._stream_worker,
+                        args=(stream_id, rtsp_url, ip_address, username, password, rtsp_port, channel_number),
+                        daemon=True
+                    )
+                    thread.start()
+                    return True
                 
             # Initialize stream info
             self.active_streams[stream_id] = {
@@ -257,7 +373,14 @@ class DVRStreamHandler:
                 'username': username,
                 'password': password,
                 'rtsp_port': rtsp_port,
-                'channel_number': channel_number
+                'channel_number': channel_number,
+                'detection_result': {
+                    'detections': [],
+                    'people_detected': 0,
+                    'compliance_rate': 100,
+                    'ppe_violations': [],
+                    'timestamp': time.time()
+                }
             }
             
             self.frame_buffers[stream_id] = []
@@ -301,6 +424,8 @@ class DVRStreamHandler:
                     return None
             else:
                 logger.warning(f"⚠️ No frame buffer for {stream_id}")
+                # Create buffer lazily to avoid repeated warnings
+                self.frame_buffers[stream_id] = []
             return None
         except Exception as e:
             logger.error(f"❌ Get frame error for {stream_id}: {e}")
@@ -315,6 +440,151 @@ class DVRStreamHandler:
         except Exception as e:
             logger.error(f"❌ Get status error: {e}")
             return None
+    
+    def _perform_ppe_detection(self, frame, stream_id: str) -> Dict:
+        """Perform PPE detection on a frame"""
+        try:
+            # SH17 Model Manager'ı başlat
+            from models.sh17_model_manager import SH17ModelManager
+            sh17_manager = SH17ModelManager()
+            
+            # Stream info'dan sector bilgisini al (varsayılan: construction)
+            sector = 'construction'  # Varsayılan sektör
+            if stream_id in self.active_streams:
+                # Stream ID'den sector çıkar (örn: DVR_192_168_1_114_1 -> construction)
+                if 'construction' in stream_id.lower():
+                    sector = 'construction'
+                elif 'manufacturing' in stream_id.lower():
+                    sector = 'manufacturing'
+                elif 'chemical' in stream_id.lower():
+                    sector = 'chemical'
+                elif 'food' in stream_id.lower():
+                    sector = 'food_beverage'
+                elif 'warehouse' in stream_id.lower():
+                    sector = 'warehouse_logistics'
+                elif 'energy' in stream_id.lower():
+                    sector = 'energy'
+                elif 'petrochemical' in stream_id.lower():
+                    sector = 'petrochemical'
+                elif 'marine' in stream_id.lower():
+                    sector = 'marine_shipyard'
+                elif 'aviation' in stream_id.lower():
+                    sector = 'aviation'
+            
+            # PPE detection yap
+            detections = sh17_manager.detect_ppe(frame, sector=sector, confidence=0.5)
+            
+            # Detection result'ı hazırla - String değil Dict olarak döndür
+            people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
+            
+            # Compliance analizi
+            required_ppe = sh17_manager.get_sector_requirements(sector)
+            compliance_analysis = sh17_manager.analyze_compliance(detections, required_ppe)
+            
+            detection_result = {
+                'detections': detections if isinstance(detections, list) else [],
+                'people_detected': people_detected,
+                'compliance_rate': int(compliance_analysis.get('score', 0) * 100) if isinstance(compliance_analysis, dict) else 100,
+                'ppe_violations': compliance_analysis.get('missing', []) if isinstance(compliance_analysis, dict) else [],
+                'timestamp': time.time(),
+                'sector': sector,
+                'model_type': 'SH17' if sh17_manager.is_sh17_available(sector) else 'Fallback'
+            }
+            
+            return detection_result
+            
+        except Exception as e:
+            logger.error(f"❌ PPE Detection error: {e}")
+            # Hata durumunda boş result döndür
+            return {
+                'detections': [],
+                'people_detected': 0,
+                'compliance_rate': 100,
+                'ppe_violations': [],
+                'timestamp': time.time(),
+                'sector': 'unknown',
+                'model_type': 'Error'
+            }
+    
+    def get_latest_detection_result(self, stream_id: str) -> Optional[Dict]:
+        """Get latest detection result for a stream - Bounding Box Overlay için"""
+        try:
+            if stream_id in self.active_streams:
+                stream_info = self.active_streams[stream_id]
+                # Detection result'ı stream_info'dan al
+                detection_result = stream_info.get('detection_result', {})
+                
+                if detection_result:
+                    return {
+                        'detections': detection_result.get('detections', []),
+                        'people_detected': detection_result.get('people_detected', 0),
+                        'compliance_rate': detection_result.get('compliance_rate', 100),
+                        'ppe_violations': detection_result.get('ppe_violations', []),
+                        'timestamp': detection_result.get('timestamp', ''),
+                        'camera_id': stream_info.get('camera_id', 'unknown')
+                    }
+                
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Detection result alma hatası: {e}")
+            return None
+
+    def capture_single_frame(self, ip_address: str, username: str, password: str,
+                              rtsp_port: int, channel_number: int) -> Optional[str]:
+        """Open RTSP briefly, grab a single frame, and close (base64). Designed to be fast and resilient for previews."""
+        urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number)
+        # Try a very small subset first for speed (most likely to work)
+        candidates = urls[:4]
+        for url in candidates:
+            cap = None
+            try:
+                cap = cv2.VideoCapture(url)
+                # Conservative timeouts to avoid blocking the endpoint
+                try:
+                    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1200)
+                    cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1200)
+                except Exception:
+                    pass
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        try:
+                            # Lower quality for preview grid to reduce payload
+                            _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
+                            return base64.b64encode(jpeg_data).decode('utf-8')
+                        except Exception:
+                            return None
+            except Exception:
+                continue
+            finally:
+                if cap:
+                    cap.release()
+        return None
+
+    # --- Lightweight image hashing utilities for stream verification ---
+    @staticmethod
+    def _compute_average_hash_from_frame(frame) -> Optional[int]:
+        try:
+            import cv2
+            import numpy as np
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            small = cv2.resize(gray, (8, 8), interpolation=cv2.INTER_AREA)
+            avg = small.mean()
+            bits = (small > avg).astype(np.uint8).flatten()
+            # Pack 64 bits into an integer
+            value = 0
+            for b in bits:
+                value = (value << 1) | int(b)
+            return int(value)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _hamming_distance64(a: int, b: int) -> int:
+        x = (a ^ b) & ((1 << 64) - 1)
+        # builtin popcount for Python 3.8+:
+        return x.bit_count() if hasattr(int, 'bit_count') else bin(x).count('1')
     
     def _stream_worker(self, stream_id: str, rtsp_url: str, 
                       ip_address: str = None, username: str = None, 
@@ -346,10 +616,19 @@ class DVRStreamHandler:
             else:
                 logger.warning(f"⚠️ Channel {channel_number}: Missing parameters for enhanced URL generation")
             
-            # Try each URL
+            # Try each URL, prioritize Hikvision ISAPI channels if present
             cap = None
             successful_url = None
             
+            # Prioritize vendor-specific working URLs: XM stream.sdp first, then cam/realmonitor,
+            # then ISAPI, then /chXX/main and others
+            def _prio(u: str) -> tuple:
+                is_xm = ('stream=0.sdp' in u or 'stream=1.sdp' in u) and '/user=' in u
+                is_cam = 'cam/realmonitor' in u
+                is_isapi = "ISAPI/Streaming/channels" in u
+                is_ch_main = "/ch" in u and u.endswith("/main")
+                return ((0 if is_xm else (1 if is_cam else (2 if is_isapi else (3 if is_ch_main else 4)))), u)
+            urls_to_try.sort(key=_prio)
             for i, url in enumerate(urls_to_try):
                 try:
                     logger.info(f"🔄 Channel {channel_number}: Trying RTSP URL {i+1}/{len(urls_to_try)}: {url}")
@@ -418,7 +697,7 @@ class DVRStreamHandler:
             consecutive_errors = 0
             max_consecutive_errors = 10
             
-            while self.active_streams[stream_id]['status'] == 'active':
+            while self.active_streams.get(stream_id, {}).get('status') == 'active':
                 try:
                     ret, frame = cap.read()
                     
@@ -472,48 +751,82 @@ class DVRStreamHandler:
                             
                             if not cap or not cap.isOpened():
                                 logger.error(f"❌ Reconnection failed for {stream_id}")
-                        break
-                    
-                    time.sleep(0.1)
-                    continue
-                
-                except Exception as e:
-                    logger.error(f"❌ Frame processing error for {stream_id}: {e}")
-                # Reset error count on successful frame
-                    consecutive_errors = 0
-                
-                # Convert frame to JPEG
-                try:
-                    _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                    jpeg_base64 = base64.b64encode(jpeg_data).decode('utf-8')
-                    
-                    # Add to buffer
-                    if stream_id in self.frame_buffers:
-                        buffer = self.frame_buffers[stream_id]
-                        buffer.append(jpeg_base64)
+                                self.active_streams[stream_id]['status'] = 'error'
+                                break
                         
-                        # Keep only latest frames
-                        if len(buffer) > self.max_buffer_size:
-                            buffer.pop(0)
+                        time.sleep(0.1)
+                        continue
                     
-                    frame_count += 1
-                    self.active_streams[stream_id]['frame_count'] = frame_count
+                    # Reset error count on successful frame
+                    consecutive_errors = 0
                     
-                    # Log progress every 30 frames
-                    if frame_count % 30 == 0:
-                        logger.info(f"📊 {stream_id}: {frame_count} frames captured")
+                    # Convert frame to JPEG
+                    try:
+                        # Frame quality'yi düşür ve boyutu optimize et
+                        _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                        jpeg_base64 = base64.b64encode(jpeg_data).decode('utf-8')
+                        
+                        # Add to buffer - Optimized buffer management
+                        if stream_id in self.frame_buffers:
+                            buffer = self.frame_buffers[stream_id]
+                            buffer.append(jpeg_base64)
+                            
+                            # Keep only latest frames - Smaller buffer for smoother playback
+                            if len(buffer) > 5:  # Reduced from max_buffer_size to 5
+                                buffer.pop(0)
+                        
+                        frame_count += 1
+                        self.active_streams[stream_id]['frame_count'] = frame_count
+                        
+                        # 🎯 PPE DETECTION - Her 15 frame'de bir detection yap (increased frequency)
+                        detection_frequency = self.active_streams[stream_id].get('detection_frequency', 15)
+                        if frame_count % detection_frequency == 0:
+                            try:
+                                # SH17 Model Manager'ı import et
+                                from models.sh17_model_manager import SH17ModelManager
+                                
+                                # Detection yap
+                                detection_result = self._perform_ppe_detection(frame, stream_id)
+                                
+                                # Stream info'ya detection result'ı ekle
+                                if stream_id in self.active_streams:
+                                    self.active_streams[stream_id]['detection_result'] = detection_result
+                                    
+                                logger.info(f"🎯 {stream_id}: Detection completed - People: {detection_result.get('people_detected', 0)}, PPE: {len(detection_result.get('detections', []))}")
+                                
+                            except Exception as e:
+                                logger.warning(f"⚠️ Detection error for {stream_id}: {e}")
+                        
+                        # Log progress every 120 frames (reduced frequency for performance)
+                        if frame_count % 120 == 0:
+                            logger.info(f"📊 {stream_id}: {frame_count} frames captured")
+                        
+                        # 🚀 FRAME SKIP OPTIMIZATION - Her 3 frame'de bir işle (smooth playback)
+                        if frame_count % 3 == 0:
+                            # Frame quality'yi düşür ve boyutu optimize et
+                            _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                            jpeg_base64 = base64.b64encode(jpeg_data).decode('utf-8')
+                            
+                            # Add to buffer - Optimized buffer management
+                            if stream_id in self.frame_buffers:
+                                buffer = self.frame_buffers[stream_id]
+                                buffer.append(jpeg_base64)
+                                
+                                # Keep only latest frames - Smaller buffer for smoother playback
+                                if len(buffer) > 3:  # Reduced buffer size for faster switching
+                                    buffer.pop(0)
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Frame processing error for {stream_id}: {e}")
+                    
+                    # Optimized frame rate control - Reduced delay for smoother playback
+                    time.sleep(0.015)  # ~65 FPS (increased from 50 FPS)
                     
                 except Exception as e:
-                    logger.error(f"❌ Frame processing error for {stream_id}: {e}")
-                
-                # Add small delay to control frame rate
-                time.sleep(0.033)  # ~30 FPS
+                    logger.error(f"❌ Stream read error for {stream_id}: {e}")
+                    consecutive_errors += 1
+                    time.sleep(0.1)
                     
-        except Exception as e:
-                logger.error(f"❌ Stream read error for {stream_id}: {e}")
-                consecutive_errors += 1
-                time.sleep(0.1)
-                
         except Exception as e:
             logger.error(f"❌ Stream worker error for {stream_id}: {e}")
             if stream_id in self.active_streams:
@@ -525,8 +838,86 @@ class DVRStreamHandler:
                 self.active_streams[stream_id]['status'] = 'stopped'
             logger.info(f"🛑 Stream worker stopped: {stream_id}")
 
+    def switch_channel_fast(self, stream_id: str, new_rtsp_url: str, 
+                           ip_address: str = None, username: str = None, 
+                           password: str = None, rtsp_port: int = None, 
+                           channel_number: int = None) -> bool:
+        """Hızlı kanal geçişi - Buffer temizleme ve frame skip ile"""
+        try:
+            logger.info(f"🚀 Hızlı kanal geçişi: {stream_id}")
+            
+            # Mevcut stream'i durdur
+            if stream_id in self.active_streams:
+                # Buffer'ı hızlı temizle
+                if stream_id in self.frame_buffers:
+                    self.frame_buffers[stream_id].clear()
+                
+                # Stream worker'ı durdur
+                self.active_streams[stream_id]['active'] = False
+                time.sleep(0.1)  # Kısa bekleme
+            
+            # Yeni stream'i başlat
+            success = self.start_stream(stream_id, new_rtsp_url, ip_address, username, password, rtsp_port, channel_number)
+            
+            if success:
+                logger.info(f"✅ Hızlı kanal geçişi tamamlandı: {stream_id}")
+                return True
+            else:
+                logger.error(f"❌ Hızlı kanal geçişi başarısız: {stream_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Hızlı kanal geçişi hatası: {e}")
+            return False
+    
+    def get_channel_preview(self, stream_id: str, preview_frames: int = 3) -> List[str]:
+        """Kanal önizlemesi - Hızlı frame capture ile"""
+        try:
+            if stream_id not in self.active_streams:
+                return []
+            
+            preview_frames_list = []
+            buffer = self.frame_buffers.get(stream_id, [])
+            
+            # Son birkaç frame'i al
+            if buffer:
+                preview_frames_list = buffer[-preview_frames:] if len(buffer) >= preview_frames else buffer
+            
+            return preview_frames_list
+            
+        except Exception as e:
+            logger.error(f"❌ Kanal önizleme hatası: {e}")
+            return []
+    
+    def optimize_stream_performance(self, stream_id: str) -> bool:
+        """Stream performansını optimize et - Detection sıklığını artır"""
+        try:
+            if stream_id not in self.active_streams:
+                return False
+            
+            # Detection sıklığını artır (her 15 frame'de bir)
+            self.active_streams[stream_id]['detection_frequency'] = 15
+            
+            # Buffer size'ı optimize et
+            if stream_id in self.frame_buffers:
+                # Buffer'ı küçült ama hızlı tut
+                current_buffer = self.frame_buffers[stream_id]
+                if len(current_buffer) > 3:
+                    self.frame_buffers[stream_id] = current_buffer[-3:]
+            
+            logger.info(f"🚀 Stream performansı optimize edildi: {stream_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Stream optimizasyon hatası: {e}")
+            return False
+
 # Global stream handler instance
 stream_handler = DVRStreamHandler()
+
+def get_stream_handler() -> DVRStreamHandler:
+    """Get global stream handler instance"""
+    return stream_handler
 
 def get_stream_handler() -> DVRStreamHandler:
     """Get global stream handler instance"""

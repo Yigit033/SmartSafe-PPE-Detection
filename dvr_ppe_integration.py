@@ -37,22 +37,31 @@ class DVRStreamProcessor:
         
         logger.info("✅ DVR Stream Processor initialized")
     
-    def start_dvr_detection(self, dvr_id: str, channel: int, company_id: str, detection_mode: str = 'construction') -> Dict[str, Any]:
+    def start_dvr_detection(self, dvr_id: str, channel: int, company_id: str, detection_mode: str = 'construction', use_sh17: bool = False) -> Dict[str, Any]:
         """DVR kanalından PPE detection başlatır"""
         
         try:
             # Stream ID oluştur
             stream_id = f"dvr_{dvr_id}_ch{channel:02d}"
             
-            # RTSP URL oluştur
-            rtsp_url = f"rtsp://nehu:yesilgross@192.168.1.109:554/ch{channel:02d}/main"
+            # RTSP URL oluştur (şirket/dvr bazlı dinamik bilgilerle)
+            dvr_system = self.db_adapter.get_dvr_system(company_id, dvr_id)
+            if not dvr_system:
+                raise RuntimeError(f"DVR system not found for company={company_id} dvr_id={dvr_id}")
+
+            rtsp_url = (
+                f"rtsp://{dvr_system['ip_address']}:{dvr_system.get('rtsp_port', 554)}"
+                f"/user={dvr_system['username']}&password={dvr_system['password']}"
+                f"&channel={channel}&stream=0.sdp"
+            )
             
             logger.info(f"🎥 Starting DVR detection: {stream_id} - {rtsp_url}")
+            logger.info(f"🔧 Detection System: {'SH17' if use_sh17 else 'Klasik'}")
             
             # Detection thread'i başlat
             detection_thread = threading.Thread(
                 target=self.process_dvr_stream,
-                args=(stream_id, rtsp_url, company_id, detection_mode),
+                args=(stream_id, rtsp_url, company_id, detection_mode, use_sh17),
                 daemon=True
             )
             
@@ -67,17 +76,19 @@ class DVRStreamProcessor:
                 "stream_id": stream_id,
                 "rtsp_url": rtsp_url,
                 "channel": channel,
-                "detection_mode": detection_mode
+                "detection_mode": detection_mode,
+                "detection_system": "SH17" if use_sh17 else "Klasik"
             }
             
         except Exception as e:
             logger.error(f"❌ DVR detection start error: {e}")
             return {"success": False, "error": str(e)}
     
-    def process_dvr_stream(self, stream_id: str, rtsp_url: str, company_id: str, detection_mode: str):
+    def process_dvr_stream(self, stream_id: str, rtsp_url: str, company_id: str, detection_mode: str, use_sh17: bool = False):
         """RTSP stream'i işler ve PPE detection yapar"""
         
         logger.info(f"🔄 Processing DVR stream: {stream_id}")
+        logger.info(f"🔧 Detection System: {'SH17' if use_sh17 else 'Klasik'}")
         
         try:
             # RTSP stream'i aç
@@ -111,11 +122,20 @@ class DVRStreamProcessor:
                     if frame_count % self.frame_skip != 0:
                         continue
                     
-                    # PPE Detection yap - Enhanced error handling
+                    # PPE Detection yap - SH17 veya Klasik sistem
                     detection_start = time.time()
                     try:
-                        ppe_result = self.ppe_manager.detect_ppe_comprehensive(frame, detection_mode)
-                        detection_time = time.time() - detection_start
+                        if use_sh17 and hasattr(self, 'sh17_manager'):
+                            # SH17 detection
+                            ppe_result = self.sh17_manager.detect_ppe(frame, detection_mode, 0.5)
+                            detection_time = time.time() - detection_start
+                            
+                            # SH17 sonuçlarını klasik formata çevir
+                            ppe_result = self._convert_sh17_to_classic_format(ppe_result, detection_mode)
+                        else:
+                            # Klasik detection
+                            ppe_result = self.ppe_manager.detect_ppe_comprehensive(frame, detection_mode)
+                            detection_time = time.time() - detection_start
                         
                         if ppe_result and ppe_result.get('success', False):
                             detection_count += 1
@@ -129,13 +149,14 @@ class DVRStreamProcessor:
                                 'timestamp': datetime.now().isoformat(),
                                 'ppe_result': ppe_result,
                                 'detection_time': detection_time,
-                                'frame_count': frame_count
+                                'frame_count': frame_count,
+                                'detection_system': 'SH17' if use_sh17 else 'Klasik'
                             })
                             
                             # Performance logging
                             if detection_count % 30 == 0:  # Her 30 detection'da bir log
                                 fps = detection_count / (time.time() - start_time)
-                                logger.info(f"📊 {stream_id} - FPS: {fps:.2f}, Detection Time: {detection_time:.3f}s")
+                                logger.info(f"📊 {stream_id} - FPS: {fps:.2f}, Detection Time: {detection_time:.3f}s, System: {'SH17' if use_sh17 else 'Klasik'}")
                         else:
                             logger.warning(f"⚠️ PPE detection failed for {stream_id}: {ppe_result.get('error', 'Unknown error')}")
                             
@@ -159,6 +180,104 @@ class DVRStreamProcessor:
             
         except Exception as e:
             logger.error(f"❌ DVR stream processing error: {e}")
+    
+    def _convert_sh17_to_classic_format(self, sh17_result: List[Dict], detection_mode: str) -> Dict[str, Any]:
+        """SH17 sonuçlarını klasik PPE formatına çevirir"""
+        try:
+            if not sh17_result:
+                return self._create_empty_result()
+            
+            # SH17 sonuçlarını işle
+            people_detected = 0
+            ppe_compliant = 0
+            ppe_violations = []
+            
+            for detection in sh17_result:
+                class_name = detection.get('class_name', '')
+                confidence = detection.get('confidence', 0.0)
+                bbox = detection.get('bbox', [])
+                
+                # Person detection
+                if class_name == 'person':
+                    people_detected += 1
+                    
+                    # PPE compliance kontrolü
+                    ppe_status = self._analyze_sh17_ppe_compliance(sh17_result, detection_mode)
+                    
+                    if ppe_status.get('compliant', False):
+                        ppe_compliant += 1
+                    else:
+                        violation = {
+                            'person_id': f"person_{people_detected}",
+                            'missing_ppe': ppe_status.get('missing_ppe', ['Gerekli PPE Eksik']),
+                            'confidence': confidence,
+                            'bbox': bbox,
+                            'ppe_status': ppe_status
+                        }
+                        ppe_violations.append(violation)
+            
+            return {
+                'success': True,
+                'people_detected': people_detected,
+                'ppe_compliant': ppe_compliant,
+                'ppe_violations': ppe_violations,
+                'detection_system': 'SH17',
+                'detection_mode': detection_mode
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ SH17 format conversion error: {e}")
+            return self._create_empty_result()
+    
+    def _analyze_sh17_ppe_compliance(self, detections: List[Dict], sector: str) -> Dict[str, Any]:
+        """SH17 detection sonuçlarından PPE compliance analizi"""
+        try:
+            # Sektör bazlı gerekli PPE'ler
+            sector_requirements = {
+                'construction': ['helmet', 'safety_vest'],
+                'manufacturing': ['helmet', 'safety_vest', 'gloves'],
+                'chemical': ['helmet', 'respirator', 'gloves', 'safety_glasses'],
+                'food_beverage': ['hair_net', 'gloves', 'apron'],
+                'warehouse_logistics': ['helmet', 'safety_vest', 'safety_shoes'],
+                'energy': ['helmet', 'safety_vest', 'safety_shoes', 'gloves'],
+                'petrochemical': ['helmet', 'respirator', 'safety_vest', 'gloves'],
+                'marine_shipyard': ['helmet', 'life_vest', 'safety_shoes'],
+                'aviation': ['aviation_helmet', 'reflective_vest', 'ear_protection']
+            }
+            
+            required_ppe = sector_requirements.get(sector, ['helmet', 'safety_vest'])
+            detected_ppe = []
+            
+            # Tespit edilen PPE'leri topla
+            for detection in detections:
+                class_name = detection.get('class_name', '')
+                if class_name in ['helmet', 'safety_vest', 'gloves', 'safety_shoes', 'safety_glasses', 'face_mask_medical']:
+                    detected_ppe.append(class_name)
+            
+            # Compliance kontrolü
+            missing_ppe = [item for item in required_ppe if item not in detected_ppe]
+            compliant = len(missing_ppe) == 0
+            
+            return {
+                'compliant': compliant,
+                'missing_ppe': missing_ppe,
+                'detected_ppe': detected_ppe,
+                'required_ppe': required_ppe
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ SH17 compliance analysis error: {e}")
+            return {'compliant': False, 'missing_ppe': ['Analysis Error']}
+    
+    def _create_empty_result(self) -> Dict[str, Any]:
+        """Boş detection sonucu oluşturur"""
+        return {
+            'success': False,
+            'people_detected': 0,
+            'ppe_compliant': 0,
+            'ppe_violations': [],
+            'error': 'No detections found'
+        }
     
     def stop_dvr_detection(self, stream_id: str) -> Dict[str, Any]:
         """DVR detection'ı durdurur"""
@@ -254,19 +373,38 @@ class EnhancedPPEDetectionManager:
         self.ppe_manager = PPEDetectionManager()
         self.dvr_processor = DVRStreamProcessor()
         
+        # SH17 Model Manager entegrasyonu
+        try:
+            from models.sh17_model_manager import SH17ModelManager
+            self.sh17_manager = SH17ModelManager()
+            self.sh17_manager.load_models()
+            self.sh17_available = True
+            logger.info("✅ SH17 Model Manager entegre edildi")
+        except Exception as e:
+            logger.warning(f"⚠️ SH17 Model Manager yüklenemedi: {e}")
+            self.sh17_available = False
+        
     def start_dvr_ppe_detection(self, dvr_id: str, channels: List[int], company_id: str, detection_mode: str = 'construction') -> Dict[str, Any]:
         """Birden fazla DVR kanalında PPE detection başlatır"""
+        
+        # SH17 kullanımını kontrol et
+        use_sh17 = self.sh17_available and detection_mode in ['construction', 'manufacturing', 'chemical', 'food_beverage', 'warehouse_logistics', 'energy', 'petrochemical', 'marine_shipyard', 'aviation']
+        
+        if use_sh17:
+            logger.info(f"🎯 SH17 detection mode aktif: {detection_mode}")
+        else:
+            logger.info(f"🔄 Klasik detection mode: {detection_mode}")
         
         active_detections = []
         
         for channel in channels:
             result = self.dvr_processor.start_dvr_detection(
-                dvr_id, channel, company_id, detection_mode
+                dvr_id, channel, company_id, detection_mode, use_sh17
             )
             
             if result['success']:
                 active_detections.append(result['stream_id'])
-                logger.info(f"✅ DVR detection started: {result['stream_id']}")
+                logger.info(f"✅ DVR detection started: {result['stream_id']} - {'SH17' if use_sh17 else 'Klasik'}")
             else:
                 logger.error(f"❌ DVR detection failed for channel {channel}: {result.get('error', 'Unknown error')}")
         
@@ -274,7 +412,8 @@ class EnhancedPPEDetectionManager:
             "success": len(active_detections) > 0,
             "active_detections": active_detections,
             "total_channels": len(channels),
-            "successful_channels": len(active_detections)
+            "successful_channels": len(active_detections),
+            "detection_system": "SH17" if use_sh17 else "Klasik"
         }
     
     def stop_dvr_ppe_detection(self, dvr_id: str, channels: List[int] = None) -> Dict[str, Any]:

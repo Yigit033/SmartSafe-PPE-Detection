@@ -462,6 +462,11 @@ class MultiTenantDatabase:
                     company_id TEXT NOT NULL,
                     camera_id TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    detection_type TEXT DEFAULT 'PPE',
+                    confidence REAL DEFAULT 0,
+                    people_detected INTEGER DEFAULT 0,
+                    ppe_compliant INTEGER DEFAULT 0,
+                    violations_count INTEGER DEFAULT 0,
                     total_people INTEGER,
                     compliant_people INTEGER,
                     violation_people INTEGER,
@@ -476,16 +481,60 @@ class MultiTenantDatabase:
                 )
             ''')
             
+            # Database migration - Yeni kolonları ekle (varsa hata vermesin)
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN detection_type TEXT DEFAULT "PPE"')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+            
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN confidence REAL DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN people_detected INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN ppe_compliant INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN violations_count INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+            
+            try:
+                cursor.execute('ALTER TABLE violations ADD COLUMN worker_id TEXT')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute('ALTER TABLE violations ADD COLUMN penalty REAL DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute('ALTER TABLE violations ADD COLUMN confidence REAL DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+            
             # İhlaller tablosu (şirket bazlı)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS violations (
                     violation_id TEXT PRIMARY KEY,
                     company_id TEXT NOT NULL,
                     camera_id TEXT NOT NULL,
-                    user_id TEXT,
+                    worker_id TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     violation_type TEXT NOT NULL,
-                    missing_ppe TEXT, -- JSON array
+                    missing_ppe TEXT NOT NULL,
+                    penalty REAL DEFAULT 0,
+                    confidence REAL DEFAULT 0,
+                    user_id TEXT,
                     severity TEXT DEFAULT 'medium',
                     penalty_amount REAL DEFAULT 0,
                     image_path TEXT,
@@ -1458,9 +1507,9 @@ class MultiTenantDatabase:
             cursor.execute(f'''
                 SELECT 
                     COUNT(*) as total_detections,
-                    SUM(total_people) as total_people,
-                    SUM(compliant_people) as compliant_people,
-                    SUM(violation_people) as violation_people,
+                    COALESCE(SUM(people_detected), SUM(total_people)) as total_people,
+                    COALESCE(SUM(ppe_compliant), SUM(compliant_people)) as compliant_people,
+                    COALESCE(SUM(violations_count), SUM(violation_people)) as violation_people,
                     AVG(compliance_rate) as avg_compliance_rate
                 FROM detections
                 WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE

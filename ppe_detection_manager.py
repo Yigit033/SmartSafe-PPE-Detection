@@ -25,6 +25,8 @@ class PPEDetectionManager:
     def __init__(self):
         self.ppe_model = None
         self.person_model = None
+        self.model = None  # Ana model referansı
+        self.device = 'cpu'  # Varsayılan device
         self.sector_ppe_mapping = self._initialize_sector_ppe_mapping()
         self.detection_history = {}
         self.performance_metrics = {}
@@ -74,14 +76,19 @@ class PPEDetectionManager:
             self.person_model = YOLO('yolov8n.pt')  # Person detection
             self.ppe_model = YOLO('yolov8n.pt')     # PPE detection (will be enhanced)
             
+            # Ana model referansını ayarla
+            self.model = self.person_model
+            
             # Move to device with error handling
             try:
                 self.person_model.to(device)
                 self.ppe_model.to(device)
+                self.device = device  # Device'ı güncelle
                 logger.info(f"✅ Models loaded successfully on {device}")
             except Exception as device_error:
                 logger.warning(f"⚠️ Device assignment failed: {device_error}, using CPU")
                 device = 'cpu'
+                self.device = 'cpu'  # Device'ı güncelle
                 self.person_model.to('cpu')
                 self.ppe_model.to('cpu')
             
@@ -187,6 +194,7 @@ class PPEDetectionManager:
                 'total_people': total_people,
                 'compliant_people': compliant_people,
                 'violations_count': len(violations),
+                'ppe_violations': violations,  # Tutarlı key kullan
                 'missing_ppe': violations,
                 'confidence': 0.8,  # Default confidence
                 'detection_time': 0.1,  # Default processing time
@@ -222,6 +230,7 @@ class PPEDetectionManager:
                 'total_people': total_people,
                 'compliant_people': compliant_people,
                 'violations_count': total_people - compliant_people,
+                'ppe_violations': ['helmet', 'vest'] if total_people > 0 else [],  # Tutarlı key kullan
                 'missing_ppe': ['helmet', 'vest'] if total_people > 0 else [],
                 'confidence': 0.6,  # Lower confidence for fallback
                 'detection_time': 0.05,
@@ -239,6 +248,7 @@ class PPEDetectionManager:
             'total_people': 0,
             'compliant_people': 0,
             'violations_count': 0,
+            'ppe_violations': [],  # Tutarlı key kullan
             'missing_ppe': [],
             'confidence': 0.0,
             'detection_time': 0.0,
@@ -608,6 +618,7 @@ class PPEDetectionManager:
             'total_people': 0,
             'compliant_people': 0,
             'compliance_rate': 0,
+            'ppe_violations': [],  # Tutarlı key kullan
             'violations': [],
             'timestamp': datetime.now().isoformat()
         }
@@ -619,6 +630,7 @@ class PPEDetectionManager:
             'total_people': 0,
             'compliant_people': 0,
             'compliance_rate': 0,
+            'ppe_violations': [],  # Tutarlı key kullan
             'violations': [],
             'timestamp': datetime.now().isoformat(),
             'message': 'No persons detected'

@@ -6,6 +6,8 @@
     <title>SmartSafe AI - Kamera Yönetimi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- HLS.js for Gateway HLS playback -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         .camera-form {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -91,6 +93,166 @@
             margin: 2px;
             display: inline-block;
             font-size: 0.8em;
+        }
+        
+        /* Professional Video Container Styles */
+        .unified-video-container {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            border: 2px solid #444;
+            position: relative;
+            padding: 20px;
+            margin: 10px 0;
+            min-height: 400px;
+            display: block;
+        }
+        
+        /* Single Video Container for Video Elements */
+        .single-video-container {
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1);
+            border: 1px solid #333;
+            position: relative;
+            min-height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        
+        .live-video-element {
+            width: 100% !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            min-height: 300px !important;
+            border-radius: 8px;
+            object-fit: contain;
+            background: transparent;
+            display: block !important;
+            margin: 0 auto;
+            box-shadow: none;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+            border: none;
+        }
+        
+        .live-video-element:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
+        }
+        
+        .live-video-element:hover {
+            transform: scale(1.02);
+            box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.15), 0 6px 20px rgba(0, 0, 0, 0.4);
+            border-color: #555;
+        }
+        
+        /* Video container responsive adjustments */
+        @media (max-width: 576px) {
+            .live-video-element {
+                max-height: 250px !important;
+                min-height: 200px !important;
+            }
+            .unified-video-container {
+                padding: 10px;
+                margin: 5px 0;
+                min-height: 250px;
+            }
+            .single-video-container {
+                min-height: 250px;
+                margin: 5px 0;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .live-video-element {
+                max-height: 350px !important;
+                min-height: 250px !important;
+            }
+            .unified-video-container {
+                padding: 15px;
+                margin: 8px 0;
+                min-height: 300px;
+            }
+            .single-video-container {
+                min-height: 300px;
+                margin: 8px 0;
+            }
+        }
+        
+        @media (min-width: 992px) {
+            .live-video-element {
+                max-height: 550px !important;
+                min-height: 400px !important;
+            }
+            .unified-video-container {
+                padding: 20px;
+                margin: 10px 0;
+                min-height: 400px;
+            }
+            .single-video-container {
+                min-height: 400px;
+                margin: 10px 0;
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .live-video-element {
+                max-height: 650px !important;
+                min-height: 500px !important;
+            }
+            .unified-video-container {
+                padding: 25px;
+                margin: 15px 0;
+                min-height: 500px;
+            }
+            .single-video-container {
+                min-height: 500px;
+                margin: 15px 0;
+            }
+        }
+        
+        /* Professional video controls overlay */
+        .video-controls-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+            padding: 20px 15px 15px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .unified-video-container:hover .video-controls-overlay {
+            opacity: 1;
+        }
+        
+        .unified-video-container:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            border-color: #555;
+        }
+        
+        .unified-video-container {
+            transition: all 0.3s ease;
+        }
+        
+        /* Stream status badge styling */
+        #streamStatus {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 10;
+            font-size: 0.8em;
+            padding: 8px 12px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
         
         /* Navbar Styles */
@@ -1554,158 +1716,95 @@
         }
         
         function showTestResult(result) {
-            console.log('🎯 showTestResult called with:', result);
-            const container = document.getElementById('testResult');
-            console.log('📋 Test result container:', container);
+            const resultDiv = document.getElementById('testResult');
+            if (!resultDiv) return;
+            
+            console.log('📊 Test result:', result);
+            
+            let html = '';
             
             if (result.success) {
-                console.log('✅ Success case - creating success HTML');
-                container.innerHTML = `
+                html = `
                     <div class="alert alert-success">
-                        <h5><i class="fas fa-check-circle me-2"></i>Bağlantı Başarılı!</h5>
-                        <p><strong>Yanıt Süresi:</strong> ${result.test_results.response_time}</p>
-                        <p><strong>Çözünürlük:</strong> ${result.test_results.resolution || 'Bilinmiyor'}</p>
-                        <p><strong>FPS:</strong> ${result.test_results.fps || 'Bilinmiyor'}</p>
-                        <p><strong>Kalite:</strong> ${result.test_results.quality}</p>
-                        <p><strong>Test Süresi:</strong> ${result.test_results.test_duration}</p>
-                        ${result.camera_info && result.camera_info.working_endpoint ? 
-                            `<p><strong>Çalışan Endpoint:</strong> <code>${result.camera_info.working_endpoint}</code></p>` : ''}
-                    </div>
+                        <h5><i class="fas fa-check-circle"></i> ${result.message}</h5>
                 `;
-                console.log('✅ Success HTML created');
                                         } else {
-                console.log('❌ Error case - creating error HTML');
-                console.log('❌ Error details:', result.error);
-                console.log('❌ Error message:', result.error_message);
-                console.log('❌ Test results:', result.test_results);
-                console.log('❌ Test details:', result.test_details);
+                html = `
+                    <div class="alert alert-danger">
+                        <h5><i class="fas fa-exclamation-triangle"></i> Test Başarısız</h5>
+                        <p>${result.error || 'Bilinmeyen hata'}</p>
+                `;
+            }
+            
+            // Kapsamlı test sonuçları
+            if (result.test_results) {
+                const tests = result.test_results;
                 
-                let detailsHtml = '';
-                let authWarning = '';
+                html += '<div class="mt-3"><h6>📋 Test Detayları:</h6>';
                 
-                // Authentication uyarısı
-                if (result.error_message && result.error_message.includes('authentication')) {
-                    authWarning = `
-                        <div class="alert alert-warning" role="alert">
-                            <strong>🔐 Authentication Gerekli!</strong><br>
-                            Bu kamera kullanıcı adı ve şifre gerektiriyor.<br>
-                            Lütfen kamera bilgilerini girin ve tekrar test edin.
+                // Bağlantı Testi
+                if (tests.connection_test) {
+                    const conn = tests.connection_test;
+                    const connStatus = conn.status === 'success' ? '✅' : '❌';
+                    const connClass = conn.status === 'success' ? 'text-success' : 'text-danger';
+                    html += `
+                        <div class="mb-2 p-2 border rounded">
+                            <strong>🔗 Bağlantı Testi:</strong> ${connStatus}
+                            ${conn.status === 'success' ? 
+                                `<br><small class="${connClass}">Response Time: ${conn.response_time_ms?.toFixed(1)}ms | Status: ${conn.status_code}</small>` : 
+                                `<br><small class="${connClass}">${conn.error}</small>`
+                            }
                         </div>
                     `;
                 }
                     
-                    if (result.test_details) {
-                        detailsHtml = `
-                            <div class="mt-3">
-                                ${authWarning}
-                                <h6>Detaylı Test Raporu:</h6>
-                                <div class="bg-light p-3 rounded">
-                                ${result.test_details.endpoints_tested ? `
-                                    <strong>Test Edilen Endpoint'ler:</strong>
-                                    <ul class="mt-2">
-                                        ${result.test_details.endpoints_tested.map(endpoint => 
-                                            `<li><code>${endpoint}</code></li>`
-                                        ).join('')}
-                                    </ul>
-                                ` : ''}
-                                
-                                ${result.test_details.connection_steps ? `
-                                    <strong>Bağlantı Adımları:</strong>
-                                    <ul class="mt-2">
-                                        ${result.test_details.connection_steps.map(step => 
-                                            `<li>${step}</li>`
-                                        ).join('')}
-                                    </ul>
-                                ` : ''}
-                                
-                                ${result.test_details.network_analysis ? `
-                                    <strong>Ağ Analizi:</strong>
-                                    <ul class="mt-2">
-                                        <li>DNS Çözümleme: ${result.test_details.network_analysis.dns_resolution ? '✅' : '❌'}</li>
-                                        <li>Port Açık: ${result.test_details.network_analysis.port_open ? '✅' : '❌'}</li>
-                                        <li>Firewall Test: ${result.test_details.network_analysis.firewall_test ? '✅' : '❌'}</li>
-                                        ${result.test_details.network_analysis.error ? `<li class="text-danger">Hata: ${result.test_details.network_analysis.error}</li>` : ''}
-                                    </ul>
-                                ` : ''}
-                                
-                                ${result.test_details.camera_analysis ? `
-                                    <strong>Kamera Analizi:</strong>
-                                    <ul class="mt-2">
-                                        <li>Web Arayüzü: ${result.test_details.camera_analysis.web_interface ? '✅' : '❌'}</li>
-                                        <li>Authentication: ${result.test_details.camera_analysis.authentication ? '✅' : '❌'}</li>
-                                        <li>Protocol Desteği: ${result.test_details.camera_analysis.protocol_support ? '✅' : '❌'}</li>
-                                        ${result.test_details.camera_analysis.error ? `<li class="text-danger">Hata: ${result.test_details.camera_analysis.error}</li>` : ''}
-                                    </ul>
-                                ` : ''}
-                                
-                                ${result.test_details.system_analysis ? `
-                                    <strong>Sistem Analizi:</strong>
-                                    <ul class="mt-2">
-                                        <li>OpenCV: ${result.test_details.system_analysis.opencv_available ? '✅' : '❌'}</li>
-                                        <li>Requests: ${result.test_details.system_analysis.requests_available ? '✅' : '❌'}</li>
-                                        <li>Platform: ${result.test_details.system_analysis.platform}</li>
-                                        ${result.test_details.system_analysis.opencv_error ? `<li class="text-danger">OpenCV: ${result.test_details.system_analysis.opencv_error}</li>` : ''}
-                                        ${result.test_details.system_analysis.requests_error ? `<li class="text-danger">Requests: ${result.test_details.system_analysis.requests_error}</li>` : ''}
-                                    </ul>
-                                ` : ''}
-                            </div>
+                // Stream Testi
+                if (tests.stream_test) {
+                    const stream = tests.stream_test;
+                    const streamStatus = stream.status === 'success' ? '✅' : '❌';
+                    const streamClass = stream.status === 'success' ? 'text-success' : 'text-danger';
+                    const isDemo = stream.demo_mode;
+                    
+                    html += `
+                        <div class="mb-2 p-2 border rounded ${isDemo ? 'border-warning bg-light' : ''}">
+                            <strong>🎥 Video Stream Testi:</strong> ${streamStatus}
+                            ${isDemo ? '<span class="badge bg-warning ms-2">DEMO</span>' : ''}
+                            ${stream.status === 'success' && stream.frame_info ? 
+                                `<br><small class="${streamClass}">Resolution: ${stream.frame_info.width}x${stream.frame_info.height} | Channels: ${stream.frame_info.channels}</small>` : 
+                                `<br><small class="${streamClass}">${stream.error}</small>`
+                            }
                         </div>
                     `;
                 }
                 
-                console.log('❌ Creating error HTML content...');
-                const errorHtml = `
-                    <div class="alert alert-danger">
-                        <h5><i class="fas fa-times-circle me-2"></i>Bağlantı Başarısız</h5>
-                        <p><strong>Hata:</strong> ${result.error}</p>
-                        <p><strong>Test Süresi:</strong> ${result.test_results ? result.test_results.test_duration : 'Bilinmiyor'}</p>
-                        ${detailsHtml}
-                        <div class="mt-3">
-                            <h6>Olası Çözümler:</h6>
-                            <ul>
-                                <li>IP adresini kontrol edin</li>
-                                <li>Port numarasını kontrol edin (8080, 80, 554, 37777)</li>
-                                <li>Kullanıcı adı ve şifreyi kontrol edin</li>
-                                <li>Kamera ağa bağlı mı kontrol edin</li>
-                                <li>Firewall ayarlarını kontrol edin</li>
-                                <li>Kamera web arayüzüne tarayıcıdan erişmeyi deneyin</li>
-                                <li>Farklı endpoint'leri deneyin (/video, /shot.jpg, /mjpeg)</li>
-                            </ul>
-                        </div>
+                // PPE Detection Testi
+                if (tests.ppe_test) {
+                    const ppe = tests.ppe_test;
+                    const ppeStatus = ppe.status === 'success' ? '✅' : '❌';
+                    const ppeClass = ppe.status === 'success' ? 'text-success' : 'text-danger';
+                    const isDemo = ppe.demo_mode;
+                    
+                    html += `
+                        <div class="mb-2 p-2 border rounded ${isDemo ? 'border-warning bg-light' : ''}">
+                            <strong>🎯 PPE Detection Testi:</strong> ${ppeStatus}
+                            ${isDemo ? '<span class="badge bg-warning ms-2">DEMO</span>' : ''}
+                            ${ppe.status === 'success' ? 
+                                `<br><small class="${ppeClass}">System: ${ppe.system_used} | People: ${ppe.people_detected} | Compliant: ${ppe.ppe_compliant} | Violations: ${ppe.ppe_violations?.length || 0}</small>` : 
+                                `<br><small class="${ppeClass}">${ppe.error}</small>`
+                            }
                     </div>
                 `;
-                console.log('❌ Error HTML content:', errorHtml);
-                container.innerHTML = errorHtml;
-                console.log('❌ Error HTML set to container');
-            console.log('🎯 Container display after set:', container.style.display);
-            console.log('🎯 Container innerHTML length:', container.innerHTML.length);
-            console.log('🎯 Container offsetHeight:', container.offsetHeight);
-            console.log('🎯 Container is visible:', container.offsetHeight > 0);
-            console.log('🎯 Container className:', container.className);
-            console.log('🎯 Container computed style:', window.getComputedStyle(container).display);
-            console.log('🎯 Container computed visibility:', window.getComputedStyle(container).visibility);
-            
-            // Container'ı görünür yap
-            container.style.display = 'block';
-            container.style.visibility = 'visible';
-            container.style.opacity = '1';
-            
-            console.log('🎯 Container display after fix:', container.style.display);
-            console.log('🎯 Container computed style after fix:', window.getComputedStyle(container).display);
-            console.log('🎯 Container offsetHeight after fix:', container.offsetHeight);
-            
-            // Container'ı zorla görünür yap
-            setTimeout(() => {
-                container.style.display = 'block';
-                container.style.visibility = 'visible';
-                container.style.opacity = '1';
-                console.log('🎯 Container display after timeout:', container.style.display);
-                console.log('🎯 Container computed style after timeout:', window.getComputedStyle(container).display);
-                console.log('🎯 Container offsetHeight after timeout:', container.offsetHeight);
-            }, 100);
+                }
+                
+                html += '</div>';
             }
             
-            container.style.display = 'block';
+            html += '</div>';
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+            
+            // Test sonucunu console'a yazdır
+            console.log('📊 Final test result:', result);
         }
         
         function fillFormFromDetection(protocol, port, path) {
@@ -2181,34 +2280,83 @@
         }
         
         function testCamera(cameraId) {
-            const statusElement = document.getElementById(`status-${cameraId}`);
-            if (statusElement) {
-                statusElement.className = 'camera-status status-testing';
-                statusElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Test Ediliyor';
+            console.log('🎯 Testing camera:', cameraId);
+            
+            // Test sonuçları için div oluştur
+            let testResultDiv = document.getElementById('testResult');
+            if (!testResultDiv) {
+                testResultDiv = document.createElement('div');
+                testResultDiv.id = 'testResult';
+                testResultDiv.className = 'mt-3';
+                document.querySelector('.container').appendChild(testResultDiv);
             }
             
-            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/test`, {
+            // Loading göster
+            testResultDiv.innerHTML = `
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-spinner fa-spin"></i> Kamera Test Ediliyor...</h5>
+                    <p>Bağlantı, video stream ve PPE detection testleri yapılıyor...</p>
+                </div>
+            `;
+            testResultDiv.style.display = 'block';
+            
+            // Önce kamerayı API'den al
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`)
+                .then(response => response.json())
+                .then(cameraData => {
+                    if (!cameraData || !cameraData.camera) {
+                        testResultDiv.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h5><i class="fas fa-exclamation-triangle"></i> Kamera Bulunamadı</h5>
+                                <p>Kamera ID: ${cameraId}</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    const camera = cameraData.camera;
+                    console.log('📹 Camera data:', camera);
+                    
+                    // Test verilerini hazırla
+                    const testData = {
+                        ip_address: camera.ip_address,
+                        port: camera.port || 8080,
+                        protocol: camera.protocol || 'http',
+                        stream_path: camera.stream_path || '/video',
+                        username: camera.username || '',
+                        password: camera.password || '',
+                        detection_mode: 'construction' // Varsayılan sektör
+                    };
+                    
+                    console.log('📝 Test data:', testData);
+                    
+                    // Kapsamlı test yap
+                    return fetch(`/api/company/{{ company_id }}/cameras/manual-test`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
+                        },
+                        body: JSON.stringify(testData)
+                    });
+                })
+                .then(response => {
+                    if (response) {
+                        console.log('📡 Test response status:', response.status);
+                        return response.json();
+                    }
+                })
             .then(data => {
-                if (data.success) {
-                    statusElement.className = 'camera-status status-online';
-                    statusElement.innerHTML = '<i class="fas fa-circle me-1"></i>Aktif';
-                    showAlert('✅ Kamera bağlantısı başarılı!', 'success');
-                } else {
-                    statusElement.className = 'camera-status status-offline';
-                    statusElement.innerHTML = '<i class="fas fa-circle me-1"></i>Pasif';
-                    showAlert('❌ Kamera bağlantısı başarısız: ' + data.error, 'danger');
-                }
+                    console.log('📡 Test result:', data);
+                    showTestResult(data);
             })
             .catch(error => {
-                statusElement.className = 'camera-status status-offline';
-                statusElement.innerHTML = '<i class="fas fa-circle me-1"></i>Pasif';
-                showAlert('❌ Test sırasında hata oluştu', 'danger');
+                    console.error('❌ Test error:', error);
+                    testResultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="fas fa-exclamation-triangle"></i> Test Hatası</h5>
+                            <p>${error.message}</p>
+                        </div>
+                    `;
             });
         }
         
@@ -3175,7 +3323,8 @@
                 
                 if (data.success) {
                     const dvr = data.dvr_system;
-                    const rtspUrl = `rtsp://${dvr.username}:${dvr.password}@${dvr.ip_address}:${dvr.rtsp_port}/ch${channelNumber.toString().padStart(2, '0')}/main`;
+                    // Build RTSP using universal XM/Dahua-compatible format
+                    const rtspUrl = `rtsp://${dvr.ip_address}:${dvr.rtsp_port}/user=${encodeURIComponent(dvr.username)}&password=${encodeURIComponent(dvr.password)}&channel=${channelNumber}&stream=0.sdp`;
                     
                     // Create modal for live view
                     const modalHtml = `
@@ -3189,18 +3338,26 @@
                                     <div class="modal-body">
                                         <div class="row">
                                             <div class="col-md-8">
-                                                <div class="live-video-container" style="background: #000; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                                                <div class="unified-video-container" style="text-align: center; position: relative;">
                                                     <div class="mb-3">
                                                         <label for="channelSelector" class="form-label"><i class="fas fa-list"></i> Kanal Seçimi:</label>
                                                         <select id="channelSelector" class="form-select" onchange="switchChannel('${dvrId}')">
                                                             <option value="">Kanal seçin...</option>
                                                         </select>
                                                     </div>
-                                                    <div id="dvrVideoContainer" style="text-align: center; padding: 20px;">
-                                                        <img id="dvrLiveImage" style="max-width: 100%; max-height: 400px; border-radius: 4px;" alt="Canlı Görüntü">
-                                                        <div class="mt-2">
-                                                            <span id="streamStatus" class="badge bg-secondary">Bağlanıyor...</span>
+                                                    <div id="dvrVideoContainer" class="single-video-container" style="text-align: center; position: relative;">
+                                                        <!-- MJPEG Stream (frame polling) -->
+                                                        <img id="dvrLiveImage" class="live-video-element" style="display:block;" alt="Canlı Görüntü">
+                                                        <div id="streamStatus" class="badge bg-secondary">Bağlanıyor...</div>
+                                                    </div>
+                                                    <div class="mt-3">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <h6 class="mb-0"><i class="fas fa-th"></i> Kanal Önizlemeleri</h6>
+                                                            <button class="btn btn-sm btn-outline-secondary" onclick="loadChannelPreviews('${dvrId}')">
+                                                                <i class="fas fa-sync"></i> Tara
+                                                            </button>
                                                         </div>
+                                                        <div id="channelPreviewGrid" class="row g-2"></div>
                                                     </div>
                                                     <div class="text-center mt-2">
                                                         <button class="btn btn-sm btn-outline-primary" onclick="copyRTSPUrl('${rtspUrl}')">
@@ -3299,9 +3456,10 @@
                 // Get DVR channels from database
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
                 const data = await response.json();
+                console.log('📊 Channels API response:', data);
                 
                 const channelSelector = document.getElementById('channelSelector');
-                if (channelSelector && data.success) {
+                if (channelSelector && data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
                     // Clear existing options
                     channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
                     
@@ -3335,6 +3493,22 @@
                     }
                 }
                 
+                // Also refresh previews
+                await loadChannelPreviews(dvrId);
+                
+                // Defensive fallback: if still no options (only placeholder), synthesize 1..16
+                const sel = document.getElementById('channelSelector');
+                if (sel && sel.options.length <= 1) {
+                    console.warn('⚠️ Channel selector empty after API, using hard fallback 1..16');
+                    for (let i = 1; i <= 16; i++) {
+                        const option = document.createElement('option');
+                        option.value = i;
+                        option.textContent = `Kanal ${i}`;
+                        if (i == currentChannel) option.selected = true;
+                        sel.appendChild(option);
+                    }
+                }
+                
             } catch (error) {
                 console.error('❌ Load channels error:', error);
                 // Fallback to basic channel list
@@ -3352,6 +3526,42 @@
                     }
                 }
             }
+        }
+
+        // Kanal önizlemelerini yükle (grid)
+        async function loadChannelPreviews(dvrId) {
+            try {
+                const grid = document.getElementById('channelPreviewGrid');
+                if (!grid) return;
+                grid.innerHTML = '<div class="text-muted">Yükleniyor...</div>';
+                const resp = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/previews`);
+                const data = await resp.json();
+                if (!data.success || !Array.isArray(data.previews) || data.previews.length === 0) {
+                    grid.innerHTML = '<div class="text-muted">Önizleme bulunamadı</div>';
+                    return;
+                }
+                grid.innerHTML = '';
+                data.previews.forEach(p => {
+                    const col = document.createElement('div');
+                    col.className = 'col-6 col-md-3';
+                    col.innerHTML = `
+                        <div class="card h-100" style="cursor:pointer" onclick="switchToPreviewChannel('${dvrId}', ${p.channel_number})">
+                            <img class="card-img-top" src="data:image/jpeg;base64,${p.frame || ''}" alt="Ch${p.channel_number}">
+                            <div class="card-body p-2"><small>Kanal ${p.channel_number}</small></div>
+                        </div>`;
+                    grid.appendChild(col);
+                });
+            } catch (err) {
+                console.error('❌ Load previews error:', err);
+            }
+        }
+
+        function switchToPreviewChannel(dvrId, ch) {
+            const selector = document.getElementById('channelSelector');
+            if (selector) {
+                selector.value = String(ch);
+            }
+            switchChannel(dvrId);
         }
         
         // Kanal değiştir
@@ -3430,27 +3640,60 @@
                     currentStreamId = `${dvrId}_ch${channelNumber.toString().padStart(2, '0')}`;
                     isStreamActive = true;
                     updateStreamStatus('Aktif', 'success');
+                    // Backend may return the brand-specific RTSP actually used
+                    try {
+                        const currentRTSPUrl = document.getElementById('currentRTSPUrl');
+                        if (currentRTSPUrl && data.rtsp_url) {
+                            currentRTSPUrl.textContent = data.rtsp_url;
+                        }
+                    } catch (e) {}
                     
                     // Clear any existing interval
                     if (videoStreamInterval) {
                         clearInterval(videoStreamInterval);
                     }
                     
-                    // Start frame updates with current channel number - slower rate to avoid rate limiting
-                    videoStreamInterval = setInterval(() => {
-                        // Get current channel from modal
-                        const modal = document.getElementById('dvrLiveModal');
-                        if (modal) {
-                            const currentChannel = modal.getAttribute('data-channel-number');
-                            if (currentChannel) {
-                                updateVideoFrame(dvrId, parseInt(currentChannel));
+                    // Use MJPEG live stream for smooth video playback (25 FPS)
+                    try {
+                        const img = document.getElementById('dvrLiveImage');
+                        const mjpegUrl = `/api/company/{{ company_id }}/dvr/${dvrId}/mjpeg/${channelNumber}`;
+                        
+                        if (img) {
+                            img.style.display = 'block';
+                            img.className = 'live-video-element';
+                            // Start MJPEG streaming - this will continuously update the image
+                            img.src = mjpegUrl;
+                            console.log(`🎥 MJPEG stream started: ${mjpegUrl}`);
+                        }
+                        
+                        // No need for frame polling interval when using MJPEG
+                        if (videoStreamInterval) {
+                            clearInterval(videoStreamInterval);
+                            videoStreamInterval = null;
+                        }
+                        
+                    } catch (e) {
+                        console.warn('MJPEG setup failed, falling back to polling frames', e);
+                        // Fallback to frame polling if MJPEG fails
+                        if (img) {
+                            img.style.display = 'block';
+                            img.className = 'live-video-element';
+                        }
+                        
+                        videoStreamInterval = setInterval(() => {
+                            const modal = document.getElementById('dvrLiveModal');
+                            if (modal) {
+                                const currentChannel = modal.getAttribute('data-channel-number');
+                                if (currentChannel) {
+                                    updateVideoFrame(dvrId, parseInt(currentChannel));
+                                } else {
+                                    updateVideoFrame(dvrId, channelNumber);
+                                }
                             } else {
                                 updateVideoFrame(dvrId, channelNumber);
                             }
-                        } else {
-                            updateVideoFrame(dvrId, channelNumber);
-                        }
-                    }, 500); // 2 FPS instead of 10 FPS to avoid rate limiting
+                        }, 200); // Faster polling for fallback (5 FPS)
+                    }
                     
                     console.log(`✅ Video stream started: ${currentStreamId} for channel ${channelNumber}`);
                     
@@ -3464,6 +3707,8 @@
                 updateStreamStatus('Hata', 'danger');
             }
         }
+
+
         
         // Video stream'i durdur
         async function stopVideoStream() {
@@ -3512,7 +3757,7 @@
             if (!isStreamActive) return;
             
             try {
-                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/frame/${channelNumber}`);
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/frame/${channelNumber}?overlay=true`);
                 
                 if (!response.ok) {
                     if (response.status === 429) {
@@ -3531,6 +3776,8 @@
                     const img = document.getElementById('dvrLiveImage');
                     if (img) {
                         img.src = `data:image/jpeg;base64,${data.frame}`;
+                        // Ensure CSS class is maintained for consistent styling
+                        img.className = 'live-video-element';
                     }
                 } else {
                     console.log('⚠️ No frame data for channel:', channelNumber);

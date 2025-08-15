@@ -495,16 +495,17 @@ class DVRManager:
         
         # Try common channel numbers (1-16)
         for channel_num in range(1, dvr_config.max_channels + 1):
-            channel = DVRChannel(
+                channel = DVRChannel(
                 channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
                 name=f"Channel {channel_num}",
                 dvr_id=dvr_config.dvr_id,
                 channel_number=channel_num,
-                rtsp_path=f"/ch{channel_num:02d}/main",
+                    # Prefer proven working patterns
+                    rtsp_path=f"/user={dvr_config.username}&password={dvr_config.password}&channel={channel_num}&stream=0.sdp",
                 http_path=f"/ch{channel_num:02d}/snapshot"
             )
-            channels.append(channel)
-        
+        channels.append(channel)
+    
         logger.info(f"📺 Generic discovery: {len(channels)} channels configured")
         return channels
     
@@ -1523,11 +1524,29 @@ class ProfessionalCameraManager:
         # DVR Integration
         self.dvr_manager = DVRManager()
         
+        # 🎯 PPE Detection Integration
+        self.ppe_detector = None
+        self.detection_results: Dict[str, Dict] = {}
+        self.detection_frequency = 5  # Her 5 frame'de bir detection (daha sık)
+        
         # Performance tracking
         self.fps_counters: Dict[str, List[float]] = {}
         self.connection_stats: Dict[str, Dict] = {}
         
-        logger.info("🎥 Professional Camera Manager initialized with DVR support")
+        logger.info("🎥 Professional Camera Manager initialized with DVR support and PPE Detection")
+        
+        # PPE Detection Manager'ı yükle
+        self._init_ppe_detector()
+    
+    def _init_ppe_detector(self):
+        """PPE Detection Manager'ı başlat"""
+        try:
+            from models.sh17_model_manager import SH17ModelManager
+            self.ppe_detector = SH17ModelManager()
+            logger.info("✅ PPE Detection Manager yüklendi")
+        except Exception as e:
+            logger.warning(f"⚠️ PPE Detection Manager yüklenemedi: {e}")
+            self.ppe_detector = None
     
     def detect_ip_webcam_cameras(self, network_range: str = "192.168.1.0/24") -> List[Dict]:
         """Detect IP Webcam apps on network"""
@@ -2425,6 +2444,229 @@ class ProfessionalCameraManager:
         except Exception as e:
             logger.error(f"❌ Smart discovery failed: {e}")
             return []
+
+    def perform_ppe_detection(self, camera_id: str, frame: np.ndarray, sector: str = 'construction') -> Dict:
+        """IP Kamera için PPE Detection yap"""
+        try:
+            if self.ppe_detector is None:
+                logger.warning("⚠️ PPE Detection Manager yüklü değil")
+                return {
+                    'detections': [],
+                    'people_detected': 0,
+                    'compliance_rate': 0,
+                    'ppe_violations': [],
+                    'timestamp': time.time(),
+                    'sector': sector,
+                    'camera_id': camera_id
+                }
+            
+            # Frame'i PPE detection için hazırla
+            if frame is None or frame.size == 0:
+                logger.warning(f"⚠️ Geçersiz frame: {camera_id}")
+                return {
+                    'detections': [],
+                    'people_detected': 0,
+                    'compliance_rate': 0,
+                    'ppe_violations': [],
+                    'timestamp': time.time(),
+                    'sector': sector,
+                    'camera_id': camera_id
+                }
+            
+            # PPE Detection yap
+            detections = self.ppe_detector.detect_ppe(frame, sector, confidence=0.5)
+            
+            # Kişi sayısını hesapla
+            people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
+            
+            # Uyumluluk analizi
+            required_ppe = self.ppe_detector.get_sector_requirements(sector)
+            compliance_analysis = self.ppe_detector.analyze_compliance(detections, required_ppe)
+            
+            # Detection result'ı hazırla
+            detection_result = {
+                'detections': detections if isinstance(detections, list) else [],
+                'people_detected': people_detected,
+                'compliance_rate': int(compliance_analysis.get('score', 0) * 100) if isinstance(compliance_analysis, dict) else 100,
+                'ppe_violations': compliance_analysis.get('missing', []) if isinstance(compliance_analysis, dict) else [],
+                'timestamp': time.time(),
+                'sector': sector,
+                'camera_id': camera_id,
+                'model_type': 'SH17' if self.ppe_detector.is_sh17_available(sector) else 'Fallback'
+            }
+            
+            # Sonucu cache'e kaydet
+            self.detection_results[camera_id] = detection_result
+            
+            logger.info(f"🎯 PPE Detection completed for {camera_id}: People: {people_detected}, PPE: {len(detections)}")
+            return detection_result
+            
+        except Exception as e:
+            logger.error(f"❌ PPE Detection hatası {camera_id}: {e}")
+            return {
+                'detections': [],
+                'people_detected': 0,
+                'compliance_rate': 0,
+                'ppe_violations': [],
+                'timestamp': time.time(),
+                'sector': sector,
+                'camera_id': camera_id,
+                'error': str(e)
+            }
+    
+    def get_latest_detection_result(self, camera_id: str) -> Optional[Dict]:
+        """Kamera için en son detection sonucunu al"""
+        return self.detection_results.get(camera_id)
+    
+    def get_detection_overlay(self, camera_id: str) -> Optional[Dict]:
+        """Detection overlay bilgilerini al"""
+        return self.detection_results.get(camera_id)
+
+    def process_camera_stream(self, camera_id: str, frame: np.ndarray) -> np.ndarray:
+        """Kamera stream'ini işle ve PPE detection ekle"""
+        try:
+            if frame is None or frame.size == 0:
+                return frame
+            
+            # Frame counter'ı güncelle
+            if camera_id in self.connection_stats:
+                self.connection_stats[camera_id]['frames_captured'] += 1
+                self.connection_stats[camera_id]['last_frame_time'] = datetime.now()
+            
+            # 🎯 PPE DETECTION - Her 15 frame'de bir detection yap
+            frame_count = self.connection_stats.get(camera_id, {}).get('frames_captured', 0)
+            if frame_count % self.detection_frequency == 0:
+                try:
+                    # PPE Detection yap
+                    detection_result = self.perform_ppe_detection(camera_id, frame)
+                    
+                    # Frame'e overlay ekle
+                    if detection_result and 'detections' in detection_result:
+                        frame = self._draw_ppe_overlay(frame, detection_result)
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ PPE Detection overlay hatası {camera_id}: {e}")
+            
+            return frame
+            
+        except Exception as e:
+            logger.error(f"❌ Stream processing hatası {camera_id}: {e}")
+            return frame
+    
+    def _draw_ppe_overlay(self, frame: np.ndarray, detection_data: Dict) -> np.ndarray:
+        """PPE Detection overlay'ini frame'e çiz"""
+        try:
+            import cv2
+            
+            # Frame boyutunu al
+            frame_height, frame_width = frame.shape[:2]
+            
+            # Üst bilgi paneli - frame boyutuna göre ayarla
+            panel_width = min(640, frame_width)
+            cv2.rectangle(frame, (0, 0), (panel_width, 80), (0, 0, 0), -1)
+            cv2.rectangle(frame, (0, 0), (panel_width, 80), (255, 255, 255), 2)
+            
+            # Başlık
+            cv2.putText(frame, 'SmartSafe AI - PPE Detection', (10, 25), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            # İstatistikler
+            people_count = detection_data.get('people_detected', 0)
+            compliance_rate = detection_data.get('compliance_rate', 0)
+            violations = detection_data.get('ppe_violations', [])
+            
+            cv2.putText(frame, f'People: {people_count}', (10, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.putText(frame, f'Compliance: {compliance_rate}%', (120, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.putText(frame, f'Violations: {len(violations)}', (280, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            # Uyum durumu göstergesi - frame boyutuna göre ayarla
+            indicator_x = min(600, frame_width - 20)
+            color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            cv2.circle(frame, (indicator_x, 40), 15, color, -1)
+            
+            # 🎯 BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
+            detections = detection_data.get('detections', [])
+            if detections and isinstance(detections, list):
+                for detection in detections:
+                    if not isinstance(detection, dict):
+                        continue
+                        
+                    bbox = detection.get('bbox', [])
+                    class_name = detection.get('class_name', 'unknown')
+                    confidence = detection.get('confidence', 0.0)
+                    
+                    if len(bbox) == 4:  # x1, y1, x2, y2
+                        try:
+                            x1, y1, x2, y2 = [int(coord) for coord in bbox]
+                            
+                            # PPE türüne göre renk belirle
+                            if class_name == 'person':
+                                color = (255, 255, 255)  # Beyaz - Kişi
+                            elif class_name in ['helmet', 'hard_hat']:
+                                color = (0, 255, 0)      # Yeşil - Baret
+                            elif class_name in ['safety_vest', 'vest']:
+                                color = (0, 255, 255)    # Sarı - Yelek
+                            elif class_name in ['safety_shoes', 'shoes']:
+                                color = (255, 0, 255)    # Magenta - Ayakkabı
+                            elif class_name in ['gloves', 'glasses']:
+                                color = (255, 255, 0)    # Cyan - Eldiven/Gözlük
+                            else:
+                                color = (128, 128, 128)  # Gri - Diğer
+                            
+                            # Bounding box çiz
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                            
+                            # Etiket hazırla
+                            label = f"{class_name} {confidence:.2f}"
+                            
+                            # Etiket arka planı
+                            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+                            cv2.rectangle(frame, 
+                                        (x1, y1 - label_size[1] - 10),
+                                        (x1 + label_size[0], y1),
+                                        color, -1)
+                            
+                            # Etiket metni
+                            cv2.putText(frame, label, (x1, y1 - 5),
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        except Exception as bbox_error:
+                            logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
+                            continue
+            
+            # İhlal detayları
+            if violations and isinstance(violations, list):
+                y_offset = 100
+                for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
+                    if isinstance(violation, str):
+                        cv2.putText(frame, f'Violation {i+1}: {violation}', (10, y_offset), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                        y_offset += 20
+            
+            # Zaman damgası
+            timestamp = detection_data.get('timestamp', '')
+            if timestamp:
+                try:
+                    if isinstance(timestamp, (int, float)):
+                        # Unix timestamp'i string'e çevir
+                        import datetime
+                        timestamp_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        timestamp_str = str(timestamp)[:19]
+                    
+                    cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                except Exception as ts_error:
+                    logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
+            
+        except Exception as e:
+            logger.error(f"❌ PPE Overlay çizim hatası: {e}")
+        
+        return frame
 
 # Global camera manager instance
 camera_manager = ProfessionalCameraManager()
