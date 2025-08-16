@@ -127,6 +127,11 @@ class DatabaseAdapter:
                 cursor = conn.cursor()
             logger.info("🔧 Creating database tables...")
             
+            # Get database-specific placeholder
+            def get_placeholder(self):
+                """Get database-specific placeholder for parameterized queries"""
+                return '?' if self.db_type == 'sqlite' else '%s'
+            
             # Companies table
             if self.db_type == 'sqlite':
                 cursor.execute('''
@@ -139,7 +144,7 @@ class DatabaseAdapter:
                         phone TEXT,
                         address TEXT,
                         max_cameras INTEGER DEFAULT 25,
-                        subscription_type TEXT DEFAULT 'basic',
+                        subscription_type TEXT DEFAULT 'starter',
                         subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         subscription_end TIMESTAMP,
                         status TEXT DEFAULT 'active',
@@ -170,7 +175,7 @@ class DatabaseAdapter:
                         phone VARCHAR(50),
                         address TEXT,
                         max_cameras INTEGER DEFAULT 25,
-                        subscription_type VARCHAR(50) DEFAULT 'basic',
+                        subscription_type VARCHAR(50) DEFAULT 'starter',
                         subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         subscription_end TIMESTAMP,
                         status VARCHAR(50) DEFAULT 'active',
@@ -202,7 +207,7 @@ class DatabaseAdapter:
                         total_detections INTEGER DEFAULT 0,
                         compliance_rate REAL,
                         violations_count INTEGER DEFAULT 0,
-                        penalty_amount REAL DEFAULT 0,
+
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
@@ -216,7 +221,7 @@ class DatabaseAdapter:
                         total_detections INTEGER DEFAULT 0,
                         compliance_rate DECIMAL(5,2),
                         violations_count INTEGER DEFAULT 0,
-                        penalty_amount DECIMAL(10,2) DEFAULT 0,
+
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
@@ -230,7 +235,7 @@ class DatabaseAdapter:
                         mandatory_ppe TEXT,
                         optional_ppe TEXT,
                         detection_settings TEXT,
-                        penalty_settings TEXT,
+
                         compliance_requirements TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -244,7 +249,7 @@ class DatabaseAdapter:
                         mandatory_ppe JSON,
                         optional_ppe JSON,
                         detection_settings JSON,
-                        penalty_settings JSON,
+
                         compliance_requirements JSON,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -404,6 +409,10 @@ class DatabaseAdapter:
                 except:
                     pass  # Column already exists
                 try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN ppe_requirements TEXT')
+                except:
+                    pass  # Column already exists
+                try:
                     cursor.execute('ALTER TABLE companies ADD COLUMN email_notifications BOOLEAN DEFAULT TRUE')
                 except:
                     pass  # Column already exists
@@ -554,7 +563,7 @@ class DatabaseAdapter:
                                 worker_id TEXT,
                                 missing_ppe TEXT NOT NULL,
                                 violation_type TEXT NOT NULL,
-                                penalty REAL DEFAULT 0,
+
                                 confidence REAL DEFAULT 0,
                                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                                 FOREIGN KEY (company_id) REFERENCES companies (company_id)
@@ -616,7 +625,7 @@ class DatabaseAdapter:
                         worker_id VARCHAR(255),
                         missing_ppe VARCHAR(255) NOT NULL,
                         violation_type VARCHAR(255) NOT NULL,
-                        penalty DECIMAL(10,2) DEFAULT 0,
+
                         confidence DECIMAL(5,2) DEFAULT 0,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (company_id) REFERENCES companies (company_id)

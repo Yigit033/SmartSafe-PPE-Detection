@@ -29,7 +29,7 @@ class ConstructionWorker:
     department: str
     violation_count: int = 0
     last_violation: Optional[datetime] = None
-    total_penalty: float = 0.0
+
 
 @dataclass
 class PPEViolation:
@@ -40,7 +40,7 @@ class PPEViolation:
     missing_ppe: List[str]
     confidence_score: float
     image_path: str
-    penalty_amount: float = 0.0
+
 
 class ConstructionPPEConfig:
     """İnşaat sektörü PPE konfigürasyonu"""
@@ -50,19 +50,16 @@ class ConstructionPPEConfig:
         'helmet': {
             'name': 'Baret/Kask',
             'critical': True,
-            'penalty_per_violation': 100.0,
             'detection_classes': ['helmet']
         },
         'safety_vest': {
             'name': 'Güvenlik Yeleği',
             'critical': True,
-            'penalty_per_violation': 75.0,
             'detection_classes': ['safety_vest', 'safety_suit']
         },
         'safety_shoes': {
             'name': 'Güvenlik Ayakkabısı',
             'critical': True,
-            'penalty_per_violation': 50.0,
             'detection_classes': ['shoes']
         }
     }
@@ -85,9 +82,7 @@ class ConstructionPPEConfig:
     DETECTION_SETTINGS = {
         'confidence_threshold': 0.6,
         'detection_interval': 3,  # saniye
-        'violation_cooldown': 300,  # 5 dakika
-        'max_penalty_per_day': 500.0,
-        'warning_before_penalty': 2
+        'violation_cooldown': 300  # 5 dakika
     }
 
 class ConstructionPPEDetector:
@@ -119,7 +114,7 @@ class ConstructionPPEDetector:
                 position TEXT,
                 department TEXT,
                 violation_count INTEGER DEFAULT 0,
-                total_penalty REAL DEFAULT 0.0,
+
                 created_date TEXT,
                 last_violation TEXT
             )
@@ -135,7 +130,7 @@ class ConstructionPPEDetector:
                 missing_ppe TEXT,
                 confidence_score REAL,
                 image_path TEXT,
-                penalty_amount REAL DEFAULT 0.0,
+
                 processed BOOLEAN DEFAULT 0,
                 FOREIGN KEY (worker_id) REFERENCES workers (worker_id)
             )
@@ -148,7 +143,7 @@ class ConstructionPPEDetector:
                 total_detections INTEGER,
                 total_violations INTEGER,
                 compliance_rate REAL,
-                total_penalties REAL,
+
                 active_workers INTEGER
             )
         ''')
@@ -286,13 +281,7 @@ class ConstructionPPEDetector:
             is_compliant = len(missing_ppe) == 0
             compliance_score = self.calculate_compliance_score(ppe_status)
             
-            # Ceza hesaplama
-            penalty_amount = 0.0
-            if missing_ppe:
-                penalty_amount = sum(
-                    self.config.MANDATORY_PPE[ppe]['penalty_per_violation'] 
-                    for ppe in missing_ppe
-                )
+
             
             compliance_results.append({
                 'person_id': f"Person_{i+1}",
@@ -302,7 +291,7 @@ class ConstructionPPEDetector:
                 'missing_ppe': missing_ppe,
                 'compliant': is_compliant,
                 'compliance_score': compliance_score,
-                'penalty_amount': penalty_amount,
+
                 'violation_level': self.get_violation_level(missing_ppe)
             })
         
@@ -317,7 +306,7 @@ class ConstructionPPEDetector:
             'compliance_rate': (compliant_people / total_people * 100) if total_people > 0 else 0,
             'individual_results': compliance_results,
             'detected_ppe_summary': {k: len(v) for k, v in detected_ppe.items()},
-            'total_penalty': sum(r['penalty_amount'] for r in compliance_results)
+
         }
     
     def calculate_compliance_score(self, ppe_status: Dict[str, bool]) -> float:
@@ -386,27 +375,24 @@ class ConstructionPPEDetector:
             
             cursor.execute('''
                 INSERT INTO violations 
-                (timestamp, worker_id, camera_id, missing_ppe, confidence_score, image_path, penalty_amount)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (timestamp, worker_id, camera_id, missing_ppe, confidence_score, image_path)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 violation_data['timestamp'].isoformat(),
                 violation_data['worker_id'],
                 violation_data['camera_id'],
                 json.dumps(violation_data['missing_ppe']),
                 violation_data['confidence_score'],
-                violation_data.get('image_path', ''),
-                violation_data.get('penalty_amount', 0.0)
+                violation_data.get('image_path', '')
             ))
             
             # Çalışan ihlal sayısını güncelle
             cursor.execute('''
                 UPDATE workers 
                 SET violation_count = violation_count + 1,
-                    total_penalty = total_penalty + ?,
                     last_violation = ?
                 WHERE worker_id = ?
             ''', (
-                violation_data.get('penalty_amount', 0.0),
                 violation_data['timestamp'].isoformat(),
                 violation_data['worker_id']
             ))
@@ -521,11 +507,7 @@ class ConstructionPPEDetector:
             ''', (date,))
             total_violations = cursor.fetchone()[0]
             
-            cursor.execute('''
-                SELECT SUM(penalty_amount) FROM violations 
-                WHERE date(timestamp) = ?
-            ''', (date,))
-            total_penalties = cursor.fetchone()[0] or 0.0
+
             
             cursor.execute('SELECT COUNT(*) FROM workers')
             active_workers = cursor.fetchone()[0]
@@ -535,9 +517,7 @@ class ConstructionPPEDetector:
             return {
                 'date': date,
                 'total_violations': total_violations,
-                'total_penalties': total_penalties,
                 'active_workers': active_workers,
-                'avg_penalty_per_worker': total_penalties / active_workers if active_workers > 0 else 0,
                 'compliance_rate': max(0, 100 - (total_violations / active_workers * 10)) if active_workers > 0 else 100
             }
             
@@ -559,12 +539,11 @@ def main():
     # Sistem bilgileri
     print("\n📋 İnşaat Sektörü PPE Kuralları:")
     for ppe_type, ppe_info in config.MANDATORY_PPE.items():
-        print(f"  ✅ {ppe_info['name']}: {ppe_info['penalty_per_violation']} TL ceza")
+        print(f"  ✅ {ppe_info['name']}")
     
     print(f"\n⚙️ Sistem Ayarları:")
     print(f"  - Tespit Eşiği: {config.DETECTION_SETTINGS['confidence_threshold']}")
     print(f"  - Tespit Aralığı: {config.DETECTION_SETTINGS['detection_interval']} saniye")
-    print(f"  - Günlük Max Ceza: {config.DETECTION_SETTINGS['max_penalty_per_day']} TL")
     
     # Demo test
     print(f"\n🎯 Test için demo fotoğrafları yükleniyor...")
@@ -586,7 +565,7 @@ def main():
                     print(f"  ✅ Uyumlu: {analysis['compliant_people']}")
                     print(f"  ❌ İhlal: {analysis['violation_people']}")
                     print(f"  📊 Uyum Oranı: {analysis['compliance_rate']:.1f}%")
-                    print(f"  💰 Toplam Ceza: {analysis['total_penalty']:.0f} TL")
+
                     
                     # İhlal detayları
                     for person_result in analysis['individual_results']:
@@ -599,7 +578,7 @@ def main():
     daily_report = detector.generate_daily_report()
     print(f"  📅 Tarih: {daily_report.get('date', 'N/A')}")
     print(f"  🚨 Toplam İhlal: {daily_report.get('total_violations', 0)}")
-    print(f"  💰 Toplam Ceza: {daily_report.get('total_penalties', 0):.0f} TL")
+
     print(f"  👥 Aktif Çalışan: {daily_report.get('active_workers', 0)}")
     print(f"  📈 Uyum Oranı: {daily_report.get('compliance_rate', 0):.1f}%")
 

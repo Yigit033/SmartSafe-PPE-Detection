@@ -385,7 +385,7 @@ class MultiTenantDatabase:
                     phone TEXT,
                     address TEXT,
                     max_cameras INTEGER DEFAULT 25,
-                    subscription_type TEXT DEFAULT 'basic',
+                    subscription_type TEXT DEFAULT 'starter',
                     subscription_start DATETIME DEFAULT CURRENT_TIMESTAMP,
                     subscription_end DATETIME,
                     status TEXT DEFAULT 'active',

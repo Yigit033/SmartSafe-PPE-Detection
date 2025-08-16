@@ -237,13 +237,7 @@ class DashboardManager:
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="stat-card text-center">
-                    <div class="stat-icon text-danger">
-                        <i class="fas fa-lira-sign"></i>
-                    </div>
-                    <div class="stat-value compliance-danger" id="total-penalty">{{ stats.total_penalty }} TL</div>
-                    <div class="stat-label">Toplam Ceza</div>
-                </div>
+
             </div>
         </div>
 
@@ -312,11 +306,7 @@ class DashboardManager:
                                     <span class="badge bg-danger ppe-badge">{{ missing_ppe }}</span>
                                     {% endfor %}
                                 </div>
-                                <div class="mt-2">
-                                    <small class="text-danger">
-                                        <i class="fas fa-lira-sign"></i> {{ violation.penalty }} TL
-                                    </small>
-                                </div>
+
                             </div>
                             {% endfor %}
                         </div>
@@ -341,7 +331,7 @@ class DashboardManager:
                                     <i class="fas fa-hard-hat fa-3x text-primary mb-2"></i>
                                     <h6>Baret/Kask</h6>
                                     <span class="badge bg-danger">Zorunlu</span>
-                                    <p class="mt-2 mb-0">Ceza: 100 TL</p>
+
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -349,7 +339,7 @@ class DashboardManager:
                                     <i class="fas fa-tshirt fa-3x text-warning mb-2"></i>
                                     <h6>Güvenlik Yeleği</h6>
                                     <span class="badge bg-danger">Zorunlu</span>
-                                    <p class="mt-2 mb-0">Ceza: 75 TL</p>
+
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -357,7 +347,7 @@ class DashboardManager:
                                     <i class="fas fa-socks fa-3x text-success mb-2"></i>
                                     <h6>Güvenlik Ayakkabısı</h6>
                                     <span class="badge bg-danger">Zorunlu</span>
-                                    <p class="mt-2 mb-0">Ceza: 50 TL</p>
+
                                 </div>
                             </div>
                         </div>
@@ -377,7 +367,7 @@ class DashboardManager:
                     document.getElementById('total-workers').textContent = data.total_workers;
                     document.getElementById('compliance-rate').textContent = data.compliance_rate + '%';
                     document.getElementById('violations-today').textContent = data.violations_today;
-                    document.getElementById('total-penalty').textContent = data.total_penalty + ' TL';
+
                 });
         }
 
@@ -541,14 +531,10 @@ def calculate_real_stats():
         # İstatistikleri hesapla
         avg_compliance_rate = sum(compliance_rates) / len(compliance_rates) if compliance_rates else 0
         
-        # Ceza hesapla (basit hesaplama)
-        total_penalty = total_violations * 75
-        
         return {
             'total_workers': total_workers,
             'compliance_rate': round(avg_compliance_rate, 1),
-            'violations_today': total_violations,
-            'total_penalty': total_penalty
+            'violations_today': total_violations
         }
     except Exception as e:
         print(f"İstatistik hesaplama hatası: {e}")
@@ -556,8 +542,7 @@ def calculate_real_stats():
         return {
             'total_workers': 0,
             'compliance_rate': 0,
-            'violations_today': 0,
-            'total_penalty': 0
+            'violations_today': 0
         }
 
 def get_recent_violations():
@@ -582,8 +567,7 @@ def get_recent_violations():
                             recent_violations.append({
                                 'worker_name': violation.get('worker_id', 'Bilinmeyen Çalışan'),
                                 'time': datetime.now().strftime('%H:%M'),
-                                'missing_ppe': violation.get('missing_ppe', ['Bilinmeyen']),
-                                'penalty': len(violation.get('missing_ppe', [])) * 75
+                                'missing_ppe': violation.get('missing_ppe', ['Bilinmeyen'])
                             })
                         
                         # Sonuçları geri koy
@@ -641,14 +625,10 @@ def get_stats():
         # İstatistikleri hesapla
         avg_compliance_rate = sum(compliance_rates) / len(compliance_rates) if compliance_rates else 0
         
-        # Ceza hesapla (basit hesaplama)
-        total_penalty = total_violations * 75  # Ortalama ceza miktarı
-        
         stats = {
             'total_workers': total_workers,
             'compliance_rate': round(avg_compliance_rate, 1),
-            'violations_today': total_violations,
-            'total_penalty': total_penalty
+            'violations_today': total_violations
         }
         
         return jsonify(stats)
@@ -658,7 +638,7 @@ def get_stats():
             'total_workers': 0,
             'compliance_rate': 0,
             'violations_today': 0,
-            'total_penalty': 0
+
         })
 
 @app.route('/api/start-detection', methods=['POST'])
@@ -1011,12 +991,7 @@ def draw_sector_detection_results(image, detection_result):
         cv2.putText(result_image, f"İhlal: {len(violations)}", 
                    (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
-        # Sektörel özel bilgiler
-        sector_specific = detection_result['analysis'].get('sector_specific', {})
-        if sector_specific:
-            penalty_amount = sector_specific.get('penalty_amount', 0)
-            cv2.putText(result_image, f"Ceza: {penalty_amount:.0f} TL", 
-                       (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+
         
         # Zaman damgası
         timestamp = datetime.now().strftime("%H:%M:%S")

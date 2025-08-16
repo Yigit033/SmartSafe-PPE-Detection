@@ -1867,9 +1867,27 @@ Mesaj:
                 # Abonelik planı seçimi
                 subscription_plan = request.form.get('subscription_plan', 'starter')
                 plan_prices = {
-                    'starter': {'monthly': 99, 'cameras': 25},
-                    'professional': {'monthly': 299, 'cameras': 100},
-                    'enterprise': {'monthly': 599, 'cameras': 500}
+                    'starter': {
+                        'name': 'Starter',
+                        'monthly': 99,
+                        'cameras': 25,
+                        'currency': 'USD',
+                        'features': ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik']
+                    },
+                    'professional': {
+                        'name': 'Professional',
+                        'monthly': 299,
+                        'cameras': 100,
+                        'currency': 'USD',
+                        'features': ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler']
+                    },
+                    'enterprise': {
+                        'name': 'Enterprise',
+                        'monthly': 599,
+                        'cameras': 500,
+                        'currency': 'USD',
+                        'features': ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı']
+                    }
                 }
                 
                 if subscription_plan in plan_prices:
@@ -5273,13 +5291,11 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                return redirect(f'/company/{company_id}/login')
+                    return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
                     return redirect(f'/company/{company_id}/login')
-                else:
-                    logger.info(f"✅ Session validation successful for subscription page")
                 
                 logger.info(f"✅ Session validation successful for subscription page")
                 return render_template('subscription_page.html', company_id=company_id, user_data=user_data)
@@ -5321,36 +5337,108 @@ Mesaj:
                 
                 data = request.json
                 required_ppe = data.get('required_ppe', [])
+                optional_ppe = data.get('optional_ppe', [])
+                confidence_threshold = data.get('confidence_threshold', 0.6)
+                detection_interval = data.get('detection_interval', 3)
+
                 
-                # Geçerli PPE türleri
-                valid_ppe_types = ['helmet', 'vest', 'glasses', 'gloves', 'shoes', 'mask']
+                # Geçerli PPE türleri - tam liste (24 tane) + Eski kayıtlar için uyumluluk
+                valid_ppe_types = [
+                    'helmet', 'safety_vest', 'safety_shoes', 'gloves', 'glasses', 'hairnet',
+                    'face_mask', 'apron', 'safety_suit', 'chemical_suit', 'respiratory_protection',
+                    'special_gloves', 'insulated_gloves', 'dielectric_boots', 'arc_flash_suit',
+                    'ear_protection', 'life_jacket', 'marine_helmet', 'waterproof_shoes',
+                    'aviation_helmet', 'reflective_vest', 'aviation_shoes', 'safety_harness',
+                    'safety_glasses'
+                ]
+                
+                # Eski kayıtlar için uyumluluk mapping'i
+                ppe_type_mapping = {
+                    'vest': 'safety_vest',
+                    'shoes': 'safety_shoes',
+                    'mask': 'face_mask',
+                    'suit': 'safety_suit',
+                    'boots': 'safety_shoes',
+                    'hat': 'helmet',
+                    'cap': 'helmet'
+                }
                 
                 # Validation
-                if not required_ppe:
+                if not required_ppe and not optional_ppe:
                     return jsonify({'success': False, 'error': 'En az bir PPE türü seçmelisiniz'}), 400
                 
-                for ppe_type in required_ppe:
-                    if ppe_type not in valid_ppe_types:
+                # PPE türlerini validate et ve eski kayıtları dönüştür
+                all_ppe = required_ppe + optional_ppe
+                normalized_ppe = []
+                
+                for ppe_type in all_ppe:
+                    # Eski kayıtları yeni formata dönüştür
+                    if ppe_type in ppe_type_mapping:
+                        normalized_ppe.append(ppe_type_mapping[ppe_type])
+                        logger.info(f"🔄 PPE türü dönüştürüldü: {ppe_type} → {ppe_type_mapping[ppe_type]}")
+                    elif ppe_type in valid_ppe_types:
+                        normalized_ppe.append(ppe_type)
+                    else:
                         return jsonify({'success': False, 'error': f'Geçersiz PPE türü: {ppe_type}'}), 400
+                
+                # Normalize edilmiş PPE'leri güncelle
+                required_ppe = [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in required_ppe]
+                optional_ppe = [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in optional_ppe]
+                
+                # Duplicate kontrolü
+                if set(required_ppe) & set(optional_ppe):
+                    return jsonify({'success': False, 'error': 'Bir PPE türü hem zorunlu hem opsiyonel olamaz'}), 400
+                
+                # PPE konfigürasyonu oluştur
+                ppe_config = {
+                    'required': required_ppe,
+                    'optional': optional_ppe
+                }
+                
+                # Compliance ayarları
+                compliance_settings = {
+                    'confidence_threshold': float(confidence_threshold),
+                    'detection_interval': int(detection_interval),
+                    'updated_at': datetime.now().isoformat()
+                }
                 
                 # Database güncelleme
                 conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
+                # Eski PPE türlerini temizle ve yeni formata dönüştür
+                cleaned_ppe_config = {
+                    'required': [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in ppe_config['required']],
+                    'optional': [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in ppe_config['optional']]
+                }
+                
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 cursor.execute(f'''
                     UPDATE companies 
-                    SET required_ppe = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                    SET required_ppe = {placeholder},
+                        ppe_requirements = {placeholder},
+                        compliance_settings = {placeholder},
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE company_id = {placeholder}
-                ''', (json.dumps(required_ppe), company_id))
+                ''', (json.dumps(cleaned_ppe_config), json.dumps(cleaned_ppe_config), json.dumps(compliance_settings), company_id))
+                
+                if cursor.rowcount == 0:
+                    conn.close()
+                    return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
                 
                 conn.commit()
                 conn.close()
                 
+                logger.info(f"✅ PPE config updated for company {company_id}: {len(cleaned_ppe_config['required'])} required, {len(cleaned_ppe_config['optional'])} optional")
+                
                 return jsonify({
                     'success': True,
-                    'message': 'PPE konfigürasyonu güncellendi',
-                    'required_ppe': required_ppe
+                    'message': 'PPE konfigürasyonu başarıyla güncellendi',
+                    'config': {
+                        'required': cleaned_ppe_config['required'],
+                        'optional': cleaned_ppe_config['optional'],
+                        'settings': compliance_settings
+                    }
                 })
                 
             except Exception as e:
@@ -5359,7 +5447,7 @@ Mesaj:
 
         @self.app.route('/api/company/<company_id>/ppe-config', methods=['GET'])
         def get_ppe_config(company_id):
-            """Get company PPE configuration"""
+            """Get comprehensive company PPE configuration with sector-specific options"""
             try:
                 # Session kontrolü
                 if not self.validate_session():
@@ -5368,12 +5456,194 @@ Mesaj:
                 if session.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 403
                 
-                required_ppe = self.db.get_company_ppe_requirements(company_id)
+                # Şirket bilgilerini al
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
                 
-                return jsonify({
-                    'success': True,
-                    'required_ppe': required_ppe
-                })
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'SELECT required_ppe, sector, ppe_requirements, compliance_settings FROM companies WHERE company_id = {placeholder}', (company_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    required_ppe_json, sector, ppe_requirements, compliance_settings = result
+                    
+                    # Eski kayıtlar için uyumluluk mapping'i
+                    ppe_type_mapping = {
+                        'vest': 'safety_vest',
+                        'shoes': 'safety_shoes',
+                        'mask': 'face_mask',
+                        'suit': 'safety_suit',
+                        'boots': 'safety_shoes',
+                        'hat': 'helmet',
+                        'cap': 'helmet'
+                    }
+                    
+                    # Mevcut PPE konfigürasyonunu parse et - önce ppe_requirements'i dene
+                    try:
+                        if ppe_requirements:
+                            ppe_config = json.loads(ppe_requirements)
+                            if isinstance(ppe_config, dict):
+                                current_required = ppe_config.get('required', [])
+                                current_optional = ppe_config.get('optional', [])
+                            else:
+                                current_required = ppe_config if isinstance(ppe_config, list) else []
+                                current_optional = []
+                        elif required_ppe_json:
+                            # Fallback to required_ppe column
+                            ppe_config = json.loads(required_ppe_json)
+                            if isinstance(ppe_config, dict):
+                                current_required = ppe_config.get('required', [])
+                                current_optional = ppe_config.get('optional', [])
+                            else:
+                                current_required = ppe_config if isinstance(ppe_config, list) else []
+                                current_optional = []
+                        else:
+                            current_required = []
+                            current_optional = []
+                            
+                        # PPE türlerini normalize et
+                        current_required = [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in current_required]
+                        current_optional = [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in current_optional]
+                        
+                    except (json.JSONDecodeError, TypeError):
+                        current_required = []
+                        current_optional = []
+                    
+                    # Şirket kayıt sayfası ile uyumlu endüstri bazlı PPE türleri
+                    all_ppe_types = {
+                        # İnşaat Sektörü PPE'leri
+                        'helmet': {'name': 'Baret/Kask', 'icon': 'fas fa-hard-hat', 'category': 'head', 'sectors': ['construction', 'manufacturing', 'warehouse', 'energy', 'petrochemical', 'marine', 'aviation']},
+                        'safety_vest': {'name': 'Güvenlik Yeleği', 'icon': 'fas fa-vest', 'category': 'body', 'sectors': ['construction', 'manufacturing', 'warehouse', 'energy', 'marine', 'aviation']},
+                        'safety_shoes': {'name': 'Güvenlik Ayakkabısı', 'icon': 'fas fa-shoe-prints', 'category': 'feet', 'sectors': ['construction', 'manufacturing', 'warehouse', 'petrochemical']},
+                        'gloves': {'name': 'Güvenlik Eldiveni', 'icon': 'fas fa-hand-paper', 'category': 'hands', 'sectors': ['construction', 'chemical', 'food', 'manufacturing', 'warehouse', 'marine', 'aviation']},
+                        'glasses': {'name': 'Güvenlik Gözlüğü', 'icon': 'fas fa-glasses', 'category': 'eyes', 'sectors': ['construction', 'chemical', 'energy', 'petrochemical', 'aviation']},
+                        
+                        # Gıda Sektörü Özel PPE'leri
+                        'hairnet': {'name': 'Bone/Saç Filesi', 'icon': 'fas fa-user-nurse', 'category': 'head', 'sectors': ['food']},
+                        'face_mask': {'name': 'Hijyen Maskesi', 'icon': 'fas fa-head-side-mask', 'category': 'respiratory', 'sectors': ['food', 'chemical']},
+                        'apron': {'name': 'Hijyen Önlüğü', 'icon': 'fas fa-tshirt', 'category': 'body', 'sectors': ['food']},
+                        
+                        # Kimya Sektörü Özel PPE'leri
+                        'safety_suit': {'name': 'Kimyasal Tulum', 'icon': 'fas fa-user-shield', 'category': 'full_body', 'sectors': ['chemical', 'petrochemical']},
+                        'chemical_suit': {'name': 'Kimyasal Koruyucu Tulum', 'icon': 'fas fa-tshirt', 'category': 'full_body', 'sectors': ['petrochemical']},
+                        'respiratory_protection': {'name': 'Solunum Koruyucu', 'icon': 'fas fa-head-side-mask', 'category': 'respiratory', 'sectors': ['petrochemical']},
+                        'special_gloves': {'name': 'Özel Kimyasal Eldiven', 'icon': 'fas fa-hand-paper', 'category': 'hands', 'sectors': ['petrochemical']},
+                        
+                        # Enerji Sektörü Özel PPE'leri
+                        'insulated_gloves': {'name': 'İzole Eldiven', 'icon': 'fas fa-hand-paper', 'category': 'hands', 'sectors': ['energy']},
+                        'dielectric_boots': {'name': 'Dielektrik Ayakkabı', 'icon': 'fas fa-shoe-prints', 'category': 'feet', 'sectors': ['energy']},
+                        'arc_flash_suit': {'name': 'Ark Flaş Tulumu', 'icon': 'fas fa-tshirt', 'category': 'full_body', 'sectors': ['energy']},
+                        'ear_protection': {'name': 'Kulak Koruyucu', 'icon': 'fas fa-headphones', 'category': 'hearing', 'sectors': ['energy', 'aviation']},
+                        
+                        # Denizcilik Sektörü Özel PPE'leri
+                        'life_jacket': {'name': 'Can Yeleği', 'icon': 'fas fa-life-ring', 'category': 'safety', 'sectors': ['marine']},
+                        'marine_helmet': {'name': 'Denizci Kaskı', 'icon': 'fas fa-hard-hat', 'category': 'head', 'sectors': ['marine']},
+                        'waterproof_shoes': {'name': 'Su Geçirmez Ayakkabı', 'icon': 'fas fa-shoe-prints', 'category': 'feet', 'sectors': ['marine']},
+                        
+                        # Havacılık Sektörü Özel PPE'leri
+                        'aviation_helmet': {'name': 'Havacılık Kaskı', 'icon': 'fas fa-hard-hat', 'category': 'head', 'sectors': ['aviation']},
+                        'reflective_vest': {'name': 'Reflektör Yelek', 'icon': 'fas fa-vest', 'category': 'body', 'sectors': ['aviation']},
+                        'aviation_shoes': {'name': 'Özel Havacılık Ayakkabısı', 'icon': 'fas fa-shoe-prints', 'category': 'feet', 'sectors': ['aviation']},
+                        
+                        # Genel PPE'ler
+                        'safety_harness': {'name': 'Emniyet Kemeri', 'icon': 'fas fa-user-shield', 'category': 'fall_protection', 'sectors': ['construction']},
+                        'safety_glasses': {'name': 'Güvenlik Gözlüğü', 'icon': 'fas fa-glasses', 'category': 'eyes', 'sectors': ['energy', 'petrochemical', 'aviation']}
+                    }
+                    
+                    # Şirket kayıt sayfası ile tam uyumlu sektör önerileri
+                    sector_recommendations = {
+                        'construction': {
+                            'required': ['helmet', 'safety_vest', 'safety_shoes', 'safety_harness'], 
+                            'optional': ['gloves', 'glasses']
+                        },
+                        'manufacturing': {
+                            'required': ['helmet', 'safety_vest', 'safety_shoes'], 
+                            'optional': ['gloves']
+                        },
+                        'chemical': {
+                            'required': ['gloves', 'glasses', 'face_mask', 'safety_suit'], 
+                            'optional': ['safety_shoes']
+                        },
+                        'food': {
+                            'required': ['hairnet', 'face_mask', 'apron'], 
+                            'optional': ['gloves', 'safety_shoes']
+                        },
+                        'warehouse': {
+                            'required': ['helmet', 'safety_vest', 'safety_shoes'], 
+                            'optional': ['gloves']
+                        },
+                        'energy': {
+                            'required': ['insulated_gloves', 'dielectric_boots', 'arc_flash_suit', 'helmet'], 
+                            'optional': ['safety_glasses', 'ear_protection']
+                        },
+                        'petrochemical': {
+                            'required': ['chemical_suit', 'respiratory_protection', 'special_gloves', 'helmet'], 
+                            'optional': ['safety_glasses', 'safety_shoes']
+                        },
+                        'marine': {
+                            'required': ['life_jacket', 'marine_helmet', 'waterproof_shoes', 'safety_vest'], 
+                            'optional': ['gloves', 'safety_glasses']
+                        },
+                        'aviation': {
+                            'required': ['aviation_helmet', 'reflective_vest', 'aviation_shoes', 'safety_glasses'], 
+                            'optional': ['ear_protection', 'gloves']
+                        }
+                    }
+                    
+                    recommendations = sector_recommendations.get(sector, {'required': ['helmet', 'safety_vest'], 'optional': ['gloves']})
+                    
+                    # Sektöre uygun PPE'leri filtrele
+                    sector_specific_ppe = {}
+                    for ppe_type, ppe_info in all_ppe_types.items():
+                        if sector in ppe_info.get('sectors', []):
+                            sector_specific_ppe[ppe_type] = ppe_info
+                    
+                    # Compliance settings'i parse et
+                    try:
+                        if compliance_settings:
+                            compliance_data = json.loads(compliance_settings)
+                        else:
+                            compliance_data = {
+                                'confidence_threshold': 0.6,
+                                'detection_interval': 3
+                            }
+                    except (json.JSONDecodeError, TypeError):
+                        compliance_data = {
+                            'confidence_threshold': 0.6,
+                            'detection_interval': 3
+                        }
+                    
+                    # Sektör bilgileri
+                    sector_info = {
+                        'construction': {'name': 'İnşaat', 'icon': 'fas fa-hard-hat', 'emoji': '🏗️'},
+                        'manufacturing': {'name': 'İmalat', 'icon': 'fas fa-industry', 'emoji': '🏭'},
+                        'chemical': {'name': 'Kimya', 'icon': 'fas fa-flask', 'emoji': '⚗️'},
+                        'food': {'name': 'Gıda & İçecek', 'icon': 'fas fa-utensils', 'emoji': '🍕'},
+                        'warehouse': {'name': 'Depo/Lojistik', 'icon': 'fas fa-warehouse', 'emoji': '📦'},
+                        'energy': {'name': 'Enerji', 'icon': 'fas fa-bolt', 'emoji': '⚡'},
+                        'petrochemical': {'name': 'Petrokimya', 'icon': 'fas fa-oil-can', 'emoji': '🛢️'},
+                        'marine': {'name': 'Denizcilik & Tersane', 'icon': 'fas fa-ship', 'emoji': '🚢'},
+                        'aviation': {'name': 'Havacılık', 'icon': 'fas fa-plane', 'emoji': '✈️'}
+                    }
+                    
+                    conn.close()
+                    return jsonify({
+                        'success': True,
+                                'current_config': {
+                                    'required': current_required,
+                                    'optional': current_optional
+                                },
+                                'sector': sector,
+                                'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
+                                'all_ppe_types': all_ppe_types,
+                                'sector_specific_ppe': sector_specific_ppe,
+                                'sector_recommendations': recommendations,
+                                'compliance_settings': compliance_data,
+                                'required_ppe': current_required  # Backward compatibility
+                            })
+                else:
+                    conn.close()
+                    return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
                 
             except Exception as e:
                 logger.error(f"❌ PPE config getirme hatası: {e}")
@@ -5527,9 +5797,27 @@ Mesaj:
                 
                 # Plan fiyatları
                 plan_prices = {
-                    'starter': {'monthly': 99, 'cameras': 25, 'name': 'Starter'},
-                    'professional': {'monthly': 299, 'cameras': 100, 'name': 'Professional'},
-                    'enterprise': {'monthly': 599, 'cameras': 500, 'name': 'Enterprise'}
+                    'starter': {
+                        'name': 'Starter',
+                        'monthly': 99,
+                        'cameras': 25,
+                        'currency': 'USD',
+                        'features': ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik']
+                    },
+                    'professional': {
+                        'name': 'Professional',
+                        'monthly': 299,
+                        'cameras': 100,
+                        'currency': 'USD',
+                        'features': ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler']
+                    },
+                    'enterprise': {
+                        'name': 'Enterprise',
+                        'monthly': 599,
+                        'cameras': 500,
+                        'currency': 'USD',
+                        'features': ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı']
+                    }
                 }
                 
                 if new_plan not in plan_prices:
@@ -6773,10 +7061,7 @@ Mesaj:
             
             # Sektörel özel bilgiler
             sector_specific = detection_result['analysis'].get('sector_specific', {})
-            if sector_specific:
-                penalty_amount = sector_specific.get('penalty_amount', 0)
-                cv2.putText(result_image, f"Ceza: {penalty_amount:.0f} TL", 
-                           (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+
             
             # Zaman damgası
             timestamp = datetime.now().strftime("%H:%M:%S")
@@ -7305,7 +7590,7 @@ Mesaj:
                                                            id="plan_starter" value="starter" checked>
                                                     <label class="form-check-label" for="plan_starter">
                                                         <strong>Starter</strong>
-                                                        <br><small class="text-muted">₺99/ay - 5 kamera</small>
+                                                        <br><small class="text-muted">$99/ay - 25 kamera</small>
                                                     </label>
                                                 </div>
                                             </div>
@@ -7315,7 +7600,7 @@ Mesaj:
                                                            id="plan_professional" value="professional">
                                                     <label class="form-check-label" for="plan_professional">
                                                         <strong>Professional</strong>
-                                                        <br><small class="text-muted">₺299/ay - 15 kamera</small>
+                                                        <br><small class="text-muted">$299/ay - 100 kamera</small>
                                                         <span class="badge bg-primary ms-1">Popüler</span>
                                                     </label>
                                                 </div>
@@ -7326,7 +7611,7 @@ Mesaj:
                                                            id="plan_enterprise" value="enterprise">
                                                     <label class="form-check-label" for="plan_enterprise">
                                                         <strong>Enterprise</strong>
-                                                        <br><small class="text-muted">₺599/ay - 50 kamera</small>
+                                                        <br><small class="text-muted">$599/ay - 500 kamera</small>
                                                     </label>
                                                 </div>
                                             </div>
@@ -8034,7 +8319,7 @@ Mesaj:
                                                 <h4 class="fw-bold text-dark mb-1">Starter</h4>
                                                 <p class="text-muted mb-3">Küçük işletmeler için AI destekli PPE tespiti</p>
                                                 <div class="mb-3">
-                                                    <span class="display-6 fw-bold text-primary">₺99</span>
+                                                    <span class="display-6 fw-bold text-primary">$99</span>
                                                     <span class="text-muted">/ay</span>
                                                 </div>
                                             </div>
@@ -8044,13 +8329,13 @@ Mesaj:
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #198754 !important;">
                                                             <i class="fas fa-video text-white"></i>
                                                         </div>
-                                                        <span class="fw-semibold">5 Kamera</span>
+                                                        <span class="fw-semibold">25 Kamera</span>
                                                     </div>
                                                     <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #0dcaf0 !important;">
                                                             <i class="fas fa-brain text-white"></i>
                                                         </div>
-                                                        <span class="fw-semibold">AI Tespit (24.7 FPS)</span>
+                                                        <span class="fw-semibold">AI Tespit (24/7)</span>
                                                     </div>
                                                     <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #ffc107 !important;">
@@ -8089,7 +8374,7 @@ Mesaj:
                                                 <h4 class="fw-bold text-white mb-1">Professional</h4>
                                                 <p class="text-white-50 mb-3">Büyüyen işletmeler için gelişmiş AI tespit sistemi</p>
                                                 <div class="mb-3">
-                                                    <span class="display-6 fw-bold text-white">₺299</span>
+                                                    <span class="display-6 fw-bold text-white">$299</span>
                                                     <span class="text-white-50">/ay</span>
                                                 </div>
                                             </div>
@@ -8099,13 +8384,13 @@ Mesaj:
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #198754 !important;">
                                                             <i class="fas fa-video text-white"></i>
                                                         </div>
-                                                        <span class="fw-semibold">15 Kamera</span>
+                                                        <span class="fw-semibold">100 Kamera</span>
                                                     </div>
                                                     <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #0dcaf0 !important;">
                                                             <i class="fas fa-brain text-white"></i>
                                                         </div>
-                                                        <span class="fw-semibold">AI Tespit (24.7 FPS)</span>
+                                                        <span class="fw-semibold">AI Tespit (24/7)</span>
                                                     </div>
                                                     <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #ffc107 !important;">
@@ -8145,7 +8430,7 @@ Mesaj:
                                                 <h4 class="fw-bold text-white mb-1">Enterprise</h4>
                                                 <p class="text-white-50 mb-3">Büyük kurumlar için endüstriyel AI tespit sistemi</p>
                                                 <div class="mb-3">
-                                                    <span class="display-6 fw-bold text-white">₺599</span>
+                                                    <span class="display-6 fw-bold text-white">$599</span>
                                                     <span class="text-white-50">/ay</span>
                                                 </div>
                                             </div>
@@ -8155,13 +8440,13 @@ Mesaj:
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #198754 !important;">
                                                             <i class="fas fa-video text-white"></i>
                                                         </div>
-                                                        <span class="fw-semibold">50 Kamera</span>
+                                                        <span class="fw-semibold">500 Kamera</span>
                                                     </div>
                                                     <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #0dcaf0 !important;">
                                                             <i class="fas fa-brain text-white"></i>
                                                         </div>
-                                                        <span class="fw-semibold">AI Tespit (24.7 FPS)</span>
+                                                        <span class="fw-semibold">AI Tespit (24/7)</span>
                                                     </div>
                                                     <div class="d-flex align-items-center justify-content-center mb-3" style="height: 50px;">
                                                         <div class="rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background-color: #ffc107 !important;">
@@ -8212,17 +8497,17 @@ Mesaj:
                                                             <td class="border-0 fw-semibold" style="width: 40%;">
                                                                 <i class="fas fa-video text-primary me-2"></i>Kamera Sayısı
                                                             </td>
-                                                            <td class="border-0 text-center">5</td>
-                                                            <td class="border-0 text-center fw-bold text-warning">15</td>
-                                                            <td class="border-0 text-center">50</td>
+                                                            <td class="border-0 text-center">25</td>
+                                                            <td class="border-0 text-center fw-bold text-warning">100</td>
+                                                            <td class="border-0 text-center">500</td>
                                                         </tr>
                                                         <tr class="border-0">
                                                             <td class="border-0 fw-semibold">
                                                                 <i class="fas fa-brain text-primary me-2"></i>AI Tespit Hızı
                                                             </td>
-                                                            <td class="border-0 text-center">24.7 FPS</td>
-                                                            <td class="border-0 text-center fw-bold text-warning">24.7 FPS</td>
-                                                            <td class="border-0 text-center">24.7 FPS</td>
+                                                            <td class="border-0 text-center">24/7</td>
+                                                            <td class="border-0 text-center fw-bold text-warning">24/7</td>
+                                                            <td class="border-0 text-center">24/7</td>
                                                         </tr>
                                                         <tr class="border-0">
                                                             <td class="border-0 fw-semibold">
@@ -10801,139 +11086,69 @@ Mesaj:
                         <div id="ppe-config-section" class="settings-section" style="display: none;">
                             <div class="form-section">
                                 <h5><i class="fas fa-hard-hat"></i> PPE Konfigürasyonu</h5>
-                                <p class="text-muted">Sektörünüze göre zorunlu ve opsiyonel PPE ekipmanlarını ayarlayın.</p>
+                                <p class="text-muted">Şirket kayıt sırasında seçtiğiniz PPE'leri yönetin ve ek konfigürasyonlar yapın.</p>
                                 
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle"></i>
-                                    <strong>Mevcut Sektör:</strong> {{ user_data.sector|title }} 
-                                    <span class="badge bg-primary ms-2">Otomatik Konfigürasyon</span>
+                                <!-- Loading State -->
+                                <div id="ppe-loading" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Yükleniyor...</span>
                                 </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6 class="text-danger">Zorunlu PPE Ekipmanları</h6>
-                                        <div class="ppe-config-item">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <i class="fas fa-hard-hat text-primary"></i>
-                                                    <strong>Baret</strong>
-                                                    <small class="text-muted d-block">Kafa koruması</small>
-                                                </div>
-                                                <div>
-                                                    <span class="badge bg-danger">100₺ Ceza</span>
+                                    <p class="mt-2 text-muted">PPE konfigürasyonu yükleniyor...</p>
+                                        </div>
+                                        
+                                <!-- PPE Configuration Content -->
+                                <div id="ppe-content" style="display: none;">
+                                    <!-- Sector Info -->
+                                    <div class="alert alert-primary">
+                                        <div class="row align-items-center">
+                                            <div class="col-md-8">
+                                                <i class="fas fa-industry"></i>
+                                                <strong>Mevcut Sektör:</strong> <span id="current-sector">{{ user_data.sector|title }}</span>
+                                                <span class="badge bg-white text-primary ms-2">Sektör Bazlı Konfigürasyon</span>
                                                 </div>
                                             </div>
                                         </div>
                                         
-                                        <div class="ppe-config-item">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <i class="fas fa-vest text-warning"></i>
-                                                    <strong>Güvenlik Yeleği</strong>
-                                                    <small class="text-muted d-block">Görünürlük</small>
-                                                </div>
-                                                <div>
-                                                    <span class="badge bg-danger">75₺ Ceza</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="ppe-config-item">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <i class="fas fa-shoe-prints text-success"></i>
-                                                    <strong>Güvenlik Ayakkabısı</strong>
-                                                    <small class="text-muted d-block">Ayak koruması</small>
-                                                </div>
-                                                <div>
-                                                    <span class="badge bg-danger">50₺ Ceza</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+
                                     
-                                    <div class="col-md-6">
-                                        <h6 class="text-success">Opsiyonel PPE Ekipmanları</h6>
-                                        <div class="ppe-config-item">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <i class="fas fa-hand-paper text-info"></i>
-                                                    <strong>Eldiven</strong>
-                                                    <small class="text-muted d-block">El koruması</small>
+                                    <!-- Özel PPE Konfigürasyonu -->
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-cogs"></i> Özel PPE Konfigürasyonu</h6>
+                                            <small class="text-muted">Ek PPE türleri ekleyebilir veya mevcut ayarları değiştirebilirsiniz</small>
                                                 </div>
-                                                <div>
-                                                    <span class="badge bg-success">+10 Puan</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="ppe-config-item">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <i class="fas fa-glasses text-info"></i>
-                                                    <strong>Güvenlik Gözlüğü</strong>
-                                                    <small class="text-muted d-block">Göz koruması</small>
-                                                </div>
-                                                <div>
-                                                    <span class="badge bg-success">+15 Puan</span>
+                                        <div class="card-body">
+                                                                                        <div class="row">
+                                                <div class="col-12">
+                                                    <h6 class="text-danger mb-3">
+                                                        <i class="fas fa-exclamation-triangle"></i> Zorunlu PPE Ekipmanları
+                                                        <small class="text-muted d-block">Bu PPE'ler tespit edilmediğinde uyarı verilir</small>
+                                                    </h6>
+                                                    <div id="required-ppe-config">
+                                                        <!-- Dinamik içerik -->
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <div class="mt-4">
-                                    <h6>Özel PPE Konfigürasyonu</h6>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="ppe_helmet" name="ppe_helmet">
-                                                <label class="form-check-label" for="ppe_helmet">
-                                                    <i class="fas fa-hard-hat text-primary"></i> Baret/Kask
-                                                </label>
-                                            </div>
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="ppe_vest" name="ppe_vest">
-                                                <label class="form-check-label" for="ppe_vest">
-                                                    <i class="fas fa-vest text-warning"></i> Güvenlik Yeleği
-                                                </label>
-                                            </div>
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="ppe_glasses" name="ppe_glasses">
-                                                <label class="form-check-label" for="ppe_glasses">
-                                                    <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="ppe_gloves" name="ppe_gloves">
-                                                <label class="form-check-label" for="ppe_gloves">
-                                                    <i class="fas fa-mitten text-success"></i> İş Eldiveni
-                                                </label>
-                                            </div>
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="ppe_shoes" name="ppe_shoes">
-                                                <label class="form-check-label" for="ppe_shoes">
-                                                    <i class="fas fa-shoe-prints text-dark"></i> Güvenlik Ayakkabısı
-                                                </label>
-                                            </div>
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="ppe_mask" name="ppe_mask">
-                                                <label class="form-check-label" for="ppe_mask">
-                                                    <i class="fas fa-head-side-mask text-secondary"></i> Maske
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
+
+                                    
+
                                 </div>
                                 
-                                <div class="mt-4">
-                                    <button class="btn btn-primary" onclick="updatePPEConfig()">
-                                        <i class="fas fa-save"></i> PPE Ayarlarını Kaydet
+
+                                
+                                <!-- Action Buttons -->
+                                <div class="text-center mt-4">
+                                    <button type="button" class="btn btn-primary btn-lg" onclick="savePPEConfig()">
+                                        <i class="fas fa-save"></i> Konfigürasyonu Kaydet
                                     </button>
-                                    <button class="btn btn-outline-secondary ms-2">
-                                        <i class="fas fa-undo"></i> Varsayılana Döndür
+                                    <button type="button" class="btn btn-outline-secondary btn-lg ms-2" onclick="resetPPEConfig()">
+                                        <i class="fas fa-undo"></i> Sıfırla
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-lg ms-2" onclick="previewPPEConfig()">
+                                        <i class="fas fa-eye"></i> Önizleme
                                     </button>
                                 </div>
                             </div>
@@ -11164,10 +11379,11 @@ Mesaj:
                                         <div class="card-body text-center">
                                             <h4 class="text-primary">$99<span class="text-muted">/ay</span></h4>
                                             <ul class="list-unstyled">
-                                                <li><i class="fas fa-video"></i> 5 Kamera</li>
-                                                <li><i class="fas fa-shield-alt"></i> Temel Güvenlik</li>
+                                                <li><i class="fas fa-video"></i> 25 Kamera</li>
+                                                <li><i class="fas fa-brain"></i> AI Tespit (24/7)</li>
                                                 <li><i class="fas fa-headset"></i> Email Destek</li>
                                                 <li><i class="fas fa-chart-bar"></i> Temel Raporlar</li>
+                                                <li><i class="fas fa-shield-alt"></i> Temel Güvenlik</li>
                                             </ul>
                                             <button class="btn btn-outline-primary btn-sm w-100" onclick="selectPlan('starter')">
                                                 Seç
@@ -11185,10 +11401,11 @@ Mesaj:
                                         <div class="card-body text-center">
                                             <h4 class="text-warning">$299<span class="text-muted">/ay</span></h4>
                                             <ul class="list-unstyled">
-                                                <li><i class="fas fa-video"></i> 15 Kamera</li>
-                                                <li><i class="fas fa-shield-alt"></i> Gelişmiş Güvenlik</li>
+                                                <li><i class="fas fa-video"></i> 100 Kamera</li>
+                                                <li><i class="fas fa-brain"></i> AI Tespit (24/7)</li>
                                                 <li><i class="fas fa-headset"></i> 7/24 Destek</li>
                                                 <li><i class="fas fa-chart-line"></i> Detaylı Analitik</li>
+                                                <li><i class="fas fa-shield-alt"></i> Gelişmiş Güvenlik</li>
                                                 <li><i class="fas fa-bell"></i> Gelişmiş Bildirimler</li>
                                             </ul>
                                             <button class="btn btn-warning btn-sm w-100" onclick="selectPlan('professional')">
@@ -11207,10 +11424,11 @@ Mesaj:
                                         <div class="card-body text-center">
                                             <h4 class="text-success">$599<span class="text-muted">/ay</span></h4>
                                             <ul class="list-unstyled">
-                                                <li><i class="fas fa-video"></i> 50 Kamera</li>
-                                                <li><i class="fas fa-shield-alt"></i> Maksimum Güvenlik</li>
+                                                <li><i class="fas fa-video"></i> 500 Kamera</li>
+                                                <li><i class="fas fa-brain"></i> AI Tespit (24/7)</li>
                                                 <li><i class="fas fa-headset"></i> Öncelikli Destek</li>
                                                 <li><i class="fas fa-chart-pie"></i> Özel Raporlar</li>
+                                                <li><i class="fas fa-shield-alt"></i> Maksimum Güvenlik</li>
                                                 <li><i class="fas fa-cogs"></i> API Erişimi</li>
                                                 <li><i class="fas fa-users"></i> Çoklu Kullanıcı</li>
                                             </ul>
@@ -11366,24 +11584,40 @@ Mesaj:
                         if (activeLink) {
                             activeLink.classList.add('active');
                         }
-                            
-                            // Show target section
+                        
+                        // Show target section
                         sections.forEach(section => section.style.display = 'none');
                         const targetElement = document.getElementById(sectionName + '-section');
-                            if (targetElement) {
-                                targetElement.style.display = 'block';
+                        if (targetElement) {
+                            targetElement.style.display = 'block';
                             console.log('Section displayed:', sectionName);
+                            
+                            // PPE config sekmesine geçildiğinde yükle
+                            if (sectionName === 'ppe-config' && typeof loadPPEConfig === 'function') {
+                                console.log('🔄 Loading PPE config for section switch...');
+                                setTimeout(() => {
+                                    loadPPEConfig();
+                                }, 200);
+                            }
+                            
+                            // Subscription sekmesine geçildiğinde abonelik bilgilerini yükle
+                            if (sectionName === 'subscription' && typeof loadSubscriptionInfo === 'function') {
+                                console.log('🔄 Loading subscription info for section switch...');
+                                setTimeout(() => {
+                                    loadSubscriptionInfo();
+                                }, 200);
+                            }
                         }
                     }
                     
                     // Add click handlers to nav links
                     navLinks.forEach(link => {
                         link.addEventListener('click', function(e) {
-                                    e.preventDefault();
+                            e.preventDefault();
                             const targetSection = this.getAttribute('data-section');
                             switchToSection(targetSection);
-                                        
-                                        // Update URL hash
+                            
+                            // Update URL hash
                             window.location.hash = targetSection;
                         });
                     });
@@ -11410,7 +11644,7 @@ Mesaj:
                 
                 // Initialize immediately and after DOM load
                 initializeSettings();
-                    document.addEventListener('DOMContentLoaded', initializeSettings);
+                document.addEventListener('DOMContentLoaded', initializeSettings);
                 
                 // Handle hash changes
                 window.addEventListener('hashchange', function() {
@@ -11421,9 +11655,9 @@ Mesaj:
                     const sections = document.querySelectorAll('.settings-section');
                     
                     if (hash) {
-                                            const targetLink = document.querySelector('[data-section="' + hash + '"]');
-                    if (targetLink) {
-                        console.log('Found target link for hash change:', hash);
+                        const targetLink = document.querySelector('[data-section="' + hash + '"]');
+                        if (targetLink) {
+                            console.log('Found target link for hash change:', hash);
                             
                             // Update active state
                             navLinks.forEach(nl => nl.classList.remove('active'));
@@ -11435,9 +11669,25 @@ Mesaj:
                             if (targetElement) {
                                 targetElement.style.display = 'block';
                                 console.log('Section displayed via hash change:', hash);
+                                
+                                // PPE config sekmesine geçildiğinde yükle
+                                if (hash === 'ppe-config' && typeof loadPPEConfig === 'function') {
+                                    console.log('🔄 Loading PPE config for section switch...');
+                                    setTimeout(() => {
+                                        loadPPEConfig();
+                                    }, 200);
+                                }
+                                
+                                // Subscription sekmesine geçildiğinde abonelik bilgilerini yükle
+                                if (hash === 'subscription' && typeof loadSubscriptionInfo === 'function') {
+                                    console.log('🔄 Loading subscription info for section switch...');
+                                    setTimeout(() => {
+                                        loadSubscriptionInfo();
+                                    }, 200);
+                                }
                             }
-                    } else {
-                        console.log('No target link found for hash change:', hash);
+                        } else {
+                            console.log('No target link found for hash change:', hash);
                         }
                     }
                 });
@@ -11774,11 +12024,80 @@ Mesaj:
                                     usageTrend.className = 'metric-trend';
                                 }
                             }
+                            
+                            // Ayarlar sayfasındaki abonelik bilgileri elementlerini güncelle
+                            const subscriptionTypeElement = document.getElementById('subscription-type');
+                            const subscriptionStatusElement = document.getElementById('subscription-status');
+                            const subscriptionEndElement = document.getElementById('subscription-end');
+                            const daysRemainingElement = document.getElementById('days-remaining');
+                            const usageProgressElement = document.getElementById('usage-progress');
+                            
+                            if (subscriptionTypeElement) {
+                                subscriptionTypeElement.textContent = subscription.subscription_type ? subscription.subscription_type.toUpperCase() : 'BASIC';
+                                console.log('✅ Ayarlar sayfası - Abonelik planı güncellendi:', subscriptionTypeElement.textContent);
+                            }
+                            
+                            if (subscriptionStatusElement) {
+                                if (subscription.is_active) {
+                                    subscriptionStatusElement.textContent = 'Aktif';
+                                    subscriptionStatusElement.className = 'text-success';
+                                } else {
+                                    subscriptionStatusElement.textContent = 'Süresi Dolmuş';
+                                    subscriptionStatusElement.className = 'text-danger';
+                                }
+                                console.log('✅ Ayarlar sayfası - Abonelik durumu güncellendi:', subscriptionStatusElement.textContent);
+                            }
+                            
+                            if (subscriptionEndElement) {
+                                if (subscription.subscription_end) {
+                                    const endDate = new Date(subscription.subscription_end);
+                                    subscriptionEndElement.textContent = endDate.toLocaleDateString('tr-TR');
+                                } else {
+                                    subscriptionEndElement.textContent = 'Sınırsız';
+                                }
+                                console.log('✅ Ayarlar sayfası - Bitiş tarihi güncellendi:', subscriptionEndElement.textContent);
+                            }
+                            
+                            if (daysRemainingElement) {
+                                if (subscription.days_remaining !== undefined) {
+                                    if (subscription.days_remaining > 0) {
+                                        daysRemainingElement.textContent = subscription.days_remaining + ' gün';
+                                        daysRemainingElement.className = 'text-success';
+                                    } else if (subscription.days_remaining === 0) {
+                                        daysRemainingElement.textContent = 'Bugün';
+                                        daysRemainingElement.className = 'text-warning';
+                                    } else {
+                                        daysRemainingElement.textContent = Math.abs(subscription.days_remaining) + ' gün önce';
+                                        daysRemainingElement.className = 'text-danger';
+                                    }
+                                } else {
+                                    daysRemainingElement.textContent = '--';
+                                }
+                                console.log('✅ Ayarlar sayfası - Kalan gün güncellendi:', daysRemainingElement.textContent);
+                            }
+                            
+                            if (cameraUsageElement) {
+                                cameraUsageElement.textContent = (subscription.used_cameras || 0) + '/' + (subscription.max_cameras || 25);
+                                console.log('✅ Ayarlar sayfası - Kamera kullanımı güncellendi:', cameraUsageElement.textContent);
+                            }
+                            
+                            if (usageProgressElement) {
+                                const usagePercentage = subscription.usage_percentage || 0;
+                                usageProgressElement.style.width = usagePercentage + '%';
+                                
+                                if (usagePercentage > 80) {
+                                    usageProgressElement.className = 'progress-bar bg-danger';
+                                } else if (usagePercentage > 60) {
+                                    usageProgressElement.className = 'progress-bar bg-warning';
+                                } else {
+                                    usageProgressElement.className = 'progress-bar bg-success';
+                                }
+                                console.log('✅ Ayarlar sayfası - Kullanım progress bar güncellendi:', usagePercentage + '%');
+                            }
                         } else {
                             console.error('❌ API returned error:', result.error);
                             // Fallback to default values
                             const subscriptionPlanElement = document.getElementById('subscription-plan');
-                            const cameraUsageElement = document.getElementById('camera-usage');
                             
                             if (subscriptionPlanElement) {
                                 subscriptionPlanElement.textContent = 'BASIC';
@@ -11787,13 +12106,37 @@ Mesaj:
                             if (cameraUsageElement) {
                                 cameraUsageElement.textContent = '0/25';
                             }
+                            
+                            // Ayarlar sayfasındaki elementleri de fallback değerlerle güncelle
+                            const subscriptionTypeElement = document.getElementById('subscription-type');
+                            const subscriptionStatusElement = document.getElementById('subscription-status');
+                            const subscriptionEndElement = document.getElementById('subscription-end');
+                            const daysRemainingElement = document.getElementById('days-remaining');
+                            const usageProgressElement = document.getElementById('usage-progress');
+                            
+                            if (subscriptionTypeElement) {
+                                subscriptionTypeElement.textContent = 'BASIC';
+                            }
+                            if (subscriptionStatusElement) {
+                                subscriptionStatusElement.textContent = 'Aktif';
+                                subscriptionStatusElement.className = 'text-success';
+                            }
+                            if (subscriptionEndElement) {
+                                subscriptionEndElement.textContent = '--';
+                            }
+                            if (daysRemainingElement) {
+                                daysRemainingElement.textContent = '--';
+                            }
+                            if (usageProgressElement) {
+                                usageProgressElement.style.width = '0%';
+                                usageProgressElement.className = 'progress-bar bg-success';
+                            }
                         }
                     })
                     .catch(error => {
                         console.error('❌ Abonelik bilgileri yükleme hatası:', error);
                         // Fallback to default values
                         const subscriptionPlanElement = document.getElementById('subscription-plan');
-                        const cameraUsageElement = document.getElementById('camera-usage');
                         
                         if (subscriptionPlanElement) {
                             subscriptionPlanElement.textContent = 'BASIC';
@@ -11801,6 +12144,31 @@ Mesaj:
                         }
                         if (cameraUsageElement) {
                             cameraUsageElement.textContent = '0/25';
+                        }
+                        
+                        // Ayarlar sayfasındaki elementleri de fallback değerlerle güncelle
+                        const subscriptionTypeElement = document.getElementById('subscription-type');
+                        const subscriptionStatusElement = document.getElementById('subscription-status');
+                        const subscriptionEndElement = document.getElementById('subscription-end');
+                        const daysRemainingElement = document.getElementById('days-remaining');
+                        const usageProgressElement = document.getElementById('usage-progress');
+                        
+                        if (subscriptionTypeElement) {
+                            subscriptionTypeElement.textContent = 'BASIC';
+                        }
+                        if (subscriptionStatusElement) {
+                            subscriptionStatusElement.textContent = 'Aktif';
+                            subscriptionStatusElement.className = 'text-success';
+                        }
+                        if (subscriptionEndElement) {
+                            subscriptionEndElement.textContent = '--';
+                        }
+                        if (daysRemainingElement) {
+                            daysRemainingElement.textContent = '--';
+                        }
+                        if (usageProgressElement) {
+                            usageProgressElement.style.width = '0%';
+                            usageProgressElement.className = 'progress-bar bg-success';
                         }
                     });
                 }
@@ -11838,19 +12206,19 @@ Mesaj:
                             name: 'Starter',
                             price: '$99/ay',
                             cameras: '25 Kamera',
-                            features: ['Temel Güvenlik', 'Email Destek', 'Temel Raporlar']
+                            features: ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik']
                         },
                         'professional': {
                             name: 'Professional',
                             price: '$299/ay',
                             cameras: '100 Kamera',
-                            features: ['Gelişmiş Güvenlik', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Bildirimler']
+                            features: ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler']
                         },
                         'enterprise': {
                             name: 'Enterprise',
                             price: '$599/ay',
                             cameras: '500 Kamera',
-                            features: ['Maksimum Güvenlik', 'Öncelikli Destek', 'Özel Raporlar', 'API Erişimi', 'Çoklu Kullanıcı']
+                            features: ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı']
                         }
                     };
                     
@@ -12019,27 +12387,381 @@ Mesaj:
                     });
                 }
                 
-                // Load PPE Configuration
+                // Enhanced PPE Configuration Management
+                let currentPPEConfig = { required: [], optional: [] };
+                let allPPETypes = {};
+
+                
+                // Load Enhanced PPE Configuration
                 function loadPPEConfig() {
+                    console.log('🔄 Enhanced PPE konfigürasyonu yükleniyor...');
+                    
+                    try {
+                        // Loading state göster
+                        const loadingEl = document.getElementById('ppe-loading');
+                        const contentEl = document.getElementById('ppe-content');
+                        if (loadingEl) loadingEl.style.display = 'block';
+                        if (contentEl) contentEl.style.display = 'none';
+                    
                     fetch('/api/company/' + companyId + '/ppe-config')
                     .then(response => response.json())
                     .then(result => {
                         if (result.success) {
-                            const requiredPPE = result.required_ppe || [];
-                            
-                            // Checkbox'ları güncelle
-                            document.getElementById('ppe_helmet').checked = requiredPPE.includes('helmet');
-                            document.getElementById('ppe_vest').checked = requiredPPE.includes('vest');
-                            document.getElementById('ppe_glasses').checked = requiredPPE.includes('glasses');
-                            document.getElementById('ppe_gloves').checked = requiredPPE.includes('gloves');
-                            document.getElementById('ppe_shoes').checked = requiredPPE.includes('shoes');
-                            document.getElementById('ppe_mask').checked = requiredPPE.includes('mask');
+                                currentPPEConfig = result.current_config || { required: [], optional: [] };
+                                allPPETypes = result.all_ppe_types || {};
+                                
+                                // Sektör bilgisini global olarak sakla
+                                window.currentSector = result.sector || 'construction';
+                                
+                                // UI'yi güncelle
+                                renderPPEConfiguration(result);
+                                
+                                // Loading'i gizle
+                                if (loadingEl) loadingEl.style.display = 'none';
+                                if (contentEl) contentEl.style.display = 'block';
+                                
+                                console.log('✅ PPE konfigürasyonu yüklendi:', currentPPEConfig, 'Sektör:', window.currentSector);
+                            } else {
+                                console.error('❌ PPE config yükleme hatası:', result.error);
+                                showPPEError('PPE konfigürasyonu yüklenemedi: ' + result.error);
                         }
                     })
                     .catch(error => {
-                        console.error('Error loading PPE config:', error);
+                            console.error('❌ PPE config fetch hatası:', error);
+                            showPPEError('Bağlantı hatası oluştu');
+                        });
+                    } catch (error) {
+                        console.error('❌ PPE config function error:', error);
+                        showPPEError('PPE konfigürasyon yükleme hatası');
+                    }
+                }
+                
+                // Sektör bilgilerini render et
+                function renderSectorInfo(sectorInfo, sectorCode) {
+                    const container = document.getElementById('ppe-content');
+                    if (!container || !sectorInfo) return;
+                    
+                    // Sektör bilgi kartı ekle
+                    let sectorCard = document.getElementById('sector-info-card');
+                    if (!sectorCard) {
+                        sectorCard = document.createElement('div');
+                        sectorCard.id = 'sector-info-card';
+                        sectorCard.className = 'card border-primary mb-4';
+                        container.insertBefore(sectorCard, container.firstChild);
+                    }
+                    
+                    sectorCard.innerHTML = `
+                        <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3" style="font-size: 2rem;">${sectorInfo.emoji}</div>
+                                <div>
+                                    <h5 class="card-title mb-1">
+                                        <i class="${sectorInfo.icon} me-2"></i>${sectorInfo.name} Sektörü
+                                    </h5>
+                                    <p class="card-text mb-0" style="color: rgba(255, 255, 255, 0.9);">
+                                        Şirket kayıt sırasında seçilen endüstrinize özel PPE konfigürasyonu
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
+                            <div class="alert border-0" style="background: rgba(255, 255, 255, 0.8); border-left: 4px solid #667eea !important; color: #495057;">
+                                <i class="fas fa-info-circle me-2" style="color: #667eea;"></i>
+                                <strong>Bu sayfada gösterilen PPE seçenekleri</strong> şirket kayıt sırasında seçtiğiniz 
+                                <strong style="color: #667eea;">${sectorInfo.name}</strong> sektörüne özeldir. Diğer sektörlerin PPE'leri burada görünmez.
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Render PPE Configuration UI
+                function renderPPEConfiguration(data) {
+                    renderSectorInfo(data.sector_info, data.sector);
+                    
+                    renderCustomPPEConfig(data.sector_specific_ppe || data.all_ppe_types || allPPETypes, data.current_config || currentPPEConfig);
+                    
+                }
+                
+
+                
+                // Özel PPE konfigürasyonu render et (sektöre özel)
+                function renderCustomPPEConfig(sectorSpecificTypes, currentConfig) {
+                    const requiredContainer = document.getElementById('required-ppe-config');
+                    
+                    if (!requiredContainer) return;
+                    
+                    let requiredHtml = '';
+                    
+                    // Sadece sektöre uygun PPE'leri göster
+                    const availablePPEs = Object.keys(sectorSpecificTypes || {});
+                    
+                    if (availablePPEs.length === 0) {
+                        const noDataHtml = `
+                            <div class="alert alert-info border-0">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Bu sektör için ek PPE seçeneği bulunmamaktadır.</strong>
+                            </div>
+                        `;
+                        requiredContainer.innerHTML = noDataHtml;
+                        return;
+                    }
+                    
+                    requiredHtml = `<div class="row">`;
+                    
+                    availablePPEs.forEach(ppeType => {
+                        const ppe = sectorSpecificTypes[ppeType];
+                        const isCurrentlyRequired = (currentConfig.required || []).includes(ppeType);
+                        
+                        const requiredCheckbox = `
+                            <div class="col-md-4 mb-3">
+                                <div class="form-check p-3 border rounded-3" style="background: rgba(220, 53, 69, 0.05);">
+                                    <input class="form-check-input" type="checkbox" 
+                                           id="req_${ppeType}" 
+                                           data-ppe="${ppeType}"
+                                           ${isCurrentlyRequired ? 'checked' : ''}
+                                           onchange="updatePPESelection('${ppeType}', 'required', this.checked)">
+                                    <label class="form-check-label fw-semibold" for="req_${ppeType}">
+                                        <i class="${ppe.icon} text-danger me-2"></i>
+                                        <strong>${ppe.name}</strong>
+        
+                                    </label>
+                                </div>
+                            </div>
+                        `;
+                        
+                        requiredHtml += requiredCheckbox;
+                    });
+                    
+                    requiredHtml += `</div>`;
+                    
+                    requiredContainer.innerHTML = requiredHtml;
+                }
+                
+
+                
+                // PPE seçim güncelleme
+                function updatePPESelection(ppeType, category, isChecked) {
+                    if (category === 'required') {
+                        if (isChecked) {
+                            if (!currentPPEConfig.required.includes(ppeType)) {
+                                currentPPEConfig.required.push(ppeType);
+                            }
+                            // Opsiyonelden kaldır
+                            currentPPEConfig.optional = currentPPEConfig.optional.filter(p => p !== ppeType);
+                            const optEl = document.getElementById(`opt_${ppeType}`);
+                            if (optEl) optEl.checked = false;
+                        } else {
+                            currentPPEConfig.required = currentPPEConfig.required.filter(p => p !== ppeType);
+                        }
+                    } else {
+                        if (isChecked) {
+                            if (!currentPPEConfig.optional.includes(ppeType)) {
+                                currentPPEConfig.optional.push(ppeType);
+                            }
+                            // Zorunludan kaldır
+                            currentPPEConfig.required = currentPPEConfig.required.filter(p => p !== ppeType);
+                            const reqEl = document.getElementById(`req_${ppeType}`);
+                            if (reqEl) reqEl.checked = false;
+                        } else {
+                            currentPPEConfig.optional = currentPPEConfig.optional.filter(p => p !== ppeType);
+                        }
+                    }
+                    
+                    // Seçili PPE'leri güncelle
+                    
+                    
+                }
+                
+                // Önerilen PPE'yi ekle
+                function addRecommendedPPE(ppeType, category) {
+                    const checkboxId = `${category === 'required' ? 'req' : 'opt'}_${ppeType}`;
+                    const checkbox = document.getElementById(checkboxId);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                        updatePPESelection(ppeType, category, true);
+                    }
+                }
+                
+                // PPE konfigürasyonunu kaydet
+                function savePPEConfig() {
+                    if (currentPPEConfig.required.length === 0 && currentPPEConfig.optional.length === 0) {
+                        alert('❌ En az bir PPE türü seçmelisiniz!');
+                        return;
+                    }
+                    
+                    const configData = {
+                        required_ppe: currentPPEConfig.required,
+                        optional_ppe: currentPPEConfig.optional
+                    };
+                    
+                    console.log('💾 PPE config kaydediliyor:', configData);
+                    
+                    fetch('/api/company/' + companyId + '/ppe-config', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(configData)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            showSuccessToast('✅ PPE konfigürasyonu başarıyla kaydedildi!');
+                            setTimeout(() => {
+                                loadPPEConfig();
+                            }, 1000);
+                        } else {
+                            alert('❌ Hata: ' + result.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ PPE config kaydetme hatası:', error);
+                        alert('❌ Kaydetme sırasında bir hata oluştu!');
                     });
                 }
+                
+                // PPE konfigürasyonunu sıfırla
+                function resetPPEConfig() {
+                    if (confirm('⚠️ PPE konfigürasyonunu sıfırlamak istediğinizden emin misiniz?')) {
+                        currentPPEConfig.required = [];
+                        currentPPEConfig.optional = [];
+                        
+                        renderPPEConfiguration({
+                            current_config: currentPPEConfig,
+                            all_ppe_types: allPPETypes
+                        });
+                        
+                        showSuccessToast('🔄 PPE konfigürasyonu sıfırlandı');
+                    }
+                }
+                
+                // PPE konfigürasyon önizlemesi
+                function previewPPEConfig() {
+                    // UI'dan gerçek zamanlı olarak seçili PPE'leri al
+                    const selectedPPEs = [];
+                    const checkboxes = document.querySelectorAll('#required-ppe-config input[type="checkbox"]:checked');
+                    checkboxes.forEach(checkbox => {
+                        const ppeType = checkbox.getAttribute('data-ppe');
+                        if (ppeType && ppeType !== '') {
+                            selectedPPEs.push(ppeType);
+                        }
+                    });
+                    
+                    const modal = document.createElement('div');
+                    modal.className = 'modal fade';
+                    
+                    let modalContent = '';
+                    
+                    if (selectedPPEs.length === 0) {
+                        // Eğer hiç PPE seçilmemişse, sektör önerilerini göster
+                        modalContent = `
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-warning text-dark">
+                                        <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> PPE Konfigürasyon Durumu</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Henüz zorunlu PPE ekipmanı seçilmemiş!</strong>
+                                        </div>
+                                        <div class="text-center mb-3">
+                                            <h6 class="text-primary">Sektörünüze Önerilen PPE Ekipmanları</h6>
+                                            <small class="text-muted">Bu ekipmanları seçerek konfigürasyonu tamamlayabilirsiniz</small>
+                                        </div>
+                                        <div class="ppe-list">
+                                            ${Object.keys(allPPETypes).filter(ppe => allPPETypes[ppe]?.sectors?.includes(window.currentSector || 'construction')).map(ppe => `
+                                                <div class="d-flex align-items-center p-2 border rounded mb-2">
+                                                    <i class="${allPPETypes[ppe]?.icon || 'fas fa-shield-alt'} text-primary me-3" style="font-size: 1.2rem;"></i>
+                                                    <span class="fw-bold">${allPPETypes[ppe]?.name || ppe}</span>
+                                                    <span class="badge bg-secondary ms-auto">Önerilen</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                        <button type="button" class="btn btn-primary" onclick="bootstrap.Modal.getInstance(this.closest('.modal')).hide(); document.getElementById('ppe-config-section').click();">PPE Seç</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Seçili PPE'leri göster
+                        modalContent = `
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-primary text-white">
+                                        <h5 class="modal-title"><i class="fas fa-shield-alt"></i> PPE Konfigürasyon Önizlemesi</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="text-center mb-3">
+                                            <h6 class="text-primary">Seçili Zorunlu PPE Ekipmanları</h6>
+                                            <small class="text-muted">Toplam: ${selectedPPEs.length} ekipman</small>
+                                        </div>
+                                        <div class="ppe-list">
+                                            ${selectedPPEs.map(ppe => `
+                                                <div class="d-flex align-items-center p-2 border rounded mb-2">
+                                                    <i class="${allPPETypes[ppe]?.icon || 'fas fa-shield-alt'} text-danger me-3" style="font-size: 1.2rem;"></i>
+                                                    <span class="fw-bold">${allPPETypes[ppe]?.name || ppe}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    modal.innerHTML = modalContent;
+                    document.body.appendChild(modal);
+                    const bsModal = new bootstrap.Modal(modal);
+                    bsModal.show();
+                    
+                    modal.addEventListener('hidden.bs.modal', () => {
+                        document.body.removeChild(modal);
+                    });
+                }
+                
+                // Helper functions
+                function showPPEError(message) {
+                    const loadingEl = document.getElementById('ppe-loading');
+                    if (loadingEl) {
+                        loadingEl.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i> ${message}
+                                <br><button class="btn btn-sm btn-primary mt-2" onclick="loadPPEConfig()">Tekrar Dene</button>
+                            </div>
+                        `;
+                    }
+                }
+                
+                function showSuccessToast(message) {
+                    const toast = document.createElement('div');
+                    toast.className = 'toast-message';
+                    toast.innerHTML = message;
+                    toast.style.cssText = 
+                        'position: fixed;' +
+                        'top: 20px;' +
+                        'right: 20px;' +
+                        'background: #28a745;' +
+                        'color: white;' +
+                        'padding: 15px 20px;' +
+                        'border-radius: 5px;' +
+                        'z-index: 9999;' +
+                        'font-weight: bold;' +
+                        'box-shadow: 0 4px 8px rgba(0,0,0,0.2);';
+                    document.body.appendChild(toast);
+                    
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 3000);
+                }
+                
+
                 
                 // Logout
                 function logout() {
@@ -12115,9 +12837,21 @@ Mesaj:
 
                 // Sayfa yüklendiğinde tüm ayarları yükle
                 document.addEventListener('DOMContentLoaded', function() {
-                    // PPE konfigürasyonu yükle
+                    console.log('🔄 Settings page DOMContentLoaded - initializing...');
+                    
+                    try {
+                        // Settings navigation'ı önce başlat
+                        initializeSettings();
+                        
+                        // PPE konfigürasyonu yükle (sadece PPE sekmesi aktifse)
+                        setTimeout(() => {
+                            try {
                     if (document.getElementById('ppe-config-section')) {
+                                    console.log('📋 PPE config section found, loading...');
+                                    // PPE yükleme sadece PPE sekmesi görünürse
+                                    if (window.location.hash === '#ppe-config' || window.location.hash === '') {
                         loadPPEConfig();
+                                    }
                     }
                     
                     // Bildirim ayarlarını yükle
@@ -12128,6 +12862,13 @@ Mesaj:
                     // Abonelik bilgilerini yükle
                     if (document.getElementById('subscription-section')) {
                         loadSubscriptionInfo();
+                                }
+                            } catch (error) {
+                                console.error('Settings initialization error:', error);
+                            }
+                        }, 100); // Kısa delay ile navigation'ın önce kurulmasını sağla
+                    } catch (error) {
+                        console.error('Settings page initialization error:', error);
                     }
                 });
             </script>
@@ -12903,8 +13644,8 @@ Mesaj:
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card">
-                            <div class="stat-value text-warning" id="totalPenalties">--₺</div>
-                            <h6 class="text-muted">Toplam Ceza</h6>
+                                                            <div class="stat-value text-warning" id="totalPenalties">--</div>
+                                <h6 class="text-muted">Toplam Uyarı</h6>
                             <small class="text-muted" id="penaltiesTrend">
                                 <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
                             </small>
@@ -13289,7 +14030,7 @@ Mesaj:
                             } else if (id.includes('Violations')) {
                                 element.textContent = '--';
                             } else if (id.includes('Penalties')) {
-                                element.textContent = '--₺';
+                                element.textContent = '--';
                             } else if (id.includes('Persons')) {
                                 element.textContent = '--';
                             }
@@ -13691,7 +14432,7 @@ Mesaj:
                                     </span>
                                 </div>
                                 <div class="col-md-2">
-                                    <strong class="text-danger">${violation.count * 75}₺</strong>
+                                    <strong class="text-danger">${violation.count} uyarı</strong>
                                 </div>
                                 <div class="col-md-1">
                                     <button class="btn btn-sm btn-outline-primary" onclick="viewViolationDetail('${violation.camera_id}')">
@@ -15249,7 +15990,7 @@ smartsafe_requests_total 100
                                 results, frame, detection_mode
                             )
                         
-                        # İYİLEŞTİRİLDİ: Performance metrics calculation ve Reports kayıt
+                                                            # İYİLEŞTİRİLDİ: Performance metrics calculation ve Reports kayıt
                             try:
                                 # Performance metrics calculation
                                 processing_time = time.time() - start_time
@@ -15469,24 +16210,24 @@ smartsafe_requests_total 100
             # Violation details
             missing_ppe = violation.get('missing_ppe', ['Unknown'])[0] if isinstance(violation.get('missing_ppe'), list) else violation.get('missing_ppe', 'Unknown')
             violation_type = f"{missing_ppe}_missing"
-            penalty = 100  # Default penalty
+            
             confidence = violation.get('confidence', 0.8)
             
             if self.db.db_adapter.db_type == 'sqlite':
                 cursor.execute(f'''
                     INSERT INTO violations (company_id, camera_id, worker_id, missing_ppe,
-                                          violation_type, penalty, confidence, timestamp)
+                                          violation_type, confidence, timestamp)
                     VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder},
-                            {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                            {placeholder}, {placeholder}, {placeholder})
                 ''', (company_id, camera_id, violation.get('person_id', 'unknown'),
-                      missing_ppe, violation_type, penalty, confidence, datetime.now()))
+                      missing_ppe, violation_type, confidence, datetime.now()))
             else:  # PostgreSQL
                 cursor.execute(f'''
                     INSERT INTO violations (company_id, camera_id, worker_id, missing_ppe,
-                                          violation_type, penalty, confidence, timestamp)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                          violation_type, confidence, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ''', (company_id, camera_id, violation.get('person_id', 'unknown'),
-                      missing_ppe, violation_type, penalty, confidence, datetime.now()))
+                      missing_ppe, violation_type, confidence, datetime.now()))
             
             conn.commit()
             conn.close()
@@ -16617,7 +17358,7 @@ smartsafe_requests_total 100
                     if isinstance(violation, dict):
                         missing_ppe = ', '.join(violation.get('missing_ppe', []))
                         cv2.putText(frame, f'Violation {i+1}: {missing_ppe}', (10, y_offset), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
                         y_offset += 20
             
             # Zaman damgası
@@ -16632,7 +17373,7 @@ smartsafe_requests_total 100
                         timestamp_str = str(timestamp)[:19]
                     
                     cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
                 except Exception as ts_error:
                     logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
             
