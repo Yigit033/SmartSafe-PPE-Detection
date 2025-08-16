@@ -5276,6 +5276,17 @@ Mesaj:
             
             return render_template('company_profile.html', company_id=company_id, company=company_info)
 
+        @self.app.route('/upgrade-modal')
+        @self.app.route('/company/<company_id>/upgrade-modal')
+        def upgrade_modal(company_id=None):
+            """Merkezi abonelik planı yükseltme modal'ını döndür"""
+            try:
+                # Company ID'yi template'e gönder
+                return render_template('subscription_upgrade_modal.html', company_id=company_id)
+            except Exception as e:
+                logger.error(f"❌ Upgrade modal hatası: {e}")
+                return "Modal yüklenemedi", 500
+
         @self.app.route('/company/<company_id>/subscription', methods=['GET'])
         def subscription_page(company_id):
             """Abonelik sayfası"""
@@ -5629,18 +5640,18 @@ Mesaj:
                     conn.close()
                     return jsonify({
                         'success': True,
-                                'current_config': {
-                                    'required': current_required,
-                                    'optional': current_optional
-                                },
-                                'sector': sector,
-                                'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
-                                'all_ppe_types': all_ppe_types,
-                                'sector_specific_ppe': sector_specific_ppe,
-                                'sector_recommendations': recommendations,
-                                'compliance_settings': compliance_data,
-                                'required_ppe': current_required  # Backward compatibility
-                            })
+                                        'current_config': {
+                                            'required': current_required,
+                                            'optional': current_optional
+                                        },
+                                        'sector': sector,
+                                        'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
+                                        'all_ppe_types': all_ppe_types,
+                                        'sector_specific_ppe': sector_specific_ppe,
+                                        'sector_recommendations': recommendations,
+                                        'compliance_settings': compliance_data,
+                                        'required_ppe': current_required  # Backward compatibility
+                                    })
                 else:
                     conn.close()
                     return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
@@ -7526,6 +7537,200 @@ Mesaj:
                     cursor: pointer;
                 }
 
+                /* Business Plan Kartları CSS */
+                .plan-card-modern {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+                    transition: all 0.3s ease;
+                    cursor: pointer;
+                    border: 2px solid #e2e8f0;
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .plan-card-modern:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+                    border-color: #cbd5e1;
+                }
+
+                .plan-card-modern.selected {
+                    border-color: #2563eb !important;
+                    border-width: 3px !important;
+                    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.25) !important;
+                    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+                    transform: translateY(-3px);
+                }
+
+                .plan-card-modern.popular {
+                    border-color: #10b981;
+                    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+                }
+
+                .plan-card-modern.popular:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 12px 25px rgba(16, 185, 129, 0.2);
+                }
+
+                .plan-card-header {
+                    padding: 25px 20px 20px;
+                    text-align: center;
+                    background: #f8fafc;
+                    border-bottom: 1px solid #e2e8f0;
+                    position: relative;
+                }
+
+                .starter-gradient {
+                    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                    color: #1e293b;
+                }
+
+                .professional-gradient {
+                    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+                    color: #1e293b;
+                }
+
+                .enterprise-gradient {
+                    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                    color: #1e293b;
+                }
+
+                .plan-icon {
+                    font-size: 2rem;
+                    margin-bottom: 15px;
+                    color: #2563eb;
+                    opacity: 0.9;
+                }
+
+                .plan-name {
+                    font-size: 1.4rem;
+                    font-weight: 600;
+                    margin-bottom: 10px;
+                    color: #1e293b;
+                }
+
+                .plan-price {
+                    font-size: 1.8rem;
+                    font-weight: 700;
+                    margin-bottom: 5px;
+                    color: #2563eb;
+                }
+
+                .period {
+                    font-size: 0.9rem;
+                    font-weight: 400;
+                    color: #64748b;
+                }
+
+                .popular-badge {
+                    position: absolute;
+                    top: 15px;
+                    right: 15px;
+                    background: #10b981;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 16px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+                }
+
+                .plan-card-body {
+                    padding: 20px;
+                    background: white;
+                }
+
+                .plan-features {
+                    margin-bottom: 15px;
+                }
+
+                .feature-item {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 10px;
+                    font-size: 0.85rem;
+                    color: #475569;
+                }
+
+                .feature-item i {
+                    margin-right: 10px;
+                    font-size: 0.9rem;
+                    width: 18px;
+                    text-align: center;
+                    color: #64748b;
+                }
+
+                .plan-badge {
+                    display: inline-block;
+                    padding: 6px 14px;
+                    border-radius: 20px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    color: white;
+                }
+
+                .starter-badge {
+                    background: #64748b;
+                }
+
+                .professional-badge {
+                    background: #2563eb;
+                }
+
+                .enterprise-badge {
+                    background: #10b981;
+                }
+
+                .plan-info-card {
+                    background: #f8fafc;
+                    border-radius: 12px;
+                    padding: 20px;
+                    border: 1px solid #e2e8f0;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+                }
+
+                .plan-info-content {
+                    line-height: 1.6;
+                    color: #475569;
+                }
+
+                .btn-modern {
+                    border-radius: 8px;
+                    padding: 10px 20px;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    border: 1px solid #2563eb;
+                    color: #2563eb;
+                    background: white;
+                }
+
+                .btn-modern:hover {
+                    background: #2563eb;
+                    color: white;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+                }
+
+                /* Responsive Tasarım */
+                @media (max-width: 768px) {
+                    .plan-card-modern {
+                        margin-bottom: 20px;
+                    }
+                    
+                    .plan-card-modern.popular {
+                        margin-bottom: 25px;
+                    }
+                    
+                    .plan-card-modern.popular:hover {
+                        transform: translateY(-3px);
+                    }
+                }
+
                 .form-check-input {
                     margin-top: 0.4em;
                 }
@@ -7580,50 +7785,133 @@ Mesaj:
                                 <form id="registerForm" method="POST" action="/api/register-form">
                                     <!-- Abonelik Planı Seçimi -->
                                     <div class="mb-4">
-                                        <label class="form-label fw-semibold">
+                                        <label class="form-label fw-semibold mb-3">
                                             <i class="fas fa-crown text-warning me-2"></i>Abonelik Planı *
                                         </label>
-                                        <div class="row">
-                                            <div class="col-md-4 mb-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="subscription_plan" 
-                                                           id="plan_starter" value="starter" checked>
-                                                    <label class="form-check-label" for="plan_starter">
-                                                        <strong>Starter</strong>
-                                                        <br><small class="text-muted">$99/ay - 25 kamera</small>
-                                                    </label>
+                                        
+                                        <!-- Modern Plan Kartları -->
+                                        <div class="row g-3 mb-3">
+                                            <!-- Starter Plan -->
+                                            <div class="col-md-4">
+                                                <div class="plan-card-modern" data-plan="starter" onclick="selectPlanCard('starter')">
+                                                    <input type="radio" name="subscription_plan" value="starter" id="plan_starter" checked style="display: none;">
+                                                    <div class="plan-card-header starter-gradient">
+                                                        <div class="plan-icon">
+                                                            <i class="fas fa-rocket"></i>
+                                                </div>
+                                                        <h5 class="plan-name">Starter</h5>
+                                                        <div class="plan-price">$99<span class="period">/ay</span></div>
+                                            </div>
+                                                    <div class="plan-card-body">
+                                                        <div class="plan-features">
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-video text-primary"></i>
+                                                                <span>25 Kamera</span>
+                                                </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-brain text-success"></i>
+                                                                <span>AI Tespit (24/7)</span>
+                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-headset text-info"></i>
+                                                                <span>Email Destek</span>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4 mb-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="subscription_plan" 
-                                                           id="plan_professional" value="professional">
-                                                    <label class="form-check-label" for="plan_professional">
-                                                        <strong>Professional</strong>
-                                                        <br><small class="text-muted">$299/ay - 100 kamera</small>
-                                                        <span class="badge bg-primary ms-1">Popüler</span>
-                                                    </label>
+                                                        <div class="plan-badge starter-badge">Başlangıç</div>
+                                        </div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4 mb-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="subscription_plan" 
-                                                           id="plan_enterprise" value="enterprise">
-                                                    <label class="form-check-label" for="plan_enterprise">
-                                                        <strong>Enterprise</strong>
-                                                        <br><small class="text-muted">$599/ay - 500 kamera</small>
-                                                    </label>
+
+                                            <!-- Professional Plan -->
+                                            <div class="col-md-4">
+                                                <div class="plan-card-modern" data-plan="professional" onclick="selectPlanCard('professional')">
+                                                    <input type="radio" name="subscription_plan" value="professional" id="plan_professional" style="display: none;">
+                                                    <div class="plan-card-header professional-gradient">
+                                                        <div class="plan-icon">
+                                                            <i class="fas fa-star"></i>
+                                                        </div>
+                                                        <h5 class="plan-name">Professional</h5>
+                                                        <div class="plan-price">$299<span class="period">/ay</span></div>
+                                                        <div class="popular-badge">Popüler</div>
+                                                    </div>
+                                                    <div class="plan-card-body">
+                                                        <div class="plan-features">
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-video text-primary"></i>
+                                                                <span>100 Kamera</span>
+                                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-brain text-success"></i>
+                                                                <span>AI Tespit (24/7)</span>
+                                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-headset text-warning"></i>
+                                                                <span>7/24 Destek</span>
+                                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-chart-line text-info"></i>
+                                                                <span>Detaylı Analitik</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="plan-badge professional-badge">Gelişmiş</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Enterprise Plan -->
+                                            <div class="col-md-4">
+                                                <div class="plan-card-modern" data-plan="enterprise" onclick="selectPlanCard('enterprise')">
+                                                    <input type="radio" name="subscription_plan" value="enterprise" id="plan_enterprise" style="display: none;">
+                                                    <div class="plan-card-header enterprise-gradient">
+                                                        <div class="plan-icon">
+                                                            <i class="fas fa-crown"></i>
+                                                        </div>
+                                                        <h5 class="plan-name">Enterprise</h5>
+                                                        <div class="plan-price">$599<span class="period">/ay</span></div>
+                                                    </div>
+                                                    <div class="plan-card-body">
+                                                        <div class="plan-features">
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-video text-primary"></i>
+                                                                <span>500 Kamera</span>
+                                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-brain text-success"></i>
+                                                                <span>AI Tespit (24/7)</span>
+                                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-headset text-danger"></i>
+                                                                <span>Öncelikli Destek</span>
+                                                            </div>
+                                                            <div class="feature-item">
+                                                                <i class="fas fa-cogs text-purple"></i>
+                                                                <span>API Erişimi</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="plan-badge enterprise-badge">Premium</div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="alert alert-info mt-2">
-                                            <i class="fas fa-info-circle"></i> 
-                                            <strong>Max kamera sayısı otomatik olarak seçilen plana göre belirlenir.</strong><br>
-                                            İlk 30 gün ücretsiz! İstediğiniz zaman planınızı değiştirebilirsiniz.
-                                            <br><br>
-                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPlanDetailsModal()">
-                                                <i class="fas fa-info-circle"></i> Plan Detaylarını Gör
+
+                                        <!-- Plan Bilgi Kartı -->
+                                        <div class="plan-info-card">
+                                            <div class="row align-items-center">
+                                                <div class="col-md-8">
+                                                    <div class="plan-info-content">
+                                                        <i class="fas fa-info-circle text-primary me-2"></i>
+                                                        <strong>Max kamera sayısı otomatik olarak seçilen plana göre belirlenir.</strong>
+                                                        <br>
+                                                        <span class="text-muted">İlk 30 gün ücretsiz! İstediğiniz zaman planınızı değiştirebilirsiniz.</span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 text-end">
+                                                    <button type="button" class="btn btn-outline-primary btn-modern" onclick="window.open('/upgrade-modal', '_blank', 'width=1400,height=900,scrollbars=yes,resizable=yes,toolbar=no,menubar=no')">
+                                                        <i class="fas fa-info-circle me-2"></i>
+                                                        Plan Detaylarını Gör
                                             </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -9011,26 +9299,29 @@ Mesaj:
         <body>
             <nav class="navbar navbar-expand-lg navbar-light bg-white">
                 <div class="container">
-                    <a class="navbar-brand fw-bold" href="#">
+                    <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
                         <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
                     </a>
                     <div class="navbar-nav ms-auto">
-                        <a class="btn btn-outline-primary btn-sm me-2" href="/company/{{ company_id }}/settings">
-                            <i class="fas fa-cog"></i> Ayarlar
+                        <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
-                        <a class="btn btn-outline-secondary btn-sm me-2" href="/company/{{ company_id }}/users">
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/users">
                             <i class="fas fa-users"></i> Kullanıcılar
                         </a>
-                        <a class="btn btn-outline-info btn-sm me-2" href="/company/{{ company_id }}/reports">
+                        <a class="nav-link" href="/company/{{ company_id }}/reports">
                             <i class="fas fa-chart-line"></i> Raporlar
                         </a>
-                        <a class="btn btn-outline-warning btn-sm me-2" href="/company/{{ company_id }}/cameras">
-                            <i class="fas fa-video"></i> Kameralar
+                        <a class="nav-link" href="/company/{{ company_id }}/settings">
+                            <i class="fas fa-cog"></i> Ayarlar
                         </a>
                         
                         <!-- Profil Dropdown -->
                         <div class="nav-item dropdown">
-                            <a class="btn btn-outline-dark btn-sm dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <div class="profile-avatar me-2">
                                     <i class="fas fa-building"></i>
                                 </div>
@@ -9044,7 +9335,7 @@ Mesaj:
                                         </div>
                                         <div>
                                             <div class="fw-bold">{{ user_data.company_name }}</div>
-                                            <small class="text-muted">{{ company_id }}</small>
+                                            <small class="text-white">{{ company_id }}</small>
                                         </div>
                                     </div>
                                 </li>
@@ -10906,6 +11197,74 @@ Mesaj:
                     transform: translateY(-5px);
                     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
                 }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
 
                 .plan-card.selected {
                     border-color: #007bff;
@@ -10951,12 +11310,11 @@ Mesaj:
                         <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
                     </a>
                     <div class="navbar-nav ms-auto">
-                        <span class="nav-link fw-bold">
-                            <i class="fas fa-building text-primary"></i> 
-                            {{ user_data.company_name }}
-                        </span>
                         <a class="nav-link" href="/company/{{ company_id }}/dashboard">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
                         </a>
                         <a class="nav-link" href="/company/{{ company_id }}/users">
                             <i class="fas fa-users"></i> Kullanıcılar
@@ -10964,9 +11322,54 @@ Mesaj:
                         <a class="nav-link" href="/company/{{ company_id }}/reports">
                             <i class="fas fa-chart-line"></i> Raporlar
                         </a>
-                        <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                            <i class="fas fa-sign-out-alt"></i> Çıkış
-                        </button>
+                        <a class="nav-link active" href="/company/{{ company_id }}/settings">
+                            <i class="fas fa-cog"></i> Ayarlar
+                        </a>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-white">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </nav>
@@ -11470,54 +11873,99 @@ Mesaj:
             </div>
             
             
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
             <script>
                 const companyId = '{{ company_id }}';
                 let selectedPlan = null;
                 let currentPlan = null;
                 
-                // Email validation function
-                function validateEmail(input) {
-                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/;
-                    const isValid = emailRegex.test(input.value);
+                // Plan seçimi fonksiyonu (Modern kartlar için)
+                function selectPlanCard(plan) {
+                    selectedPlan = plan;
+                    console.log('Plan seçildi:', selectedPlan);
                     
-                    if (input.value && !isValid) {
-                        input.classList.add('is-invalid');
-                        input.classList.remove('is-valid');
+                    // Radio button'u seç
+                    const radioButton = document.getElementById('plan_' + plan);
+                    if (radioButton) {
+                        radioButton.checked = true;
+                        console.log('Radio button seçildi:', plan);
+                    }
+                    
+                    // Tüm kartlardan seçim işaretini kaldır
+                    document.querySelectorAll('.plan-card-modern').forEach(card => {
+                        card.classList.remove('selected');
+                        console.log('Kart temizlendi:', card.getAttribute('data-plan'));
+                    });
+                    
+                    // Seçilen kartı işaretle
+                    const selectedCard = document.querySelector('[data-plan="' + plan + '"]');
+                    if (selectedCard) {
+                        selectedCard.classList.add('selected');
+                        console.log('Kart seçildi:', plan);
                         
-                        // Remove existing error message
-                        const existingError = input.parentNode.querySelector('.invalid-feedback');
-                        if (existingError) {
-                            existingError.remove();
+                        // Seçilen kartın görünür olduğundan emin ol
+                        selectedCard.style.zIndex = '10';
+                        selectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    
+                    // Onay butonunu aktif et (eğer varsa)
+                    const confirmBtn = document.getElementById('confirm-upgrade-btn');
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                    }
+                }
+
+                // Eski selectPlan fonksiyonu (geriye uyumluluk için)
+                function selectPlan(plan) {
+                    selectPlanCard(plan);
+                }
+                
+                // Plan detaylarını göster
+                function showPlanDetails(plan) {
+                    const planDetails = {
+                        'starter': {
+                            name: 'Starter',
+                            price: '$99/ay',
+                            cameras: '25 Kamera',
+                            features: ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik']
+                        },
+                        'professional': {
+                            name: 'Professional',
+                            price: '$299/ay',
+                            cameras: '100 Kamera',
+                            features: ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler']
+                        },
+                        'enterprise': {
+                            name: 'Enterprise',
+                            price: '$599/ay',
+                            cameras: '500 Kamera',
+                            features: ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı']
                         }
+                    };
+                    
+                    const details = planDetails[plan];
+                    const detailsDiv = document.getElementById('plan-details-content');
+                    if (detailsDiv && details) {
+                        detailsDiv.innerHTML = 
+                            '<div class="row">' +
+                                '<div class="col-md-6">' +
+                                    '<strong>Plan:</strong> ' + details.name + '<br>' +
+                                    '<strong>Fiyat:</strong> ' + details.price + '<br>' +
+                                    '<strong>Kamera Limiti:</strong> ' + details.cameras +
+                                '</div>' +
+                                '<div class="col-md-6">' +
+                                    '<strong>Özellikler:</strong><br>' +
+                                    details.features.map(feature => '<i class="fas fa-check text-success"></i> ' + feature).join('<br>') +
+                                '</div>' +
+                            '</div>';
                         
-                        // Add error message
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'invalid-feedback';
-                        errorDiv.textContent = 'Please enter a valid email address (Turkish characters are supported)';
-                        input.parentNode.appendChild(errorDiv);
-                    } else if (input.value && isValid) {
-                        input.classList.add('is-valid');
-                        input.classList.remove('is-invalid');
-                        
-                        // Remove error message
-                        const existingError = input.parentNode.querySelector('.invalid-feedback');
-                        if (existingError) {
-                            existingError.remove();
-                        }
-                    } else {
-                        input.classList.remove('is-valid', 'is-invalid');
-                        
-                        // Remove error message
-                        const existingError = input.parentNode.querySelector('.invalid-feedback');
-                        if (existingError) {
-                            existingError.remove();
+                        const selectedPlanDetails = document.getElementById('selected-plan-details');
+                        if (selectedPlanDetails) {
+                            selectedPlanDetails.style.display = 'block';
                         }
                     }
                 }
-            </script>
-            
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-            <script>
+                
                 // Email Validation Function
                 function validateEmail(input) {
                     const emailRegex = /^[a-zA-Z0-9._%+-çğıöşüÇĞIİÖŞÜ]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/;
@@ -11567,6 +12015,17 @@ Mesaj:
                 function initializeSettings() {
                     console.log('Initializing settings page...');
                     
+                    // Varsayılan planı seçili yap
+                    setTimeout(() => {
+                        selectPlanCard('starter');
+                    }, 100);
+                    
+                    // Sayfa yüklendiğinde plan seçimi için event listener ekle
+                    document.addEventListener('DOMContentLoaded', function() {
+                        console.log('DOM loaded, initializing plan selection...');
+                        selectPlanCard('starter');
+                    });
+                    
                     // Simple and reliable navigation
                         const navLinks = document.querySelectorAll('.nav-link[data-section]');
                     const sections = document.querySelectorAll('.settings-section');
@@ -11584,12 +12043,12 @@ Mesaj:
                         if (activeLink) {
                             activeLink.classList.add('active');
                         }
-                        
-                        // Show target section
+                            
+                            // Show target section
                         sections.forEach(section => section.style.display = 'none');
                         const targetElement = document.getElementById(sectionName + '-section');
-                        if (targetElement) {
-                            targetElement.style.display = 'block';
+                            if (targetElement) {
+                                targetElement.style.display = 'block';
                             console.log('Section displayed:', sectionName);
                             
                             // PPE config sekmesine geçildiğinde yükle
@@ -11613,11 +12072,11 @@ Mesaj:
                     // Add click handlers to nav links
                     navLinks.forEach(link => {
                         link.addEventListener('click', function(e) {
-                            e.preventDefault();
+                                    e.preventDefault();
                             const targetSection = this.getAttribute('data-section');
                             switchToSection(targetSection);
-                            
-                            // Update URL hash
+                                        
+                                        // Update URL hash
                             window.location.hash = targetSection;
                         });
                     });
@@ -11644,7 +12103,7 @@ Mesaj:
                 
                 // Initialize immediately and after DOM load
                 initializeSettings();
-                document.addEventListener('DOMContentLoaded', initializeSettings);
+                    document.addEventListener('DOMContentLoaded', initializeSettings);
                 
                 // Handle hash changes
                 window.addEventListener('hashchange', function() {
@@ -11655,9 +12114,9 @@ Mesaj:
                     const sections = document.querySelectorAll('.settings-section');
                     
                     if (hash) {
-                        const targetLink = document.querySelector('[data-section="' + hash + '"]');
-                        if (targetLink) {
-                            console.log('Found target link for hash change:', hash);
+                                            const targetLink = document.querySelector('[data-section="' + hash + '"]');
+                    if (targetLink) {
+                        console.log('Found target link for hash change:', hash);
                             
                             // Update active state
                             navLinks.forEach(nl => nl.classList.remove('active'));
@@ -11686,8 +12145,8 @@ Mesaj:
                                     }, 200);
                                 }
                             }
-                        } else {
-                            console.log('No target link found for hash change:', hash);
+                    } else {
+                        console.log('No target link found for hash change:', hash);
                         }
                     }
                 });
@@ -12175,9 +12634,81 @@ Mesaj:
 
                 // Plan yükseltme modal'ını aç
                 function openUpgradeModal() {
-                    loadCurrentPlanInfo();
-                    const modal = new bootstrap.Modal(document.getElementById('upgradePlanModal'));
-                    modal.show();
+                    // Merkezi modal'ı yeni sekmede aç
+                    const companyId = '{{ company_id }}';
+                    const currentPlan = getCurrentUserPlan();
+                    window.open(`/company/${companyId}/upgrade-modal?current_plan=${currentPlan}`, '_blank', 'width=1400,height=900,scrollbars=yes,resizable=yes,toolbar=no,menubar=no');
+                }
+
+                // Kullanıcının mevcut planını al
+                function getCurrentUserPlan() {
+                    // Subscription type elementinden al
+                    const subscriptionTypeElement = document.getElementById('subscription-type');
+                    if (subscriptionTypeElement) {
+                        return subscriptionTypeElement.textContent.toLowerCase().trim();
+                    }
+                    
+                    // localStorage'dan al
+                    const storedPlan = localStorage.getItem('current_plan');
+                    if (storedPlan) {
+                        return storedPlan;
+                    }
+                    
+                    return 'starter'; // Varsayılan
+                }
+
+                // Global olarak erişilebilir yap
+                window.getCurrentUserPlan = getCurrentUserPlan;
+
+                // PostMessage listener - Plan yükseltme bildirimi dinle
+                window.addEventListener('message', function(event) {
+                    if (event.data && event.data.type === 'PLAN_UPGRADED') {
+                        console.log('🎉 Plan yükseltme başarılı:', event.data.data);
+                        
+                        // Başarı mesajı göster
+                        showPlanUpgradeSuccess(event.data.data);
+                        
+                        // Abonelik bilgilerini yenile
+                        if (typeof loadSubscriptionInfo === 'function') {
+                            setTimeout(() => {
+                                loadSubscriptionInfo();
+                            }, 1000);
+                        }
+                        
+                        // Sayfayı yenile (isteğe bağlı)
+                        setTimeout(() => {
+                            location.reload();
+                        }, 3000);
+                    }
+                });
+
+                // Plan yükseltme başarı mesajı
+                function showPlanUpgradeSuccess(data) {
+                    const successHtml = `
+                        <div class="alert alert-success alert-dismissible fade show position-fixed" 
+                             style="top: 20px; right: 20px; z-index: 9999; min-width: 350px;">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-crown me-3" style="font-size: 1.5rem; color: #ffd700;"></i>
+                                <div>
+                                    <strong>🎉 Plan Başarıyla Yükseltildi!</strong>
+                                    <br><small>Yeni Plan: ${data.plan_name} - ${data.max_cameras} Kamera</small>
+                                    <br><small class="text-muted">Sayfa otomatik yenilenecek...</small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = successHtml;
+                    document.body.appendChild(tempDiv);
+                    
+                    // 5 saniye sonra kaldır
+                    setTimeout(() => {
+                        if (tempDiv.parentNode) {
+                            tempDiv.remove();
+                        }
+                    }, 5000);
                 }
 
                 // Plan seçimi
@@ -12975,6 +13506,74 @@ Mesaj:
                     padding: 15px;
                     text-align: center;
                 }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
             </style>
         </head>
         <body>
@@ -12984,12 +13583,11 @@ Mesaj:
                         <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
                     </a>
                     <div class="navbar-nav ms-auto">
-                        <span class="nav-link fw-bold">
-                            <i class="fas fa-building text-primary"></i> 
-                            {{ user_data.company_name }}
-                        </span>
                         <a class="nav-link" href="/company/{{ company_id }}/dashboard">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
                         </a>
                         <a class="nav-link active" href="/company/{{ company_id }}/users">
                             <i class="fas fa-users"></i> Kullanıcılar
@@ -13000,9 +13598,51 @@ Mesaj:
                         <a class="nav-link" href="/company/{{ company_id }}/settings">
                             <i class="fas fa-cog"></i> Ayarlar
                         </a>
-                        <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                            <i class="fas fa-sign-out-alt"></i> Çıkış
-                        </button>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-white">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </nav>
@@ -13552,6 +14192,74 @@ Mesaj:
                 .table-hover tbody tr:hover {
                     background-color: rgba(102, 126, 234, 0.1);
                 }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
             </style>
         </head>
         <body>
@@ -13561,12 +14269,11 @@ Mesaj:
                         <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
                     </a>
                     <div class="navbar-nav ms-auto">
-                        <span class="nav-link fw-bold">
-                            <i class="fas fa-building text-primary"></i> 
-                            {{ user_data.company_name }}
-                        </span>
                         <a class="nav-link" href="/company/{{ company_id }}/dashboard">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
                         </a>
                         <a class="nav-link" href="/company/{{ company_id }}/users">
                             <i class="fas fa-users"></i> Kullanıcılar
@@ -13577,9 +14284,51 @@ Mesaj:
                         <a class="nav-link" href="/company/{{ company_id }}/settings">
                             <i class="fas fa-cog"></i> Ayarlar
                         </a>
-                        <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                            <i class="fas fa-sign-out-alt"></i> Çıkış
-                        </button>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-white">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </nav>

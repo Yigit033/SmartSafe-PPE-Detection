@@ -606,8 +606,79 @@
 
         // Open upgrade modal
         function openUpgradeModal() {
-            const modal = new bootstrap.Modal(document.getElementById('upgradePlanModal'));
-            modal.show();
+            // Merkezi modal'ı yeni sekmede aç
+            const companyId = '{{ company_id }}';
+            const currentPlan = getCurrentUserPlan();
+            window.open(`/company/${companyId}/upgrade-modal?current_plan=${currentPlan}`, '_blank', 'width=1400,height=900,scrollbars=yes,resizable=yes,toolbar=no,menubar=no');
+        }
+
+        // Kullanıcının mevcut planını al
+        function getCurrentUserPlan() {
+            // Plan type elementinden al
+            const planTypeElement = document.getElementById('plan-type');
+            if (planTypeElement) {
+                return planTypeElement.textContent.toLowerCase().trim();
+            }
+            
+            // localStorage'dan al
+            const storedPlan = localStorage.getItem('current_plan');
+            if (storedPlan) {
+                return storedPlan;
+            }
+            
+            return 'starter'; // Varsayılan
+        }
+
+        // Global olarak erişilebilir yap
+        window.getCurrentUserPlan = getCurrentUserPlan;
+
+        // PostMessage listener - Plan yükseltme bildirimi dinle
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'PLAN_UPGRADED') {
+                console.log('🎉 Plan yükseltme başarılı:', event.data.data);
+                
+                // Başarı mesajı göster
+                showPlanUpgradeSuccess(event.data.data);
+                
+                // Abonelik bilgilerini yenile
+                setTimeout(() => {
+                    loadSubscriptionData();
+                }, 1000);
+                
+                // Sayfayı yenile
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            }
+        });
+
+        // Plan yükseltme başarı mesajı
+        function showPlanUpgradeSuccess(data) {
+            const successHtml = `
+                <div class="alert alert-success alert-dismissible fade show position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999; min-width: 350px;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-crown me-3" style="font-size: 1.5rem; color: #ffd700;"></i>
+                        <div>
+                            <strong>🎉 Plan Başarıyla Yükseltildi!</strong>
+                            <br><small>Yeni Plan: ${data.plan_name} - ${data.max_cameras} Kamera</small>
+                            <br><small class="text-muted">Sayfa otomatik yenilenecek...</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = successHtml;
+            document.body.appendChild(tempDiv);
+            
+            // 5 saniye sonra kaldır
+            setTimeout(() => {
+                if (tempDiv.parentNode) {
+                    tempDiv.remove();
+                }
+            }, 5000);
         }
 
         // Select plan

@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSafe AI - Abonelik Planı Yükselt</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --light-bg: #f8fafc;
+            --card-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            --border-radius: 16px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .modal-content {
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+            color: white;
+            border: none;
+            padding: 2rem;
+        }
+
+        .modal-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 3rem 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="%23e0f2fe" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            background: linear-gradient(135deg, var(--success-color) 0%, #047857 100%);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: inline-block;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: var(--secondary-color);
+            margin-bottom: 0;
+        }
+
+        .plans-container {
+            padding: 3rem 2rem;
+            background: white;
+        }
+
+        .plan-card {
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            transition: var(--transition);
+            position: relative;
+            overflow: visible;
+            height: 100%;
+            margin-top: 20px;
+        }
+
+        .plan-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .plan-card.selected {
+            border: 3px solid var(--primary-color);
+            box-shadow: 0 0 30px rgba(37, 99, 235, 0.3);
+        }
+
+        .plan-header {
+            padding: 2rem 1.5rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .plan-badge {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--warning-color) 0%, #b45309 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3);
+            z-index: 10;
+        }
+
+        .plan-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+            color: white;
+        }
+
+        .plan-icon.starter {
+            background: linear-gradient(135deg, var(--success-color) 0%, #047857 100%);
+        }
+
+        .plan-icon.professional {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+        }
+
+        .plan-icon.enterprise {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #b91c1c 100%);
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-description {
+            color: var(--secondary-color);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .plan-price {
+            text-align: center;
+            padding: 1.5rem;
+            background: var(--light-bg);
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .price-amount {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            line-height: 1;
+        }
+
+        .price-period {
+            color: var(--secondary-color);
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .plan-features {
+            padding: 1.5rem;
+            flex-grow: 1;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .feature-icon.success { background: var(--success-color); }
+        .feature-icon.primary { background: var(--primary-color); }
+        .feature-icon.warning { background: var(--warning-color); }
+        .feature-icon.danger { background: var(--danger-color); }
+        .feature-icon.secondary { background: var(--secondary-color); }
+
+        .feature-text {
+            color: #334155;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .plan-cta {
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .btn-select-plan {
+            width: 100%;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: var(--transition);
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-select-plan::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-select-plan:hover::before {
+            left: 100%;
+        }
+
+        .btn-starter {
+            background: linear-gradient(135deg, var(--success-color) 0%, #047857 100%);
+            color: white;
+        }
+
+        .btn-professional {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+            color: white;
+        }
+
+        .btn-enterprise {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #b91c1c 100%);
+            color: white;
+        }
+
+        .comparison-table {
+            margin-top: 3rem;
+            background: white;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+        }
+
+        .table-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .table-header h5 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .comparison-table .table {
+            margin: 0;
+        }
+
+        .comparison-table .table th {
+            background: #f8fafc;
+            border: none;
+            padding: 1rem;
+            font-weight: 600;
+            color: #475569;
+            text-align: center;
+        }
+
+        .comparison-table .table td {
+            border: none;
+            padding: 1rem;
+            text-align: center;
+            vertical-align: middle;
+            color: #334155;
+        }
+
+        .comparison-table .table tbody tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .feature-check {
+            color: var(--success-color);
+            font-size: 1.25rem;
+        }
+
+        .feature-dash {
+            color: var(--secondary-color);
+            font-size: 1.25rem;
+        }
+
+        .important-info {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+
+        .important-info h6 {
+            color: #92400e;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .important-info ul {
+            margin: 0;
+            padding-left: 1.5rem;
+            color: #92400e;
+        }
+
+        .important-info li {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .modal-footer {
+            background: var(--light-bg);
+            border-top: 1px solid #e2e8f0;
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-cancel {
+            background: #64748b;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .btn-cancel:hover {
+            background: #475569;
+            color: white;
+        }
+
+        .btn-confirm {
+            background: linear-gradient(135deg, var(--success-color) 0%, #047857 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .btn-confirm:hover {
+            background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+            color: white;
+        }
+
+        .btn-confirm:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        .current-plan-indicator {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--success-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .modal-dialog {
+                margin: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+            
+            .hero-title {
+                font-size: 2rem;
+            }
+            
+            .price-amount {
+                font-size: 2.5rem;
+            }
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Abonelik Planı Yükseltme Modal -->
+    <div class="modal fade" id="subscriptionUpgradeModal" tabindex="-1" aria-labelledby="subscriptionUpgradeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h5 class="modal-title" id="subscriptionUpgradeModalLabel">
+                        <i class="fas fa-crown"></i>
+                        Abonelik Planını Yükselt
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <!-- Hero Section -->
+                <div class="hero-section">
+                    <div class="hero-content">
+                        <div class="hero-badge">
+                            <i class="fas fa-gift me-2"></i>
+                            İlk 30 Gün Ücretsiz Deneme!
+                        </div>
+                        <h1 class="hero-title">İşletmenizi Büyütün</h1>
+                        <p class="hero-subtitle">Daha fazla özellik ve kamera ile SmartSafe AI'ın gücünü keşfedin</p>
+                    </div>
+                </div>
+
+                <!-- Plans Container -->
+                <div class="plans-container">
+                    <div class="row g-4">
+                        <!-- Starter Plan -->
+                        <div class="col-lg-4">
+                            <div class="plan-card" data-plan="starter">
+                                <div class="plan-header">
+                                    <div class="plan-icon starter">
+                                        <i class="fas fa-rocket"></i>
+                                    </div>
+                                    <h3 class="plan-name">Starter</h3>
+                                    <p class="plan-description">Küçük işletmeler için AI destekli PPE tespiti</p>
+                                </div>
+                                
+                                <div class="plan-price">
+                                    <div class="price-amount">$99</div>
+                                    <div class="price-period">/ay</div>
+                                </div>
+                                
+                                <div class="plan-features">
+                                    <div class="feature-item">
+                                        <div class="feature-icon success">
+                                            <i class="fas fa-video"></i>
+                                        </div>
+                                        <span class="feature-text">25 Kamera</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon primary">
+                                            <i class="fas fa-brain"></i>
+                                        </div>
+                                        <span class="feature-text">AI Tespit (24/7)</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon warning">
+                                            <i class="fas fa-headset"></i>
+                                        </div>
+                                        <span class="feature-text">Email Destek</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon success">
+                                            <i class="fas fa-chart-bar"></i>
+                                        </div>
+                                        <span class="feature-text">Temel Raporlar</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon secondary">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <span class="feature-text">Temel Güvenlik</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="plan-cta">
+                                    <button class="btn-select-plan btn-starter" onclick="selectPlan('starter')">
+                                        <i class="fas fa-check me-2"></i>
+                                        Seç
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Professional Plan -->
+                        <div class="col-lg-4">
+                            <div class="plan-card" data-plan="professional">
+                                <div class="plan-badge">
+                                    <i class="fas fa-star me-1"></i>
+                                    En Popüler
+                                </div>
+                                <div class="plan-header">
+                                    <div class="plan-icon professional">
+                                        <i class="fas fa-crown"></i>
+                                    </div>
+                                    <h3 class="plan-name">Professional</h3>
+                                    <p class="plan-description">Büyüyen işletmeler için gelişmiş AI tespit sistemi</p>
+                                </div>
+                                
+                                <div class="plan-price">
+                                    <div class="price-amount">$299</div>
+                                    <div class="price-period">/ay</div>
+                                </div>
+                                
+                                <div class="plan-features">
+                                    <div class="feature-item">
+                                        <div class="feature-icon success">
+                                            <i class="fas fa-video"></i>
+                                        </div>
+                                        <span class="feature-text">100 Kamera</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon primary">
+                                            <i class="fas fa-brain"></i>
+                                        </div>
+                                        <span class="feature-text">AI Tespit (24/7)</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon danger">
+                                            <i class="fas fa-headset"></i>
+                                        </div>
+                                        <span class="feature-text">7/24 Destek</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon warning">
+                                            <i class="fas fa-chart-line"></i>
+                                        </div>
+                                        <span class="feature-text">Detaylı Analitik</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon success">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <span class="feature-text">Gelişmiş Güvenlik</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon secondary">
+                                            <i class="fas fa-bell"></i>
+                                        </div>
+                                        <span class="feature-text">Gelişmiş Bildirimler</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="plan-cta">
+                                    <button class="btn-select-plan btn-professional" onclick="selectPlan('professional')">
+                                        <i class="fas fa-crown me-2"></i>
+                                        Seç
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Enterprise Plan -->
+                        <div class="col-lg-4">
+                            <div class="plan-card" data-plan="enterprise">
+                                <div class="plan-header">
+                                    <div class="plan-icon enterprise">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <h3 class="plan-name">Enterprise</h3>
+                                    <p class="plan-description">Büyük kurumlar için endüstriyel AI tespit sistemi</p>
+                                </div>
+                                
+                                <div class="plan-price">
+                                    <div class="price-amount">$599</div>
+                                    <div class="price-period">/ay</div>
+                                </div>
+                                
+                                <div class="plan-features">
+                                    <div class="feature-item">
+                                        <div class="feature-icon success">
+                                            <i class="fas fa-video"></i>
+                                        </div>
+                                        <span class="feature-text">500 Kamera</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon primary">
+                                            <i class="fas fa-brain"></i>
+                                        </div>
+                                        <span class="feature-text">AI Tespit (24/7)</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon danger">
+                                            <i class="fas fa-headset"></i>
+                                        </div>
+                                        <span class="feature-text">Öncelikli Destek</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon warning">
+                                            <i class="fas fa-chart-pie"></i>
+                                        </div>
+                                        <span class="feature-text">Özel Raporlar</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon success">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <span class="feature-text">Maksimum Güvenlik</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon secondary">
+                                            <i class="fas fa-cogs"></i>
+                                        </div>
+                                        <span class="feature-text">API Erişimi</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <div class="feature-icon primary">
+                                            <i class="fas fa-users"></i>
+                                        </div>
+                                        <span class="feature-text">Çoklu Kullanıcı</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="plan-cta">
+                                    <button class="btn-select-plan btn-enterprise" onclick="selectPlan('enterprise')">
+                                        <i class="fas fa-building me-2"></i>
+                                        Seç
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feature Comparison Table -->
+                    <div class="comparison-table">
+                        <div class="table-header">
+                            <h5><i class="fas fa-table me-2"></i>Özellik Karşılaştırması</h5>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Özellik</th>
+                                        <th class="text-center">Starter</th>
+                                        <th class="text-center">Professional</th>
+                                        <th class="text-center">Enterprise</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><i class="fas fa-video me-2 text-primary"></i>Kamera Sayısı</td>
+                                        <td class="text-center">25</td>
+                                        <td class="text-center">100</td>
+                                        <td class="text-center">500</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-brain me-2 text-primary"></i>AI Tespit</td>
+                                        <td class="text-center">24/7</td>
+                                        <td class="text-center">24/7</td>
+                                        <td class="text-center">24/7</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-headset me-2 text-primary"></i>Destek</td>
+                                        <td class="text-center">Email</td>
+                                        <td class="text-center">7/24</td>
+                                        <td class="text-center">Öncelikli</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-chart-line me-2 text-primary"></i>Raporlar</td>
+                                        <td class="text-center">Temel</td>
+                                        <td class="text-center">Detaylı</td>
+                                        <td class="text-center">Özel</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-shield-alt me-2 text-primary"></i>Güvenlik</td>
+                                        <td class="text-center">Temel</td>
+                                        <td class="text-center">Gelişmiş</td>
+                                        <td class="text-center">Maksimum</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-bell me-2 text-primary"></i>Bildirimler</td>
+                                        <td class="text-center"><i class="fas fa-minus feature-dash"></i></td>
+                                        <td class="text-center">Gelişmiş</td>
+                                        <td class="text-center"><i class="fas fa-minus feature-dash"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-cogs me-2 text-primary"></i>API Erişimi</td>
+                                        <td class="text-center"><i class="fas fa-minus feature-dash"></i></td>
+                                        <td class="text-center"><i class="fas fa-minus feature-dash"></i></td>
+                                        <td class="text-center"><i class="fas fa-check feature-check"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fas fa-users me-2 text-primary"></i>Çoklu Kullanıcı</td>
+                                        <td class="text-center"><i class="fas fa-minus feature-dash"></i></td>
+                                        <td class="text-center"><i class="fas fa-minus feature-dash"></i></td>
+                                        <td class="text-center"><i class="fas fa-check feature-check"></i></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Important Information -->
+                    <div class="important-info">
+                        <h6>
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Önemli Bilgiler
+                        </h6>
+                        <ul>
+                            <li>Plan değişikliği anında etkili olur</li>
+                            <li>Mevcut kameralarınız korunur</li>
+                            <li>Yeni limitler hemen uygulanır</li>
+                            <li>Fatura döneminiz değişmez</li>
+                            <li>İlk 30 gün ücretsiz deneme süresi</li>
+                            <li>İstediğiniz zaman planınızı değiştirebilirsiniz</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>
+                        İptal
+                    </button>
+                    <button type="button" class="btn btn-confirm" id="confirmUpgradeBtn" onclick="confirmPlanUpgrade()" disabled>
+                        <div class="loading-spinner" id="loadingSpinner"></div>
+                        <i class="fas fa-check me-2"></i>
+                        Planı Değiştir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedPlan = null;
+        let currentPlan = null;
+        let companyId = null;
+
+        // Modal açıldığında çalışacak fonksiyon
+        function initializeUpgradeModal(company_id, current_plan = null) {
+            companyId = company_id || getCompanyIdFromURL();
+            currentPlan = current_plan || getCurrentPlanFromStorage();
+            
+            console.log('initializeUpgradeModal çağrıldı');
+            console.log('company_id parametresi:', company_id);
+            console.log('getCompanyIdFromURL sonucu:', getCompanyIdFromURL());
+            console.log('Final companyId:', companyId);
+            
+            // Eğer company_id yoksa (şirket kayıt sayfasından)
+            if (!companyId) {
+                console.log('Şirket kayıt sayfasından açıldı - sadece bilgi modu');
+                // Plan değiştirme butonunu gizle
+                const confirmBtn = document.getElementById('confirmUpgradeBtn');
+                if (confirmBtn) {
+                    confirmBtn.style.display = 'none';
+                }
+                // Bilgi mesajı göster
+                showInfoMessage('Bu sayfa sadece plan bilgilerini göstermektedir. Plan değiştirme işlemi için lütfen önce şirket kaydınızı tamamlayın.');
+            } else {
+                console.log('Mevcut şirket - plan değiştirme modu');
+                // Normal plan değiştirme modu
+                const confirmBtn = document.getElementById('confirmUpgradeBtn');
+                if (confirmBtn) {
+                    confirmBtn.style.display = 'block';
+                }
+                // Mevcut planı işaretle
+                if (currentPlan) {
+                    markCurrentPlan(currentPlan);
+                }
+            }
+            
+            // Modal'ı göster
+            const modal = new bootstrap.Modal(document.getElementById('subscriptionUpgradeModal'));
+            modal.show();
+        }
+
+        // Plan seçimi
+        function selectPlan(plan) {
+            console.log('selectPlan çağrıldı:', plan);
+            selectedPlan = plan;
+            console.log('selectedPlan değişkeni set edildi:', selectedPlan);
+            
+            // Tüm kartlardan seçim işaretini kaldır
+            document.querySelectorAll('.plan-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Seçilen kartı işaretle
+            const selectedCard = document.querySelector(`[data-plan="${plan}"]`);
+            if (selectedCard) {
+                selectedCard.classList.add('selected');
+                console.log('Kart seçildi:', plan);
+            }
+            
+            // Onay butonunu aktif et
+            const confirmBtn = document.getElementById('confirmUpgradeBtn');
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                console.log('Onay butonu aktif edildi');
+            } else {
+                console.log('Onay butonu bulunamadı!');
+            }
+        }
+
+        // Mevcut planı işaretle
+        function markCurrentPlan(plan) {
+            const currentCard = document.querySelector(`[data-plan="${plan}"]`);
+            if (currentCard) {
+                currentCard.classList.add('selected');
+                currentCard.style.position = 'relative';
+                
+                // Mevcut plan göstergesi ekle
+                const indicator = document.createElement('div');
+                indicator.className = 'current-plan-indicator';
+                indicator.innerHTML = '<i class="fas fa-check me-1"></i>Mevcut Plan';
+                currentCard.appendChild(indicator);
+            }
+        }
+
+        // Plan yükseltmeyi onayla
+        function confirmPlanUpgrade() {
+            console.log('confirmPlanUpgrade çağrıldı');
+            console.log('selectedPlan:', selectedPlan);
+            console.log('companyId:', companyId);
+            
+            if (!selectedPlan) {
+                console.log('Plan seçimi eksik!');
+                alert('Lütfen bir plan seçin');
+                return;
+            }
+            
+            if (!companyId) {
+                console.log('Company ID eksik - şirket kayıt sayfasından açıldı');
+                alert('Bu sayfa sadece plan bilgilerini göstermektedir. Plan değiştirme işlemi için lütfen önce şirket kaydınızı tamamlayın.');
+                return;
+            }
+
+            if (selectedPlan === currentPlan) {
+                alert('Zaten bu plandasınız!');
+                return;
+            }
+
+            // Loading göster
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const confirmBtn = document.getElementById('confirmUpgradeBtn');
+            loadingSpinner.style.display = 'inline-block';
+            confirmBtn.disabled = true;
+
+            // API çağrısı
+            fetch(`/api/company/${companyId}/subscription/change-plan`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    new_plan: selectedPlan
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    // Başarı mesajı
+                    showSuccessMessage('✅ Plan başarıyla değiştirildi!', result);
+                    
+                    // Parent window'a bildirim gönder (eğer popup ise)
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'PLAN_UPGRADED',
+                            data: result
+                        }, '*');
+                        
+                        // 2 saniye sonra popup'ı kapat
+                        setTimeout(() => {
+                            window.close();
+                        }, 2000);
+                    } else {
+                        // Modal olarak açıldıysa
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('subscriptionUpgradeModal'));
+                        if (modal) {
+                            modal.hide();
+                        }
+                        
+                        // Sayfayı yenile veya callback çağır
+                        if (typeof window.onPlanUpgraded === 'function') {
+                            window.onPlanUpgraded(result);
+                        } else {
+                            setTimeout(() => {
+                                location.reload();
+                            }, 1000);
+                        }
+                    }
+                } else {
+                    showErrorMessage('❌ Hata: ' + result.error);
+                }
+            })
+            .catch(error => {
+                console.error('Plan değiştirme hatası:', error);
+                alert('❌ Plan değiştirme sırasında bir hata oluştu');
+            })
+            .finally(() => {
+                // Loading gizle
+                loadingSpinner.style.display = 'none';
+                confirmBtn.disabled = false;
+            });
+        }
+
+        // Başarı mesajı göster
+        function showSuccessMessage(message, data) {
+            // Güzel bir başarı mesajı oluştur
+            const successDiv = document.createElement('div');
+            successDiv.innerHTML = `
+                <div class="alert alert-success alert-dismissible fade show position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-check-circle me-2" style="font-size: 1.2rem;"></i>
+                        <div>
+                            <strong>${message}</strong>
+                            <br><small>Yeni Plan: ${data.plan_name} - ${data.max_cameras} Kamera</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.body.appendChild(successDiv);
+            
+            // 3 saniye sonra otomatik kapat
+            setTimeout(() => {
+                if (successDiv.parentNode) {
+                    successDiv.remove();
+                }
+            }, 3000);
+        }
+
+        // Bilgi mesajı göster
+        function showInfoMessage(message) {
+            const infoDiv = document.createElement('div');
+            infoDiv.innerHTML = `
+                <div class="alert alert-info alert-dismissible fade show position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999; min-width: 400px;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle me-2" style="font-size: 1.2rem;"></i>
+                        <div>
+                            <strong>ℹ️ Bilgi</strong>
+                            <br><small>${message}</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.body.appendChild(infoDiv);
+            
+            // 8 saniye sonra otomatik kapat
+            setTimeout(() => {
+                if (infoDiv.parentNode) {
+                    infoDiv.remove();
+                }
+            }, 8000);
+        }
+
+        // Hata mesajı göster
+        function showErrorMessage(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-circle me-2" style="font-size: 1.2rem;"></i>
+                        <strong>${message}</strong>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.body.appendChild(errorDiv);
+            
+            // 5 saniye sonra otomatik kapat
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // URL'den company ID al
+        function getCompanyIdFromURL() {
+            // Template'den company_id al
+            const templateCompanyId = '{{ company_id or "" }}';
+            if (templateCompanyId) {
+                return templateCompanyId;
+            }
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('company_id') || localStorage.getItem('company_id');
+        }
+
+        // Storage'dan mevcut planı al
+        function getCurrentPlanFromStorage() {
+            // Önce URL parametrelerinden kontrol et
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlPlan = urlParams.get('current_plan');
+            if (urlPlan) {
+                return urlPlan;
+            }
+            
+            // Sonra localStorage'dan
+            const storedPlan = localStorage.getItem('current_plan');
+            if (storedPlan) {
+                return storedPlan;
+            }
+            
+            // Son olarak parent window'dan almaya çalış
+            if (window.opener && window.opener.getCurrentUserPlan) {
+                try {
+                    return window.opener.getCurrentUserPlan();
+                } catch (e) {
+                    console.log('Parent window plan bilgisi alınamadı:', e);
+                }
+            }
+            
+            return 'starter'; // Varsayılan
+        }
+
+        // Mevcut planı backend'den al
+        function fetchCurrentPlan() {
+            const companyId = getCompanyIdFromURL();
+            if (!companyId) {
+                console.log('Company ID yok - fetchCurrentPlan çalışmayacak');
+                return;
+            }
+            
+            console.log('Backend\'den plan bilgisi alınıyor...');
+            fetch(`/api/company/${companyId}/subscription`)
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success && result.subscription) {
+                        let currentPlan = result.subscription.subscription_type || 'starter';
+                        currentPlan = currentPlan.toLowerCase();
+                        
+                        // localStorage'a kaydet
+                        localStorage.setItem('current_plan', currentPlan);
+                        
+                        // Mevcut planı işaretle
+                        markCurrentPlan(currentPlan);
+                        console.log('Plan bilgisi başarıyla alındı:', currentPlan);
+                    }
+                })
+                .catch(error => {
+                    console.error('Mevcut plan bilgisi alınamadı:', error);
+                });
+        }
+
+        // Sayfa yüklendiğinde otomatik başlat
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM yüklendi - upgrade modal başlatılıyor...');
+            initializeUpgradeModal();
+            
+            // Sadece company_id varsa backend'den plan bilgisi al
+            const companyId = getCompanyIdFromURL();
+            if (companyId) {
+                console.log('Company ID bulundu, plan bilgisi alınıyor...');
+                fetchCurrentPlan();
+            } else {
+                console.log('Company ID bulunamadı, plan bilgisi alınmayacak');
+            }
+        });
+
+        // Global fonksiyon olarak tanımla
+        window.initializeUpgradeModal = initializeUpgradeModal;
+        window.selectPlan = selectPlan;
+        window.confirmPlanUpgrade = confirmPlanUpgrade;
+    </script>
+</body>
+</html>
