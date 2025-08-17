@@ -22,6 +22,7 @@ import sqlite3
 import json
 import threading
 import time
+import requests
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -38,6 +39,7 @@ import numpy as np
 import base64
 import queue
 from io import BytesIO
+import bcrypt
 
 # Load environment variables
 load_dotenv()
@@ -2190,11 +2192,11 @@ Mesaj:
                     </script>
                     '''
                 
-                # Şirket ID formatını kontrol et
-                if not company_id.startswith('COMP_'):
+                # Şirket ID formatını kontrol et (Normal + Demo)
+                if not (company_id.startswith('COMP_') or company_id.startswith('demo_')):
                     return '''
                     <script>
-                        alert("❌ Geçersiz Şirket ID formatı!\\nŞirket ID'niz COMP_ ile başlamalıdır.");
+                        alert("❌ Geçersiz Şirket ID formatı!\\nŞirket ID'niz COMP_ veya demo_ ile başlamalıdır.");
                         window.history.back();
                     </script>
                     '''
@@ -2203,7 +2205,7 @@ Mesaj:
                 conn = self.db.get_connection()
                 cursor = conn.cursor()
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
-                cursor.execute(f'SELECT company_name FROM companies WHERE company_id = {placeholder}', (company_id,))
+                cursor.execute(f'SELECT company_name, account_type, demo_expires_at FROM companies WHERE company_id = {placeholder}', (company_id,))
                 company = cursor.fetchone()
                 conn.close()
                 
@@ -2215,7 +2217,33 @@ Mesaj:
                     </script>
                     '''
                 
-                # Şirket giriş sayfasına yönlendir
+                # Demo hesap kontrolü
+                company_name, account_type, demo_expires_at = company
+                
+                if account_type == 'demo' and demo_expires_at:
+                    # Demo süresi kontrolü
+                    if isinstance(demo_expires_at, str):
+                        expire_date = datetime.fromisoformat(demo_expires_at.replace('Z', '+00:00'))
+                    else:
+                        expire_date = demo_expires_at
+                    
+                    if datetime.now() > expire_date:
+                        return f'''
+                        <script>
+                            alert("❌ Demo hesabınızın süresi dolmuş!\\nDemo süresi: 7 gün\\nŞirket: {company_name}\\n\\nYeni demo hesap oluşturmak için ana sayfaya dönün.");
+                            window.location.href = '/';
+                        </script>
+                        '''
+                    
+                    # Demo bilgisi göster
+                    return f'''
+                    <script>
+                        alert("🎯 Demo Hesap Tespit Edildi!\\n\\nŞirket: {company_name}\\nDemo Süresi: 7 gün\\nKalan Süre: {(expire_date - datetime.now()).days} gün\\n\\nGiriş yapılıyor...");
+                        window.location.href = '/company/{company_id}/login';
+                    </script>
+                    '''
+                
+                # Normal şirket giriş sayfasına yönlendir
                 return redirect(f'/company/{company_id}/login')
                 
             except Exception as e:
@@ -8774,7 +8802,7 @@ Mesaj:
                                                 <input type="text" 
                                                        class="form-control form-control-lg" 
                                                        name="company_id" 
-                                                       placeholder="COMP_ABC123"
+                                                       placeholder="COMP_ABC123 veya demo_20241217_143022"
                                                        style="border-radius: 15px; border: 2px solid #e2e8f0;"
                                                        required>
                                             </div>
@@ -8790,7 +8818,9 @@ Mesaj:
                                         <div class="alert alert-info border-0 mt-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 10px;">
                                             <small class="text-muted">
                                                 <i class="fas fa-info-circle me-2"></i>
-                                                Your Company ID is the code starting with COMP_ given to you after registration.
+                                                <strong>Company ID Formatları:</strong><br>
+                                                • <strong>Normal Hesap:</strong> COMP_ABC123 (kayıt sonrası verilir)<br>
+                                                • <strong>Demo Hesap:</strong> demo_20241217_143022 (demo form sonrası verilir)
                                             </small>
                                         </div>
                                     </form>
@@ -11122,6 +11152,14 @@ Mesaj:
                             Company ID: ''' + company_id + '''
                         </div>
                         <p class="text-muted">Secure login</p>
+                        
+                        <!-- Demo Hesap Bilgisi -->
+                        <div id="demo-info" style="display: none;" class="alert alert-warning border-0 mb-3" style="background: rgba(251, 191, 36, 0.1); border-radius: 15px;">
+                            <small>
+                                <i class="fas fa-clock text-warning me-2"></i>
+                                <strong>Demo Hesap:</strong> 7 günlük ücretsiz deneme süreniz devam ediyor!
+                            </small>
+                        </div>
                     </div>
                     
                     <form action="/company/''' + company_id + '''/login-form" method="POST">
@@ -11174,6 +11212,33 @@ Mesaj:
             </div>
 
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+            <script>
+                // Demo hesap kontrolü
+                document.addEventListener('DOMContentLoaded', function() {
+                    const companyId = '{{ company_id }}';
+                    
+                    if (companyId.startsWith('demo_')) {
+                        // Demo hesap bilgisini göster
+                        const demoInfo = document.getElementById('demo-info');
+                        if (demoInfo) {
+                            demoInfo.style.display = 'block';
+                        }
+                        
+                        // Demo hesap için özel stil
+                        document.body.style.background = 'linear-gradient(135deg, #059669 0%, #10B981 100%)';
+                        
+                        // Company badge'i demo renk yap
+                        const companyBadge = document.querySelector('.company-badge');
+                        if (companyBadge) {
+                            companyBadge.innerHTML = `
+                                <i class="fas fa-clock text-warning me-2"></i>
+                                <strong>Demo Account:</strong> ${companyId}
+                            `;
+                            companyBadge.style.color = '#059669';
+                        }
+                    }
+                });
+            </script>
         </body>
         </html>
         '''
