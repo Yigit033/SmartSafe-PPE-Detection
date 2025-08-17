@@ -145,8 +145,17 @@ class DatabaseAdapter:
                         address TEXT,
                         max_cameras INTEGER DEFAULT 25,
                         subscription_type TEXT DEFAULT 'starter',
+                        billing_cycle TEXT DEFAULT 'monthly',
                         subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         subscription_end TIMESTAMP,
+                        next_billing_date TIMESTAMP,
+                        auto_renewal BOOLEAN DEFAULT TRUE,
+                        payment_method TEXT,
+                        payment_status TEXT DEFAULT 'active',
+                        current_balance REAL DEFAULT 0.00,
+                        total_paid REAL DEFAULT 0.00,
+                        last_payment_date TIMESTAMP,
+                        last_payment_amount REAL,
                         status TEXT DEFAULT 'active',
                         api_key TEXT UNIQUE,
                         required_ppe TEXT,
@@ -179,8 +188,17 @@ class DatabaseAdapter:
                         address TEXT,
                         max_cameras INTEGER DEFAULT 25,
                         subscription_type VARCHAR(50) DEFAULT 'starter',
+                        billing_cycle VARCHAR(20) DEFAULT 'monthly',
                         subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         subscription_end TIMESTAMP,
+                        next_billing_date TIMESTAMP,
+                        auto_renewal BOOLEAN DEFAULT TRUE,
+                        payment_method VARCHAR(50),
+                        payment_status VARCHAR(20) DEFAULT 'active',
+                        current_balance DECIMAL(10,2) DEFAULT 0.00,
+                        total_paid DECIMAL(10,2) DEFAULT 0.00,
+                        last_payment_date TIMESTAMP,
+                        last_payment_amount DECIMAL(10,2),
                         status VARCHAR(50) DEFAULT 'active',
                         api_key VARCHAR(255) UNIQUE,
                         required_ppe TEXT,
@@ -779,6 +797,119 @@ class DatabaseAdapter:
                     )
                 ''')
             
+            # Create subscription history table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS subscription_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT,
+                        subscription_type TEXT NOT NULL,
+                        billing_cycle TEXT NOT NULL,
+                        start_date TIMESTAMP NOT NULL,
+                        end_date TIMESTAMP NOT NULL,
+                        monthly_price REAL NOT NULL,
+                        yearly_price REAL,
+                        actual_paid REAL NOT NULL,
+                        payment_method TEXT,
+                        payment_status TEXT NOT NULL,
+                        change_reason TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS subscription_history (
+                        id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) REFERENCES companies(company_id),
+                        subscription_type VARCHAR(50) NOT NULL,
+                        billing_cycle VARCHAR(20) NOT NULL,
+                        start_date TIMESTAMP NOT NULL,
+                        end_date TIMESTAMP NOT NULL,
+                        monthly_price DECIMAL(10,2) NOT NULL,
+                        yearly_price DECIMAL(10,2),
+                        actual_paid DECIMAL(10,2) NOT NULL,
+                        payment_method VARCHAR(50),
+                        payment_status VARCHAR(20) NOT NULL,
+                        change_reason VARCHAR(100),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+
+            # Create billing history table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS billing_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT,
+                        invoice_number TEXT UNIQUE NOT NULL,
+                        billing_date TIMESTAMP NOT NULL,
+                        due_date TIMESTAMP NOT NULL,
+                        amount REAL NOT NULL,
+                        tax_amount REAL DEFAULT 0.00,
+                        total_amount REAL NOT NULL,
+                        currency TEXT DEFAULT 'USD',
+                        payment_status TEXT DEFAULT 'pending',
+                        payment_method TEXT,
+                        paid_date TIMESTAMP,
+                        invoice_pdf_path TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS billing_history (
+                        id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) REFERENCES companies(company_id),
+                        invoice_number VARCHAR(50) UNIQUE NOT NULL,
+                        billing_date TIMESTAMP NOT NULL,
+                        due_date TIMESTAMP NOT NULL,
+                        amount DECIMAL(10,2) NOT NULL,
+                        tax_amount DECIMAL(10,2) DEFAULT 0.00,
+                        total_amount DECIMAL(10,2) NOT NULL,
+                        currency VARCHAR(3) DEFAULT 'USD',
+                        payment_status VARCHAR(20) DEFAULT 'pending',
+                        payment_method VARCHAR(50),
+                        paid_date TIMESTAMP,
+                        invoice_pdf_path TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+
+            # Create payment methods table
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS payment_methods (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT,
+                        payment_type TEXT NOT NULL,
+                        card_last4 TEXT,
+                        card_brand TEXT,
+                        expiry_month INTEGER,
+                        expiry_year INTEGER,
+                        is_default BOOLEAN DEFAULT FALSE,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS payment_methods (
+                        id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) REFERENCES companies(company_id),
+                        payment_type VARCHAR(50) NOT NULL,
+                        card_last4 VARCHAR(4),
+                        card_brand VARCHAR(20),
+                        expiry_month INTEGER,
+                        expiry_year INTEGER,
+                        is_default BOOLEAN DEFAULT FALSE,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+
             # Her tablo oluşturulduktan sonra commit yap
             conn.commit()
             logger.info("✅ Database tables created successfully")

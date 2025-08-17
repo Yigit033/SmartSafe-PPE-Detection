@@ -180,11 +180,44 @@
             line-height: 1.5;
         }
 
+        .billing-toggle {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        
+        .billing-toggle .btn {
+            padding: 5px 15px;
+            font-size: 0.85rem;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .billing-toggle .btn.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
         .plan-price {
             text-align: center;
             padding: 1.5rem;
             background: var(--light-bg);
             border-top: 1px solid #e2e8f0;
+            position: relative;
+        }
+        
+        .discount-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--success-color);
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: normal;
         }
 
         .price-amount {
@@ -479,7 +512,7 @@
                     <div class="hero-content">
                         <div class="hero-badge">
                             <i class="fas fa-gift me-2"></i>
-                            İlk 30 Gün Ücretsiz Deneme!
+                                                                İlk 7 Gün Ücretsiz Deneme!
                         </div>
                         <h1 class="hero-title">İşletmenizi Büyütün</h1>
                         <p class="hero-subtitle">Daha fazla özellik ve kamera ile SmartSafe AI'ın gücünü keşfedin</p>
@@ -500,9 +533,21 @@
                                     <p class="plan-description">Küçük işletmeler için AI destekli PPE tespiti</p>
                                 </div>
                                 
+                                <div class="billing-toggle mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary active" data-cycle="monthly" onclick="toggleBilling('starter', 'monthly')">Aylık</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-cycle="yearly" onclick="toggleBilling('starter', 'yearly')">Yıllık</button>
+                                </div>
+                                
                                 <div class="plan-price">
-                                    <div class="price-amount">$99</div>
-                                    <div class="price-period">/ay</div>
+                                    <div class="monthly-price">
+                                        <div class="price-amount">$99</div>
+                                        <div class="price-period">/ay</div>
+                                    </div>
+                                    <div class="yearly-price" style="display: none;">
+                                        <div class="price-amount">$990</div>
+                                        <div class="price-period">/yıl</div>
+                                        <div class="discount-badge">%17 İndirim</div>
+                                    </div>
                                 </div>
                                 
                                 <div class="plan-features">
@@ -562,9 +607,21 @@
                                     <p class="plan-description">Büyüyen işletmeler için gelişmiş AI tespit sistemi</p>
                                 </div>
                                 
+                                <div class="billing-toggle mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary active" data-cycle="monthly" onclick="toggleBilling('professional', 'monthly')">Aylık</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-cycle="yearly" onclick="toggleBilling('professional', 'yearly')">Yıllık</button>
+                                </div>
+                                
                                 <div class="plan-price">
-                                    <div class="price-amount">$299</div>
-                                    <div class="price-period">/ay</div>
+                                    <div class="monthly-price">
+                                        <div class="price-amount">$299</div>
+                                        <div class="price-period">/ay</div>
+                                    </div>
+                                    <div class="yearly-price" style="display: none;">
+                                        <div class="price-amount">$2990</div>
+                                        <div class="price-period">/yıl</div>
+                                        <div class="discount-badge">%17 İndirim</div>
+                                    </div>
                                 </div>
                                 
                                 <div class="plan-features">
@@ -626,9 +683,21 @@
                                     <p class="plan-description">Büyük kurumlar için endüstriyel AI tespit sistemi</p>
                                 </div>
                                 
+                                <div class="billing-toggle mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary active" data-cycle="monthly" onclick="toggleBilling('enterprise', 'monthly')">Aylık</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-cycle="yearly" onclick="toggleBilling('enterprise', 'yearly')">Yıllık</button>
+                                </div>
+                                
                                 <div class="plan-price">
-                                    <div class="price-amount">$599</div>
-                                    <div class="price-period">/ay</div>
+                                    <div class="monthly-price">
+                                        <div class="price-amount">$599</div>
+                                        <div class="price-period">/ay</div>
+                                    </div>
+                                    <div class="yearly-price" style="display: none;">
+                                        <div class="price-amount">$5990</div>
+                                        <div class="price-period">/yıl</div>
+                                        <div class="discount-badge">%17 İndirim</div>
+                                    </div>
                                 </div>
                                 
                                 <div class="plan-features">
@@ -766,7 +835,7 @@
                             <li>Mevcut kameralarınız korunur</li>
                             <li>Yeni limitler hemen uygulanır</li>
                             <li>Fatura döneminiz değişmez</li>
-                            <li>İlk 30 gün ücretsiz deneme süresi</li>
+                                                                    <li>İlk 7 gün ücretsiz deneme süresi</li>
                             <li>İstediğiniz zaman planınızı değiştirebilirsiniz</li>
                         </ul>
                     </div>
@@ -791,8 +860,42 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let selectedPlan = null;
+        let selectedBillingCycle = 'monthly';
         let currentPlan = null;
         let companyId = null;
+        
+        // Billing toggle fonksiyonu
+        function toggleBilling(plan, cycle) {
+            console.log('Toggle billing:', plan, cycle);
+            
+            // Tüm plan kartlarındaki toggle butonlarını güncelle
+            const planCard = document.querySelector(`[data-plan="${plan}"]`);
+            if (planCard) {
+                // Toggle butonlarını güncelle
+                const toggleButtons = planCard.querySelectorAll('.billing-toggle .btn');
+                toggleButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.getAttribute('data-cycle') === cycle) {
+                        btn.classList.add('active');
+                    }
+                });
+                
+                // Fiyat gösterimini değiştir
+                const monthlyPrice = planCard.querySelector('.monthly-price');
+                const yearlyPrice = planCard.querySelector('.yearly-price');
+                
+                if (cycle === 'monthly') {
+                    monthlyPrice.style.display = 'block';
+                    yearlyPrice.style.display = 'none';
+                } else {
+                    monthlyPrice.style.display = 'none';
+                    yearlyPrice.style.display = 'block';
+                }
+            }
+            
+            // Global billing cycle'ı güncelle
+            selectedBillingCycle = cycle;
+        }
 
         // Modal açıldığında çalışacak fonksiyon
         function initializeUpgradeModal(company_id, current_plan = null) {
@@ -911,7 +1014,8 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    new_plan: selectedPlan
+                    new_plan: selectedPlan,
+                    billing_cycle: selectedBillingCycle
                 })
             })
             .then(response => response.json())
@@ -973,7 +1077,7 @@
                         <i class="fas fa-check-circle me-2" style="font-size: 1.2rem;"></i>
                         <div>
                             <strong>${message}</strong>
-                            <br><small>Yeni Plan: ${data.plan_name} - ${data.max_cameras} Kamera</small>
+                            <br><small>Yeni Plan: ${data.plan_name} (${data.billing_cycle === 'yearly' ? 'Yıllık' : 'Aylık'}) - ${data.max_cameras} Kamera</small>
                         </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>

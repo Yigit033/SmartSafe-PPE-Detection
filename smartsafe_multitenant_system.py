@@ -700,8 +700,8 @@ class MultiTenantDatabase:
                 # Demo hesaplar için 7 gün
                 subscription_end = datetime.now() + timedelta(days=7)
             else:
-                # Normal hesaplar için 1 yıl
-                subscription_end = datetime.now() + timedelta(days=365)
+                # Normal hesaplar için 7 gün ücretsiz + 1 yıl ücretli
+                subscription_end = datetime.now() + timedelta(days=7 + 365)
             
             # PPE konfigürasyonunu işle
             ppe_config = company_data.get('required_ppe', {})
@@ -716,15 +716,15 @@ class MultiTenantDatabase:
             cursor.execute(f'''
                 INSERT INTO companies 
                 (company_id, company_name, sector, contact_person, email, phone, address, 
-                 max_cameras, subscription_type, subscription_end, api_key, required_ppe,
+                 max_cameras, subscription_type, billing_cycle, subscription_end, api_key, required_ppe,
                  account_type, demo_expires_at, demo_limits)
-                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 company_id, company_data['company_name'], company_data['sector'],
                 company_data['contact_person'], company_data['email'], 
                 company_data.get('phone', ''), company_data.get('address', ''),
                 company_data.get('max_cameras', 25), company_data.get('subscription_type', 'basic'),
-                subscription_end, api_key, ppe_json,
+                company_data.get('billing_cycle', 'monthly'), subscription_end, api_key, ppe_json,
                 company_data.get('account_type', 'full'), company_data.get('demo_expires_at'), company_data.get('demo_limits')
             ))
             

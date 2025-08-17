@@ -1934,35 +1934,45 @@ Mesaj:
                 
                 # Abonelik planı seçimi
                 subscription_plan = request.form.get('subscription_plan', 'starter')
+                billing_cycle = request.form.get('billing_cycle', 'monthly')
+                
                 plan_prices = {
                     'starter': {
                         'name': 'Starter',
                         'monthly': 99,
+                        'yearly': 990,  # %17 indirim
                         'cameras': 25,
                         'currency': 'USD',
-                        'features': ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik']
+                        'features': ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik'],
+                        'billing_cycles': ['monthly', 'yearly']
                     },
                     'professional': {
                         'name': 'Professional',
                         'monthly': 299,
+                        'yearly': 2990,  # %17 indirim
                         'cameras': 100,
                         'currency': 'USD',
-                        'features': ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler']
+                        'features': ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler'],
+                        'billing_cycles': ['monthly', 'yearly']
                     },
                     'enterprise': {
                         'name': 'Enterprise',
                         'monthly': 599,
+                        'yearly': 5990,  # %17 indirim
                         'cameras': 500,
                         'currency': 'USD',
-                        'features': ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı']
+                        'features': ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı'],
+                        'billing_cycles': ['monthly', 'yearly']
                     }
                 }
                 
                 if subscription_plan in plan_prices:
                     data['subscription_type'] = subscription_plan
+                    data['billing_cycle'] = billing_cycle
                     data['max_cameras'] = plan_prices[subscription_plan]['cameras']
                 else:
                     data['subscription_type'] = 'starter'
+                    data['billing_cycle'] = 'monthly'
                     data['max_cameras'] = 25
                 
                 # Doğrulama
@@ -5396,7 +5406,7 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                    return redirect(f'/company/{company_id}/login')
+                return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
@@ -5734,18 +5744,18 @@ Mesaj:
                     conn.close()
                     return jsonify({
                         'success': True,
-                                        'current_config': {
-                                            'required': current_required,
-                                            'optional': current_optional
-                                        },
-                                        'sector': sector,
-                                        'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
-                                        'all_ppe_types': all_ppe_types,
-                                        'sector_specific_ppe': sector_specific_ppe,
-                                        'sector_recommendations': recommendations,
-                                        'compliance_settings': compliance_data,
-                                        'required_ppe': current_required  # Backward compatibility
-                                    })
+                                                'current_config': {
+                                                    'required': current_required,
+                                                    'optional': current_optional
+                                                },
+                                                'sector': sector,
+                                                'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
+                                                'all_ppe_types': all_ppe_types,
+                                                'sector_specific_ppe': sector_specific_ppe,
+                                                'sector_recommendations': recommendations,
+                                                'compliance_settings': compliance_data,
+                                                'required_ppe': current_required  # Backward compatibility
+                                            })
                 else:
                     conn.close()
                     return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
@@ -5896,6 +5906,7 @@ Mesaj:
                 
                 data = request.get_json()
                 new_plan = data.get('new_plan')
+                new_billing_cycle = data.get('billing_cycle', 'monthly')
                 
                 if not new_plan:
                     return jsonify({'success': False, 'error': 'Yeni plan seçimi gerekli'}), 400
@@ -5905,23 +5916,29 @@ Mesaj:
                     'starter': {
                         'name': 'Starter',
                         'monthly': 99,
+                        'yearly': 990,  # %17 indirim
                         'cameras': 25,
                         'currency': 'USD',
-                        'features': ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik']
+                        'features': ['AI Tespit (24/7)', 'Email Destek', 'Temel Raporlar', 'Temel Güvenlik'],
+                        'billing_cycles': ['monthly', 'yearly']
                     },
                     'professional': {
                         'name': 'Professional',
                         'monthly': 299,
+                        'yearly': 2990,  # %17 indirim
                         'cameras': 100,
                         'currency': 'USD',
-                        'features': ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler']
+                        'features': ['AI Tespit (24/7)', '7/24 Destek', 'Detaylı Analitik', 'Gelişmiş Güvenlik', 'Gelişmiş Bildirimler'],
+                        'billing_cycles': ['monthly', 'yearly']
                     },
                     'enterprise': {
                         'name': 'Enterprise',
                         'monthly': 599,
+                        'yearly': 5990,  # %17 indirim
                         'cameras': 500,
                         'currency': 'USD',
-                        'features': ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı']
+                        'features': ['AI Tespit (24/7)', 'Öncelikli Destek', 'Özel Raporlar', 'Maksimum Güvenlik', 'API Erişimi', 'Çoklu Kullanıcı'],
+                        'billing_cycles': ['monthly', 'yearly']
                     }
                 }
                 
@@ -5936,10 +5953,11 @@ Mesaj:
                 cursor.execute(f'''
                     UPDATE companies 
                     SET subscription_type = {placeholder}, 
+                        billing_cycle = {placeholder},
                         max_cameras = {placeholder},
                         updated_at = CURRENT_TIMESTAMP
                     WHERE company_id = {placeholder}
-                ''', (new_plan, plan_prices[new_plan]['cameras'], company_id))
+                ''', (new_plan, new_billing_cycle, plan_prices[new_plan]['cameras'], company_id))
                 
                 conn.commit()
                 conn.close()
@@ -5948,8 +5966,10 @@ Mesaj:
                     'success': True,
                     'message': 'Plan başarıyla değiştirildi',
                     'new_plan': new_plan,
+                    'billing_cycle': new_billing_cycle,
                     'plan_name': plan_prices[new_plan]['name'],
                     'monthly_price': plan_prices[new_plan]['monthly'],
+                    'yearly_price': plan_prices[new_plan]['yearly'],
                     'max_cameras': plan_prices[new_plan]['cameras']
                 })
                 
@@ -5958,6 +5978,191 @@ Mesaj:
                 return jsonify({'success': False, 'error': 'Plan değiştirme başarısız'}), 500
 
 
+
+        # Billing History API endpoint'i
+        @self.app.route('/api/company/<company_id>/billing/history', methods=['GET'])
+        def get_billing_history(company_id):
+            """Get company billing history"""
+            try:
+                # Session validation
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT * FROM billing_history 
+                    WHERE company_id = {placeholder}
+                    ORDER BY billing_date DESC
+                    LIMIT 50
+                ''', (company_id,))
+                
+                results = cursor.fetchall()
+                conn.close()
+                
+                # Convert to list of dictionaries
+                billing_history = []
+                if results:
+                    columns = [desc[0] for desc in cursor.description]
+                    for row in results:
+                        billing_history.append(dict(zip(columns, row)))
+                
+                return jsonify({
+                    'success': True,
+                    'billing_history': billing_history
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Get billing history error: {e}")
+                return jsonify({'success': False, 'error': 'Fatura geçmişi alınamadı'}), 500
+
+        # Payment Methods API endpoint'i
+        @self.app.route('/api/company/<company_id>/payment/methods', methods=['GET'])
+        def get_payment_methods(company_id):
+            """Get company payment methods"""
+            try:
+                # Session validation
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    SELECT * FROM payment_methods 
+                    WHERE company_id = {placeholder} AND is_active = TRUE
+                    ORDER BY is_default DESC, created_at DESC
+                ''', (company_id,))
+                
+                results = cursor.fetchall()
+                conn.close()
+                
+                # Convert to list of dictionaries
+                payment_methods = []
+                if results:
+                    columns = [desc[0] for desc in cursor.description]
+                    for row in results:
+                        payment_methods.append(dict(zip(columns, row)))
+                
+                return jsonify({
+                    'success': True,
+                    'payment_methods': payment_methods
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Get payment methods error: {e}")
+                return jsonify({'success': False, 'error': 'Ödeme yöntemleri alınamadı'}), 500
+
+        # Subscription Pause API endpoint'i
+        @self.app.route('/api/company/<company_id>/subscription/pause', methods=['POST'])
+        def pause_subscription(company_id):
+            """Pause company subscription"""
+            try:
+                # Session validation
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    UPDATE companies 
+                    SET payment_status = 'paused',
+                        auto_renewal = FALSE,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Abonelik duraklatıldı'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Pause subscription error: {e}")
+                return jsonify({'success': False, 'error': 'Abonelik duraklatılamadı'}), 500
+
+        # Subscription Cancel API endpoint'i
+        @self.app.route('/api/company/<company_id>/subscription/cancel', methods=['POST'])
+        def cancel_subscription(company_id):
+            """Cancel company subscription"""
+            try:
+                # Session validation
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    UPDATE companies 
+                    SET payment_status = 'cancelled',
+                        auto_renewal = FALSE,
+                        subscription_end = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
+                ''', (company_id,))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Abonelik iptal edildi'
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Cancel subscription error: {e}")
+                return jsonify({'success': False, 'error': 'Abonelik iptal edilemedi'}), 500
+
+        # Auto Renewal Toggle API endpoint'i
+        @self.app.route('/api/company/<company_id>/subscription/auto-renewal', methods=['POST'])
+        def toggle_auto_renewal(company_id):
+            """Toggle auto renewal for subscription"""
+            try:
+                # Session validation
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+                data = request.get_json()
+                auto_renewal = data.get('auto_renewal', True)
+
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                cursor.execute(f'''
+                    UPDATE companies 
+                    SET auto_renewal = {placeholder},
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
+                ''', (auto_renewal, company_id))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Otomatik yenileme {"açıldı" if auto_renewal else "kapatıldı"}',
+                    'auto_renewal': auto_renewal
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Toggle auto renewal error: {e}")
+                return jsonify({'success': False, 'error': 'Otomatik yenileme ayarı değiştirilemedi'}), 500
 
         # Abonelik bilgileri API endpoint'leri
         @self.app.route('/api/company/<company_id>/subscription', methods=['GET'])
@@ -7867,6 +8072,39 @@ Mesaj:
                     font-size: 1.8rem;
                     font-weight: 700;
                     margin-bottom: 5px;
+                    position: relative;
+                }
+                
+                .billing-toggle {
+                    display: flex;
+                    gap: 5px;
+                    justify-content: center;
+                    margin-bottom: 15px;
+                }
+                
+                .billing-toggle .btn {
+                    padding: 5px 15px;
+                    font-size: 0.85rem;
+                    border-radius: 20px;
+                    transition: all 0.3s ease;
+                }
+                
+                .billing-toggle .btn.active {
+                    background-color: #3182ce;
+                    color: white;
+                    border-color: #3182ce;
+                }
+                
+                .discount-badge {
+                    position: absolute;
+                    top: -5px;
+                    right: -5px;
+                    background: #38a169;
+                    color: white;
+                    font-size: 0.6rem;
+                    padding: 2px 6px;
+                    border-radius: 8px;
+                    font-weight: normal;
                     color: #2563eb;
                 }
 
@@ -8048,7 +8286,7 @@ Mesaj:
                                                 <span id="toggleBtnText">Abonelik Planını Seç</span>
                                                 <i class="fas fa-chevron-down ms-2" id="toggleIcon"></i>
                                             </button>
-                                        </div>
+                                                </div>
                                         
                                         <!-- Gizli Abonelik Planları -->
                                         <div id="subscriptionPlansContainer" style="display: none;">
@@ -8064,28 +8302,36 @@ Mesaj:
                                             <div class="col-md-4">
                                                 <div class="plan-card-modern" data-plan="starter" onclick="selectPlanCard('starter')">
                                                     <input type="radio" name="subscription_plan" value="starter" id="plan_starter" checked style="display: none;">
+                                                    <input type="hidden" name="billing_cycle" id="billing_cycle" value="monthly">
                                                     <div class="plan-card-header starter-gradient">
                                                         <div class="plan-icon">
                                                             <i class="fas fa-rocket"></i>
-                                                </div>
-                                                        <h5 class="plan-name">Starter</h5>
-                                                        <div class="plan-price">$99<span class="period">/ay</span></div>
                                             </div>
+                                                        <h5 class="plan-name">Starter</h5>
+                                                        <div class="billing-toggle mb-3">
+                                                            <button type="button" class="btn btn-sm btn-outline-primary active" data-cycle="monthly" onclick="toggleBilling('starter', 'monthly')">Aylık</button>
+                                                            <button type="button" class="btn btn-sm btn-outline-primary" data-cycle="yearly" onclick="toggleBilling('starter', 'yearly')">Yıllık</button>
+                                                </div>
+                                                        <div class="plan-price">
+                                                            <div class="monthly-price">$99<span class="period">/ay</span></div>
+                                                            <div class="yearly-price" style="display: none;">$990<span class="period">/yıl</span><span class="discount-badge">%17 İndirim</span></div>
+                                            </div>
+                                                </div>
                                                     <div class="plan-card-body">
                                                         <div class="plan-features">
                                                             <div class="feature-item">
                                                                 <i class="fas fa-video text-primary"></i>
                                                                 <span>25 Kamera</span>
-                                                </div>
+                                            </div>
                                                             <div class="feature-item">
                                                                 <i class="fas fa-brain text-success"></i>
                                                                 <span>AI Tespit (24/7)</span>
-                                            </div>
+                                        </div>
                                                             <div class="feature-item">
                                                                 <i class="fas fa-headset text-info"></i>
                                                                 <span>Email Destek</span>
-                                                </div>
                                             </div>
+                                        </div>
                                                         <div class="plan-badge starter-badge">Başlangıç</div>
                                         </div>
                                                 </div>
@@ -8100,7 +8346,14 @@ Mesaj:
                                                             <i class="fas fa-star"></i>
                                                         </div>
                                                         <h5 class="plan-name">Professional</h5>
-                                                        <div class="plan-price">$299<span class="period">/ay</span></div>
+                                                        <div class="billing-toggle mb-3">
+                                                            <button type="button" class="btn btn-sm btn-outline-primary active" data-cycle="monthly" onclick="toggleBilling('professional', 'monthly')">Aylık</button>
+                                                            <button type="button" class="btn btn-sm btn-outline-primary" data-cycle="yearly" onclick="toggleBilling('professional', 'yearly')">Yıllık</button>
+                                                        </div>
+                                                        <div class="plan-price">
+                                                            <div class="monthly-price">$299<span class="period">/ay</span></div>
+                                                            <div class="yearly-price" style="display: none;">$2990<span class="period">/yıl</span><span class="discount-badge">%17 İndirim</span></div>
+                                                        </div>
                                                         <div class="popular-badge">Popüler</div>
                                                     </div>
                                                     <div class="plan-card-body">
@@ -8136,7 +8389,14 @@ Mesaj:
                                                             <i class="fas fa-crown"></i>
                                                         </div>
                                                         <h5 class="plan-name">Enterprise</h5>
-                                                        <div class="plan-price">$599<span class="period">/ay</span></div>
+                                                        <div class="billing-toggle mb-3">
+                                                            <button type="button" class="btn btn-sm btn-outline-primary active" data-cycle="monthly" onclick="toggleBilling('enterprise', 'monthly')">Aylık</button>
+                                                            <button type="button" class="btn btn-sm btn-outline-primary" data-cycle="yearly" onclick="toggleBilling('enterprise', 'yearly')">Yıllık</button>
+                                                        </div>
+                                                        <div class="plan-price">
+                                                            <div class="monthly-price">$599<span class="period">/ay</span></div>
+                                                            <div class="yearly-price" style="display: none;">$5990<span class="period">/yıl</span><span class="discount-badge">%17 İndirim</span></div>
+                                                        </div>
                                                     </div>
                                                     <div class="plan-card-body">
                                                         <div class="plan-features">
@@ -8171,7 +8431,7 @@ Mesaj:
                                                         <i class="fas fa-info-circle text-primary me-2"></i>
                                                         <strong>Max kamera sayısı otomatik olarak seçilen plana göre belirlenir.</strong>
                                                         <br>
-                                                        <span class="text-muted">İlk 30 gün ücretsiz! İstediğiniz zaman planınızı değiştirebilirsiniz.</span>
+                                                        <span class="text-muted">İlk 7 gün ücretsiz! İstediğiniz zaman planınızı değiştirebilirsiniz.</span>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-4 text-end">
@@ -8183,10 +8443,10 @@ Mesaj:
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
+                                        </div>
+                                    </div>
 
-                            <div class="row">
+                                    <div class="row">
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
                                                 <i class="fas fa-building text-primary me-2"></i>Company Name *
@@ -8859,9 +9119,9 @@ Mesaj:
                                 <div class="text-center">
                                     <h5 class="text-primary mb-2">
                                         <i class="fas fa-gift text-warning me-2"></i>
-                                        <strong>İlk 30 Gün Ücretsiz Deneme!</strong>
+                                        <strong>İlk 7 Gün Ücretsiz Deneme!</strong>
                                     </h5>
-                                    <p class="text-muted mb-0">Hiçbir kredi kartı gerektirmez • İstediğiniz zaman iptal edebilirsiniz</p>
+                                    <p class="text-muted mb-0">İlk 7 gün ücretsiz • Hiçbir kredi kartı gerektirmez • İstediğiniz zaman iptal edebilirsiniz</p>
                                 </div>
                             </div>
 
@@ -9193,12 +9453,54 @@ Mesaj:
                     }
                 }
                 
+                // Global değişkenler
+                let selectedBillingCycle = 'monthly';
+                
+                function toggleBilling(plan, cycle) {
+                    console.log('Toggle billing:', plan, cycle);
+                    
+                    // Tüm plan kartlarındaki toggle butonlarını güncelle
+                    const planCard = document.querySelector(`[data-plan="${plan}"]`);
+                    if (planCard) {
+                        // Toggle butonlarını güncelle
+                        const toggleButtons = planCard.querySelectorAll('.billing-toggle .btn');
+                        toggleButtons.forEach(btn => {
+                            btn.classList.remove('active');
+                            if (btn.getAttribute('data-cycle') === cycle) {
+                                btn.classList.add('active');
+                            }
+                        });
+                        
+                        // Fiyat gösterimini değiştir
+                        const monthlyPrice = planCard.querySelector('.monthly-price');
+                        const yearlyPrice = planCard.querySelector('.yearly-price');
+                        
+                        if (cycle === 'monthly') {
+                            monthlyPrice.style.display = 'inline';
+                            yearlyPrice.style.display = 'none';
+                        } else {
+                            monthlyPrice.style.display = 'none';
+                            yearlyPrice.style.display = 'inline';
+                        }
+                    }
+                    
+                    // Global billing cycle'ı güncelle
+                    selectedBillingCycle = cycle;
+                }
+                
                 // Plan seçimi fonksiyonu (Modern kartlar için)
                 function selectPlanCard(plan) {
                     const radioButton = document.getElementById('plan_' + plan);
                     if (radioButton) {
                         radioButton.checked = true;
                         console.log('Plan seçildi:', plan);
+                    }
+                    
+                    // Billing cycle'ı hidden input'a yaz
+                    const billingCycleInput = document.getElementById('billing_cycle');
+                    if (billingCycleInput) {
+                        billingCycleInput.value = selectedBillingCycle;
+                        console.log('Billing cycle:', selectedBillingCycle);
                     }
                     
                     // Tüm kartlardan seçim işaretini kaldır
