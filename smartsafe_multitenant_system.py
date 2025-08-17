@@ -685,13 +685,23 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             # Benzersiz şirket ID oluştur
-            company_id = f"COMP_{uuid.uuid4().hex[:8].upper()}"
+            if company_data.get('account_type') == 'demo':
+                # Demo hesaplar için özel ID formatı
+                company_id = f"demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            else:
+                # Normal hesaplar için mevcut format
+                company_id = f"COMP_{uuid.uuid4().hex[:8].upper()}"
             
             # API key oluştur
             api_key = f"sk_{secrets.token_urlsafe(32)}"
             
-            # Abonelik bitiş tarihi (1 yıl)
-            subscription_end = datetime.now() + timedelta(days=365)
+            # Abonelik bitiş tarihi
+            if company_data.get('account_type') == 'demo':
+                # Demo hesaplar için 7 gün
+                subscription_end = datetime.now() + timedelta(days=7)
+            else:
+                # Normal hesaplar için 1 yıl
+                subscription_end = datetime.now() + timedelta(days=365)
             
             # PPE konfigürasyonunu işle
             ppe_config = company_data.get('required_ppe', {})
@@ -706,14 +716,16 @@ class MultiTenantDatabase:
             cursor.execute(f'''
                 INSERT INTO companies 
                 (company_id, company_name, sector, contact_person, email, phone, address, 
-                 max_cameras, subscription_type, subscription_end, api_key, required_ppe)
-                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                 max_cameras, subscription_type, subscription_end, api_key, required_ppe,
+                 account_type, demo_expires_at, demo_limits)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 company_id, company_data['company_name'], company_data['sector'],
                 company_data['contact_person'], company_data['email'], 
                 company_data.get('phone', ''), company_data.get('address', ''),
                 company_data.get('max_cameras', 25), company_data.get('subscription_type', 'basic'),
-                subscription_end, api_key, ppe_json
+                subscription_end, api_key, ppe_json,
+                company_data.get('account_type', 'full'), company_data.get('demo_expires_at'), company_data.get('demo_limits')
             ))
             
             # Varsayılan admin kullanıcısı oluştur

@@ -1827,6 +1827,72 @@ Mesaj:
                 logger.error(f"❌ Şirket kayıt hatası: {e}")
                 return jsonify({'success': False, 'error': 'Registration failed'}), 500
 
+        # Demo kayıt endpoint'i
+        @self.app.route('/api/request-demo', methods=['POST'])
+        def request_demo():
+            """Demo hesabı talebi"""
+            try:
+                data = request.json
+                required_fields = ['company_name', 'sector', 'contact_person', 'email', 'password']
+                
+                # Gerekli alanları kontrol et
+                for field in required_fields:
+                    if not data.get(field):
+                        return jsonify({'success': False, 'error': f'{field} gerekli'}), 400
+                
+                # Şifre validasyonu
+                if len(data.get('password', '')) < 6:
+                    return jsonify({'success': False, 'error': 'Şifre en az 6 karakter olmalıdır'}), 400
+                
+                # Sektör validasyonu
+                valid_sectors = ['construction', 'manufacturing', 'chemical', 'food', 'warehouse', 'energy', 'petrochemical', 'marine', 'aviation']
+                if data.get('sector') not in valid_sectors:
+                    return jsonify({'success': False, 'error': 'Geçersiz sektör seçimi'}), 400
+                
+                # Demo ayarları
+                from datetime import datetime, timedelta
+                import json
+                
+                data['account_type'] = 'demo'
+                data['demo_expires_at'] = (datetime.now() + timedelta(days=7)).isoformat()
+                data['demo_limits'] = json.dumps({
+                    'cameras': 2,
+                    'violations': 100,
+                    'days': 7
+                })
+                data['subscription_type'] = 'demo'
+                data['max_cameras'] = 2
+                # Şifre kullanıcıdan gelecek - varsayılan yok
+                
+                # Demo PPE konfigürasyonu (basit)
+                data['required_ppe'] = {
+                    'required': ['helmet', 'safety_vest'],
+                    'optional': ['gloves']
+                }
+                
+                # Demo hesabı oluştur
+                success, result = self.db.create_company(data)
+                
+                if success:
+                    logger.info(f"✅ Demo hesabı oluşturuldu: {result}")
+                    return jsonify({
+                        'success': True, 
+                        'company_id': result,
+                        'message': 'Demo hesabı başarıyla oluşturuldu',
+                        'demo_info': {
+                            'expires_in_days': 7,
+                            'camera_limit': 2,
+                            'violation_limit': 100
+                        },
+                        'login_url': f'/company/{result}/login'
+                    })
+                else:
+                    return jsonify({'success': False, 'error': result}), 400
+                    
+            except Exception as e:
+                logger.error(f"❌ Demo kayıt hatası: {e}")
+                return jsonify({'success': False, 'error': 'Demo request failed'}), 500
+
         # HTML Form kayıt endpoint'i
         @self.app.route('/api/register-form', methods=['POST'])
         def register_form():
@@ -6430,6 +6496,128 @@ Mesaj:
             logger.error(f"❌ Session validation error: {e}")
             return None
     
+    def check_demo_status(self, company_id: str) -> Dict[str, Any]:
+        """Demo hesabı durumunu kontrol et"""
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder()
+            cursor.execute(f'''
+                SELECT account_type, demo_expires_at, demo_limits, created_at
+                FROM companies 
+                WHERE company_id = {placeholder}
+            ''', (company_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if not result:
+                return {'is_demo': False, 'expired': False}
+            
+            # PostgreSQL Row object vs SQLite tuple compatibility
+            if hasattr(result, 'keys'):  # PostgreSQL Row object
+                account_type = result['account_type']
+                demo_expires_at = result['demo_expires_at']
+                demo_limits = result['demo_limits']
+                created_at = result['created_at']
+            else:  # SQLite tuple
+                account_type, demo_expires_at, demo_limits, created_at = result
+            
+            if account_type != 'demo':
+                return {'is_demo': False, 'expired': False}
+            
+            # Demo süresi kontrolü
+            from datetime import datetime
+            import json
+            
+            if demo_expires_at:
+                if isinstance(demo_expires_at, str):
+                    expire_date = datetime.fromisoformat(demo_expires_at.replace('Z', '+00:00'))
+                else:
+                    expire_date = demo_expires_at
+                
+                is_expired = datetime.now() > expire_date
+                days_remaining = max(0, (expire_date - datetime.now()).days)
+            else:
+                is_expired = True
+                days_remaining = 0
+            
+            # Demo limitleri parse et
+            limits = {}
+            if demo_limits:
+                try:
+                    if isinstance(demo_limits, str):
+                        limits = json.loads(demo_limits)
+                    else:
+                        limits = demo_limits
+                except:
+                    limits = {'cameras': 2, 'violations': 100, 'days': 7}
+            
+            return {
+                'is_demo': True,
+                'expired': is_expired,
+                'days_remaining': days_remaining,
+                'limits': limits,
+                'created_at': created_at
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Demo status check error: {e}")
+            return {'is_demo': False, 'expired': False}
+    
+    def enforce_demo_limits(self, company_id: str, action: str) -> Dict[str, Any]:
+        """Demo limitlerini kontrol et ve uygula"""
+        try:
+            demo_status = self.check_demo_status(company_id)
+            
+            if not demo_status['is_demo']:
+                return {'allowed': True, 'message': 'Full account'}
+            
+            if demo_status['expired']:
+                return {'allowed': False, 'message': 'Demo süresi dolmuş', 'expired': True}
+            
+            limits = demo_status.get('limits', {})
+            
+            # Kamera limiti kontrolü
+            if action == 'add_camera':
+                cameras = self.db.get_company_cameras(company_id)
+                if len(cameras) >= limits.get('cameras', 2):
+                    return {
+                        'allowed': False, 
+                        'message': f"Demo hesabında maksimum {limits.get('cameras', 2)} kamera ekleyebilirsiniz",
+                        'limit_type': 'camera'
+                    }
+            
+            # İhlal limiti kontrolü
+            elif action == 'log_violation':
+                # Son 7 günlük ihlal sayısını kontrol et
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                placeholder = self.db.get_placeholder()
+                cursor.execute(f'''
+                    SELECT COUNT(*) FROM violations 
+                    WHERE company_id = {placeholder} 
+                    AND timestamp >= datetime('now', '-7 days')
+                ''', (company_id,))
+                
+                violation_count = cursor.fetchone()[0]
+                conn.close()
+                
+                if violation_count >= limits.get('violations', 100):
+                    return {
+                        'allowed': False,
+                        'message': f"Demo hesabında maksimum {limits.get('violations', 100)} ihlal kaydedebilirsiniz",
+                        'limit_type': 'violation'
+                    }
+            
+            return {'allowed': True, 'message': 'Demo limitleri içinde'}
+            
+        except Exception as e:
+            logger.error(f"❌ Demo limits enforcement error: {e}")
+            return {'allowed': True, 'message': 'Limit check failed'}
+    
     def _get_realtime_camera_status(self, ip_address: str) -> Optional[Dict[str, Any]]:
         """Get real-time camera status from IP address"""
         try:
@@ -7537,6 +7725,43 @@ Mesaj:
                     cursor: pointer;
                 }
 
+                /* Açılır-Kapanır Buton Stilleri */
+                #toggleSubscriptionBtn {
+                    transition: all 0.3s ease;
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                #toggleSubscriptionBtn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(30, 58, 138, 0.2);
+                }
+                
+                #toggleSubscriptionBtn:active {
+                    transform: translateY(0);
+                }
+                
+                #toggleSubscriptionBtn .fas {
+                    transition: transform 0.3s ease;
+                }
+                
+                #subscriptionPlansContainer {
+                    animation: slideDown 0.4s ease-out;
+                }
+                
+                @keyframes slideDown {
+                    from { 
+                        opacity: 0; 
+                        transform: translateY(-20px);
+                        max-height: 0;
+                    }
+                    to { 
+                        opacity: 1; 
+                        transform: translateY(0);
+                        max-height: 1000px; /* Yeterince büyük bir değer */
+                    }
+                }
+                
                 /* Business Plan Kartları CSS */
                 .plan-card-modern {
                     background: white;
@@ -7783,14 +8008,30 @@ Mesaj:
                                 </div>
                                 
                                 <form id="registerForm" method="POST" action="/api/register-form">
-                                    <!-- Abonelik Planı Seçimi -->
+                                    <!-- Abonelik Planı Seçimi - Açılır Kapanır -->
                                     <div class="mb-4">
-                                        <label class="form-label fw-semibold mb-3">
-                                            <i class="fas fa-crown text-warning me-2"></i>Abonelik Planı *
-                                        </label>
+                                        <!-- Açılır-Kapanır Buton -->
+                                        <div class="d-grid mb-3">
+                                            <button type="button" class="btn btn-outline-primary btn-lg" 
+                                                    onclick="toggleSubscriptionPlans()" 
+                                                    id="toggleSubscriptionBtn"
+                                                    style="border-radius: 15px; border: 2px solid #1E3A8A; font-weight: 600; background: rgba(30, 58, 138, 0.05);">
+                                                <i class="fas fa-crown text-warning me-2"></i>
+                                                <span id="toggleBtnText">Abonelik Planını Seç</span>
+                                                <i class="fas fa-chevron-down ms-2" id="toggleIcon"></i>
+                                            </button>
+                                        </div>
                                         
-                                        <!-- Modern Plan Kartları -->
-                                        <div class="row g-3 mb-3">
+                                        <!-- Gizli Abonelik Planları -->
+                                        <div id="subscriptionPlansContainer" style="display: none;">
+                                            <div class="glass-card p-4 mb-4" style="background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.1); border-radius: 15px;">
+                                                <h5 class="text-center mb-4">
+                                                    <i class="fas fa-crown text-warning me-2"></i>
+                                                    Abonelik Planı Seçin
+                                                </h5>
+                                                
+                                                <!-- Modern Plan Kartları -->
+                                                <div class="row g-3 mb-3">
                                             <!-- Starter Plan -->
                                             <div class="col-md-4">
                                                 <div class="plan-card-modern" data-plan="starter" onclick="selectPlanCard('starter')">
@@ -7914,8 +8155,10 @@ Mesaj:
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
 
-                                    <div class="row">
+                            <div class="row">
                                         <div class="col-md-6 mb-4">
                                             <label class="form-label fw-semibold">
                                                 <i class="fas fa-building text-primary me-2"></i>Company Name *
@@ -8891,6 +9134,55 @@ Mesaj:
             
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
             <script>
+                // Abonelik planlarını aç/kapat
+                function toggleSubscriptionPlans() {
+                    const container = document.getElementById('subscriptionPlansContainer');
+                    const btn = document.getElementById('toggleSubscriptionBtn');
+                    const btnText = document.getElementById('toggleBtnText');
+                    const icon = document.getElementById('toggleIcon');
+                    
+                    if (container.style.display === 'none' || container.style.display === '') {
+                        // Aç
+                        container.style.display = 'block';
+                        btnText.textContent = 'Abonelik Planını Gizle';
+                        icon.className = 'fas fa-chevron-up ms-2';
+                        btn.style.background = 'rgba(30, 58, 138, 0.1)';
+                        btn.style.borderColor = '#1E3A8A';
+                        
+                        // Smooth scroll to plans
+                        setTimeout(() => {
+                            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                    } else {
+                        // Kapat
+                        container.style.display = 'none';
+                        btnText.textContent = 'Abonelik Planını Seç';
+                        icon.className = 'fas fa-chevron-down ms-2';
+                        btn.style.background = 'rgba(30, 58, 138, 0.05)';
+                        btn.style.borderColor = '#1E3A8A';
+                    }
+                }
+                
+                // Plan seçimi fonksiyonu (Modern kartlar için)
+                function selectPlanCard(plan) {
+                    const radioButton = document.getElementById('plan_' + plan);
+                    if (radioButton) {
+                        radioButton.checked = true;
+                        console.log('Plan seçildi:', plan);
+                    }
+                    
+                    // Tüm kartlardan seçim işaretini kaldır
+                    document.querySelectorAll('.plan-card-modern').forEach(card => {
+                        card.classList.remove('selected');
+                    });
+                    
+                    // Seçilen kartı işaretle
+                    const selectedCard = document.querySelector('[data-plan="' + plan + '"]');
+                    if (selectedCard) {
+                        selectedCard.classList.add('selected');
+                    }
+                }
+                
                 // Plan Detayları Modal Fonksiyonları
                 function openPlanDetailsModal() {
                     const modal = new bootstrap.Modal(document.getElementById('planDetailsModal'));
@@ -9079,6 +9371,57 @@ Mesaj:
                     } else {
                         ppeContainer.style.display = 'none';
                         console.log('PPE container hidden');
+                    }
+                }
+                
+                // Demo Modal Functions
+                function openDemoModal() {
+                    document.getElementById('demoModal').style.display = 'block';
+                }
+                
+                function closeDemoModal() {
+                    document.getElementById('demoModal').style.display = 'none';
+                }
+                
+                function submitDemoRequest() {
+                    const form = document.getElementById('demoForm');
+                    const formData = new FormData(form);
+                    
+                    const demoData = {
+                        company_name: formData.get('demo_company_name'),
+                        sector: formData.get('demo_sector'),
+                        contact_person: formData.get('demo_contact_person'),
+                        email: formData.get('demo_email'),
+                        phone: formData.get('demo_phone') || ''
+                    };
+                    
+                    fetch('/api/request-demo', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(demoData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('✅ Demo hesabınız oluşturuldu! Giriş sayfasına yönlendiriliyorsunuz...');
+                            window.location.href = data.login_url;
+                        } else {
+                            alert('❌ Hata: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('❌ Bir hata oluştu. Lütfen tekrar deneyin.');
+                    });
+                }
+                
+                // Close modal when clicking outside
+                window.onclick = function(event) {
+                    const modal = document.getElementById('demoModal');
+                    if (event.target == modal) {
+                        closeDemoModal();
                     }
                 }
             </script>
@@ -11878,6 +12221,35 @@ Mesaj:
                 const companyId = '{{ company_id }}';
                 let selectedPlan = null;
                 let currentPlan = null;
+                
+                // Abonelik planlarını aç/kapat
+                function toggleSubscriptionPlans() {
+                    const container = document.getElementById('subscriptionPlansContainer');
+                    const btn = document.getElementById('toggleSubscriptionBtn');
+                    const btnText = document.getElementById('toggleBtnText');
+                    const icon = document.getElementById('toggleIcon');
+                    
+                    if (container.style.display === 'none' || container.style.display === '') {
+                        // Aç
+                        container.style.display = 'block';
+                        btnText.textContent = 'Abonelik Planını Gizle';
+                        icon.className = 'fas fa-chevron-up ms-2';
+                        btn.style.background = 'rgba(30, 58, 138, 0.1)';
+                        btn.style.borderColor = '#1E3A8A';
+                        
+                        // Smooth scroll to plans
+                        setTimeout(() => {
+                            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                    } else {
+                        // Kapat
+                        container.style.display = 'none';
+                        btnText.textContent = 'Abonelik Planını Seç';
+                        icon.className = 'fas fa-chevron-down ms-2';
+                        btn.style.background = 'rgba(30, 58, 138, 0.05)';
+                        btn.style.borderColor = '#1E3A8A';
+                    }
+                }
                 
                 // Plan seçimi fonksiyonu (Modern kartlar için)
                 function selectPlanCard(plan) {

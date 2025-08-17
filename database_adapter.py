@@ -160,6 +160,9 @@ class DatabaseAdapter:
                         violation_alerts BOOLEAN DEFAULT TRUE,
                         system_alerts BOOLEAN DEFAULT TRUE,
                         report_notifications BOOLEAN DEFAULT TRUE,
+                        account_type TEXT DEFAULT 'full',
+                        demo_expires_at TIMESTAMP,
+                        demo_limits TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -191,8 +194,11 @@ class DatabaseAdapter:
                         violation_alerts BOOLEAN DEFAULT TRUE,
                         system_alerts BOOLEAN DEFAULT TRUE,
                         report_notifications BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        account_type VARCHAR(20) DEFAULT 'full',
+                        demo_expires_at TIMESTAMP,
+                        demo_limits JSON,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -440,6 +446,18 @@ class DatabaseAdapter:
                     cursor.execute('ALTER TABLE companies ADD COLUMN profile_image TEXT')
                 except:
                     pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN account_type TEXT DEFAULT "full"')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN demo_expires_at TIMESTAMP')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN demo_limits TEXT')
+                except:
+                    pass  # Column already exists
             else:  # PostgreSQL
                 try:
                     cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS sector_config JSON')
@@ -479,6 +497,18 @@ class DatabaseAdapter:
                     pass  # Column already exists
                 try:
                     cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS profile_image TEXT')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT \'full\'')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMP')
+                except:
+                    pass  # Column already exists
+                try:
+                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON')
                 except:
                     pass  # Column already exists
             

@@ -1264,10 +1264,18 @@
                         Smart security system that monitors personal protective equipment (PPE) usage 
                         in real-time and prevents workplace accidents in industrial facilities.
                     </p>
-                    <div class="d-flex gap-3 mb-4">
-                        <a href="/app" class="btn btn-primary" data-translate="get_started">
-                            Get Started
+                    <div class="d-flex gap-3 mb-4 flex-wrap">
+                        <button type="button" class="btn btn-primary btn-lg" onclick="openDemoModal()">
+                            <i class="fas fa-play me-2"></i><span data-translate="request_demo">Demo Talep Et</span>
+                        </button>
+                        <a href="/app" class="btn btn-outline-light btn-lg" data-translate="get_started">
+                            <i class="fas fa-rocket me-2"></i>Get Started
                         </a>
+                    </div>
+                    <div class="demo-benefits d-flex gap-4 text-white-50 small mb-4">
+                        <span><i class="fas fa-check-circle text-success me-1"></i><span data-translate="no_credit_card">Kredi kartı gerekmez</span></span>
+                        <span><i class="fas fa-check-circle text-success me-1"></i><span data-translate="instant_access">Anında erişim</span></span>
+                        <span><i class="fas fa-check-circle text-success me-1"></i><span data-translate="seven_days_free">7 gün ücretsiz</span></span>
                     </div>
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
@@ -2611,6 +2619,83 @@
             height: 100%;
             margin: 0;
         }
+
+        /* Demo Modal Styles */
+        .demo-modal {
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .demo-modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .demo-modal-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .demo-close {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+        
+        .demo-close:hover {
+            opacity: 1;
+        }
+        
+        .demo-modal-body {
+            padding: 30px;
+        }
+        
+        .demo-feature {
+            text-align: center;
+            padding: 15px;
+        }
+        
+        .demo-info {
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .demo-benefits {
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .demo-benefits {
+                flex-direction: column;
+                gap: 8px !important;
+            }
+        }
     </style>
 
     <script>
@@ -2896,6 +2981,155 @@
                 }
             }
         });
+
+        // Demo Modal Functions
+        function openDemoModal() {
+            document.getElementById('demoModal').style.display = 'block';
+        }
+        
+        function closeDemoModal() {
+            document.getElementById('demoModal').style.display = 'none';
+        }
+        
+        function submitDemoRequest() {
+            const form = document.getElementById('demoForm');
+            const formData = new FormData(form);
+            
+            const demoData = {
+                company_name: formData.get('demo_company_name'),
+                sector: formData.get('demo_sector'),
+                contact_person: formData.get('demo_contact_person'),
+                email: formData.get('demo_email'),
+                phone: formData.get('demo_phone') || '',
+                password: formData.get('demo_password')
+            };
+            
+            fetch('/api/request-demo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(demoData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success('Demo hesabınız oluşturuldu! Giriş sayfasına yönlendiriliyorsunuz...');
+                    setTimeout(() => {
+                        window.location.href = data.login_url;
+                    }, 2000);
+                } else {
+                    toastr.error('Hata: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                toastr.error('Bir hata oluştu. Lütfen tekrar deneyin.');
+            });
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('demoModal');
+            if (event.target == modal) {
+                closeDemoModal();
+            }
+        }
     </script>
+
+    <!-- Demo Modal -->
+    <div id="demoModal" class="demo-modal" style="display: none;">
+        <div class="demo-modal-content">
+            <div class="demo-modal-header">
+                <h3><i class="fas fa-play-circle text-white me-2"></i>Demo Talep Et</h3>
+                <span class="demo-close" onclick="closeDemoModal()">&times;</span>
+            </div>
+            <div class="demo-modal-body">
+                <div class="demo-info mb-4">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <div class="demo-feature">
+                                <i class="fas fa-calendar-alt text-success fa-2x mb-2"></i>
+                                <h6>7 Gün Ücretsiz</h6>
+                                <small class="text-muted">Tam özellikli deneme</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="demo-feature">
+                                <i class="fas fa-video text-primary fa-2x mb-2"></i>
+                                <h6>2 Kamera</h6>
+                                <small class="text-muted">Demo limiti</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="demo-feature">
+                                <i class="fas fa-rocket text-warning fa-2x mb-2"></i>
+                                <h6>Anında Başla</h6>
+                                <small class="text-muted">Hemen erişim</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <form id="demoForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Şirket Adı *</label>
+                            <input type="text" class="form-control" name="demo_company_name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Sektör *</label>
+                            <select class="form-select" name="demo_sector" required>
+                                <option value="">Sektör seçin</option>
+                                <option value="construction">🏗️ İnşaat</option>
+                                <option value="manufacturing">🏭 İmalat</option>
+                                <option value="chemical">⚗️ Kimya</option>
+                                <option value="food">🍕 Gıda</option>
+                                <option value="warehouse">📦 Depo/Lojistik</option>
+                                <option value="energy">⚡ Enerji</option>
+                                <option value="petrochemical">🛢️ Petrokimya</option>
+                                <option value="marine">🚢 Denizcilik & Tersane</option>
+                                <option value="aviation">✈️ Havacılık</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">İletişim Kişisi *</label>
+                            <input type="text" class="form-control" name="demo_contact_person" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" name="demo_email" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Telefon</label>
+                            <input type="tel" class="form-control" name="demo_phone">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Şifre *</label>
+                            <input type="password" class="form-control" name="demo_password" required 
+                                   placeholder="Minimum 6 karakter" minlength="6">
+                        </div>
+                    </div>
+                    
+                    <div class="demo-terms mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Demo hesabınız 7 gün boyunca aktif olacaktır. Kredi kartı bilgisi gerekmez.
+                        </small>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="button" class="btn btn-primary btn-lg" onclick="submitDemoRequest()">
+                            <i class="fas fa-rocket me-2"></i>Demo Hesabı Oluştur
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </body>
 </html> 
