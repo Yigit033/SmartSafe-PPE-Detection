@@ -389,8 +389,8 @@ class SmartSafeSaaSAPI:
             
             placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
             query = f'''
-                SELECT subscription_type, subscription_end, max_cameras, 
-                       created_at, company_name, sector
+                SELECT subscription_type, billing_cycle, subscription_start, subscription_end, max_cameras, 
+                       created_at, company_name, sector, payment_status, auto_renewal, next_billing_date
                 FROM companies WHERE company_id = {placeholder}
             '''
             logger.info(f"🔍 Executing query: {query} with params: {company_id}")
@@ -408,8 +408,14 @@ class SmartSafeSaaSAPI:
                 # PostgreSQL Row object vs SQLite tuple compatibility
                 if hasattr(result, 'keys'):  # PostgreSQL Row object
                     subscription_end = result['subscription_end']
+                    subscription_start = result['subscription_start']
                     subscription_info = {
                         'subscription_type': result['subscription_type'] or 'basic',
+                        'billing_cycle': result['billing_cycle'] or 'monthly',
+                        'subscription_start': subscription_start,
+                        'payment_status': result['payment_status'] or 'active',
+                        'auto_renewal': result['auto_renewal'],
+                        'next_billing_date': result['next_billing_date'],
                         'max_cameras': result['max_cameras'] or 25,
                         'created_at': result['created_at'] if result['created_at'] else None,
                         'company_name': result['company_name'],
@@ -417,15 +423,41 @@ class SmartSafeSaaSAPI:
                         'used_cameras': used_cameras,
                     }
                 else:  # SQLite tuple
-                    subscription_end = result[1]
+                    # subscription_type, billing_cycle, subscription_start, subscription_end, max_cameras, created_at, company_name, sector, payment_status, auto_renewal, next_billing_date
+                    subscription_end = result[3]
+                    subscription_start = result[2]
                     subscription_info = {
                         'subscription_type': result[0] or 'basic',
-                        'max_cameras': result[2] or 25,
-                        'created_at': result[3] if result[3] else None,
-                        'company_name': result[4],
-                        'sector': result[5],
+                        'billing_cycle': result[1] or 'monthly',
+                        'subscription_start': subscription_start,
+                        'payment_status': result[8] or 'active',
+                        'auto_renewal': result[9],
+                        'next_billing_date': result[10],
+                        'max_cameras': result[4] or 25,
+                        'created_at': result[5] if result[5] else None,
+                        'company_name': result[6],
+                        'sector': result[7],
                         'used_cameras': used_cameras,
                     }
+                
+                # Plan fiyat bilgilerini ekle
+                plan_prices = {
+                    'starter': {'monthly': 99, 'yearly': 990, 'cameras': 25},
+                    'professional': {'monthly': 299, 'yearly': 2990, 'cameras': 100},
+                    'enterprise': {'monthly': 599, 'yearly': 5990, 'cameras': 500}
+                }
+                
+                current_plan = subscription_info['subscription_type'].lower()
+                billing_cycle = subscription_info['billing_cycle']
+                
+                if current_plan in plan_prices:
+                    subscription_info['current_price'] = plan_prices[current_plan][billing_cycle]
+                    subscription_info['monthly_price'] = plan_prices[current_plan]['monthly']
+                    subscription_info['yearly_price'] = plan_prices[current_plan]['yearly']
+                else:
+                    subscription_info['current_price'] = 99
+                    subscription_info['monthly_price'] = 99
+                    subscription_info['yearly_price'] = 990
                 
                 # Abonelik durumunu kontrol et
                 is_active = True
@@ -5744,18 +5776,18 @@ Mesaj:
                     conn.close()
                     return jsonify({
                         'success': True,
-                                                'current_config': {
-                                                    'required': current_required,
-                                                    'optional': current_optional
-                                                },
-                                                'sector': sector,
-                                                'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
-                                                'all_ppe_types': all_ppe_types,
-                                                'sector_specific_ppe': sector_specific_ppe,
-                                                'sector_recommendations': recommendations,
-                                                'compliance_settings': compliance_data,
-                                                'required_ppe': current_required  # Backward compatibility
-                                            })
+                                                        'current_config': {
+                                                            'required': current_required,
+                                                            'optional': current_optional
+                                                        },
+                                                        'sector': sector,
+                                                        'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
+                                                        'all_ppe_types': all_ppe_types,
+                                                        'sector_specific_ppe': sector_specific_ppe,
+                                                        'sector_recommendations': recommendations,
+                                                        'compliance_settings': compliance_data,
+                                                        'required_ppe': current_required  # Backward compatibility
+                                                    })
                 else:
                     conn.close()
                     return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
@@ -12359,6 +12391,14 @@ Mesaj:
                                         </div>
                                         <div class="plan-feature">
                                             <i class="fas fa-check"></i>
+                                            <strong>Fatura Döngüsü:</strong> <span id="billing-cycle">AYLIK</span>
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-check"></i>
+                                            <strong>Mevcut Fiyat:</strong> <span id="current-price">$99/ay</span>
+                                        </div>
+                                        <div class="plan-feature">
+                                            <i class="fas fa-check"></i>
                                             <strong>Durum:</strong> <span id="subscription-status">Aktif</span>
                                         </div>
                                         <div class="plan-feature">
@@ -12765,130 +12805,8 @@ Mesaj:
                         selectPlanCard('starter');
                     });
                     
-                    // Simple and reliable navigation
-                        const navLinks = document.querySelectorAll('.nav-link[data-section]');
-                    const sections = document.querySelectorAll('.settings-section');
-                    
-                    console.log('Found nav links:', navLinks.length);
-                    console.log('Found sections:', sections.length);
-                    
-                    // Function to switch to a section
-                    function switchToSection(sectionName) {
-                        console.log('Switching to section:', sectionName);
-                        
-                        // Update active state
-                        navLinks.forEach(nl => nl.classList.remove('active'));
-                        const activeLink = document.querySelector('[data-section="' + sectionName + '"]');
-                        if (activeLink) {
-                            activeLink.classList.add('active');
-                        }
-                            
-                            // Show target section
-                        sections.forEach(section => section.style.display = 'none');
-                        const targetElement = document.getElementById(sectionName + '-section');
-                            if (targetElement) {
-                                targetElement.style.display = 'block';
-                            console.log('Section displayed:', sectionName);
-                            
-                            // PPE config sekmesine geçildiğinde yükle
-                            if (sectionName === 'ppe-config' && typeof loadPPEConfig === 'function') {
-                                console.log('🔄 Loading PPE config for section switch...');
-                                setTimeout(() => {
-                                    loadPPEConfig();
-                                }, 200);
-                            }
-                            
-                            // Subscription sekmesine geçildiğinde abonelik bilgilerini yükle
-                            if (sectionName === 'subscription' && typeof loadSubscriptionInfo === 'function') {
-                                console.log('🔄 Loading subscription info for section switch...');
-                                setTimeout(() => {
-                                    loadSubscriptionInfo();
-                                }, 200);
-                            }
-                        }
-                    }
-                    
-                    // Add click handlers to nav links
-                    navLinks.forEach(link => {
-                        link.addEventListener('click', function(e) {
-                                    e.preventDefault();
-                            const targetSection = this.getAttribute('data-section');
-                            switchToSection(targetSection);
-                                        
-                                        // Update URL hash
-                            window.location.hash = targetSection;
-                        });
-                    });
-                    
-                    // Handle initial hash on page load
-                    const hash = window.location.hash.substring(1);
-                    console.log('Initial hash:', hash);
-                    if (hash) {
-                        const targetLink = document.querySelector('[data-section="' + hash + '"]');
-                        if (targetLink) {
-                            console.log('Found target link for hash:', hash);
-                            switchToSection(hash);
-                        } else {
-                            console.log('No target link found for hash:', hash);
-                            // Default to profile
-                            switchToSection('profile');
-                        }
-                    } else {
-                        // Default to profile section if no hash
-                        console.log('No hash found, defaulting to profile');
-                        switchToSection('profile');
-                    }
                 }
                 
-                // Initialize immediately and after DOM load
-                initializeSettings();
-                    document.addEventListener('DOMContentLoaded', initializeSettings);
-                
-                // Handle hash changes
-                window.addEventListener('hashchange', function() {
-                    const hash = window.location.hash.substring(1);
-                    console.log('Hash changed to:', hash);
-                    
-                    const navLinks = document.querySelectorAll('.nav-link[data-section]');
-                    const sections = document.querySelectorAll('.settings-section');
-                    
-                    if (hash) {
-                                            const targetLink = document.querySelector('[data-section="' + hash + '"]');
-                    if (targetLink) {
-                        console.log('Found target link for hash change:', hash);
-                            
-                            // Update active state
-                            navLinks.forEach(nl => nl.classList.remove('active'));
-                            targetLink.classList.add('active');
-                            
-                            // Show target section
-                            sections.forEach(section => section.style.display = 'none');
-                            const targetElement = document.getElementById(hash + '-section');
-                            if (targetElement) {
-                                targetElement.style.display = 'block';
-                                console.log('Section displayed via hash change:', hash);
-                                
-                                // PPE config sekmesine geçildiğinde yükle
-                                if (hash === 'ppe-config' && typeof loadPPEConfig === 'function') {
-                                    console.log('🔄 Loading PPE config for section switch...');
-                                    setTimeout(() => {
-                                        loadPPEConfig();
-                                    }, 200);
-                                }
-                                
-                                // Subscription sekmesine geçildiğinde abonelik bilgilerini yükle
-                                if (hash === 'subscription' && typeof loadSubscriptionInfo === 'function') {
-                                    console.log('🔄 Loading subscription info for section switch...');
-                                    setTimeout(() => {
-                                        loadSubscriptionInfo();
-                                    }, 200);
-                                }
-                            }
-                    } else {
-                        console.log('No target link found for hash change:', hash);
-                        }
-                    }
-                });
                 
                 // Profile Form Submission
                 document.getElementById('profileForm').addEventListener('submit', function(e) {
@@ -13179,6 +13097,9 @@ Mesaj:
                     })
                     .then(result => {
                         console.log('📊 Abonelik yükleme sonucu:', result);
+                        console.log('🔍 Subscription data:', result.subscription);
+                        console.log('🔍 Days remaining:', result.subscription ? result.subscription.days_remaining : 'undefined');
+                        console.log('🔍 Subscription end:', result.subscription ? result.subscription.subscription_end : 'undefined');
                         if (result.success) {
                             const subscription = result.subscription;
                             
@@ -13225,6 +13146,8 @@ Mesaj:
                             
                             // Ayarlar sayfasındaki abonelik bilgileri elementlerini güncelle
                             const subscriptionTypeElement = document.getElementById('subscription-type');
+                            const billingCycleElement = document.getElementById('billing-cycle');
+                            const currentPriceElement = document.getElementById('current-price');
                             const subscriptionStatusElement = document.getElementById('subscription-status');
                             const subscriptionEndElement = document.getElementById('subscription-end');
                             const daysRemainingElement = document.getElementById('days-remaining');
@@ -13233,6 +13156,20 @@ Mesaj:
                             if (subscriptionTypeElement) {
                                 subscriptionTypeElement.textContent = subscription.subscription_type ? subscription.subscription_type.toUpperCase() : 'BASIC';
                                 console.log('✅ Ayarlar sayfası - Abonelik planı güncellendi:', subscriptionTypeElement.textContent);
+                            }
+                            
+                            if (billingCycleElement) {
+                                const billingCycle = subscription.billing_cycle || 'monthly';
+                                billingCycleElement.textContent = billingCycle === 'monthly' ? 'AYLIK' : 'YILLIK';
+                                console.log('✅ Ayarlar sayfası - Fatura döngüsü güncellendi:', billingCycleElement.textContent);
+                            }
+                            
+                            if (currentPriceElement) {
+                                const currentPrice = subscription.current_price || 99;
+                                const billingCycle = subscription.billing_cycle || 'monthly';
+                                const priceText = billingCycle === 'monthly' ? `$${currentPrice}/ay` : `$${currentPrice}/yıl`;
+                                currentPriceElement.textContent = priceText;
+                                console.log('✅ Ayarlar sayfası - Mevcut fiyat güncellendi:', currentPriceElement.textContent);
                             }
                             
                             if (subscriptionStatusElement) {
@@ -13257,19 +13194,49 @@ Mesaj:
                             }
                             
                             if (daysRemainingElement) {
+                                console.log('🔍 Kalan gün hesaplama - subscription data:', subscription);
+                                
                                 if (subscription.days_remaining !== undefined) {
+                                    console.log('🔍 Backend den gelen days_remaining:', subscription.days_remaining);
                                     if (subscription.days_remaining > 0) {
                                         daysRemainingElement.textContent = subscription.days_remaining + ' gün';
                                         daysRemainingElement.className = 'text-success';
                                     } else if (subscription.days_remaining === 0) {
-                                        daysRemainingElement.textContent = 'Bugün';
+                                        daysRemainingElement.textContent = 'Bugün sona eriyor';
                                         daysRemainingElement.className = 'text-warning';
                                     } else {
                                         daysRemainingElement.textContent = Math.abs(subscription.days_remaining) + ' gün önce';
                                         daysRemainingElement.className = 'text-danger';
                                     }
                                 } else {
-                                    daysRemainingElement.textContent = '--';
+                                    console.log('🔍 days_remaining yok, subscription_end den hesaplaniyor:', subscription.subscription_end);
+                                    // days_remaining yoksa subscription_end den hesapla
+                                    if (subscription.subscription_end) {
+                                        try {
+                                            const endDate = new Date(subscription.subscription_end);
+                                            const today = new Date();
+                                            const diffTime = endDate - today;
+                                            const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                            
+                                            console.log('🔍 Hesaplanan kalan gün:', remainingDays);
+                                            
+                                            if (remainingDays > 0) {
+                                                daysRemainingElement.textContent = remainingDays + ' gün';
+                                                daysRemainingElement.className = 'text-success';
+                                            } else if (remainingDays === 0) {
+                                                daysRemainingElement.textContent = 'Bugün sona eriyor';
+                                                daysRemainingElement.className = 'text-warning';
+                                            } else {
+                                                daysRemainingElement.textContent = Math.abs(remainingDays) + ' gün önce';
+                                                daysRemainingElement.className = 'text-danger';
+                                            }
+                                        } catch (e) {
+                                            daysRemainingElement.textContent = '--';
+                                            console.error('Kalan gün hesaplama hatası:', e);
+                                        }
+                                    } else {
+                                        daysRemainingElement.textContent = '--';
+                                    }
                                 }
                                 console.log('✅ Ayarlar sayfası - Kalan gün güncellendi:', daysRemainingElement.textContent);
                             }
@@ -14140,6 +14107,87 @@ Mesaj:
                     } catch (error) {
                         console.error('Settings page initialization error:', error);
                     }
+                });
+
+                // Hash Navigation System
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('DOM loaded, initializing hash navigation...');
+                    
+                    const navLinks = document.querySelectorAll('.nav-link[data-section]');
+                    const sections = document.querySelectorAll('.settings-section');
+                    
+                    console.log('Found nav links:', navLinks.length);
+                    console.log('Found sections:', sections.length);
+                    
+                    // Function to switch to a section
+                    function switchToSection(sectionName) {
+                        console.log('Switching to section:', sectionName);
+                        
+                        // Update active state
+                        navLinks.forEach(nl => nl.classList.remove('active'));
+                        const activeLink = document.querySelector('[data-section="' + sectionName + '"]');
+                        if (activeLink) {
+                            activeLink.classList.add('active');
+                        }
+                        
+                        // Show target section
+                        sections.forEach(section => section.style.display = 'none');
+                        const targetElement = document.getElementById(sectionName + '-section');
+                        if (targetElement) {
+                            targetElement.style.display = 'block';
+                            console.log('Section displayed:', sectionName);
+                            
+                            // Load data when switching to subscription
+                            if (sectionName === 'subscription' && typeof loadSubscriptionInfo === 'function') {
+                                console.log('Loading subscription info...');
+                                setTimeout(() => {
+                                    loadSubscriptionInfo();
+                                }, 200);
+                            }
+                        }
+                    }
+                    
+                    // Add click handlers to nav links
+                    navLinks.forEach(link => {
+                        link.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const targetSection = this.getAttribute('data-section');
+                            switchToSection(targetSection);
+                            
+                            // Update URL hash
+                            window.location.hash = targetSection;
+                        });
+                    });
+                    
+                    // Handle initial hash on page load
+                    const hash = window.location.hash.substring(1);
+                    console.log('Initial hash:', hash);
+                    if (hash) {
+                        const targetLink = document.querySelector('[data-section="' + hash + '"]');
+                        if (targetLink) {
+                            console.log('Found target link for hash:', hash);
+                            switchToSection(hash);
+                        } else {
+                            console.log('No target link found for hash:', hash);
+                            switchToSection('profile');
+                        }
+                    } else {
+                        console.log('No hash found, defaulting to profile');
+                        switchToSection('profile');
+                    }
+                    
+                    // Handle hash changes
+                    window.addEventListener('hashchange', function() {
+                        const hash = window.location.hash.substring(1);
+                        console.log('Hash changed to:', hash);
+                        
+                        if (hash) {
+                            const targetLink = document.querySelector('[data-section="' + hash + '"]');
+                            if (targetLink) {
+                                switchToSection(hash);
+                            }
+                        }
+                    });
                 });
             </script>
         </body>

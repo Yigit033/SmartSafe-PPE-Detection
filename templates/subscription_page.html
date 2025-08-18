@@ -122,6 +122,16 @@
                             </div>
                             
                             <div class="mb-3">
+                                <strong>Fatura Döngüsü:</strong>
+                                <span id="billing-cycle" class="badge bg-info ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Mevcut Fiyat:</strong>
+                                <span id="current-price" class="badge bg-success ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
                                 <strong>Başlangıç Tarihi:</strong>
                                 <span id="start-date" class="ms-2">Yükleniyor...</span>
                             </div>
@@ -129,6 +139,11 @@
                             <div class="mb-3">
                                 <strong>Bitiş Tarihi:</strong>
                                 <span id="end-date" class="ms-2">Yükleniyor...</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Kalan Süre:</strong>
+                                <span id="remaining-days" class="badge bg-warning ms-2">Yükleniyor...</span>
                             </div>
                             
                             <div class="mb-3">
@@ -508,6 +523,15 @@
                         // Update plan details
                         document.getElementById('plan-type').textContent = (subscription.subscription_type || 'BASIC').toUpperCase();
                         
+                        // Update billing cycle
+                        const billingCycle = subscription.billing_cycle || 'monthly';
+                        document.getElementById('billing-cycle').textContent = billingCycle === 'monthly' ? 'AYLIK' : 'YILLIK';
+                        
+                        // Update current price
+                        const currentPrice = subscription.current_price || 99;
+                        const priceText = billingCycle === 'monthly' ? `$${currentPrice}/ay` : `$${currentPrice}/yıl`;
+                        document.getElementById('current-price').textContent = priceText;
+                        
                         // Format start date
                         let startDate = 'Belirtilmemiş';
                         if (subscription.subscription_start) {
@@ -519,16 +543,36 @@
                         }
                         document.getElementById('start-date').textContent = startDate;
                         
-                        // Format end date
+                        // Format end date and calculate remaining days
                         let endDate = 'Belirtilmemiş';
+                        let remainingDays = 0;
                         if (subscription.subscription_end) {
                             try {
-                                endDate = new Date(subscription.subscription_end).toLocaleDateString('tr-TR');
+                                const endDateObj = new Date(subscription.subscription_end);
+                                endDate = endDateObj.toLocaleDateString('tr-TR');
+                                
+                                // Calculate remaining days
+                                const today = new Date();
+                                const diffTime = endDateObj - today;
+                                remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                             } catch (e) {
                                 endDate = subscription.subscription_end;
                             }
                         }
                         document.getElementById('end-date').textContent = endDate;
+                        
+                        // Update remaining days
+                        const remainingElement = document.getElementById('remaining-days');
+                        if (remainingDays > 0) {
+                            remainingElement.textContent = `${remainingDays} gün`;
+                            remainingElement.className = 'badge bg-success ms-2';
+                        } else if (remainingDays === 0) {
+                            remainingElement.textContent = 'Bugün sona eriyor';
+                            remainingElement.className = 'badge bg-warning ms-2';
+                        } else {
+                            remainingElement.textContent = 'Süresi dolmuş';
+                            remainingElement.className = 'badge bg-danger ms-2';
+                        }
                         
                         // Update status
                         const statusElement = document.getElementById('status');
