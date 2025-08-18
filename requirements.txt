@@ -1,15 +1,14 @@
-# SmartSafe AI PPE Detection - Render.com Optimized
+# SmartSafe AI PPE Detection - Render.com Memory Optimized
 # Core Computer Vision
-opencv-python==4.8.1.78
+opencv-python-headless==4.8.1.78  # Headless version for server deployment
 numpy==1.24.3
 Pillow>=9.0.0
 
-# Deep Learning Framework (Production Ready - Auto GPU/CPU)
-# PyTorch with CUDA support for production
-torch>=2.0.0
-torchvision>=0.15.0
+# Deep Learning Framework (Memory Optimized for Render.com)
+# CPU-only PyTorch for memory efficiency
+torch>=2.0.0+cpu --index-url https://download.pytorch.org/whl/cpu
+torchvision>=0.15.0+cpu --index-url https://download.pytorch.org/whl/cpu
 ultralytics>=8.0.0
-torchaudio>=2.0.0  # Audio processing support
 
 # Web Framework
 flask>=2.3.0
@@ -68,11 +67,11 @@ qrcode>=7.4.0
 # Logging
 loguru>=0.7.2
 
-# Audio Support
-pygame>=2.5.2
+# Audio Support (removed pygame for memory optimization)
+# pygame>=2.5.2  # Commented out for Render.com memory optimization
 
-# Additional Python Standard Library Extensions
-pathlib2>=2.3.0
+# Additional Python Standard Library Extensions (removed for memory optimization)
+# pathlib2>=2.3.0  # Not needed for Python 3.7+
 
 # Production Deployment Support
 python-multipart>=0.0.6  # File upload support

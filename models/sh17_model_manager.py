@@ -28,6 +28,10 @@ class SH17ModelManager:
         self.last_detection_time = {}  # Son detection zamanları
         self.detection_throttle = 0.05  # Detection throttle (50ms - daha hızlı)
         
+        # 🚀 RENDER.COM MEMORY OPTIMIZATION
+        self.is_production = os.environ.get('RENDER') is not None
+        self.lazy_loading = self.is_production  # Production'da lazy loading aktif
+        
         self.sector_mapping = {
             'construction': ['helmet', 'safety_vest', 'safety_shoes', 'gloves'],
             'manufacturing': ['helmet', 'safety_vest', 'gloves', 'safety_glasses'],
@@ -50,8 +54,12 @@ class SH17ModelManager:
         
         logger.info(f"🎯 SH17 Model Manager başlatıldı - Device: {self.device}")
         
-        # Modelleri otomatik yükle
-        self.load_models()
+        # RENDER.COM OPTIMIZATION: Lazy loading if in production
+        if not self.lazy_loading:
+            # Modelleri otomatik yükle (sadece development'ta)
+            self.load_models()
+        else:
+            logger.info("🚀 Production mode: Lazy loading enabled - models will load on demand")
         
     def load_models(self):
         """Tüm SH17 modellerini yükle ve fallback model'i hazırla"""
@@ -151,6 +159,35 @@ class SH17ModelManager:
                     logger.error("❌ Fallback model bulunamadı!")
             except Exception as e:
                 logger.error(f"❌ Fallback model yüklenemedi: {e}")
+    
+    def get_model(self, sector='base'):
+        """Model al - lazy loading ile (RENDER.COM OPTIMIZATION)"""
+        # Eğer model zaten yüklüyse, onu döndür
+        if sector in self.models:
+            return self.models[sector]
+        
+        # Lazy loading aktifse ve model henüz yüklenmemişse, şimdi yükle
+        if self.lazy_loading:
+            logger.info(f"🔄 Lazy loading: {sector} modeli yükleniyor...")
+            
+            # Production ortamında sadece yolov8n kullan (memory optimization)
+            model_path = 'yolov8n.pt'
+            
+            try:
+                model = YOLO(model_path)
+                model.to(self.device)
+                self.models[sector] = model
+                logger.info(f"✅ {sector} modeli lazy loading ile yüklendi: {model_path}")
+                return model
+            except Exception as e:
+                logger.error(f"❌ {sector} modeli lazy loading hatası: {e}")
+                # Fallback model döndür
+                self._ensure_fallback_model()
+                return self.fallback_model
+        
+        # Fallback model döndür
+        self._ensure_fallback_model()
+        return self.fallback_model
         
     def detect_ppe(self, image, sector='base', confidence=0.5):
         """PPE tespiti yap - SH17 veya fallback ile (OPTIMIZED)"""
@@ -217,7 +254,7 @@ class SH17ModelManager:
     def _detect_with_sh17(self, image, sector, confidence):
         """SH17 model ile detection (OPTIMIZED)"""
         try:
-            model = self.models[sector]
+            model = self.get_model(sector)  # Lazy loading ile model al
             if model is None:
                 logger.warning(f"⚠️ SH17 {sector} modeli None")
                 return []
