@@ -4,11 +4,12 @@ opencv-python-headless==4.8.1.78  # Headless version for server deployment
 numpy==1.24.3
 Pillow>=9.0.0
 
-# Deep Learning Framework (Memory Optimized for Render.com)
-# CPU-only PyTorch for memory efficiency
-torch>=2.0.0+cpu --index-url https://download.pytorch.org/whl/cpu
-torchvision>=0.15.0+cpu --index-url https://download.pytorch.org/whl/cpu
+# Deep Learning Framework (Production Ready - Auto GPU/CPU Detection)
+# Will use GPU if available, CPU as fallback
+torch>=2.0.0
+torchvision>=0.15.0
 ultralytics>=8.0.0
+# CUDA support will be automatically detected
 
 # Web Framework
 flask>=2.3.0
@@ -35,11 +36,11 @@ pyotp>=2.8.0
 # Email & Validation
 email-validator>=2.0.0
 
-# Data Processing & Visualization
+# Data Processing & Visualization (memory optimized)
 pandas>=1.5.0
 scipy>=1.9.0
 matplotlib>=3.7.0
-seaborn>=0.12.0
+# seaborn>=0.12.0  # Commented out for memory optimization
 
 # Configuration & Environment
 pyyaml>=6.0

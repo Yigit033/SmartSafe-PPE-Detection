@@ -17422,8 +17422,8 @@ smartsafe_requests_total 100
                 import torch
                 from ultralytics import YOLO
                 
-                # GPU/CPU seçimi
-                if torch.cuda.is_available() and not os.environ.get('RENDER'):  # Render.com'da CUDA kullanma
+                # GPU/CPU seçimi (Production-ready)
+                if torch.cuda.is_available() and not os.environ.get('CUDA_VISIBLE_DEVICES') == '':
                     try:
                         test_tensor = torch.randn(1, 3, 640, 640).cuda()
                         _ = test_tensor * 2
