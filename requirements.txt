@@ -40,7 +40,7 @@ email-validator>=2.0.0
 pandas>=1.5.0
 scipy>=1.9.0
 matplotlib>=3.7.0
-# seaborn>=0.12.0  # Commented out for memory optimization
+seaborn>=0.12.0  # Required for visualization utils
 
 # Configuration & Environment
 pyyaml>=6.0
@@ -68,8 +68,8 @@ qrcode>=7.4.0
 # Logging
 loguru>=0.7.2
 
-# Audio Support (removed pygame for memory optimization)
-# pygame>=2.5.2  # Commented out for Render.com memory optimization
+# Audio Support (optional - for audio alerts)
+pygame>=2.5.2  # Re-enabled for audio alerts
 
 # Additional Python Standard Library Extensions (removed for memory optimization)
 # pathlib2>=2.3.0  # Not needed for Python 3.7+

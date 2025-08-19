@@ -33,5 +33,9 @@ echo "📦 Environment configured for production"
 echo "🔧 Memory optimization enabled"
 echo "🌐 Starting Flask application..."
 
+# Port binding for Render.com
+export PORT=${PORT:-10000}
+echo "🌐 Port: $PORT"
+
 # Start the application
 python smartsafe_saas_api.py

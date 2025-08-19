@@ -16,7 +16,14 @@ from datetime import datetime, timedelta
 import uuid
 import secrets
 import bcrypt
-from utils.secure_database_connector import get_secure_db_connector
+# Lazy import to avoid circular dependency
+def get_secure_db_connector():
+    """Get secure DB connector when needed"""
+    try:
+        from utils.secure_database_connector import get_secure_db_connector
+        return get_secure_db_connector()
+    except ImportError:
+        return None
 import time
 import traceback
 import threading
@@ -85,7 +92,12 @@ class DatabaseAdapter:
                 connection.row_factory = sqlite3.Row
                 return connection
             else:  # PostgreSQL
-                return self.secure_connector.get_connection()
+                secure_connector = get_secure_db_connector()
+                if secure_connector:
+                    return secure_connector.get_connection()
+                else:
+                    logger.error("❌ Secure connector not available")
+                    return None
         except Exception as e:
             logger.error(f"❌ Database connection error: {e}")
             return None
