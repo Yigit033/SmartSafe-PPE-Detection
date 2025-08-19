@@ -19692,52 +19692,37 @@ def create_app():
 # Create the app instance
 app = create_app()
 
-if __name__ == "__main__":
-    # RENDER.COM OPTIMIZED FLASK SERVER
-    print("🚀 RENDER.COM - Starting optimized Flask server...")
-    
+if __name__ == "__main__" and not os.environ.get('RENDER'):
+    # Local-only server start (Render uses the block below)
+    print("🚀 Local development Flask server starting...")
     try:
         api_server = SmartSafeSaaSAPI()
         app = api_server.app
-        logger.info("✅ Ana SmartSafe API başarıyla başlatıldı")
+        logger.info("✅ Ana SmartSafe API başarıyla başlatıldı (local)")
     except Exception as main_error:
         logger.error(f"❌ Ana API başlatma hatası: {main_error}")
-        # Emergency fallback Flask app
-        logger.warning("🚨 Emergency fallback sistem devreye giriyor...")
         app = create_emergency_app()
-        logger.info("✅ Emergency fallback sistem başlatıldı")
-    
-    # Flask server başlatma
+        logger.info("✅ Emergency fallback sistem başlatıldı (local)")
+
     try:
-        # Render.com automatic port detection
-        port = int(os.environ.get('PORT', 5000))  # Local development default port
+        port = int(os.environ.get('PORT', 5000))
         host = '0.0.0.0'
-        
-        # Platform detection - Render.com focused
-        if os.environ.get('RENDER'):
-            platform = "Render.com (Production)"
-        else:
-            platform = "Local Development"
-        print(f"🌐 Platform: {platform}")
+        print(f"🌐 Platform: Local Development")
         print(f"🌐 Starting server on {host}:{port}")
         print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
         print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
-        
-        # RENDER.COM OPTIMIZED FLASK SERVER
         app.run(
-            host=host, 
-            port=port, 
-            debug=True, 
+            host=host,
+            port=port,
+            debug=False,
             threaded=True,
-            use_reloader=False,  # Render.com optimization
-            use_debugger=False   # Production safety
+            use_reloader=False,
+            use_debugger=False
         )
-        
     except Exception as e:
         print(f"❌ Server start error: {e}")
         import traceback
         traceback.print_exc()
-        # Exit with error code for Render.com
         import sys
         sys.exit(1)
 

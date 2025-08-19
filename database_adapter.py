@@ -117,23 +117,26 @@ class DatabaseAdapter:
                     logger.error("❌ Database initialization failed: No connection available")
                     return False
             
-                    # Production-safe transaction management
+            # PostgreSQL için temiz connection ve autocommit setup
             if self.db_type == 'postgresql':
                 try:
-                    # Yeni connection al - önceki connection'ı kapat
+                    # Fresh connection al
                     conn.close()
                     conn = self.get_connection()
                     logger.info("🔄 PostgreSQL fresh connection established")
+                    
+                    # Enable autocommit IMMEDIATELY to avoid transaction issues
+                    conn.autocommit = True
+                    logger.info("🔧 PostgreSQL autocommit enabled for DDL operations")
+                    
                 except Exception as e:
-                    logger.warning(f"⚠️ Connection reset warning: {e}")
-                    # Fresh connection al
+                    logger.warning(f"⚠️ PostgreSQL setup warning: {e}")
                     try:
                         conn = self.get_connection()
+                        conn.autocommit = True
                     except Exception:
                         pass
-            
-            # PostgreSQL için cursor oluştur
-            if self.db_type == 'postgresql':
+                
                 cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
             else:
                 cursor = conn.cursor()
@@ -488,59 +491,29 @@ class DatabaseAdapter:
                     cursor.execute('ALTER TABLE companies ADD COLUMN demo_limits TEXT')
                 except:
                     pass  # Column already exists
-            else:  # PostgreSQL
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS sector_config JSON')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS ppe_requirements JSON')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS compliance_settings JSON')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT TRUE')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS sms_notifications BOOLEAN DEFAULT FALSE')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS push_notifications BOOLEAN DEFAULT TRUE')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS violation_alerts BOOLEAN DEFAULT TRUE')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS system_alerts BOOLEAN DEFAULT TRUE')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS report_notifications BOOLEAN DEFAULT TRUE')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS profile_image TEXT')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT \'full\'')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMP')
-                except:
-                    pass  # Column already exists
-                try:
-                    cursor.execute('ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON')
-                except:
-                    pass  # Column already exists
+            else:  # PostgreSQL - Batch DDL operations to avoid transaction issues
+                ddl_statements = [
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS sector_config JSON",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS ppe_requirements JSON", 
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS compliance_settings JSON",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT TRUE",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS sms_notifications BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS push_notifications BOOLEAN DEFAULT TRUE",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS violation_alerts BOOLEAN DEFAULT TRUE",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS system_alerts BOOLEAN DEFAULT TRUE",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS report_notifications BOOLEAN DEFAULT TRUE",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS profile_image TEXT",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT 'full'",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMP",
+                    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON"
+                ]
+                
+                for ddl in ddl_statements:
+                    try:
+                        cursor.execute(ddl)
+                        logger.debug(f"✅ DDL executed: {ddl[:50]}...")
+                    except Exception as e:
+                        logger.warning(f"⚠️ DDL skipped: {ddl[:50]}... -> {e}")
             
             # Users table
             cursor.execute('''
@@ -922,8 +895,9 @@ class DatabaseAdapter:
                     )
                 ''')
 
-            # Her tablo oluşturulduktan sonra commit yap
-            conn.commit()
+            # PostgreSQL autocommit kullanıyorsa commit'e gerek yok
+            if not (self.db_type == 'postgresql' and getattr(conn, 'autocommit', False)):
+                conn.commit()
             logger.info("✅ Database tables created successfully")
             return True
             
