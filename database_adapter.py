@@ -103,7 +103,7 @@ class DatabaseAdapter:
             return None
     
     def init_database(self):
-        """Initialize database tables - Production Safe"""
+        """Initialize database tables - Production Safe with Schema Sync"""
         try:
             conn = self.get_connection()
             if conn is None:
@@ -117,23 +117,28 @@ class DatabaseAdapter:
                     logger.error("❌ Database initialization failed: No connection available")
                     return False
             
-            # PostgreSQL için temiz connection ve autocommit setup
+            # PostgreSQL için schema senkronizasyonu kontrol et
+            if self.db_type == 'postgresql':
+                schema_ok = self._check_and_sync_schema(conn)
+                if schema_ok:
+                    logger.info("✅ PostgreSQL schema synchronized successfully")
+                    return True
+                else:
+                    logger.warning("⚠️ Schema sync failed, continuing with table creation")
+            
+            # PostgreSQL için temiz connection setup
             if self.db_type == 'postgresql':
                 try:
                     # Fresh connection al
                     conn.close()
                     conn = self.get_connection()
                     logger.info("🔄 PostgreSQL fresh connection established")
-                    
-                    # Enable autocommit IMMEDIATELY to avoid transaction issues
-                    conn.autocommit = True
-                    logger.info("🔧 PostgreSQL autocommit enabled for DDL operations")
+                    logger.info("🔧 PostgreSQL autocommit already enabled in secure connector")
                     
                 except Exception as e:
                     logger.warning(f"⚠️ PostgreSQL setup warning: {e}")
                     try:
                         conn = self.get_connection()
-                        conn.autocommit = True
                     except Exception:
                         pass
                 
@@ -984,6 +989,87 @@ class DatabaseAdapter:
 
         logger.error(f"❌ Database query failed after {max_retries} attempts")
         return None
+    
+    def _check_and_sync_schema(self, conn) -> bool:
+        """PostgreSQL schema'sını kontrol et ve senkronize et"""
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Temel tabloların varlığını kontrol et
+            cursor.execute("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('companies', 'users', 'cameras', 'sessions', 'detections', 'violations')
+            """)
+            existing_tables = [row[0] for row in cursor.fetchall()]
+            
+            required_tables = ['companies', 'users', 'cameras', 'sessions', 'detections', 'violations']
+            missing_tables = [t for t in required_tables if t not in existing_tables]
+            
+            if missing_tables:
+                logger.warning(f"⚠️ Missing tables: {missing_tables}, will create them")
+                return False
+            
+            # 2. companies tablosundaki kritik kolonları kontrol et
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'companies' AND table_schema = 'public'
+                AND column_name IN ('account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle')
+            """)
+            existing_columns = [row[0] for row in cursor.fetchall()]
+            
+            required_columns = ['account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle']
+            missing_columns = [c for c in required_columns if c not in existing_columns]
+            
+            if missing_columns:
+                logger.info(f"🔧 Adding missing columns to companies table: {missing_columns}")
+                
+                # Eksik kolonları ekle
+                column_definitions = {
+                    'account_type': 'VARCHAR(20) DEFAULT \'full\'',
+                    'demo_expires_at': 'TIMESTAMP',
+                    'demo_limits': 'JSON',
+                    'billing_cycle': 'VARCHAR(20) DEFAULT \'monthly\'',
+                    'next_billing_date': 'TIMESTAMP',
+                    'auto_renewal': 'BOOLEAN DEFAULT TRUE',
+                    'payment_method': 'VARCHAR(50)',
+                    'payment_status': 'VARCHAR(20) DEFAULT \'active\'',
+                    'current_balance': 'DECIMAL(10,2) DEFAULT 0.00',
+                    'total_paid': 'DECIMAL(10,2) DEFAULT 0.00',
+                    'last_payment_date': 'TIMESTAMP',
+                    'last_payment_amount': 'DECIMAL(10,2)'
+                }
+                
+                for column in missing_columns:
+                    if column in column_definitions:
+                        try:
+                            cursor.execute(f'ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {column_definitions[column]}')
+                            logger.info(f"✅ Added column: {column}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to add column {column}: {e}")
+            
+            # 3. Ek tabloları kontrol et
+            cursor.execute("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('subscription_history', 'billing_history', 'payment_methods')
+            """)
+            existing_extra_tables = [row[0] for row in cursor.fetchall()]
+            
+            extra_tables = ['subscription_history', 'billing_history', 'payment_methods']
+            missing_extra_tables = [t for t in extra_tables if t not in existing_extra_tables]
+            
+            if missing_extra_tables:
+                logger.info(f"🔧 Creating missing extra tables: {missing_extra_tables}")
+                # Bu tabloları oluşturmak için normal init_database akışına devam et
+                return False
+            
+            logger.info("✅ PostgreSQL schema is up to date")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Schema sync error: {e}")
+            return False
 
     # DVR System Methods
     def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> bool:

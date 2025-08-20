@@ -2248,12 +2248,27 @@ Mesaj:
                     </script>
                     '''
                 
-                # Şirket var mı kontrol et
+                # Şirket var mı kontrol et - Safe query with fallback
                 conn = self.db.get_connection()
                 cursor = conn.cursor()
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
-                cursor.execute(f'SELECT company_name, account_type, demo_expires_at FROM companies WHERE company_id = {placeholder}', (company_id,))
-                company = cursor.fetchone()
+                
+                # Try with account_type column first, fallback if column doesn't exist
+                try:
+                    cursor.execute(f'SELECT company_name, account_type, demo_expires_at FROM companies WHERE company_id = {placeholder}', (company_id,))
+                    company = cursor.fetchone()
+                except Exception as e:
+                    if 'account_type' in str(e) and 'does not exist' in str(e):
+                        # Column doesn't exist, use fallback query
+                        logger.warning(f"⚠️ account_type column missing, using fallback query")
+                        cursor.execute(f'SELECT company_name FROM companies WHERE company_id = {placeholder}', (company_id,))
+                        result = cursor.fetchone()
+                        if result:
+                            company = (result[0], 'full', None)  # Default values
+                        else:
+                            company = None
+                    else:
+                        raise e
                 conn.close()
                 
                 if not company:
@@ -6773,13 +6788,29 @@ Mesaj:
             cursor = conn.cursor()
             
             placeholder = self.db.get_placeholder()
-            cursor.execute(f'''
-                SELECT account_type, demo_expires_at, demo_limits, created_at
-                FROM companies 
-                WHERE company_id = {placeholder}
-            ''', (company_id,))
             
-            result = cursor.fetchone()
+            # Safe query with fallback for missing account_type column
+            try:
+                cursor.execute(f'''
+                    SELECT account_type, demo_expires_at, demo_limits, created_at
+                    FROM companies 
+                    WHERE company_id = {placeholder}
+                ''', (company_id,))
+                result = cursor.fetchone()
+            except Exception as e:
+                if 'account_type' in str(e) and 'does not exist' in str(e):
+                    # Column doesn't exist, use fallback
+                    logger.warning(f"⚠️ account_type column missing in demo check, using fallback")
+                    cursor.execute(f'''
+                        SELECT created_at FROM companies WHERE company_id = {placeholder}
+                    ''', (company_id,))
+                    fallback_result = cursor.fetchone()
+                    if fallback_result:
+                        result = ('full', None, None, fallback_result[0])  # Default values
+                    else:
+                        result = None
+                else:
+                    raise e
             conn.close()
             
             if not result:

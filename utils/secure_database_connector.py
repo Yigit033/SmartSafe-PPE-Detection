@@ -77,7 +77,7 @@ class SecureDatabaseConnector:
             'keepalives_count': self.keepalives_count,
             'connect_timeout': self.connection_timeout,
             'application_name': 'smartsafe_ppe_detection',
-            'options': '-c statement_timeout=30000'  # 30 second statement timeout
+            'options': '-c statement_timeout=30000 -c role=service_role'  # Service role for RLS bypass
         }
         
         # For Render.com, use prefer mode for better compatibility
@@ -148,10 +148,10 @@ class SecureDatabaseConnector:
                 self.test_connection(params['host'], params['port'])
                 
                 # Try to establish connection
-                conn = psycopg2.connect(
-                    **params,
-                    cursor_factory=psycopg2.extras.RealDictCursor
-                )
+                conn = psycopg2.connect(**params)
+                
+                # Enable autocommit immediately to avoid transaction issues
+                conn.autocommit = True
                 
                 # Test the connection
                 with conn.cursor() as cur:
