@@ -1519,9 +1519,9 @@ class MultiTenantDatabase:
             cursor.execute(f'''
                 SELECT 
                     COUNT(*) as total_detections,
-                    COALESCE(SUM(people_detected), SUM(total_people)) as total_people,
-                    COALESCE(SUM(ppe_compliant), SUM(compliant_people)) as compliant_people,
-                    COALESCE(SUM(violations_count), SUM(violation_people)) as violation_people,
+                    COALESCE(SUM(people_detected), SUM(total_people), 0) as total_people,
+                    COALESCE(SUM(ppe_compliant), SUM(compliant_people), 0) as compliant_people,
+                    COALESCE(SUM(violations_count), SUM(violation_people), 0) as violation_people,
                     AVG(compliance_rate) as avg_compliance_rate
                 FROM detections
                 WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE

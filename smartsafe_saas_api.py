@@ -3039,7 +3039,7 @@ Mesaj:
         
         @self.app.route('/api/company/<company_id>/profile', methods=['PUT'])
         def update_company_profile(company_id):
-            """Şirket profili güncelle"""
+            """Şirket profili güncelle - Boş alanları koruyarak"""
             try:
                 # Session kontrolü
                 user_data = self.validate_session()
@@ -3057,7 +3057,7 @@ Mesaj:
                 conn = self.db.get_connection()
                 cursor = conn.cursor()
                 
-                # Şirket bilgilerini güncelle
+                # Şirket bilgilerini güncelle - Sadece dolu alanları güncelle
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
                 
                 # Timestamp fonksiyonu
@@ -3066,35 +3066,55 @@ Mesaj:
                 else:
                     timestamp_func = 'datetime(\'now\')'
                 
-                cursor.execute(f"""
-                        UPDATE companies 
-                    SET company_name = {placeholder}, 
-                        contact_person = {placeholder}, 
-                        email = {placeholder}, 
-                        phone = {placeholder}, 
-                        sector = {placeholder}, 
-                        address = {placeholder},
-                        updated_at = {timestamp_func}
-                    WHERE company_id = {placeholder}
-                    """, (
-                        data.get('company_name'),
-                        data.get('contact_person'),
-                        data.get('email'),
-                        data.get('phone'),
-                        data.get('sector'),
-                        data.get('address'),
-                        company_id
-                    ))
+                # Sadece dolu alanları güncelle - Boş string'leri koru
+                update_fields = []
+                update_values = []
                 
-                # Kullanıcı bilgilerini güncelle
-                cursor.execute(f"""
+                if data.get('company_name') and data.get('company_name').strip():
+                    update_fields.append(f"company_name = {placeholder}")
+                    update_values.append(data.get('company_name').strip())
+                
+                if data.get('contact_person') and data.get('contact_person').strip():
+                    update_fields.append(f"contact_person = {placeholder}")
+                    update_values.append(data.get('contact_person').strip())
+                
+                if data.get('phone') and data.get('phone').strip():
+                    update_fields.append(f"phone = {placeholder}")
+                    update_values.append(data.get('phone').strip())
+                
+                if data.get('sector') and data.get('sector').strip():
+                    update_fields.append(f"sector = {placeholder}")
+                    update_values.append(data.get('sector').strip())
+                
+                if data.get('address') and data.get('address').strip():
+                    update_fields.append(f"address = {placeholder}")
+                    update_values.append(data.get('address').strip())
+                
+                # Email'i sadece dolu ise güncelle
+                if data.get('email') and data.get('email').strip():
+                    update_fields.append(f"email = {placeholder}")
+                    update_values.append(data.get('email').strip())
+                
+                # updated_at her zaman ekle
+                update_fields.append(f"updated_at = {timestamp_func}")
+                
+                # Eğer güncellenecek alan varsa UPDATE yap
+                if update_fields:
+                    update_values.append(company_id)  # WHERE clause için
+                    update_sql = f"""
+                        UPDATE companies 
+                        SET {', '.join(update_fields)}
+                        WHERE company_id = {placeholder}
+                    """
+                    cursor.execute(update_sql, update_values)
+                
+                # Kullanıcı bilgilerini güncelle - Sadece email dolu ise
+                if data.get('email') and data.get('email').strip():
+                    cursor.execute(f"""
                         UPDATE users 
-                    SET email = {placeholder}
-                    WHERE company_id = {placeholder}
-                    """, (
-                        data.get('email'),
-                        company_id
-                    ))
+                        SET email = {placeholder}
+                        WHERE company_id = {placeholder}
+                    """, (data.get('email').strip(), company_id))
                 
                 conn.commit()
                 conn.close()
@@ -3163,14 +3183,29 @@ Mesaj:
                 else:
                     timestamp_func = 'datetime(\'now\')'
                 
-                cursor.execute(f"""
-                    UPDATE companies 
-                    SET profile_image = {placeholder}, updated_at = {timestamp_func}
-                    WHERE company_id = {placeholder}
-                """, (f'/static/uploads/logos/{filename}', company_id))
-                
-                conn.commit()
-                conn.close()
+                # profile_image kolonunun varlığını kontrol et
+                try:
+                    cursor.execute(f"""
+                        UPDATE companies 
+                        SET profile_image = {placeholder}, updated_at = {timestamp_func}
+                        WHERE company_id = {placeholder}
+                    """, (f'/static/uploads/logos/{filename}', company_id))
+                    
+                    conn.commit()
+                    conn.close()
+                except Exception as db_error:
+                    # profile_image kolonu yoksa, sadece updated_at güncelle
+                    if 'profile_image' in str(db_error) and 'does not exist' in str(db_error):
+                        print(f"⚠️ profile_image kolonu bulunamadı, sadece updated_at güncelleniyor")
+                        cursor.execute(f"""
+                            UPDATE companies 
+                            SET updated_at = {timestamp_func}
+                            WHERE company_id = {placeholder}
+                        """, (company_id,))
+                        conn.commit()
+                        conn.close()
+                    else:
+                        raise db_error
                 
                 return jsonify({
                     'success': True, 
@@ -5628,7 +5663,30 @@ Mesaj:
                 cursor = conn.cursor()
                 
                 placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
-                cursor.execute(f'SELECT required_ppe, sector, ppe_requirements, compliance_settings FROM companies WHERE company_id = {placeholder}', (company_id,))
+                
+                # COALESCE kullanarak eksik kolonlar için default değerler döndür
+                if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
+                    cursor.execute('''
+                        SELECT 
+                            required_ppe, 
+                            sector, 
+                            COALESCE(ppe_requirements, '{}'::json) AS ppe_requirements,
+                            COALESCE(compliance_settings, '{}'::json) AS compliance_settings
+                        FROM companies 
+                        WHERE company_id = %s
+                    ''', (company_id,))
+                else:
+                    # SQLite için
+                    cursor.execute('''
+                        SELECT 
+                            required_ppe, 
+                            sector, 
+                            COALESCE(ppe_requirements, '{}') AS ppe_requirements,
+                            COALESCE(compliance_settings, '{}') AS compliance_settings
+                        FROM companies 
+                        WHERE company_id = ?
+                    ''', (company_id,))
+                
                 result = cursor.fetchone()
                 
                 if result:

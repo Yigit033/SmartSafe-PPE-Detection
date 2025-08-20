@@ -1014,11 +1014,11 @@ class DatabaseAdapter:
             cursor.execute("""
                 SELECT column_name FROM information_schema.columns 
                 WHERE table_name = 'companies' AND table_schema = 'public'
-                AND column_name IN ('account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle')
+                AND column_name IN ('account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle', 'profile_image', 'ppe_requirements', 'compliance_settings')
             """)
             existing_columns = [row[0] for row in cursor.fetchall()]
             
-            required_columns = ['account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle']
+            required_columns = ['account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle', 'profile_image', 'ppe_requirements', 'compliance_settings']
             missing_columns = [c for c in required_columns if c not in existing_columns]
             
             if missing_columns:
@@ -1037,7 +1037,10 @@ class DatabaseAdapter:
                     'current_balance': 'DECIMAL(10,2) DEFAULT 0.00',
                     'total_paid': 'DECIMAL(10,2) DEFAULT 0.00',
                     'last_payment_date': 'TIMESTAMP',
-                    'last_payment_amount': 'DECIMAL(10,2)'
+                    'last_payment_amount': 'DECIMAL(10,2)',
+                    'profile_image': 'TEXT',
+                    'ppe_requirements': 'JSON',
+                    'compliance_settings': 'JSON'
                 }
                 
                 for column in missing_columns:
@@ -1048,15 +1051,38 @@ class DatabaseAdapter:
                         except Exception as e:
                             logger.warning(f"⚠️ Failed to add column {column}: {e}")
             
-            # 3. Ek tabloları kontrol et
+            # 3. detections tablosundaki eksik kolonları kontrol et
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'detections' AND table_schema = 'public'
+                AND column_name IN ('people_detected', 'total_people')
+            """)
+            existing_detection_columns = [row[0] for row in cursor.fetchall()]
+            
+            required_detection_columns = ['people_detected', 'total_people']
+            missing_detection_columns = [c for c in required_detection_columns if c not in existing_detection_columns]
+            
+            if missing_detection_columns:
+                logger.info(f"🔧 Adding missing columns to detections table: {missing_detection_columns}")
+                for column in missing_detection_columns:
+                    try:
+                        if column == 'people_detected':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS people_detected INTEGER DEFAULT 0')
+                        elif column == 'total_people':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS total_people INTEGER DEFAULT 0')
+                        logger.info(f"✅ Added column to detections: {column}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to add column {column} to detections: {e}")
+            
+            # 4. Ek tabloları kontrol et
             cursor.execute("""
                 SELECT table_name FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                AND table_name IN ('subscription_history', 'billing_history', 'payment_methods')
+                AND table_name IN ('subscription_history', 'billing_history', 'payment_methods', 'alerts')
             """)
             existing_extra_tables = [row[0] for row in cursor.fetchall()]
             
-            extra_tables = ['subscription_history', 'billing_history', 'payment_methods']
+            extra_tables = ['subscription_history', 'billing_history', 'payment_methods', 'alerts']
             missing_extra_tables = [t for t in extra_tables if t not in existing_extra_tables]
             
             if missing_extra_tables:
