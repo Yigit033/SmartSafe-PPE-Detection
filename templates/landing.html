@@ -3539,6 +3539,177 @@
                     backdrop-filter: blur(10px);
                     border: 1px solid rgba(255,255,255,0.2);
                 }
+                
+                /* Demo Process Modal Styling */
+                .demo-process-modal .modal-content {
+                    border: none;
+                    border-radius: 25px;
+                    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+                    overflow: hidden;
+                }
+                
+                .demo-process-modal .modal-header {
+                    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+                    border: none;
+                    padding: 2rem 2rem 1.5rem;
+                }
+                
+                .demo-process-modal .modal-title {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                }
+                
+                .demo-process-modal .modal-body {
+                    padding: 2rem;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                }
+                
+                .demo-process-modal .card {
+                    border: none;
+                    border-radius: 20px;
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    overflow: hidden;
+                    position: relative;
+                }
+                
+                .demo-process-modal .card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+                }
+                
+                .demo-process-modal .card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 5px;
+                    background: linear-gradient(90deg, #17a2b8, #28a745);
+                }
+                
+                .demo-process-modal .card-header {
+                    border: none;
+                    padding: 1.5rem;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                }
+                
+                .demo-process-modal .card-body {
+                    padding: 2rem;
+                }
+                
+                .demo-process-modal .timeline {
+                    position: relative;
+                }
+                
+                .demo-process-modal .timeline-item {
+                    position: relative;
+                    padding: 1rem 0 1rem 3rem;
+                    margin-bottom: 1.5rem;
+                    border-left: 2px solid #e9ecef;
+                }
+                
+                .demo-process-modal .timeline-item:last-child {
+                    border-left: none;
+                }
+                
+                .demo-process-modal .timeline-marker {
+                    position: absolute;
+                    left: -1rem;
+                    top: 1.5rem;
+                    width: 2rem;
+                    height: 2rem;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 0.875rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                }
+                
+                .demo-process-modal .timeline-content h6 {
+                    font-weight: 600;
+                    margin-bottom: 0.5rem;
+                    color: #495057;
+                }
+                
+                .demo-process-modal .timeline-content small {
+                    color: #6c757d;
+                    font-weight: 500;
+                }
+                
+                .demo-process-modal .accordion-item {
+                    border: none;
+                    border-radius: 15px;
+                    margin-bottom: 1rem;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+                    overflow: hidden;
+                }
+                
+                .demo-process-modal .accordion-button {
+                    border: none;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    color: #495057;
+                    font-weight: 600;
+                    padding: 1.25rem 1.5rem;
+                    border-radius: 15px;
+                }
+                
+                .demo-process-modal .accordion-button:not(.collapsed) {
+                    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                    color: white;
+                    box-shadow: none;
+                }
+                
+                .demo-process-modal .accordion-button:focus {
+                    box-shadow: none;
+                    border: none;
+                }
+                
+                .demo-process-modal .accordion-body {
+                    background: white;
+                    padding: 1.5rem;
+                    color: #6c757d;
+                    line-height: 1.6;
+                }
+                
+                .demo-process-modal .alert-warning {
+                    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                    border: none;
+                    border-radius: 20px;
+                    padding: 1.5rem;
+                    box-shadow: 0 10px 25px rgba(255, 193, 7, 0.15);
+                }
+                
+                .demo-process-modal .modal-footer {
+                    border: none;
+                    padding: 1.5rem 2rem 2rem;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                }
+                
+                .demo-process-modal .btn {
+                    border-radius: 25px;
+                    padding: 0.75rem 2rem;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                }
+                
+                .demo-process-modal .btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+                }
+                
+                .demo-process-modal .btn-secondary {
+                    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+                    border: none;
+                    color: white;
+                }
             </style>
         `;
         document.head.insertAdjacentHTML('beforeend', demoSuccessCSS);
@@ -3562,50 +3733,58 @@
         // Demo süreci hakkında bilgi göster
         function showDemoProcessInfo() {
             const processInfo = `
-                <div class="modal fade" id="demoProcessModal" tabindex="-1">
+                <div class="modal fade demo-process-modal" id="demoProcessModal" tabindex="-1">
                     <div class="modal-dialog modal-lg">
                         <div class="modal-content">
-                            <div class="modal-header bg-info text-white">
+                            <div class="modal-header">
                                 <h5 class="modal-title">
                                     <i class="fas fa-info-circle me-2"></i>Demo Hesap Süreci
                                 </h5>
                                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body">
-                                <div class="row">
+                                <div class="row g-4">
                                     <div class="col-md-6">
-                                        <div class="card border-info">
-                                            <div class="card-header bg-info text-white">
+                                        <div class="card">
+                                            <div class="card-header">
                                                 <h6 class="mb-0"><i class="fas fa-clock me-2"></i>Demo Süreci</h6>
                                             </div>
                                             <div class="card-body">
                                                 <div class="timeline">
                                                     <div class="timeline-item">
-                                                        <div class="timeline-marker bg-success"></div>
+                                                        <div class="timeline-marker bg-success">
+                                                            <i class="fas fa-check"></i>
+                                                        </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Talep</h6>
-                                                            <small class="text-muted">Şirket bilgileri alındı</small>
+                                                            <small class="text-muted">✅ Şirket bilgileri alındı</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
-                                                        <div class="timeline-marker bg-warning"></div>
+                                                        <div class="timeline-marker bg-warning">
+                                                            <i class="fas fa-clock"></i>
+                                                        </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Email Bekleniyor</h6>
-                                                            <small class="text-muted">24 saat içinde demo bilgileri</small>
+                                                            <small class="text-muted">⏳ 24 saat içinde demo bilgileri</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
-                                                        <div class="timeline-marker bg-info"></div>
+                                                        <div class="timeline-marker bg-info">
+                                                            <i class="fas fa-envelope"></i>
+                                                        </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Giriş</h6>
-                                                            <small class="text-muted">Mail'deki link ile giriş</small>
+                                                            <small class="text-muted">📧 Mail'deki link ile giriş</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
-                                                        <div class="timeline-marker bg-primary"></div>
+                                                        <div class="timeline-marker bg-primary">
+                                                            <i class="fas fa-phone"></i>
+                                                        </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Satış Ekibi</h6>
-                                                            <small class="text-muted">24 saat içinde iletişim</small>
+                                                            <small class="text-muted">📞 24 saat içinde iletişim</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -3613,8 +3792,8 @@
                                         </div>
                                     </div>
                                     <div class="col-md-6">
-                                        <div class="card border-success">
-                                            <div class="card-header bg-success text-white">
+                                        <div class="card">
+                                            <div class="card-header">
                                                 <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>Sık Sorulan Sorular</h6>
                                             </div>
                                             <div class="card-body">
@@ -3622,36 +3801,42 @@
                                                     <div class="accordion-item">
                                                         <h2 class="accordion-header">
                                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                                                <i class="fas fa-envelope me-2 text-primary"></i>
                                                                 Demo bilgileri ne zaman gelir?
                                                             </button>
                                                         </h2>
                                                         <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#demoFAQ">
                                                             <div class="accordion-body">
-                                                                Demo hesap bilgileriniz 24 saat içinde email adresinize gönderilecektir.
+                                                                <i class="fas fa-clock text-warning me-2"></i>
+                                                                Demo hesap bilgileriniz <strong>24 saat içinde</strong> email adresinize gönderilecektir.
                                                             </div>
                                                         </div>
                                                     </div>
                                                     <div class="accordion-item">
                                                         <h2 class="accordion-header">
                                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                                                <i class="fas fa-calendar me-2 text-success"></i>
                                                                 Demo süresi ne kadar?
                                                             </button>
                                                         </h2>
                                                         <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#demoFAQ">
                                                             <div class="accordion-body">
-                                                                Demo hesabınız 7 gün boyunca aktif olacaktır.
+                                                                <i class="fas fa-calendar-check text-success me-2"></i>
+                                                                Demo hesabınız <strong>7 gün boyunca</strong> aktif olacaktır.
                                                             </div>
                                                         </div>
                                                     </div>
                                                     <div class="accordion-item">
                                                         <h2 class="accordion-header">
                                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                                                <i class="fas fa-phone me-2 text-info"></i>
                                                                 Satış ekibi ne zaman iletişime geçer?
                                                             </button>
                                                         </h2>
                                                         <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#demoFAQ">
                                                             <div class="accordion-body">
-                                                                Satış ekibimiz 24 saat içinde sizinle iletişime geçecektir.
+                                                                <i class="fas fa-phone-volume text-info me-2"></i>
+                                                                Satış ekibimiz <strong>24 saat içinde</strong> sizinle iletişime geçecektir.
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3661,16 +3846,19 @@
                                     </div>
                                 </div>
                                 
-                                <div class="alert alert-warning mt-3">
-                                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Önemli Not:</h6>
+                                <div class="alert alert-warning mt-4">
+                                    <h6 class="mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Önemli Not:</h6>
                                     <p class="mb-0">
+                                        <i class="fas fa-envelope-open text-primary me-2"></i>
                                         Demo hesap bilgileriniz email adresinize gönderilecektir. 
-                                        Lütfen email'inizi kontrol edin ve spam klasörünü de kontrol etmeyi unutmayın.
+                                        <strong>Lütfen email'inizi kontrol edin ve spam klasörünü de kontrol etmeyi unutmayın.</strong>
                                     </p>
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-2"></i>Kapat
+                                </button>
                             </div>
                         </div>
                     </div>
