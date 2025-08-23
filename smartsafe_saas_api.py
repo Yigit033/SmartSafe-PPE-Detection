@@ -392,10 +392,8 @@ class SmartSafeSaaSAPI:
             '''
             logger.info(f"🔍 Executing query: {query} with params: {company_id}")
             cursor.execute(query, (company_id,))
-            
             result = cursor.fetchone()
             logger.info(f"🔍 Query result: {result}")
-            conn.close()
             
             if result:
                 # Kamera kullanımını al
@@ -506,16 +504,126 @@ class SmartSafeSaaSAPI:
                     'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 25)) * 100
                 })
                 
-                return {
-                    'success': True,
-                    'subscription': subscription_info
-                }
+                return subscription_info
             else:
-                return {'success': False, 'error': 'Şirket bulunamadı'}
+                logger.warning(f"⚠️ Company not found: {company_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Subscription info error: {e}")
+            return None
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
+    def _apply_demo_channel_limits(self, company_id: str, dvr_id: str, max_cameras: int, active_cameras: int):
+        """Demo hesabı için DVR kanal limitlerini uygula"""
+        try:
+            logger.info(f"🔒 Demo hesabı kanal limiti uygulanıyor: {company_id} - DVR: {dvr_id}")
+            
+            # DVR'daki toplam kanal sayısını al
+            manager = self.get_camera_manager()
+            if not manager or not hasattr(manager, 'dvr_manager'):
+                logger.warning("⚠️ DVR manager bulunamadı")
+                return
+            
+            # DVR kanallarını al
+            dvr_channels = manager.dvr_manager.get_dvr_channels(company_id, dvr_id)
+            if not dvr_channels:
+                logger.warning("⚠️ DVR kanalları bulunamadı")
+                return
+            
+            total_channels = len(dvr_channels)
+            available_slots = max_cameras - active_cameras
+            
+            if available_slots <= 0:
+                logger.warning(f"⚠️ Demo hesabı kamera slotu kalmadı: {active_cameras}/{max_cameras}")
+                return
+            
+            # Sadece kullanılabilir slot kadar kanalı aktif et
+            active_channels = min(available_slots, total_channels)
+            
+            logger.info(f"✅ Demo hesabı kanal limiti uygulandı: {active_channels}/{total_channels} kanal aktif")
+            
+            # Kanal durumlarını güncelle (sadece aktif olanlar)
+            for i, channel in enumerate(dvr_channels):
+                if i < active_channels:
+                    # Aktif kanal
+                    self._activate_demo_channel(company_id, dvr_id, channel['channel_id'])
+                else:
+                    # Pasif kanal
+                    self._deactivate_demo_channel(company_id, dvr_id, channel['channel_id'])
             
         except Exception as e:
-            logger.error(f"❌ Internal abonelik bilgileri getirme hatası: {e}")
-            return {'success': False, 'error': 'Veri getirme başarısız'}
+            logger.error(f"❌ Demo kanal limiti uygulama hatası: {e}")
+    
+    def _activate_demo_channel(self, company_id: str, dvr_id: str, channel_id: str):
+        """Demo hesabı için kanalı aktif et"""
+        try:
+            # Kanalı aktif et
+            manager = self.get_camera_manager()
+            if manager and hasattr(manager, 'dvr_manager'):
+                # Kanal durumunu güncelle
+                self.db.update_dvr_channel_status(company_id, dvr_id, channel_id, 'active')
+                logger.info(f"✅ Demo kanal aktif edildi: {channel_id}")
+        except Exception as e:
+            logger.error(f"❌ Demo kanal aktif etme hatası: {e}")
+    
+    def _deactivate_demo_channel(self, company_id: str, dvr_id: str, channel_id: str):
+        """Demo hesabı için kanalı pasif et"""
+        try:
+            # Kanalı pasif et
+            manager = self.get_camera_manager()
+            if manager and hasattr(manager, 'dvr_manager'):
+                # Kanal durumunu güncelle
+                self.db.update_dvr_channel_status(company_id, dvr_id, channel_id, 'inactive')
+                logger.info(f"✅ Demo kanal pasif edildi: {channel_id}")
+        except Exception as e:
+            logger.error(f"❌ Demo kanal pasif etme hatası: {e}")
+    
+    def _limit_demo_channels(self, channels: List[Dict], max_cameras: int, active_cameras: int) -> List[Dict]:
+        """Demo hesabı için kanal listesini limitlendir"""
+        try:
+            available_slots = max_cameras - active_cameras
+            
+            if available_slots <= 0:
+                logger.warning(f"⚠️ Demo hesabı kamera slotu kalmadı: {active_cameras}/{max_cameras}")
+                return []
+            
+            # Sadece kullanılabilir slot kadar kanalı döndür
+            limited_channels = channels[:available_slots]
+            
+            # Kalan kanalları pasif olarak işaretle
+            for channel in limited_channels:
+                channel['demo_active'] = True
+                channel['demo_note'] = f'Demo hesabı - {len(limited_channels)}/{len(channels)} kanal aktif'
+            
+            logger.info(f"✅ Demo kanal limiti uygulandı: {len(limited_channels)}/{len(channels)} kanal aktif")
+            return limited_channels
+            
+        except Exception as e:
+            logger.error(f"❌ Demo kanal limiti hatası: {e}")
+            return channels
+    
+    def _send_demo_notification(self, email: str, message: str):
+        """Demo bildirim maili gönder - PostgreSQL ve SQLite uyumlu"""
+        try:
+            # Mevcut mail sistemi kullanılarak
+            if hasattr(self, 'mail') and self.mail:
+                msg = Message(
+                    subject="SmartSafe AI Demo Hesap Bilgileri",
+                    recipients=[email],
+                    body=message,
+                    sender=os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
+                )
+                self.mail.send(msg)
+                logger.info(f"✅ Demo mail gönderildi: {email}")
+            else:
+                # Mail sistemi yoksa log'a yaz
+                logger.info(f"📧 Demo mail içeriği (mail sistemi aktif değil):\n{message}")
+                
+        except Exception as e:
+            logger.error(f"❌ Demo mail gönderim hatası: {e}")
 
     def setup_routes(self):
         """API rotalarını ayarla"""
@@ -526,10 +634,28 @@ class SmartSafeSaaSAPI:
             user_data = self.validate_session()
             if not user_data:
                 return jsonify({'error': 'Unauthorized'}), 401
+            
+            # Demo hesabı kamera limiti kontrolü
+            company_info = self.db.get_company_info(company_id)
+            if not company_info:
+                return jsonify({'error': 'Şirket bulunamadı'}), 404
+            
+            subscription_type = company_info.get('subscription_type', 'basic')
+            max_cameras = company_info.get('max_cameras', 25)
+            
+            # Mevcut aktif kamera sayısını kontrol et
+            active_cameras = self.db.get_active_camera_count(company_id)
+            
+            if subscription_type == 'demo' and active_cameras >= max_cameras:
+                return jsonify({
+                    'error': f'Demo hesabı kamera limiti ({max_cameras}) aşıldı. Mevcut: {active_cameras}'
+                }), 400
+            
             data = request.get_json()
             required_fields = ['dvr_id', 'name', 'ip_address']
             if not all(f in data for f in required_fields):
                 return jsonify({'error': 'Eksik DVR bilgisi'}), 400
+            
             try:
                 dvr_config = DVRConfig(
                     dvr_id=data['dvr_id'],
@@ -544,10 +670,18 @@ class SmartSafeSaaSAPI:
                     rtsp_port=int(data.get('rtsp_port', 554)),
                     max_channels=int(data.get('max_channels', 16))
                 )
+                
                 manager = self.get_camera_manager().dvr_manager
                 success, msg = manager.add_dvr_system(dvr_config, company_id)
+                
+                if success:
+                    # Demo hesabı için kanal limiti uygula
+                    if subscription_type == 'demo':
+                        self._apply_demo_channel_limits(company_id, dvr_config.dvr_id, max_cameras, active_cameras)
+                
                 return jsonify({'success': success, 'message': msg})
             except Exception as e:
+                logger.error(f"❌ DVR ekleme hatası: {e}")
                 return jsonify({'error': str(e)}), 500    
 
         @app.route('/api/company/<company_id>/dvr/<dvr_id>/discover', methods=['POST'])
@@ -555,16 +689,37 @@ class SmartSafeSaaSAPI:
             user_data = self.validate_session()
             if not user_data:
                 return jsonify({'error': 'Unauthorized'}), 401
+            
+            # Demo hesabı kamera limiti kontrolü
+            company_info = self.db.get_company_info(company_id)
+            if not company_info:
+                return jsonify({'error': 'Şirket bulunamadı'}), 404
+            
+            subscription_type = company_info.get('subscription_type', 'basic')
+            max_cameras = company_info.get('max_cameras', 25)
+            
+            # Mevcut aktif kamera sayısını kontrol et
+            active_cameras = self.db.get_active_camera_count(company_id)
+            
             try:
                 manager = self.get_camera_manager().dvr_manager
                 channels = manager.discover_cameras(dvr_id, company_id)
+                
+                # Demo hesabı için kanal limiti uygula
+                if subscription_type == 'demo':
+                    channels = self._limit_demo_channels(channels, max_cameras, active_cameras)
+                
                 # Frontend expects `channels` key
                 return jsonify({
                     'success': True,
                     'channels': channels,
-                    'count': len(channels)
+                    'count': len(channels),
+                    'demo_limited': subscription_type == 'demo',
+                    'max_cameras': max_cameras,
+                    'active_cameras': active_cameras
                 })
             except Exception as e:
+                logger.error(f"❌ DVR kanal keşif hatası: {e}")
                 return jsonify({'error': str(e)}), 500
 
         @app.route('/api/company/<company_id>/dvr/<dvr_id>/camera/<channel>/start', methods=['POST'])
@@ -572,6 +727,23 @@ class SmartSafeSaaSAPI:
             user_data = self.validate_session()
             if not user_data:
                 return jsonify({'error': 'Unauthorized'}), 401
+            
+            # Demo hesabı kamera limiti kontrolü
+            company_info = self.db.get_company_info(company_id)
+            if not company_info:
+                return jsonify({'error': 'Şirket bulunamadı'}), 404
+            
+            subscription_type = company_info.get('subscription_type', 'basic')
+            max_cameras = company_info.get('max_cameras', 25)
+            
+            # Mevcut aktif kamera sayısını kontrol et
+            active_cameras = self.db.get_active_camera_count(company_id)
+            
+            if subscription_type == 'demo' and active_cameras >= max_cameras:
+                return jsonify({
+                    'error': f'Demo hesabı kamera limiti ({max_cameras}) aşıldı. Mevcut: {active_cameras}'
+                }), 400
+            
             data = request.get_json() or {}
             try:
                 manager = self.get_camera_manager()
@@ -586,7 +758,10 @@ class SmartSafeSaaSAPI:
                     'success': True,
                     'stream_url': stream_url,
                     'dvr_id': dvr_id,
-                    'channel': channel
+                    'channel': channel,
+                    'demo_limited': subscription_type == 'demo',
+                    'max_cameras': max_cameras,
+                    'active_cameras': active_cameras + 1
                 })
             except Exception as e:
                 logger.error(f"❌ DVR stream start error: {e}")
@@ -1901,32 +2076,196 @@ Mesaj:
                 })
                 data['subscription_type'] = 'demo'
                 data['max_cameras'] = 2
+                
+                # Demo PPE konfigürasyonu - Sektöre göre varsayılan setler
+                demo_ppe_defaults = {
+                    'construction': {
+                        'required': ['helmet', 'safety_vest', 'safety_shoes'],
+                        'optional': ['gloves', 'glasses']
+                    },
+                    'manufacturing': {
+                        'required': ['helmet', 'safety_vest', 'gloves'],
+                        'optional': ['glasses', 'ear_protection']
+                    },
+                    'chemical': {
+                        'required': ['helmet', 'safety_suit', 'gloves', 'face_mask'],
+                        'optional': ['glasses', 'respiratory_protection']
+                    },
+                    'food': {
+                        'required': ['hairnet', 'face_mask', 'apron'],
+                        'optional': ['gloves', 'safety_shoes']
+                    },
+                    'warehouse': {
+                        'required': ['helmet', 'safety_vest', 'safety_shoes'],
+                        'optional': ['gloves', 'glasses']
+                    },
+                    'energy': {
+                        'required': ['helmet', 'insulated_gloves', 'dielectric_boots'],
+                        'optional': ['ear_protection', 'arc_flash_suit']
+                    },
+                    'petrochemical': {
+                        'required': ['helmet', 'chemical_suit', 'respiratory_protection'],
+                        'optional': ['special_gloves', 'glasses']
+                    },
+                    'marine': {
+                        'required': ['life_jacket', 'marine_helmet', 'waterproof_shoes'],
+                        'optional': ['safety_vest', 'gloves']
+                    },
+                    'aviation': {
+                        'required': ['aviation_helmet', 'reflective_vest', 'aviation_shoes'],
+                        'optional': ['ear_protection', 'gloves']
+                    }
+                }
+                
+                # Demo PPE konfigürasyonu için ek alanlar
+                selected_sector = data.get('sector')
+                if selected_sector in demo_ppe_defaults:
+                    ppe_set = demo_ppe_defaults[selected_sector]
+                    data['ppe_requirements'] = json.dumps(ppe_set)
+                    data['compliance_settings'] = json.dumps({
+                        'strict_mode': False,
+                        'demo_mode': True,
+                        'sector': selected_sector
+                    })
+                else:
+                    # Fallback için
+                    fallback_ppe = {
+                        'required': ['helmet', 'safety_vest', 'safety_shoes'],
+                        'optional': ['gloves', 'glasses']
+                    }
+                    data['ppe_requirements'] = json.dumps(fallback_ppe)
+                    data['compliance_settings'] = json.dumps({
+                        'strict_mode': False,
+                        'demo_mode': True,
+                        'sector': 'general'
+                    })
                 # Şifre kullanıcıdan gelecek - varsayılan yok
                 
-                # Demo PPE konfigürasyonu (basit)
-                data['required_ppe'] = {
-                    'required': ['helmet', 'safety_vest'],
-                    'optional': ['gloves']
-                }
+                # Seçilen sektöre göre PPE setini ata
+                selected_sector = data.get('sector')
+                if selected_sector in demo_ppe_defaults:
+                    data['required_ppe'] = demo_ppe_defaults[selected_sector]
+                else:
+                    # Fallback: Genel güvenlik seti
+                    data['required_ppe'] = {
+                        'required': ['helmet', 'safety_vest', 'safety_shoes'],
+                        'optional': ['gloves', 'glasses']
+                    }
                 
                 # Demo hesabı oluştur
                 success, result = self.db.create_company(data)
                 
                 if success:
                     logger.info(f"✅ Demo hesabı oluşturuldu: {result}")
+                    
+                    # Demo PPE setini al
+                    selected_sector = data.get('sector')
+                    if selected_sector in demo_ppe_defaults:
+                        ppe_info = demo_ppe_defaults[selected_sector]
+                    else:
+                        ppe_info = {
+                            'required': ['helmet', 'safety_vest', 'safety_shoes'],
+                            'optional': ['gloves', 'glasses']
+                        }
+                    
+                    # Admin mailine demo hesap bilgisi gönder
+                    try:
+                        admin_email = os.getenv('ADMIN_EMAIL', 'yigittilaver2000@gmail.com')
+                        demo_notification = f"""
+                        🆕 YENİ DEMO HESAP TALEBİ
+                        
+                        📋 Şirket Bilgileri:
+                        - Şirket Adı: {data.get('company_name')}
+                        - Sektör: {data.get('sector')}
+                        - İletişim Kişisi: {data.get('contact_person')}
+                        - Email: {data.get('email')}
+                        - Telefon: {data.get('phone', 'Belirtilmemiş')}
+                        
+                        🔑 Demo Hesap Bilgileri:
+                        - Demo ID: {result}
+                        - Şifre: {data.get('password')}
+                        - Süre: 7 gün
+                        - Kamera Limiti: 2
+                        
+                        🌐 Demo Login Linki:
+                        https://smartsafeai.onrender.com/company/{result}/login
+                        
+                        📧 MANUEL MAİL GÖNDERİMİ GEREKİYOR!
+                        
+                        Müşteriye gönderilecek mail içeriği:
+                        ===========================================
+                        
+                        Konu: SmartSafe AI Demo Hesabınız Hazır
+                        
+                        Merhaba {data.get('contact_person')},
+                        
+                        SmartSafe AI demo hesabınız başarıyla oluşturuldu. 
+                        Demo hesabınıza giriş yapmak için aşağıdaki bilgileri kullanabilirsiniz.
+                        
+                        🔑 Demo Hesap Bilgileri:
+                        - Demo ID: {result}
+                        - Email: {data.get('email')}
+                        - Şifre: {data.get('password')}
+                        
+                        🌐 Demo Giriş Linki:
+                        https://smartsafeai.onrender.com/company/{result}/login
+                        
+                        📋 Demo Hesap Özellikleri:
+                        - Süre: 7 gün ücretsiz
+                        - Kamera Limiti: 2 kamera
+                        - DVR/NVR Desteği: Tek cihaz + 2 kanal
+                        - PPE Detection: Sektöre özel
+                        - Tüm özellikler aktif
+                        
+                        📞 Sonraki Adımlar:
+                        24 saat içinde satış ekibimiz sizinle iletişime geçecek.
+                        Demo süresince tüm özellikleri test edebilir,
+                        fiyat planlarımızı inceleyebilirsiniz.
+                        
+                        Demo sonunda size en uygun planı birlikte seçelim!
+                        
+                        İyi çalışmalar,
+                        SmartSafe AI Ekibi
+                        
+                        ===========================================
+                        
+                        ⚠️ NOT: Bu mail manuel olarak gönderilmelidir!
+                        """
+                        
+                        # Mail gönderimi (mevcut mail sistemi kullanılarak)
+                        self._send_demo_notification(admin_email, demo_notification)
+                        logger.info(f"✅ Demo hesap bildirimi admin mailine gönderildi: {admin_email}")
+                        
+                    except Exception as mail_error:
+                        logger.error(f"❌ Demo mail gönderim hatası: {mail_error}")
+                    
+                    # Müşteriye mail gönderilmiyor - Manuel mail gönderimi yapılacak
+                    logger.info(f"📧 Demo hesabı oluşturuldu: {data.get('email')} - Manuel mail gönderimi bekleniyor")
+                    
                     return jsonify({
                         'success': True, 
                         'company_id': result,
-                        'message': 'Demo hesabı başarıyla oluşturuldu',
+                        'message': 'Demo hesabınız başarıyla oluşturuldu! 24 saat içinde satış ekibimiz sizinle iletişime geçecek.',
                         'demo_info': {
                             'expires_in_days': 7,
                             'camera_limit': 2,
-                            'violation_limit': 100
+                            'violation_limit': 100,
+                            'sector': selected_sector,
+                            'ppe_config': ppe_info
                         },
-                        'login_url': f'/company/{result}/login'
+                        'login_url': f'/company/{result}/login',
+                        'demo_id': result,
+                        'next_steps': 'Demo hesap bilgileriniz email adresinize gönderilecektir.'
                     })
                 else:
-                    return jsonify({'success': False, 'error': result}), 400
+                    # Duplicate email hatası için özel mesaj
+                    if 'UNIQUE constraint failed: companies.email' in str(result):
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Bu email adresi zaten kullanılıyor. Lütfen farklı bir email adresi deneyin veya mevcut hesabınızla giriş yapın.'
+                        }), 400
+                    else:
+                        return jsonify({'success': False, 'error': result}), 400
                     
             except Exception as e:
                 logger.error(f"❌ Demo kayıt hatası: {e}")
@@ -2220,6 +2559,84 @@ Mesaj:
                 return f'''
                 <script>
                     alert("❌ Bir hata oluştu: {str(e)}");
+                    window.history.back();
+                </script>
+                '''
+        
+        # Demo login endpoint
+        @self.app.route('/company/<company_id>/demo-login', methods=['POST'])
+        def demo_login_form(company_id):
+            """Demo hesap girişi"""
+            try:
+                # Form verilerini al
+                demo_id = request.form.get('demo_id')
+                email = request.form.get('email')
+                password = request.form.get('password')
+                
+                if not demo_id or not email or not password:
+                    return f'''
+                    <script>
+                        alert("❌ Demo ID, email ve şifre gerekli!");
+                        window.history.back();
+                    </script>
+                    '''
+                
+                # Demo hesap kontrolü
+                if not company_id.startswith('demo_'):
+                    return f'''
+                    <script>
+                        alert("❌ Bu demo girişi değil!");
+                        window.history.back();
+                    </script>
+                    '''
+                
+                # Demo ID format kontrolü
+                if not demo_id.startswith('demo_'):
+                    return f'''
+                    <script>
+                        alert("❌ Geçersiz demo ID formatı!");
+                        window.history.back();
+                    </script>
+                    '''
+                
+                # Demo hesap doğrulama
+                user_data = self.db.authenticate_demo_user(demo_id, email, password)
+                
+                if user_data:
+                    # Oturum oluştur
+                    session_id = self.db.create_session(
+                        user_data['user_id'], 
+                        demo_id,
+                        request.remote_addr,
+                        request.headers.get('User-Agent', '')
+                    )
+                    
+                    if session_id:
+                        session['session_id'] = session_id
+                        session['company_id'] = demo_id
+                        session['user_id'] = user_data['user_id']
+                        session['is_demo'] = True
+                        
+                        # Başarılı demo giriş - Dashboard'a yönlendir
+                        return f'''
+                        <script>
+                            alert("🎉 Demo girişi başarılı! Dashboard'a yönlendiriliyorsunuz...");
+                            window.location.href = "/company/{demo_id}/dashboard";
+                        </script>
+                        '''
+                
+                return f'''
+                <script>
+                    alert("❌ Geçersiz demo bilgileri!");
+                    window.history.back();
+                </script>
+                '''
+                
+            except Exception as e:
+                logger.error(f"❌ Demo form giriş hatası: {e}")
+                return f'''
+                <script>
+                    alert("❌ Demo giriş hatası: {str(e)}");
                     window.history.back();
                 </script>
                 '''
@@ -5762,7 +6179,7 @@ Mesaj:
                         
                         # Denizcilik Sektörü Özel PPE'leri
                         'life_jacket': {'name': 'Can Yeleği', 'icon': 'fas fa-life-ring', 'category': 'safety', 'sectors': ['marine']},
-                        'marine_helmet': {'name': 'Denizci Kaskı', 'icon': 'fas fa-hard-hat', 'category': 'head', 'sectors': ['marine']},
+                        'marine_helmet': {'name': 'Denizci Kaskı/Baret', 'icon': 'fas fa-hard-hat', 'category': 'head', 'sectors': ['marine']},
                         'waterproof_shoes': {'name': 'Su Geçirmez Ayakkabı', 'icon': 'fas fa-shoe-prints', 'category': 'feet', 'sectors': ['marine']},
                         
                         # Havacılık Sektörü Özel PPE'leri
@@ -9002,7 +9419,7 @@ Mesaj:
                                                     <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="required_ppe" value="marine_helmet" id="marine-helmet" checked>
                                                         <label class="form-check-label" for="marine-helmet">
-                                                            <i class="fas fa-hard-hat text-warning"></i> Denizci Kaskı
+                                                            <i class="fas fa-hard-hat text-warning"></i> Denizci Kaskı/Baret
                                                         </label>
                                                     </div>
                                                 </div>
@@ -11590,27 +12007,77 @@ Mesaj:
                         </div>
                     </div>
                     
-                    <form action="/company/''' + company_id + '''/login-form" method="POST">
+                    <!-- Login Type Toggle -->
+                    <div class="login-type-toggle mb-4">
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="login_type" id="company_login" value="company" checked>
+                            <label class="btn btn-outline-primary" for="company_login">
+                                <i class="fas fa-building me-2"></i>Şirket Girişi
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="login_type" id="demo_login" value="demo">
+                            <label class="btn btn-outline-warning" for="demo_login">
+                                <i class="fas fa-play me-2"></i>Demo Girişi
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Company Login Form -->
+                    <form id="companyLoginForm" action="/company/''' + company_id + '''/login-form" method="POST">
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
-                                <i class="fas fa-envelope text-primary me-2"></i>Your Email
+                                <i class="fas fa-envelope text-primary me-2"></i>Şirket Email
                             </label>
-                            <input type="email" class="form-control form-control-lg" id="email" name="email" 
+                            <input type="email" class="form-control form-control-lg" id="company_email" name="email" 
                                    placeholder="example@yourcompany.com" required>
                         </div>
                         
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
-                                <i class="fas fa-lock text-primary me-2"></i>Your Password
+                                <i class="fas fa-lock text-primary me-2"></i>Şifre
                             </label>
-                            <input type="password" class="form-control form-control-lg" id="password" name="password" 
-                                   placeholder="Enter your password" required>
+                            <input type="password" class="form-control form-control-lg" id="company_password" name="password" 
+                                   placeholder="Şifrenizi girin" required>
                         </div>
                         
                         <div class="d-grid mb-4">
                             <button type="submit" class="btn btn-primary btn-lg" 
                                     style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
-                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                                <i class="fas fa-sign-in-alt me-2"></i>Şirket Girişi
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Demo Login Form -->
+                    <form id="demoLoginForm" action="/company/''' + company_id + '''/demo-login" method="POST" style="display: none;">
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-id-card text-warning me-2"></i>Demo Hesap ID
+                            </label>
+                            <input type="text" class="form-control form-control-lg" id="demo_id" name="demo_id" 
+                                   placeholder="demo_20250823_163119" required>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-envelope text-warning me-2"></i>Şirket Email
+                            </label>
+                            <input type="email" class="form-control form-control-lg" id="demo_email" name="email" 
+                                   placeholder="demo@yourcompany.com" required>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-lock text-warning me-2"></i>Şifre
+                            </label>
+                            <input type="password" class="form-control form-control-lg" id="demo_password" name="password" 
+                                   placeholder="Demo şifrenizi girin" required>
+                        </div>
+                        
+                        <div class="d-grid mb-4">
+                            <button type="submit" class="btn btn-warning btn-lg" 
+                                    style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #F59E0B 0%, #F97316 100%); border: none; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);">
+                                <i class="fas fa-play me-2"></i>Demo Girişi
                             </button>
                         </div>
                     </form>

@@ -1274,14 +1274,13 @@
                         </a>
                     </div>
                     <div class="demo-benefits d-flex gap-4 text-white-50 small mb-4">
-                        <span><i class="fas fa-check-circle text-success me-1"></i><span data-translate="no_credit_card">Kredi kartı gerekmez</span></span>
                         <span><i class="fas fa-check-circle text-success me-1"></i><span data-translate="instant_access">Anında erişim</span></span>
                         <span><i class="fas fa-check-circle text-success me-1"></i><span data-translate="seven_days_free">7 gün ücretsiz</span></span>
                     </div>
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
                     <div class="position-relative rounded-4 shadow-lg overflow-hidden pt-3">
-                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png">
+                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png" preload="metadata">
                             <source src="/static/videos/hero-video.webm" type="video/webm">
                             <source src="/static/videos/hero-video.mp4" type="video/mp4">
                             <!-- Fallback for browsers that don't support video -->
@@ -2635,13 +2634,16 @@
         
         .demo-modal-content {
             background-color: white;
-            margin: 5% auto;
+            margin: 2% auto;
             padding: 0;
             border-radius: 20px;
-            width: 90%;
-            max-width: 600px;
+            width: 95%;
+            max-width: 800px;
+            max-height: 90vh;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             animation: modalSlideIn 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
         }
         
         @keyframes modalSlideIn {
@@ -2652,11 +2654,16 @@
         .demo-modal-header {
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
             color: white;
-            padding: 20px;
+            padding: 25px;
             border-radius: 20px 20px 0 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        
+        .demo-modal-header h3 {
+            font-size: 1.5rem;
+            margin: 0;
         }
         
         .demo-close {
@@ -2672,19 +2679,118 @@
         }
         
         .demo-modal-body {
-            padding: 30px;
+            padding: 40px;
+            overflow-y: auto;
+            flex: 1;
+            max-height: calc(90vh - 120px); /* Header yüksekliği çıkarıldı */
         }
         
         .demo-feature {
             text-align: center;
-            padding: 15px;
+            padding: 20px;
+        }
+        
+        .demo-feature h6 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+        
+        .demo-feature .fa-2x {
+            font-size: 2.5em;
+            margin-bottom: 15px;
         }
         
         .demo-info {
             background: #f8fafc;
             border-radius: 15px;
-            padding: 20px;
+            padding: 30px;
             border: 1px solid #e2e8f0;
+        }
+        
+        /* Timeline CSS */
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .timeline-marker {
+            position: absolute;
+            left: -35px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px #dee2e6;
+        }
+        
+        .timeline-content {
+            padding-left: 10px;
+        }
+        
+        .timeline-content h6 {
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .timeline-content small {
+            color: #6c757d;
+        }
+        
+        .feature-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 1rem;
+        }
+        
+        .form-label {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        
+        .form-control, .form-select {
+            padding: 12px 15px;
+            font-size: 1rem;
+        }
+        
+        /* PPE Info özel stilleri */
+        #demoPPEInfo .alert {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border: none;
+        }
+        
+        #demoPPEInfo .badge {
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        
+        #demoPPEInfo strong {
+            font-size: 1.1rem;
+            display: block;
+            margin-bottom: 10px;
+        }
+        
+        /* DVR/NVR Demo bilgi stilleri */
+        #demoFeaturesDetails .alert-warning {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: none;
+        }
+        
+        #demoFeaturesDetails .feature-item {
+            margin-bottom: 8px;
+        }
+        
+        #demoFeaturesDetails .alert small {
+            line-height: 1.4;
+        }
+        
+        .feature-item:last-child {
+            border-bottom: none;
         }
 
         .demo-benefits {
@@ -2695,6 +2801,26 @@
             .demo-benefits {
                 flex-direction: column;
                 gap: 8px !important;
+            }
+            
+            .demo-modal-content {
+                margin: 1% auto;
+                max-height: 98vh;
+                width: 98%;
+                max-width: 95vw;
+            }
+            
+            .demo-modal-body {
+                max-height: calc(98vh - 100px);
+                padding: 25px;
+            }
+            
+            .demo-modal-header {
+                padding: 20px;
+            }
+            
+            .demo-info {
+                padding: 25px;
             }
         }
     </style>
@@ -2990,11 +3116,97 @@
         
         function closeDemoModal() {
             document.getElementById('demoModal').style.display = 'none';
+            // Form'u sıfırla ve başarı mesajını gizle
+            if (document.getElementById('demoRequestForm')) {
+                document.getElementById('demoRequestForm').style.display = 'block';
+            }
+            if (document.getElementById('demoSuccessMessage')) {
+                document.getElementById('demoSuccessMessage').style.display = 'none';
+            }
         }
         
         function submitDemoRequest() {
             const form = document.getElementById('demoForm');
             const formData = new FormData(form);
+            
+            // Form validasyonu
+            if (!formData.get('demo_company_name') || !formData.get('demo_sector') || 
+                !formData.get('demo_contact_person') || !formData.get('demo_email') || 
+                !formData.get('demo_password')) {
+                toastr.error('Lütfen tüm gerekli alanları doldurun!');
+                return;
+            }
+            
+            // Şifre validasyonu
+            if (formData.get('demo_password').length < 6) {
+                toastr.error('Şifre en az 6 karakter olmalıdır!');
+                return;
+            }
+            
+            // Loading state başlat
+            const submitButton = document.querySelector('#demoForm button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            
+            submitButton.disabled = true;
+            submitButton.innerHTML = `
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Demo Hesabı Oluşturuluyor...
+            `;
+            
+            // Loading mesajı göster
+            const loadingMessage = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <h5 class="text-primary mb-2">Demo Hesabınız Oluşturuluyor</h5>
+                    <p class="text-muted mb-3">Lütfen bekleyin, bu işlem birkaç saniye sürebilir...</p>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card border-primary">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-cog fa-spin text-primary fa-2x mb-2"></i>
+                                    <h6>Hesap Oluşturuluyor</h6>
+                                    <small class="text-muted">Veritabanı işlemleri</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-envelope text-success fa-2x mb-2"></i>
+                                    <h6>Email Hazırlanıyor</h6>
+                                    <small class="text-muted">Bildirim sistemi</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-info">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-shield-alt text-info fa-2x mb-2"></i>
+                                    <h6>Güvenlik Kontrolü</h6>
+                                    <small class="text-muted">PPE konfigürasyonu</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Form'u gizle ve loading mesajını göster
+            const demoRequestForm = document.getElementById('demoRequestForm');
+            const demoSuccessMessage = document.getElementById('demoSuccessMessage');
+            
+            if (demoRequestForm && demoSuccessMessage) {
+                demoRequestForm.style.display = 'none';
+                demoSuccessMessage.innerHTML = loadingMessage;
+                demoSuccessMessage.style.display = 'block';
+            } else {
+                console.error('❌ Demo form elementleri bulunamadı');
+                toastr.error('Form yüklenirken hata oluştu. Lütfen sayfayı yenileyin.');
+                return;
+            }
             
             const demoData = {
                 company_name: formData.get('demo_company_name'),
@@ -3015,18 +3227,664 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    toastr.success('Demo hesabınız oluşturuldu! Giriş sayfasına yönlendiriliyorsunuz...');
-                    setTimeout(() => {
-                        window.location.href = data.login_url;
-                    }, 2000);
+                    // Demo hesabı başarıyla oluşturuldu - PROFESYONEL AKIŞ
+                    const successMessage = `
+                        <div class="text-center demo-success-info">
+                            <div class="success-icon mb-3">🎉</div>
+                            <h3 class="text-success mb-3 fw-bold">Demo Hesabınız Başarıyla Oluşturuldu!</h3>
+                            <p class="lead text-muted mb-4">Demo hesap bilgileriniz email adresinize gönderilecektir.</p>
+                            
+                            <div class="process-steps mb-4">
+                                <div class="alert alert-warning border-0 shadow-sm mb-3">
+                                    <h6 class="mb-3 fw-bold"><i class="fas fa-clock me-2 text-warning"></i>Demo Hesap Süreci</h6>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-center p-2 rounded" style="background: rgba(0,123,255,0.1);">
+                                                <i class="fas fa-envelope text-primary me-3 fa-lg"></i>
+                                                <div class="text-start">
+                                                    <strong class="d-block text-primary">Email Bildirimi</strong>
+                                                    <small class="text-muted">24 saat içinde</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-center p-2 rounded" style="background: rgba(40,167,69,0.1);">
+                                                <i class="fas fa-phone text-success me-3 fa-lg"></i>
+                                                <div class="text-start">
+                                                    <strong class="d-block text-success">Satış Ekibi</strong>
+                                                    <small class="text-muted">24 saat içinde</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info border-0 shadow-sm">
+                                    <h6 class="mb-3 fw-bold"><i class="fas fa-info-circle me-2 text-info"></i>Sonraki Adımlar</h6>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="timeline-item">
+                                                <strong>1. Email Kontrolü</strong>
+                                                <small class="d-block text-muted">24 saat içinde email adresinizi kontrol edin</small>
+                                            </div>
+                                            <div class="timeline-item">
+                                                <strong>2. Demo Bilgileri</strong>
+                                                <small class="d-block text-muted">Demo hesap bilgilerinizi alın</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="timeline-item">
+                                                <strong>3. Giriş Yapın</strong>
+                                                <small class="d-block text-muted">Mail'deki link ile giriş yapın</small>
+                                            </div>
+                                            <div class="timeline-item">
+                                                <strong>4. Satış Ekibi</strong>
+                                                <small class="d-block text-muted">Sizinle iletişime geçecek</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-6">
+                                    <div class="card position-relative">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-envelope text-primary fa-2x mb-3"></i>
+                                            <h6 class="fw-bold mb-2">Email Bekleniyor</h6>
+                                            <small class="text-muted">Demo bilgileri 24 saat içinde</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card position-relative">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-phone text-success fa-2x mb-3"></i>
+                                            <h6 class="fw-bold mb-2">Satış Ekibi</h6>
+                                            <small class="text-muted">24 saat içinde iletişim</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex gap-3 justify-content-center">
+                                <button class="btn btn-outline-secondary" onclick="closeDemoModal()">
+                                    <i class="fas fa-times me-2"></i>Kapat
+                                </button>
+                                <button class="btn btn-primary" onclick="showDemoProcessInfoAndClose()">
+                                    <i class="fas fa-question-circle me-2"></i>Demo Süreci Hakkında
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Loading mesajını gizle ve başarı mesajını göster
+                    document.getElementById('demoSuccessMessage').innerHTML = successMessage;
+                    
+                    // Form'u temizle - Güvenli reset
+                    const demoForm = document.getElementById('demoForm');
+                    if (demoForm && typeof demoForm.reset === 'function') {
+                        demoForm.reset();
+                    }
+                    
+                    toastr.success('Demo hesabınız başarıyla oluşturuldu! Email adresinizi kontrol edin.');
                 } else {
-                    toastr.error('Hata: ' + data.error);
+                    // Hata durumunda form'u geri göster
+                    const demoRequestForm = document.getElementById('demoRequestForm');
+                    const demoSuccessMessage = document.getElementById('demoSuccessMessage');
+                    
+                    if (demoRequestForm && demoSuccessMessage) {
+                        demoRequestForm.style.display = 'block';
+                        demoSuccessMessage.style.display = 'none';
+                    }
+                    
+                    // Duplicate email hatası için özel mesaj
+                    if (data.error && data.error.includes('zaten kullanılıyor')) {
+                        toastr.warning('⚠️ ' + data.error);
+                    } else {
+                        toastr.error('❌ Hata: ' + data.error);
+                    }
                 }
+                
+                // Button'u eski haline getir
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
             })
             .catch(error => {
                 console.error('Error:', error);
+                
+                // Hata durumunda form'u geri göster
+                const demoRequestForm = document.getElementById('demoRequestForm');
+                const demoSuccessMessage = document.getElementById('demoSuccessMessage');
+                
+                if (demoRequestForm && demoSuccessMessage) {
+                    demoRequestForm.style.display = 'block';
+                    demoSuccessMessage.style.display = 'none';
+                }
+                
+                // Button'u eski haline getir
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                
                 toastr.error('Bir hata oluştu. Lütfen tekrar deneyin.');
             });
+        }
+        
+        // Demo özelliklerini göster/gizle
+        function toggleDemoFeatures() {
+            const featuresDetails = document.getElementById('demoFeaturesDetails');
+            const button = event.target;
+            
+            if (featuresDetails.style.display === 'none') {
+                featuresDetails.style.display = 'block';
+                button.innerHTML = '<i class="fas fa-eye-slash me-2"></i>Özellikleri Gizle';
+                button.classList.remove('btn-outline-info');
+                button.classList.add('btn-info', 'text-white');
+            } else {
+                featuresDetails.style.display = 'none';
+                button.innerHTML = '<i class="fas fa-info-circle me-2"></i>Demo Hesap Özellikleri';
+                button.classList.remove('btn-info', 'text-white');
+                button.classList.add('btn-outline-info');
+            }
+        }
+        
+        // Demo süreci hakkında bilgi göster ve mevcut ekranı kapat
+        function showDemoProcessInfoAndClose() {
+            // Önce mevcut demo modal'ını kapat
+            closeDemoModal();
+            
+            // Sonra demo süreci bilgilerini göster
+            setTimeout(() => {
+                showDemoProcessInfo();
+            }, 300); // Modal kapanma animasyonu için kısa bekleme
+        }
+        
+        // Demo başarı ekranı için özel CSS
+        const demoSuccessCSS = `
+            <style>
+                .demo-success-info {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    border-radius: 20px;
+                    padding: 2rem;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                }
+                
+                .demo-success-info .alert-warning {
+                    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 8px 25px rgba(255, 193, 7, 0.15);
+                    backdrop-filter: blur(10px);
+                }
+                
+                .demo-success-info .alert-info {
+                    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 8px 25px rgba(23, 162, 184, 0.15);
+                    backdrop-filter: blur(10px);
+                }
+                
+                .demo-success-info .text-success {
+                    color: #28a745 !important;
+                    font-weight: 600;
+                }
+                
+                .demo-success-info .text-primary {
+                    color: #007bff !important;
+                    font-weight: 600;
+                }
+                
+                .demo-success-info .card {
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    border: none;
+                    border-radius: 20px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+                    overflow: hidden;
+                }
+                
+                .demo-success-info .card:hover {
+                    transform: translateY(-8px) scale(1.02);
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+                }
+                
+                .demo-success-info .card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 4px;
+                    background: linear-gradient(90deg, var(--bs-primary), var(--bs-success));
+                }
+                
+                .demo-success-info .card-body {
+                    padding: 2rem 1.5rem;
+                }
+                
+                .demo-success-info .fa-2x {
+                    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+                }
+                
+                .demo-success-info .badge {
+                    font-size: 0.75rem;
+                    padding: 0.5rem 1rem;
+                    border-radius: 25px;
+                    font-weight: 500;
+                    letter-spacing: 0.5px;
+                }
+                
+                .demo-success-info .btn {
+                    border-radius: 25px;
+                    padding: 0.75rem 2rem;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                }
+                
+                .demo-success-info .btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+                }
+                
+                .demo-success-info .btn-primary {
+                    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+                    border: none;
+                }
+                
+                .demo-success-info .btn-outline-secondary {
+                    border: 2px solid #6c757d;
+                    color: #6c757d;
+                }
+                
+                .demo-success-info .btn-outline-secondary:hover {
+                    background: #6c757d;
+                    border-color: #6c757d;
+                    color: white;
+                }
+                
+                .demo-success-info .timeline-item {
+                    position: relative;
+                    padding-left: 2rem;
+                    margin-bottom: 1rem;
+                }
+                
+                .demo-success-info .timeline-item::before {
+                    content: '';
+                    position: absolute;
+                    left: 0;
+                    top: 0.5rem;
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #007bff, #28a745);
+                }
+                
+                .demo-success-info .success-icon {
+                    font-size: 4rem;
+                    background: linear-gradient(135deg, #28a745, #20c997);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                    filter: drop-shadow(0 4px 8px rgba(40, 167, 69, 0.3));
+                }
+                
+                .demo-success-info .process-steps {
+                    background: rgba(255,255,255,0.8);
+                    border-radius: 15px;
+                    padding: 1.5rem;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+            </style>
+        `;
+        document.head.insertAdjacentHTML('beforeend', demoSuccessCSS);
+
+        // Video hatalarını yakala ve sessizce handle et
+        document.addEventListener('DOMContentLoaded', function() {
+            const videoElements = document.querySelectorAll('video');
+            videoElements.forEach(video => {
+                video.addEventListener('error', function(e) {
+                    console.warn('Video yüklenemedi, fallback image gösteriliyor:', e);
+                    // Video hatası durumunda sessizce handle et
+                });
+                
+                video.addEventListener('abort', function(e) {
+                    console.warn('Video yükleme iptal edildi:', e);
+                    // Video abort durumunda sessizce handle et
+                });
+            });
+        });
+
+        // Demo süreci hakkında bilgi göster
+        function showDemoProcessInfo() {
+            const processInfo = `
+                <div class="modal fade" id="demoProcessModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-info-circle me-2"></i>Demo Hesap Süreci
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card border-info">
+                                            <div class="card-header bg-info text-white">
+                                                <h6 class="mb-0"><i class="fas fa-clock me-2"></i>Demo Süreci</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="timeline">
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-success"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Demo Talep</h6>
+                                                            <small class="text-muted">Şirket bilgileri alındı</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-warning"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Email Bekleniyor</h6>
+                                                            <small class="text-muted">24 saat içinde demo bilgileri</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-info"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Demo Giriş</h6>
+                                                            <small class="text-muted">Mail'deki link ile giriş</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-primary"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Satış Ekibi</h6>
+                                                            <small class="text-muted">24 saat içinde iletişim</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card border-success">
+                                            <div class="card-header bg-success text-white">
+                                                <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>Sık Sorulan Sorular</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="accordion" id="demoFAQ">
+                                                    <div class="accordion-item">
+                                                        <h2 class="accordion-header">
+                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                                                Demo bilgileri ne zaman gelir?
+                                                            </button>
+                                                        </h2>
+                                                        <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#demoFAQ">
+                                                            <div class="accordion-body">
+                                                                Demo hesap bilgileriniz 24 saat içinde email adresinize gönderilecektir.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="accordion-item">
+                                                        <h2 class="accordion-header">
+                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                                                Demo süresi ne kadar?
+                                                            </button>
+                                                        </h2>
+                                                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#demoFAQ">
+                                                            <div class="accordion-body">
+                                                                Demo hesabınız 7 gün boyunca aktif olacaktır.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="accordion-item">
+                                                        <h2 class="accordion-header">
+                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                                                Satış ekibi ne zaman iletişime geçer?
+                                                            </button>
+                                                        </h2>
+                                                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#demoFAQ">
+                                                            <div class="accordion-body">
+                                                                Satış ekibimiz 24 saat içinde sizinle iletişime geçecektir.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-warning mt-3">
+                                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Önemli Not:</h6>
+                                    <p class="mb-0">
+                                        Demo hesap bilgileriniz email adresinize gönderilecektir. 
+                                        Lütfen email'inizi kontrol edin ve spam klasörünü de kontrol etmeyi unutmayın.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Modal'ı body'ye ekle
+            if (!document.getElementById('demoProcessModal')) {
+                document.body.insertAdjacentHTML('beforeend', processInfo);
+            }
+            
+            // Modal'ı göster
+            const modal = new bootstrap.Modal(document.getElementById('demoProcessModal'));
+            modal.show();
+        }
+        
+        // Demo giriş bilgilerini göster (Sadece bilgilendirme amaçlı)
+        function showDemoLoginInfo(demoId) {
+            const loginInfo = `
+                <div class="modal fade" id="demoLoginModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-info-circle me-2"></i>Demo Hesap Bilgilendirmesi
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-warning border-0 shadow-sm">
+                                    <h6 class="mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Önemli Bilgi</h6>
+                                    <p class="mb-0">
+                                        Demo hesap bilgileriniz email adresinize gönderilecektir. 
+                                        Lütfen email'inizi kontrol edin ve spam klasörünü de kontrol etmeyi unutmayın.
+                                    </p>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card border-info">
+                                            <div class="card-header bg-info text-white">
+                                                <h6 class="mb-0"><i class="fas fa-clock me-2"></i>Demo Süreci</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="timeline">
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-success"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Demo Talep</h6>
+                                                            <small class="text-muted">✅ Tamamlandı</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-warning"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Email Bekleniyor</h6>
+                                                            <small class="text-muted">⏳ 24 saat içinde</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-secondary"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Demo Giriş</h6>
+                                                            <small class="text-muted">📧 Mail gelince</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="timeline-item">
+                                                        <div class="timeline-marker bg-secondary"></div>
+                                                        <div class="timeline-content">
+                                                            <h6 class="mb-1">Satış Ekibi</h6>
+                                                            <small class="text-muted">📞 24 saat içinde</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card border-success">
+                                            <div class="card-header bg-success text-white">
+                                                <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>Neden Bekliyoruz?</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <ul class="mb-0">
+                                                    <li><strong>Güvenlik:</strong> Demo hesap bilgileri güvenli şekilde iletilir</li>
+                                                    <li><strong>Doğrulama:</strong> Email adresiniz doğrulanır</li>
+                                                    <li><strong>Kişiselleştirme:</strong> Sektöre özel demo hazırlanır</li>
+                                                    <li><strong>Satış Desteği:</strong> Uzman ekibimiz size yardımcı olur</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info mt-3">
+                                    <h6><i class="fas fa-lightbulb me-2"></i>Demo Süresince Yapabilecekleriniz:</h6>
+                                    <div class="row g-2 mt-2">
+                                        <div class="col-md-6">
+                                            <small class="text-muted">
+                                                <i class="fas fa-check text-success me-1"></i>
+                                                2 kamera ekleme ve yönetim
+                                            </small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small class="text-muted">
+                                                <i class="fas fa-check text-success me-1"></i>
+                                                PPE detection test etme
+                                            </small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small class="text-muted">
+                                                <i class="fas fa-check text-success me-1"></i>
+                                                DVR/NVR sistem entegrasyonu
+                                            </small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small class="text-muted">
+                                                <i class="fas fa-check text-success me-1"></i>
+                                                Raporlama ve analitik
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                                <button type="button" class="btn btn-info" onclick="showDemoProcessInfo()">
+                                    <i class="fas fa-info-circle me-2"></i>Demo Süreci Hakkında
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Modal'ı body'ye ekle
+            if (!document.getElementById('demoLoginModal')) {
+                document.body.insertAdjacentHTML('beforeend', loginInfo);
+            }
+            
+            // Modal'ı göster
+            const modal = new bootstrap.Modal(document.getElementById('demoLoginModal'));
+            modal.show();
+        }
+        
+        // Demo PPE bilgisini göster
+        function showDemoPPEInfo(sector) {
+            const ppeInfo = document.getElementById('demoPPEInfo');
+            const ppeDetails = document.getElementById('ppeDetails');
+            
+            if (!sector) {
+                ppeInfo.style.display = 'none';
+                return;
+            }
+            
+            const demoPPESets = {
+                'construction': {
+                    required: ['Baret/Kask', 'Güvenlik Yeleği', 'Güvenlik Ayakkabısı'],
+                    optional: ['Güvenlik Eldiveni', 'Güvenlik Gözlüğü']
+                },
+                'manufacturing': {
+                    required: ['Baret/Kask', 'Güvenlik Yeleği', 'Güvenlik Eldiveni'],
+                    optional: ['Güvenlik Gözlüğü', 'Kulak Koruyucu']
+                },
+                'chemical': {
+                    required: ['Baret/Kask', 'Kimyasal Tulum', 'Güvenlik Eldiveni', 'Hijyen Maskesi'],
+                    optional: ['Güvenlik Gözlüğü', 'Solunum Koruyucu']
+                },
+                'food': {
+                    required: ['Bone/Saç Filesi', 'Hijyen Maskesi', 'Hijyen Önlüğü'],
+                    optional: ['Güvenlik Eldiveni', 'Güvenlik Ayakkabısı']
+                },
+                'warehouse': {
+                    required: ['Baret/Kask', 'Güvenlik Yeleği', 'Güvenlik Ayakkabısı'],
+                    optional: ['Güvenlik Eldiveni', 'Güvenlik Gözlüğü']
+                },
+                'energy': {
+                    required: ['Baret/Kask', 'İzole Eldiven', 'Dielektrik Ayakkabı'],
+                    optional: ['Kulak Koruyucu', 'Ark Flaş Tulumu']
+                },
+                'petrochemical': {
+                    required: ['Baret/Kask', 'Kimyasal Tulum', 'Solunum Koruyucu'],
+                    optional: ['Özel Kimyasal Eldiven', 'Güvenlik Gözlüğü']
+                },
+                'marine': {
+                    required: ['Can Yeleği', 'Denizci Kaskı/Baret', 'Su Geçirmez Ayakkabı'],
+                    optional: ['Güvenlik Yeleği', 'Güvenlik Eldiveni']
+                },
+                'aviation': {
+                    required: ['Havacılık Kaskı', 'Reflektör Yelek', 'Özel Havacılık Ayakkabısı'],
+                    optional: ['Kulak Koruyucu', 'Güvenlik Eldiveni']
+                }
+            };
+            
+            if (demoPPESets[sector]) {
+                const ppeSet = demoPPESets[sector];
+                ppeDetails.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <strong class="text-primary fs-6">Zorunlu PPE:</strong>
+                            <div class="mt-2">
+                                ${ppeSet.required.map(item => `<span class="badge bg-primary fs-6 me-2 mb-2 px-3 py-2">${item}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <strong class="text-secondary fs-6">Opsiyonel PPE:</strong>
+                            <div class="mt-2">
+                                ${ppeSet.optional.map(item => `<span class="badge bg-secondary fs-6 me-2 mb-2 px-3 py-2">${item}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                ppeInfo.style.display = 'block';
+            }
         }
         
         // Close modal when clicking outside
@@ -3045,8 +3903,15 @@
                 <h3><i class="fas fa-play-circle text-white me-2"></i>Demo Talep Et</h3>
                 <span class="demo-close" onclick="closeDemoModal()">&times;</span>
             </div>
-            <div class="demo-modal-body">
-                <div class="demo-info mb-4">
+                            <div class="demo-modal-body">
+                    <!-- Demo Başarı Mesajı -->
+                    <div id="demoSuccessMessage" class="demo-success-message" style="display: none;">
+                        <!-- JavaScript ile doldurulacak -->
+                    </div>
+                    
+                    <!-- Demo Talep Formu -->
+                    <div id="demoRequestForm">
+                        <div class="demo-info mb-4">
                     <div class="row text-center">
                         <div class="col-md-4">
                             <div class="demo-feature">
@@ -3070,17 +3935,99 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Demo Özellikleri Butonu -->
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="toggleDemoFeatures()">
+                            <i class="fas fa-info-circle me-2"></i>Demo Hesap Özellikleri
+                        </button>
+                    </div>
+                    
+                    <!-- Detaylı Demo Özellikleri -->
+                    <div id="demoFeaturesDetails" class="mt-3" style="display: none;">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-shield-alt text-success me-2"></i>
+                                    <strong>PPE Detection:</strong> Sektöre özel PPE tespiti
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fas fa-camera text-primary me-2"></i>
+                                    <strong>Kamera Yönetimi:</strong> 2 kamera ekleme ve yönetim
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fas fa-server text-info me-2"></i>
+                                    <strong>DVR/NVR Desteği:</strong> Tek DVR + 2 kanal limiti
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fas fa-chart-line text-warning me-2"></i>
+                                    <strong>Raporlama:</strong> Detaylı ihlal ve uyumluluk raporları
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-users text-info me-2"></i>
+                                    <strong>Kullanıcı Yönetimi:</strong> Admin ve kullanıcı hesapları
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fas fa-bell text-danger me-2"></i>
+                                    <strong>Bildirimler:</strong> Gerçek zamanlı uyarı sistemi
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fas fa-cog text-secondary me-2"></i>
+                                    <strong>Konfigürasyon:</strong> PPE kuralları ve ayarları
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                    <strong>Demo Limitleri:</strong> 2 kamera/kanal maksimum
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- DVR/NVR Demo Bilgisi -->
+                        <div class="alert alert-warning mt-3 border-0 shadow-sm">
+                            <h6 class="mb-2"><i class="fas fa-info-circle me-2"></i>DVR/NVR Demo Hesabı Bilgisi</h6>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-check text-success me-1"></i>
+                                        <strong>DVR/NVR Ekleyebilir:</strong> Tek cihaz ekleyebilirsiniz
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-check text-success me-1"></i>
+                                        <strong>Kanal Limiti:</strong> Maksimum 2 kanal aktif olabilir
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-2">
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info text-primary me-1"></i>
+                                        <strong>DVR Kanalları:</strong> Sadece 2 kanalı test edebilirsiniz
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info text-primary me-1"></i>
+                                        <strong>IP Kamera:</strong> 2 ayrı IP kamera ekleyebilirsiniz
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <form id="demoForm">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Şirket Adı *</label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Şirket Adı *</label>
                             <input type="text" class="form-control" name="demo_company_name" required>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Sektör *</label>
-                            <select class="form-select" name="demo_sector" required>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Sektör *</label>
+                            <select class="form-select" name="demo_sector" required onchange="showDemoPPEInfo(this.value)">
                                 <option value="">Sektör seçin</option>
                                 <option value="construction">🏗️ İnşaat</option>
                                 <option value="manufacturing">🏭 İmalat</option>
@@ -3094,23 +4041,31 @@
                             </select>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">İletişim Kişisi *</label>
+                    
+                    <!-- Demo PPE Bilgisi -->
+                    <div id="demoPPEInfo" class="mb-3" style="display: none;">
+                        <div class="alert alert-info py-4 border-0 shadow-sm">
+                            <h5 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Demo PPE Konfigürasyonu</h5>
+                            <div id="ppeDetails"></div>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">İletişim Kişisi *</label>
                             <input type="text" class="form-control" name="demo_contact_person" required>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Email *</label>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Email *</label>
                             <input type="email" class="form-control" name="demo_email" required>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Telefon</label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Telefon</label>
                             <input type="tel" class="form-control" name="demo_phone">
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Şifre *</label>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Şifre *</label>
                             <input type="password" class="form-control" name="demo_password" required 
                                    placeholder="Minimum 6 karakter" minlength="6">
                         </div>
@@ -3121,10 +4076,16 @@
                             <i class="fas fa-info-circle me-1"></i>
                             Demo hesabınız 7 gün boyunca aktif olacaktır. Kredi kartı bilgisi gerekmez.
                         </small>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-server me-1"></i>
+                                <strong>DVR/NVR Demo:</strong> Tek DVR cihazı ekleyebilir, maksimum 2 kanalı test edebilirsiniz.
+                            </small>
+                        </div>
                     </div>
                     
                     <div class="d-grid">
-                        <button type="button" class="btn btn-primary btn-lg" onclick="submitDemoRequest()">
+                        <button type="submit" class="btn btn-primary btn-lg" onclick="submitDemoRequest()">
                             <i class="fas fa-rocket me-2"></i>Demo Hesabı Oluştur
                         </button>
                     </div>

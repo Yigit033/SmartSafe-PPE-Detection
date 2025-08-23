@@ -717,15 +717,16 @@ class MultiTenantDatabase:
                 INSERT INTO companies 
                 (company_id, company_name, sector, contact_person, email, phone, address, 
                  max_cameras, subscription_type, billing_cycle, subscription_end, api_key, required_ppe,
-                 account_type, demo_expires_at, demo_limits)
-                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                 account_type, demo_expires_at, demo_limits, ppe_requirements, compliance_settings)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 company_id, company_data['company_name'], company_data['sector'],
                 company_data['contact_person'], company_data['email'], 
                 company_data.get('phone', ''), company_data.get('address', ''),
                 company_data.get('max_cameras', 25), company_data.get('subscription_type', 'basic'),
                 company_data.get('billing_cycle', 'monthly'), subscription_end, api_key, ppe_json,
-                company_data.get('account_type', 'full'), company_data.get('demo_expires_at'), company_data.get('demo_limits')
+                company_data.get('account_type', 'full'), company_data.get('demo_expires_at'), company_data.get('demo_limits'),
+                company_data.get('ppe_requirements', '{}'), company_data.get('compliance_settings', '{}')
             ))
             
             # Varsayılan admin kullanıcısı oluştur
@@ -836,6 +837,124 @@ class MultiTenantDatabase:
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return None
     
+    def authenticate_demo_user(self, demo_id: str, email: str, password: str) -> Optional[Dict]:
+        """Demo kullanıcı doğrulama - PostgreSQL ve SQLite uyumlu"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            
+            # PostgreSQL ve SQLite için uyumlu query
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    SELECT u.user_id, u.company_id, u.username, u.email, u.password_hash, 
+                           u.role, u.permissions, c.company_name, c.status as company_status,
+                           c.subscription_type, c.demo_expires_at
+                    FROM users u
+                    JOIN companies c ON u.company_id = c.company_id
+                    WHERE u.email = {placeholder} AND u.company_id = {placeholder} 
+                    AND u.status = 'active' AND c.status = 'active'
+                    AND c.subscription_type = 'demo'
+                ''', (email, demo_id))
+            else:
+                cursor.execute(f'''
+                    SELECT u.user_id, u.company_id, u.username, u.email, u.password_hash, 
+                           u.role, u.permissions, c.company_name, c.status as company_status,
+                           c.subscription_type, c.demo_expires_at
+                    FROM users u
+                    JOIN companies c ON u.company_id = c.company_id
+                    WHERE u.email = {placeholder} AND u.company_id = {placeholder} 
+                    AND u.status = 'active' AND c.status = 'active'
+                    AND c.subscription_type = 'demo'
+                ''', (email, demo_id))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                # Demo hesap süresi kontrolü - PostgreSQL ve SQLite uyumlu
+                demo_expires_at = None
+                if self.db_adapter.db_type == 'postgresql':
+                    demo_expires_at = result.get('demo_expires_at') if hasattr(result, 'get') else result[10] if len(result) > 10 else None
+                else:
+                    demo_expires_at = result[10] if len(result) > 10 else None
+                
+                if demo_expires_at:
+                    try:
+                        if isinstance(demo_expires_at, str):
+                            if 'T' in demo_expires_at:
+                                # ISO format with timezone
+                                demo_expires_at = datetime.fromisoformat(demo_expires_at.replace('Z', '+00:00'))
+                            elif '.' in demo_expires_at:
+                                # SQLite format with microseconds
+                                demo_expires_at = datetime.strptime(demo_expires_at, '%Y-%m-%d %H:%M:%S.%f')
+                            else:
+                                # Standard format
+                                demo_expires_at = datetime.strptime(demo_expires_at, '%Y-%m-%d %H:%M:%S')
+                        
+                        if datetime.now() > demo_expires_at:
+                            logger.warning(f"⚠️ Demo hesap süresi dolmuş: {demo_id}")
+                            return None
+                    except Exception as date_error:
+                        logger.error(f"❌ Demo süre kontrol hatası: {date_error}")
+                
+                # Şifre doğrulama - PostgreSQL ve SQLite uyumlu
+                password_hash = None
+                if self.db_adapter.db_type == 'postgresql':
+                    if hasattr(result, 'keys') and hasattr(result, 'get'):
+                        password_hash = result.get('password_hash')
+                    else:
+                        password_hash = result[4] if len(result) > 4 else None
+                else:
+                    password_hash = result[4] if len(result) > 4 else None
+                
+                if password_hash and bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
+                    logger.info(f"✅ Demo kullanıcı doğrulandı: {demo_id}")
+                    
+                    # PostgreSQL ve SQLite için uyumlu veri döndürme
+                    if self.db_adapter.db_type == 'postgresql':
+                        if hasattr(result, 'keys') and hasattr(result, 'get'):
+                            return {
+                                'user_id': result.get('user_id'),
+                                'company_id': result.get('company_id'),
+                                'username': result.get('username'),
+                                'email': result.get('email'),
+                                'role': result.get('role'),
+                                'permissions': json.loads(result.get('permissions')) if result.get('permissions') else [],
+                                'company_name': result.get('company_name')
+                            }
+                        else:
+                            return {
+                                'user_id': result[0],
+                                'company_id': result[1],
+                                'username': result[2],
+                                'email': result[3],
+                                'role': result[5],
+                                'permissions': json.loads(result[6]) if result[6] else [],
+                                'company_name': result[7]
+                            }
+                    else:
+                        return {
+                            'user_id': result[0],
+                            'company_id': result[1],
+                            'username': result[2],
+                            'email': result[3],
+                            'role': result[5],
+                            'permissions': json.loads(result[6]) if result[6] else [],
+                            'company_name': result[7]
+                        }
+                
+                logger.error("❌ Demo kullanıcı şifre doğrulaması başarısız")
+            else:
+                logger.error(f"❌ Demo kullanıcı bulunamadı: {demo_id} - {email}")
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Demo kullanıcı doğrulama hatası: {e}")
+            return None
+    
     def create_session(self, user_id: str, company_id: str, ip_address: str, user_agent: str) -> str:
         """Oturum oluştur"""
         try:
@@ -852,10 +971,15 @@ class MultiTenantDatabase:
                 VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (session_id, user_id, company_id, expires_at, ip_address, user_agent))
             
-            # Son giriş zamanını güncelle
-            cursor.execute(f'''
-                UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = {placeholder}
-            ''', (user_id,))
+            # Son giriş zamanını güncelle - PostgreSQL ve SQLite uyumlu
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f'''
+                    UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = {placeholder}
+                ''', (user_id,))
+            else:
+                cursor.execute(f'''
+                    UPDATE users SET last_login = datetime('now') WHERE user_id = {placeholder}
+                ''', (user_id,))
             
             conn.commit()
             conn.close()
@@ -1507,6 +1631,101 @@ class MultiTenantDatabase:
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+    
+    def get_company_info(self, company_id: str) -> Optional[Dict]:
+        """Şirket bilgilerini getir"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
+                SELECT company_id, company_name, sector, contact_person, email, phone, address,
+                       max_cameras, subscription_type, subscription_start, subscription_end,
+                       status, created_at, api_key
+                FROM companies 
+                WHERE company_id = {placeholder}
+            ''', (company_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                # PostgreSQL Row object vs SQLite tuple compatibility
+                if hasattr(result, 'keys'):  # PostgreSQL Row object
+                    company_info = {
+                        'company_id': result['company_id'],
+                        'company_name': result['company_name'],
+                        'sector': result['sector'],
+                        'contact_person': result['contact_person'],
+                        'email': result['email'],
+                        'phone': result['phone'],
+                        'address': result['address'],
+                        'max_cameras': result['max_cameras'],
+                        'subscription_type': result['subscription_type'],
+                        'subscription_start': result['subscription_start'],
+                        'subscription_end': result['subscription_end'],
+                        'status': result['status'],
+                        'created_at': result['created_at'],
+                        'api_key': result['api_key']
+                    }
+                else:  # SQLite tuple
+                    company_info = {
+                        'company_id': result[0],
+                        'company_name': result[1],
+                        'sector': result[2],
+                        'contact_person': result[3],
+                        'email': result[4],
+                        'phone': result[5],
+                        'address': result[6],
+                        'max_cameras': result[7],
+                        'subscription_type': result[8],
+                        'subscription_start': result[9],
+                        'subscription_end': result[10],
+                        'status': result[11],
+                        'created_at': result[12],
+                        'api_key': result[13]
+                    }
+                
+                return company_info
+            else:
+                logger.warning(f"⚠️ Company not found: {company_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Get company info error: {e}")
+            return None
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
+    def get_active_camera_count(self, company_id: str) -> int:
+        """Şirketin aktif kamera sayısını getir"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            cursor.execute(f'''
+                SELECT COUNT(*) FROM cameras 
+                WHERE company_id = {placeholder} AND status = 'active'
+            ''', (company_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                if hasattr(result, 'keys'):  # PostgreSQL Row object
+                    return list(result.values())[0] or 0
+                else:  # SQLite tuple
+                    return result[0] or 0
+            else:
+                return 0
+                
+        except Exception as e:
+            logger.error(f"❌ Get active camera count error: {e}")
+            return 0
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def get_company_stats(self, company_id: str) -> Dict:
         """Enhanced şirket istatistikleri"""

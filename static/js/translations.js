@@ -680,17 +680,22 @@ function initializeLanguageSelector() {
     languageBtn.removeEventListener('click', toggleDropdown);
     document.removeEventListener('click', closeDropdownOutside);
     
-    // Add click listener to language button
-    languageBtn.addEventListener('click', toggleDropdown);
+    // Add click listener to language button - Güvenli ekleme
+    if (languageBtn) {
+        languageBtn.addEventListener('click', toggleDropdown);
+    }
     
     // Add click listener to document to close dropdown when clicking outside
     document.addEventListener('click', closeDropdownOutside);
     
-    // Add click listeners to language options
-    document.querySelectorAll('.language-option').forEach(option => {
-        option.removeEventListener('click', handleLanguageSelection);
-        option.addEventListener('click', handleLanguageSelection);
-    });
+    // Add click listeners to language options - Güvenli ekleme
+    const languageOptions = document.querySelectorAll('.language-option');
+    if (languageOptions && languageOptions.length > 0) {
+        languageOptions.forEach(option => {
+            option.removeEventListener('click', handleLanguageSelection);
+            option.addEventListener('click', handleLanguageSelection);
+        });
+    }
 }
 
 function toggleDropdown(event) {
