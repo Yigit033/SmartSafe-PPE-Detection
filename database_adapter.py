@@ -235,8 +235,8 @@ class DatabaseAdapter:
                         account_type VARCHAR(20) DEFAULT 'full',
                         demo_expires_at TIMESTAMP,
                         demo_limits JSON,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -903,7 +903,7 @@ class DatabaseAdapter:
             # PostgreSQL autocommit kullanıyorsa commit'e gerek yok
             if not (self.db_type == 'postgresql' and getattr(conn, 'autocommit', False)):
                 conn.commit()
-            logger.info("✅ Database tables created successfully")
+                logger.info("✅ Database tables created successfully")
             return True
             
         except Exception as e:

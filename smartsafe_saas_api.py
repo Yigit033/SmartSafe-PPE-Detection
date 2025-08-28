@@ -80,7 +80,7 @@ class SmartSafeSaaSAPI:
             # RENDER.COM OPTIMIZATION: Modelleri başlangıçta yükleme, lazy loading kullan
             if not self.sh17_manager.lazy_loading:
                 self.sh17_manager.load_models()
-            logger.info("✅ SH17 Model Manager API'ye entegre edildi (Lazy Loading)")
+                logger.info("✅ SH17 Model Manager API'ye entegre edildi (Lazy Loading)")
         except Exception as e:
             logger.warning(f"⚠️ SH17 Model Manager API'ye yüklenemedi: {e}")
             self.sh17_manager = None
@@ -508,7 +508,7 @@ class SmartSafeSaaSAPI:
             else:
                 logger.warning(f"⚠️ Company not found: {company_id}")
                 return None
-                
+            
         except Exception as e:
             logger.error(f"❌ Subscription info error: {e}")
             return None
@@ -2522,6 +2522,15 @@ Mesaj:
                     </script>
                     '''
                 
+                # Demo hesap güvenlik kontrolü
+                if company_id.startswith('demo_'):
+                    return f'''
+                    <script>
+                        alert("❌ Demo hesaplar normal giriş yapamaz!");
+                        window.history.back();
+                    </script>
+                    '''
+                
                 # Kullanıcı doğrulama
                 user_data = self.db.authenticate_user(email, password)
                 
@@ -3521,17 +3530,17 @@ Mesaj:
                     update_sql = f"""
                         UPDATE companies 
                         SET {', '.join(update_fields)}
-                        WHERE company_id = {placeholder}
+                    WHERE company_id = {placeholder}
                     """
                     cursor.execute(update_sql, update_values)
                 
                 # Kullanıcı bilgilerini güncelle - Sadece email dolu ise
                 if data.get('email') and data.get('email').strip():
                     cursor.execute(f"""
-                        UPDATE users 
+                            UPDATE users 
                         SET email = {placeholder}
                         WHERE company_id = {placeholder}
-                    """, (data.get('email').strip(), company_id))
+                        """, (data.get('email').strip(), company_id))
                 
                 conn.commit()
                 conn.close()
@@ -3607,7 +3616,7 @@ Mesaj:
                         SET profile_image = {placeholder}, updated_at = {timestamp_func}
                         WHERE company_id = {placeholder}
                     """, (f'/static/uploads/logos/{filename}', company_id))
-                    
+                
                     conn.commit()
                     conn.close()
                 except Exception as db_error:
@@ -5910,7 +5919,7 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                return redirect(f'/company/{company_id}/login')
+                    return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
@@ -6271,18 +6280,18 @@ Mesaj:
                     conn.close()
                     return jsonify({
                         'success': True,
-                                                        'current_config': {
-                                                            'required': current_required,
-                                                            'optional': current_optional
-                                                        },
-                                                        'sector': sector,
-                                                        'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
-                                                        'all_ppe_types': all_ppe_types,
-                                                        'sector_specific_ppe': sector_specific_ppe,
-                                                        'sector_recommendations': recommendations,
-                                                        'compliance_settings': compliance_data,
-                                                        'required_ppe': current_required  # Backward compatibility
-                                                    })
+                        'current_config': {
+                            'required': current_required,
+                            'optional': current_optional
+                        },
+                        'sector': sector,
+                        'sector_info': sector_info.get(sector, {'name': sector.title(), 'icon': 'fas fa-industry', 'emoji': '🏢'}),
+                        'all_ppe_types': all_ppe_types,
+                        'sector_specific_ppe': sector_specific_ppe,
+                        'sector_recommendations': recommendations,
+                        'compliance_settings': compliance_data,
+                        'required_ppe': current_required  # Backward compatibility
+                    })
                 else:
                     conn.close()
                     return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
@@ -9785,7 +9794,7 @@ Mesaj:
                                     <!-- Enterprise Plan -->
                                     <div class="col-lg-4">
                                         <div class="card h-100 border-0 shadow-sm plan-card" data-plan="enterprise" style="border-radius: 16px; transition: all 0.3s ease;">
-                                            <div class="card-header bg-gradient-success border-0 text-center pt-4 text-white" style="border-radius: 16px 16px 0 0; background: linear-gradient(135deg, #059669 0%, #10B981 100%);">
+                                            <div class="card-header bg-gradient-primary border-0 text-center pt-4 text-white" style="border-radius: 16px 16px 0 0; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%);">
                                                 <div class="mb-3">
                                                     <div class="bg-white bg-opacity-20 rounded-circle mx-auto d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
                                                         <i class="fas fa-crown text-white" style="font-size: 32px;"></i>
@@ -9837,7 +9846,7 @@ Mesaj:
                                                         <span class="fw-semibold">Çoklu Kullanıcı</span>
                                                     </div>
                                                 </div>
-                                                <button class="btn btn-success btn-lg w-100 rounded-pill shadow-sm" onclick="selectPlanForRegistration('enterprise')" style="background: linear-gradient(135deg, #059669 0%, #10B981 100%); border: none; padding: 12px 24px;">
+                                                <button class="btn btn-primary btn-lg w-100 rounded-pill shadow-sm" onclick="selectPlanForRegistration('enterprise')" style="background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; padding: 12px 24px;">
                                                     <i class="fas fa-crown me-2"></i>Enterprise Planı Seç
                                                 </button>
                                             </div>
@@ -11855,7 +11864,7 @@ Mesaj:
     
     def get_login_template(self, company_id):
         """Company login page template"""
-        return '''
+        template = '''
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -11994,7 +12003,7 @@ Mesaj:
                         <h2 class="fw-bold mb-3">SmartSafe AI</h2>
                         <div class="company-badge mb-3">
                             <i class="fas fa-building me-2"></i>
-                            Company ID: ''' + company_id + '''
+                            Company ID: COMPANY_ID_PLACEHOLDER
                         </div>
                         <p class="text-muted">Secure login</p>
                         
@@ -12023,7 +12032,7 @@ Mesaj:
                     </div>
                     
                     <!-- Company Login Form -->
-                    <form id="companyLoginForm" action="/company/''' + company_id + '''/login-form" method="POST">
+                    <form id="companyLoginForm" action="/company/COMPANY_ID_PLACEHOLDER/login-form" method="POST">
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
                                 <i class="fas fa-envelope text-primary me-2"></i>Şirket Email
@@ -12049,7 +12058,7 @@ Mesaj:
                     </form>
                     
                     <!-- Demo Login Form -->
-                    <form id="demoLoginForm" action="/company/''' + company_id + '''/demo-login" method="POST" style="display: none;">
+                    <form id="demoLoginForm" action="/company/COMPANY_ID_PLACEHOLDER/demo-login" method="POST" style="display: none;">
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
                                 <i class="fas fa-id-card text-warning me-2"></i>Demo Hesap ID
@@ -12108,19 +12117,53 @@ Mesaj:
 
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
             <script>
-                // Demo hesap kontrolü
+                // Login type toggle functionality
                 document.addEventListener('DOMContentLoaded', function() {
-                    const companyId = '{{ company_id }}';
+                    const companyId = 'COMPANY_ID_PLACEHOLDER';
+                    const companyLoginForm = document.getElementById('companyLoginForm');
+                    const demoLoginForm = document.getElementById('demoLoginForm');
+                    const companyLoginRadio = document.getElementById('company_login');
+                    const demoLoginRadio = document.getElementById('demo_login');
                     
-                    if (companyId.startsWith('demo_')) {
+                    console.log('Company ID:', companyId); // Debug için
+                    console.log('Forms found:', {companyLoginForm, demoLoginForm}); // Debug için
+                    console.log('Radios found:', {companyLoginRadio, demoLoginRadio}); // Debug için
+                    
+                    // Login type değiştiğinde form'ları göster/gizle
+                    function toggleLoginForms() {
+                        console.log('Toggle called, companyLoginRadio.checked:', companyLoginRadio.checked); // Debug için
+                        if (companyLoginRadio.checked) {
+                            companyLoginForm.style.display = 'block';
+                            demoLoginForm.style.display = 'none';
+                            console.log('Company form shown, demo form hidden'); // Debug için
+                        } else {
+                            companyLoginForm.style.display = 'none';
+                            demoLoginForm.style.display = 'block';
+                            console.log('Demo form shown, company form hidden'); // Debug için
+                        }
+                    }
+                    
+                    // Radio button change event
+                    companyLoginRadio.addEventListener('change', function() {
+                        console.log('Company radio changed'); // Debug için
+                        toggleLoginForms();
+                    });
+                    demoLoginRadio.addEventListener('change', function() {
+                        console.log('Demo radio changed'); // Debug için
+                        toggleLoginForms();
+                    });
+                    
+                    // Demo hesap kontrolü ve güvenlik
+                    if (companyId && companyId.startsWith('demo_')) {
+                        console.log('Demo account detected'); // Debug için
                         // Demo hesap bilgisini göster
                         const demoInfo = document.getElementById('demo-info');
                         if (demoInfo) {
                             demoInfo.style.display = 'block';
                         }
                         
-                        // Demo hesap için özel stil
-                        document.body.style.background = 'linear-gradient(135deg, #059669 0%, #10B981 100%)';
+                        // Demo hesap için özel stil - Gerçek şirketlerle aynı mavi arka plan
+                        document.body.style.background = 'linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%)';
                         
                         // Company badge'i demo renk yap
                         const companyBadge = document.querySelector('.company-badge');
@@ -12131,12 +12174,82 @@ Mesaj:
                             `;
                             companyBadge.style.color = '#059669';
                         }
+                        
+                        // Demo hesaplar için normal girişi devre dışı bırak
+                        companyLoginRadio.disabled = true;
+                        companyLoginRadio.checked = false;
+                        demoLoginRadio.checked = true;
+                        toggleLoginForms();
+                        
+                        // Uyarı mesajı göster
+                        const warningDiv = document.createElement('div');
+                        warningDiv.className = 'alert alert-warning border-0 mb-3';
+                        warningDiv.innerHTML = `
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Demo Hesap:</strong> Bu hesap sadece demo girişi yapabilir.
+                        `;
+                        companyLoginForm.parentNode.insertBefore(warningDiv, companyLoginForm);
+                        
+                    } else {
+                        console.log('Normal account detected'); // Debug için
+                        // Normal hesaplar için demo girişi devre dışı bırak
+                        demoLoginRadio.disabled = true;
+                        demoLoginRadio.checked = false;
+                        companyLoginRadio.checked = true;
+                        toggleLoginForms();
+                        
+                        // Uyarı mesajı göster
+                        const warningDiv = document.createElement('div');
+                        warningDiv.className = 'alert alert-info border-0 mb-3';
+                        warningDiv.innerHTML = `
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Normal Hesap:</strong> Bu hesap sadece şirket girişi yapabilir.
+                        `;
+                        demoLoginForm.parentNode.insertBefore(warningDiv, demoLoginForm);
                     }
+                    
+                    // Form validation - Sadece görünür form submit edilebilir
+                    companyLoginForm.addEventListener('submit', function(e) {
+                        console.log('Company form submit attempted'); // Debug
+                        // Eğer demo hesap ise ve company form görünürse engelle
+                        if (companyId && companyId.startsWith('demo_')) {
+                            e.preventDefault();
+                            alert('❌ Demo hesaplar normal giriş yapamaz!');
+                            return false;
+                        }
+                        // Eğer demo form görünürse company form submit'ini engelle
+                        if (demoLoginForm.style.display === 'block') {
+                            e.preventDefault();
+                            alert('❌ Demo girişi için demo formu kullanın!');
+                            return false;
+                        }
+                        console.log('Company form submitted successfully'); // Debug
+                    });
+                    
+                    demoLoginForm.addEventListener('submit', function(e) {
+                        console.log('Demo form submit attempted'); // Debug
+                        // Eğer normal hesap ise ve demo form görünürse engelle
+                        if (!companyId || !companyId.startsWith('demo_')) {
+                            e.preventDefault();
+                            alert('❌ Normal hesaplar demo giriş yapamaz!');
+                            return false;
+                        }
+                        // Eğer company form görünürse demo form submit'ini engelle
+                        if (companyLoginForm.style.display === 'block') {
+                            e.preventDefault();
+                            alert('❌ Şirket girişi için şirket formu kullanın!');
+                            return false;
+                        }
+                        console.log('Demo form submitted successfully'); // Debug
+                    });
                 });
             </script>
         </body>
         </html>
         '''
+        
+        # Template'deki placeholder'ları gerçek company_id ile değiştir
+        return template.replace('COMPANY_ID_PLACEHOLDER', company_id)
     
     def get_admin_login_template(self, error=None):
         """Admin login template"""
@@ -18091,7 +18204,7 @@ smartsafe_requests_total 100
                                 ppe_violations = compliance_result.get('violations', [])
                             else:
                                 ppe_compliant = people_detected  # PPE zorunluluğu yoksa tümü uyumlu
-                                
+                        
                         else:
                             # YOLOv8 sonuçlarını işle (klasik format)
                             logger.debug(f"🔄 YOLOv8 sonuçları işleniyor")
@@ -20259,7 +20372,7 @@ if __name__ == "__main__" and not os.environ.get('RENDER'):
         logger.error(f"❌ Ana API başlatma hatası: {main_error}")
         app = create_emergency_app()
         logger.info("✅ Emergency fallback sistem başlatıldı (local)")
-
+        
     try:
         port = int(os.environ.get('PORT', 5000))
         host = '0.0.0.0'
@@ -20268,9 +20381,9 @@ if __name__ == "__main__" and not os.environ.get('RENDER'):
         print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
         print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
         app.run(
-            host=host,
-            port=port,
-            debug=False,
+            host=host, 
+            port=port, 
+            debug=False, 
             threaded=True,
             use_reloader=False,
             use_debugger=False

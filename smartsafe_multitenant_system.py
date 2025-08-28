@@ -1987,6 +1987,142 @@ class MultiTenantDatabase:
             logger.error(f"❌ PPE gereksinimlerini alma hatası: {e}")
             return []
 
+    def get_subscription_info(self, company_id):
+        """Şirket abonelik bilgilerini getir"""
+        try:
+            cursor = self.db.cursor()
+            
+            # Şirket abonelik bilgilerini al
+            cursor.execute("""
+                SELECT subscription_type, billing_cycle, subscription_start, subscription_end, 
+                       max_cameras, created_at, company_name, sector, payment_status, 
+                       auto_renewal, next_billing_date
+                FROM companies 
+                WHERE company_id = %s
+            """, (company_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                # Kamera kullanımını al
+                cameras = self.get_company_cameras(company_id)
+                used_cameras = len(cameras)
+                
+                # PostgreSQL Row object vs SQLite tuple compatibility
+                if hasattr(result, 'keys'):  # PostgreSQL Row object
+                    subscription_end = result['subscription_end']
+                    subscription_start = result['subscription_start']
+                    subscription_info = {
+                        'subscription_type': result['subscription_type'] or 'basic',
+                        'billing_cycle': result['billing_cycle'] or 'monthly',
+                        'subscription_start': subscription_start,
+                        'payment_status': result['payment_status'] or 'active',
+                        'auto_renewal': result['auto_renewal'],
+                        'next_billing_date': result['next_billing_date'],
+                        'max_cameras': result['max_cameras'] or 25,
+                        'created_at': result['created_at'] if result['created_at'] else None,
+                        'company_name': result['company_name'],
+                        'sector': result['sector'],
+                        'used_cameras': used_cameras,
+                    }
+                else:  # SQLite tuple
+                    # subscription_type, billing_cycle, subscription_start, subscription_end, max_cameras, created_at, company_name, sector, payment_status, auto_renewal, next_billing_date
+                    subscription_end = result[3]
+                    subscription_start = result[2]
+                    subscription_info = {
+                        'subscription_type': result[0] or 'basic',
+                        'billing_cycle': result[1] or 'monthly',
+                        'subscription_start': subscription_start,
+                        'payment_status': result[8] or 'active',
+                        'auto_renewal': result[9],
+                        'next_billing_date': result[10],
+                        'max_cameras': result[4] or 25,
+                        'created_at': result[5] if result[5] else None,
+                        'company_name': result[6],
+                        'sector': result[7],
+                        'used_cameras': used_cameras,
+                    }
+                
+                # Plan fiyat bilgilerini ekle
+                plan_prices = {
+                    'starter': {'monthly': 99, 'yearly': 990, 'cameras': 25},
+                    'professional': {'monthly': 299, 'yearly': 2990, 'cameras': 100},
+                    'enterprise': {'monthly': 599, 'yearly': 5990, 'cameras': 500}
+                }
+                
+                current_plan = subscription_info['subscription_type'].lower()
+                billing_cycle = subscription_info['billing_cycle']
+                
+                if current_plan in plan_prices:
+                    subscription_info['current_price'] = plan_prices[current_plan][billing_cycle]
+                    subscription_info['monthly_price'] = plan_prices[current_plan]['monthly']
+                    subscription_info['yearly_price'] = plan_prices[current_plan]['yearly']
+                else:
+                    subscription_info['current_price'] = 99
+                    subscription_info['monthly_price'] = 99
+                    subscription_info['yearly_price'] = 990
+                
+                # Abonelik durumunu kontrol et
+                is_active = True
+                days_remaining = 0
+                
+                if subscription_end:
+                    try:
+                        if isinstance(subscription_end, str):
+                            # Handle different date formats including microseconds
+                            if 'T' in subscription_end:  # ISO format with timezone
+                                subscription_end = datetime.fromisoformat(subscription_end.replace('Z', '+00:00'))
+                            elif '.' in subscription_end:  # SQLite format with microseconds: '2025-08-01 22:14:59.075710'
+                                subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S.%f')
+                            else:  # Standard format: '2025-08-01 22:14:59'
+                                subscription_end = datetime.strptime(subscription_end, '%Y-%m-%d %H:%M:%S')
+                            
+                            days_remaining = (subscription_end - datetime.now()).days
+                            is_active = days_remaining > 0
+                            
+                            logger.info(f"🔍 Subscription end: {subscription_end}, days remaining: {days_remaining}, is_active: {is_active}")
+                    except Exception as date_error:
+                        logger.error(f"❌ Date parsing error: {date_error}")
+                        logger.error(f"❌ Raw subscription_end value: {subscription_end}")
+                        is_active = True
+                        days_remaining = 0
+                
+                # Ortak alanları ekle
+                # Format subscription_start date
+                subscription_start = subscription_info.get('created_at')
+                if subscription_start and isinstance(subscription_start, str):
+                    try:
+                        if '.' in subscription_start:  # SQLite format with microseconds
+                            subscription_start = datetime.strptime(subscription_start, '%Y-%m-%d %H:%M:%S.%f').isoformat()
+                        else:  # Standard format
+                            subscription_start = datetime.strptime(subscription_start, '%Y-%m-%d %H:%M:%S').isoformat()
+                    except Exception as e:
+                        logger.error(f"❌ Subscription start date parsing error: {e}")
+                        subscription_start = None
+                
+                subscription_info.update({
+                    'subscription_start': subscription_start,
+                    'subscription_end': subscription_end.isoformat() if subscription_end else None,
+                    'is_active': is_active,
+                    'days_remaining': days_remaining,
+                    'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 25)) * 100
+                })
+                
+                return {
+                    'success': True,
+                    'subscription': subscription_info
+                }
+            else:
+                return {'success': False, 'error': 'Şirket bulunamadı'}
+                
+        except Exception as e:
+            logger.error(f"❌ Internal abonelik bilgileri getirme hatası: {e}")
+            return {'success': False, 'error': 'Veri getirme başarısız'}
+
+    def get_subscription_info_internal(self, company_id):
+        """Şirket abonelik bilgilerini internal API için getir"""
+        return self.get_subscription_info(company_id)
+
 def main():
     """Test fonksiyonu"""
     print("🏗️ SmartSafe AI - Multi-Tenant SaaS System")
