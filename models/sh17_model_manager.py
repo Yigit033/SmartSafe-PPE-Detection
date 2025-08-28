@@ -267,20 +267,20 @@ class SH17ModelManager:
                 boxes = result.boxes
                 if boxes is not None:
                     for box in boxes:
-                            try:
-                                detection = {
-                                    'class_id': int(box.cls[0]),
-                                    'class_name': self.sh17_classes[int(box.cls[0])],
-                                    'confidence': float(box.conf[0]),
-                                    'bbox': box.xyxy[0].cpu().numpy().tolist(),
-                                                    'sector': sector,
-                                                    'model_type': 'SH17'
-                                                }
-                                detections.append(detection)
-                            except Exception as box_error:
-                                logger.warning(f"⚠️ Box processing hatası: {box_error}")
-                                continue
-                    
+                        try:
+                            detection = {
+                                'class_id': int(box.cls[0]),
+                                'class_name': self.sh17_classes[int(box.cls[0])],
+                                'confidence': float(box.conf[0]),
+                                'bbox': box.xyxy[0].cpu().numpy().tolist(),
+                                                            'sector': sector,
+                                                            'model_type': 'SH17'
+                                                        }
+                            detections.append(detection)
+                        except Exception as box_error:
+                            logger.warning(f"⚠️ Box processing hatası: {box_error}")
+                            continue
+                        
             return detections
             
         except Exception as e:
@@ -316,8 +316,8 @@ class SH17ModelManager:
                                     'bbox': box.xyxy[0].cpu().numpy().tolist(),
                                     'sector': sector,
                                     'model_type': 'Fallback'
-                            }
-                            detections.append(detection)
+                                }
+                                detections.append(detection)
                         except Exception as box_error:
                             logger.warning(f"⚠️ Fallback box processing hatası: {box_error}")
                             continue
