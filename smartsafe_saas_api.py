@@ -625,6 +625,26 @@ class SmartSafeSaaSAPI:
         except Exception as e:
             logger.error(f"❌ Demo mail gönderim hatası: {e}")
 
+    def _send_company_notification(self, email: str, message: str):
+        """Şirket kayıt bildirim maili gönder - PostgreSQL ve SQLite uyumlu"""
+        try:
+            # Mevcut mail sistemi kullanılarak
+            if hasattr(self, 'mail') and self.mail:
+                msg = Message(
+                    subject="SmartSafe AI Şirket Hesap Bilgileri",
+                    recipients=[email],
+                    body=message,
+                    sender=os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
+                )
+                self.mail.send(msg)
+                logger.info(f"✅ Şirket kayıt maili gönderildi: {email}")
+            else:
+                # Mail sistemi yoksa log'a yaz
+                logger.info(f"📧 Şirket kayıt mail içeriği (mail sistemi aktif değil):\n{message}")
+                
+        except Exception as e:
+            logger.error(f"❌ Şirket kayıt mail gönderim hatası: {e}")
+
     def setup_routes(self):
         """API rotalarını ayarla"""
         app = self.app
@@ -2379,66 +2399,477 @@ Mesaj:
                     company_id = result
                     login_url = f"/company/{company_id}/login"
                     
-                    # Başarılı kayıt HTML sayfası
+                    # Admin mailine şirket kayıt bilgisi gönder
+                    try:
+                        admin_email = os.getenv('ADMIN_EMAIL', 'yigittilaver2000@gmail.com')
+                        
+                        # Plan bilgilerini al
+                        subscription_plan = data.get('subscription_type', 'starter')
+                        billing_cycle = data.get('billing_cycle', 'monthly')
+                        
+                        plan_info = {
+                            'starter': {'name': 'Starter', 'monthly': 99, 'yearly': 990, 'cameras': 25},
+                            'professional': {'name': 'Professional', 'monthly': 299, 'yearly': 2990, 'cameras': 100},
+                            'enterprise': {'name': 'Enterprise', 'monthly': 599, 'yearly': 5990, 'cameras': 500}
+                        }
+                        
+                        selected_plan = plan_info.get(subscription_plan, plan_info['starter'])
+                        
+                        company_notification = f"""
+                        🏢 YENİ ŞİRKET KAYDI
+                        
+                        📋 Şirket Bilgileri:
+                        - Şirket Adı: {data.get('company_name')}
+                        - Sektör: {data.get('sector')}
+                        - İletişim Kişisi: {data.get('contact_person')}
+                        - Email: {data.get('email')}
+                        - Telefon: {data.get('phone', 'Belirtilmemiş')}
+                        - Adres: {data.get('address', 'Belirtilmemiş')}
+                        
+                        💳 Abonelik Bilgileri:
+                        - Plan: {selected_plan['name']} ({subscription_plan})
+                        - Fatura Döngüsü: {billing_cycle}
+                        - Aylık Ücret: ${selected_plan[billing_cycle]}
+                        - Kamera Limiti: {selected_plan['cameras']}
+                        
+                        🔑 Hesap Bilgileri:
+                        - Company ID: {company_id}
+                        - Şifre: {data.get('password')}
+                        
+                        🌐 Giriş Linki:
+                        https://smartsafeai.onrender.com/company/{company_id}/login
+                        
+                        📧 MANUEL MAİL GÖNDERİMİ GEREKİYOR!
+                        
+                        Müşteriye gönderilecek mail içeriği:
+                        ===========================================
+                        
+                        Konu: SmartSafe AI Hesabınız Hazır - {selected_plan['name']} Plan
+                        
+                        Merhaba {data.get('contact_person')},
+                        
+                        SmartSafe AI şirket hesabınız başarıyla oluşturuldu!
+                        Profesyonel PPE tespit sisteminize hoş geldiniz.
+                        
+                        🔑 Hesap Bilgileri:
+                        - Company ID: {company_id}
+                        - Email: {data.get('email')}
+                        - Şifre: {data.get('password')}
+                        
+                        🌐 Giriş Linki:
+                        https://smartsafeai.onrender.com/company/{company_id}/login
+                        
+                        💳 Abonelik Bilgileri:
+                        - Plan: {selected_plan['name']}
+                        - Kamera Limiti: {selected_plan['cameras']} kamera
+                        - Fatura Döngüsü: {billing_cycle}
+                        
+                        📋 Sonraki Adımlar:
+                        1. Yukarıdaki link ile giriş yapın
+                        2. İlk kameranızı ekleyin
+                        3. PPE kurallarınızı ayarlayın
+                        4. Ekibinizi sisteme davet edin
+                        
+                        📞 Destek:
+                        24 saat içinde teknik destek ekibimiz sizinle iletişime geçecek.
+                        Kurulum ve eğitim desteği için hazırız!
+                        
+                        SmartSafe AI ile güvenli çalışma ortamları oluşturun!
+                        
+                        İyi çalışmalar,
+                        SmartSafe AI Ekibi
+                        
+                        ===========================================
+                        
+                        ⚠️ NOT: Bu mail manuel olarak gönderilmelidir!
+                        """
+                        
+                        # Mail gönderimi
+                        self._send_company_notification(admin_email, company_notification)
+                        logger.info(f"✅ Şirket kayıt bildirimi admin mailine gönderildi: {admin_email}")
+                        
+                    except Exception as mail_error:
+                        logger.error(f"❌ Şirket kayıt mail gönderim hatası: {mail_error}")
+                    
+                    # Müşteriye mail gönderilmiyor - Manuel mail gönderimi yapılacak
+                    logger.info(f"📧 Şirket hesabı oluşturuldu: {data.get('email')} - Manuel mail gönderimi bekleniyor")
+                    
+                    # Profesyonel başarılı kayıt HTML sayfası - Demo kaydına benzer
                     return f'''
                     <!DOCTYPE html>
                     <html lang="tr">
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Registration Successful!</title>
-                        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-                        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+                        <title>Şirket Hesabınız Oluşturuldu!</title>
+                        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+                        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
                         <style>
-                            body {{
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                min-height: 100vh;
-                                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            :root {{
+                                --primary: #1E3A8A;
+                                --secondary: #0EA5E9;
+                                --accent: #22C55E;
+                                --warning: #EF4444;
+                                --light: #F8FAFC;
+                                --dark: #0F172A;
                             }}
-                            .card {{
-                                border-radius: 15px;
-                                box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+
+                            body {{
+                                background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+                                min-height: 100vh;
+                                font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                                color: var(--dark);
+                                overflow-x: hidden;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                margin: 0;
+                                padding: 20px;
+                            }}
+
+                            .glass-card {{
+                                background: rgba(255, 255, 255, 0.95);
                                 backdrop-filter: blur(10px);
-                                background: rgba(255,255,255,0.95);
+                                border-radius: 20px;
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                                max-width: 600px;
+                                width: 100%;
+                                margin: 0 auto;
+                            }}
+
+                            .success-icon {{
+                                font-size: 4rem;
+                                margin-bottom: 1rem;
+                            }}
+
+                            .btn-primary {{
+                                background: var(--primary);
+                                border: none;
+                                padding: 12px 32px;
+                                border-radius: 30px;
+                                font-weight: 600;
+                                transition: all 0.3s ease;
+                            }}
+
+                            .btn-primary:hover {{
+                                background: var(--secondary);
+                                transform: translateY(-2px);
+                                box-shadow: 0 5px 15px rgba(14, 165, 233, 0.3);
+                            }}
+
+                            .alert {{
+                                border-radius: 15px;
+                                border: none;
+                            }}
+
+                            .timeline {{
+                                position: relative;
+                                padding-left: 30px;
+                            }}
+                            
+                            .timeline::before {{
+                                content: '';
+                                position: absolute;
+                                left: 15px;
+                                top: 0;
+                                bottom: 0;
+                                width: 2px;
+                                background: #e9ecef;
+                            }}
+
+                            .timeline-item {{
+                                position: relative;
+                                margin-bottom: 20px;
+                                padding-bottom: 20px;
+                            }}
+
+                            .timeline-marker {{
+                                position: absolute;
+                                left: -35px;
+                                top: 5px;
+                                width: 12px;
+                                height: 12px;
+                                border-radius: 50%;
+                                border: 3px solid white;
+                                box-shadow: 0 0 0 3px #dee2e6;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 8px;
+                                color: white;
+                            }}
+                            
+                            .timeline-content {{
+                                padding-left: 10px;
+                            }}
+                            
+                            .timeline-content h6 {{
+                                margin-bottom: 5px;
+                                font-weight: 600;
+                            }}
+                            
+                            .timeline-content small {{
+                                color: #6c757d;
+                            }}
+
+                            .bg-success {{ background-color: var(--accent) !important; }}
+                            .bg-warning {{ background-color: #F59E0B !important; }}
+                            .bg-info {{ background-color: var(--secondary) !important; }}
+                            .bg-primary {{ background-color: var(--primary) !important; }}
+
+                            .modal {{
+                                backdrop-filter: blur(10px);
+                            }}
+
+                            .modal-content {{
+                                border-radius: 20px;
+                                border: none;
+                                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
                             }}
                         </style>
                     </head>
                     <body>
-                        <div class="container mt-5">
-                            <div class="row justify-content-center">
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-body text-center p-5">
-                                            <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
-                                            <h2 class="mt-3 text-success">🎉 Registration Successful!</h2>
-                                            <hr>
-                                            <div class="alert alert-info">
-                                                <h5><i class="fas fa-building"></i> Your Company ID:</h5>
-                                                <h3 class="text-primary"><strong>{company_id}</strong></h3>
+                        <div class="glass-card p-5">
+                            <div class="text-center">
+                                <div class="success-icon">🎉</div>
+                                <h2 class="fw-bold mb-3 text-success">Şirket Hesabınız Başarıyla Oluşturuldu!</h2>
+                                <p class="lead text-muted mb-4">SmartSafe AI ailesine hoş geldiniz!</p>
+                                
+                                <div class="alert alert-info border-0 mb-4" style="background: rgba(59, 130, 246, 0.1); border-radius: 15px;">
+                                    <h6 class="mb-3 fw-bold">
+                                        <i class="fas fa-envelope text-primary me-2"></i>
+                                        Hesap Bilgileriniz Email ile Gönderilecek
+                                    </h6>
+                                    <p class="mb-2">
+                                        <i class="fas fa-clock text-warning me-2"></i>
+                                        <strong>24 saat içinde</strong> SmartSafe AI yönetimi sizinle iletişime geçecek
+                                    </p>
+                                    <p class="mb-0">
+                                        <i class="fas fa-info-circle text-info me-2"></i>
+                                        Email adresinize şirket hesap bilgileri ve giriş linki gönderilecektir
+                                    </p>
+                                </div>
+
+                                <div class="alert alert-success border-0 mb-4" style="background: rgba(34, 197, 94, 0.1); border-radius: 15px;">
+                                    <h6 class="mb-3 fw-bold">
+                                        <i class="fas fa-check-circle text-success me-2"></i>
+                                        Hesap Kurulumu Tamamlandı
+                                    </h6>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="timeline-item">
+                                                <div class="timeline-icon bg-success">
+                                                    <i class="fas fa-check"></i>
+                                                </div>
+                                                <div>
+                                                    <strong>Hesap Oluşturuldu</strong>
+                                                    <small class="d-block text-muted">Veritabanı kaydı tamamlandı</small>
+                                                </div>
                                             </div>
-                                            <div class="alert alert-warning">
-                                                <i class="fas fa-exclamation-triangle"></i>
-                                                <strong>IMPORTANT:</strong> Please note this ID! 
-                                                You will need it to log in again.
+                                            <div class="timeline-item">
+                                                <div class="timeline-icon bg-warning">
+                                                    <i class="fas fa-envelope"></i>
+                                                </div>
+                                                <div>
+                                                    <strong>Email Hazırlanıyor</strong>
+                                                    <small class="d-block text-muted">24 saat içinde gönderilecek</small>
+                                                </div>
                                             </div>
-                                            <div class="mt-4">
-                                                <a href="{login_url}" class="btn btn-primary btn-lg">
-                                                    <i class="fas fa-sign-in-alt"></i> Go to Login Page
-                                                </a>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="timeline-item">
+                                                <div class="timeline-icon bg-info">
+                                                    <i class="fas fa-shield-alt"></i>
+                                                </div>
+                                                <div>
+                                                    <strong>Güvenlik Ayarları</strong>
+                                                    <small class="d-block text-muted">PPE konfigürasyonu hazır</small>
+                                                </div>
                                             </div>
-                                            <div class="mt-3">
-                                                <a href="/" class="btn btn-outline-secondary">
-                                                    <i class="fas fa-home"></i> Home Page
-                                                </a>
+                                            <div class="timeline-item">
+                                                <div class="timeline-icon bg-primary">
+                                                    <i class="fas fa-headset"></i>
+                                                </div>
+                                                <div>
+                                                    <strong>Destek Ekibi</strong>
+                                                    <small class="d-block text-muted">24 saat içinde iletişim</small>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+
+                                <div class="d-flex gap-3 justify-content-center">
+                                    <a href="/" class="btn btn-outline-secondary">
+                                        <i class="fas fa-home me-2"></i>Ana Sayfa
+                                    </a>
+                                    <button class="btn btn-primary" onclick="showCompanyProcessInfo()">
+                                        <i class="fas fa-question-circle me-2"></i>Şirket Süreci Hakkında
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Şirket Süreci Modal -->
+                        <div class="modal fade" id="companyProcessModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-primary text-white">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-info-circle me-2"></i>Şirket Hesap Süreci
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row g-4">
+                                            <div class="col-md-6">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h6 class="mb-0"><i class="fas fa-list me-2"></i>Süreç Adımları</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="timeline">
+                                                            <div class="timeline-item">
+                                                                <div class="timeline-marker bg-success">
+                                                                    <i class="fas fa-check"></i>
+                                                                </div>
+                                                                <div class="timeline-content">
+                                                                    <h6 class="mb-1">Şirket Kaydı</h6>
+                                                                    <small class="text-muted">✅ Şirket bilgileri alındı</small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="timeline-item">
+                                                                <div class="timeline-marker bg-warning">
+                                                                    <i class="fas fa-clock"></i>
+                                                                </div>
+                                                                <div class="timeline-content">
+                                                                    <h6 class="mb-1">Email Bekleniyor</h6>
+                                                                    <small class="text-muted">⏳ 24 saat içinde hesap bilgileri</small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="timeline-item">
+                                                                <div class="timeline-marker bg-info">
+                                                                    <i class="fas fa-envelope"></i>
+                                                                </div>
+                                                                <div class="timeline-content">
+                                                                    <h6 class="mb-1">Şirket Giriş</h6>
+                                                                    <small class="text-muted">📧 Mail'deki link ile giriş</small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="timeline-item">
+                                                                <div class="timeline-marker bg-primary">
+                                                                    <i class="fas fa-phone"></i>
+                                                                </div>
+                                                                <div class="timeline-content">
+                                                                    <h6 class="mb-1">Teknik Destek</h6>
+                                                                    <small class="text-muted">📞 24 saat içinde iletişim</small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="timeline-item">
+                                                                <div class="timeline-marker bg-success">
+                                                                    <i class="fas fa-rocket"></i>
+                                                                </div>
+                                                                <div class="timeline-content">
+                                                                    <h6 class="mb-1">Platform Kurulumu</h6>
+                                                                    <small class="text-muted">🚀 İlk kurulum ve rehber</small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="timeline-item">
+                                                                <div class="timeline-marker bg-info">
+                                                                    <i class="fas fa-headset"></i>
+                                                                </div>
+                                                                <div class="timeline-content">
+                                                                    <h6 class="mb-1">Teknik Destek</h6>
+                                                                    <small class="text-muted">🎧 7/24 destek</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>Sık Sorulan Sorular</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="accordion" id="companyFAQ">
+                                                            <div class="accordion-item">
+                                                                <h2 class="accordion-header">
+                                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                                                        <i class="fas fa-envelope me-2 text-primary"></i>
+                                                                        Hesap bilgileri ne zaman gelir?
+                                                                    </button>
+                                                                </h2>
+                                                                <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#companyFAQ">
+                                                                    <div class="accordion-body">
+                                                                        <i class="fas fa-clock text-warning me-2"></i>
+                                                                        Şirket hesap bilgileriniz <strong>24 saat içinde</strong> email adresinize gönderilecektir.
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="accordion-item">
+                                                                <h2 class="accordion-header">
+                                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                                                        <i class="fas fa-headset me-2 text-success"></i>
+                                                                        Teknik destek ne zaman?
+                                                                    </button>
+                                                                </h2>
+                                                                <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#companyFAQ">
+                                                                    <div class="accordion-body">
+                                                                        <i class="fas fa-phone text-success me-2"></i>
+                                                                        Teknik destek ekibimiz <strong>24 saat içinde</strong> sizinle iletişime geçecektir.
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="accordion-item">
+                                                                <h2 class="accordion-header">
+                                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                                                        <i class="fas fa-cog me-2 text-info"></i>
+                                                                        İlk kurulum nasıl?
+                                                                    </button>
+                                                                </h2>
+                                                                <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#companyFAQ">
+                                                                    <div class="accordion-body">
+                                                                        <i class="fas fa-book text-info me-2"></i>
+                                                                        Mail ile gelen rehber dokümanları ve destek ekibi yardımıyla kolayca kurulum yapabilirsiniz.
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-warning mt-4">
+                                            <h6 class="mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Önemli Not:</h6>
+                                            <p class="mb-0">
+                                                <i class="fas fa-envelope-open text-primary me-2"></i>
+                                                Şirket hesap bilgileriniz email adresinize gönderilecektir. 
+                                                <strong>Lütfen email'inizi kontrol edin ve spam klasörünü de kontrol etmeyi unutmayın.</strong>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            <i class="fas fa-times me-2"></i>Kapat
+                                        </button>
+                                        <a href="/" class="btn btn-primary">
+                                            <i class="fas fa-home me-2"></i>Ana Sayfa
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
                         <script>
-                            // Store company ID in localStorage
-                            localStorage.setItem('lastCompanyId', '{company_id}');
+                            function showCompanyProcessInfo() {{
+                                const modal = new bootstrap.Modal(document.getElementById('companyProcessModal'));
+                                modal.show();
+                            }}
                         </script>
                     </body>
                     </html>
