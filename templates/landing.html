@@ -2959,6 +2959,65 @@
                 }, 200);
             });
         });
+        
+        // Şifre validation fonksiyonları
+        function validatePasswordStrength(password) {
+            const requirements = {
+                length: password.length >= 8,
+                uppercase: /[A-Z]/.test(password),
+                lowercase: /[a-z]/.test(password),
+                number: /\d/.test(password),
+                special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+            };
+            return requirements;
+        }
+        
+        function updateLandingDemoPasswordStrength(password) {
+            const requirements = validatePasswordStrength(password);
+            const strengthFill = document.getElementById('landing-demo-strength-fill');
+            const strengthText = document.getElementById('landing-demo-strength-text');
+            
+            if (!strengthFill || !strengthText) return;
+            
+            // Gereksinimleri güncelle
+            Object.keys(requirements).forEach(req => {
+                const element = document.getElementById(`landing-demo-req-${req}`);
+                if (element) {
+                    if (requirements[req]) {
+                        element.innerHTML = '<i class="fas fa-check text-success me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                        element.classList.add('valid');
+                    } else {
+                        element.innerHTML = '<i class="fas fa-times text-danger me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                        element.classList.remove('valid');
+                    }
+                }
+            });
+            
+            // Güç seviyesini hesapla
+            const validCount = Object.values(requirements).filter(Boolean).length;
+            let strength = 'Zayıf';
+            let width = '25%';
+            let color = '#dc3545';
+            
+            if (validCount >= 5) {
+                strength = 'Güçlü';
+                width = '100%';
+                color = '#20c997';
+            } else if (validCount >= 4) {
+                strength = 'İyi';
+                width = '75%';
+                color = '#28a745';
+            } else if (validCount >= 3) {
+                strength = 'Orta';
+                width = '50%';
+                color = '#ffc107';
+            }
+            
+            // Güç göstergesini güncelle
+            strengthFill.style.width = width;
+            strengthFill.style.background = color;
+            strengthText.textContent = `Şifre gücü: ${strength}`;
+        }
     </script>
     <script>
         // Custom dropdown logic
@@ -4254,8 +4313,47 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Şifre *</label>
-                            <input type="password" class="form-control" name="demo_password" required 
-                                   placeholder="Minimum 6 karakter" minlength="6">
+                            <input type="password" class="form-control" name="demo_password" id="landing_demo_password" required 
+                                   placeholder="Güvenli şifre oluşturun" minlength="8"
+                                   oninput="updateLandingDemoPasswordStrength(this.value)">
+                            
+                            <!-- Şifre Gücü Göstergesi -->
+                            <div class="password-strength mt-2">
+                                <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                    <div class="strength-fill" id="landing-demo-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
+                                </div>
+                                <small class="strength-text" id="landing-demo-strength-text" style="font-size: 0.8rem; color: #6c757d;">Şifre gücü: Zayıf</small>
+                            </div>
+                            
+                            <!-- Şifre Gereksinimleri -->
+                            <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
+                                <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
+                                    <i class="fas fa-info-circle text-warning me-2"></i>
+                                    Şifre Gereksinimleri
+                                </h6>
+                                <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
+                                    <div class="requirement-item" id="landing-demo-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 8 karakter</span>
+                                    </div>
+                                    <div class="requirement-item" id="landing-demo-req-uppercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 büyük harf (A-Z)</span>
+                                    </div>
+                                    <div class="requirement-item" id="landing-demo-req-lowercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 küçük harf (a-z)</span>
+                                    </div>
+                                    <div class="requirement-item" id="landing-demo-req-number" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 rakam (0-9)</span>
+                                    </div>
+                                    <div class="requirement-item" id="landing-demo-req-special" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 özel karakter (!@#$%^&*)</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     

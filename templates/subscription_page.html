@@ -517,7 +517,8 @@
                 .then(result => {
                     console.log('🔍 API response:', result);
                     if (result.success) {
-                        const subscription = result.subscription;
+                        // API'den gelen response'da subscription key'i yok, direkt subscription bilgileri var
+                        const subscription = result;
                         console.log('🔍 Subscription data:', subscription);
                         
                         // Update plan details

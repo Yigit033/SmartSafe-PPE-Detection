@@ -19,6 +19,7 @@ import threading
 import time
 import requests
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import os
@@ -162,6 +163,15 @@ class SmartSafeSaaSAPI:
         except Exception as e:
             logger.warning(f"⚠️ PPE Detection Manager yüklenemedi: {e}, fallback kullanılacak")
             self.ppe_manager = None
+        
+        # Şifre güvenlik politikası
+        self.password_policy = {
+            'min_length': 8,
+            'require_uppercase': True,
+            'require_lowercase': True,
+            'require_digits': True,
+            'require_special': True
+        }
         
         # İYİLEŞTİRİLDİ: Enhanced Error Handlers
         @self.app.errorhandler(404)
@@ -504,14 +514,16 @@ class SmartSafeSaaSAPI:
                     'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 25)) * 100
                 })
                 
+                # Success key'i ekle
+                subscription_info['success'] = True
                 return subscription_info
             else:
                 logger.warning(f"⚠️ Company not found: {company_id}")
-                return None
+                return {'success': False, 'error': 'Şirket bulunamadı'}
             
         except Exception as e:
             logger.error(f"❌ Subscription info error: {e}")
-            return None
+            return {'success': False, 'error': str(e)}
         finally:
             if 'conn' in locals():
                 conn.close()
@@ -644,6 +656,41 @@ class SmartSafeSaaSAPI:
                 
         except Exception as e:
             logger.error(f"❌ Şirket kayıt mail gönderim hatası: {e}")
+
+    def validate_password_strength(self, password: str) -> tuple[bool, list[str]]:
+        """Şifre gücünü kontrol et - 5 temel gereksinimi doğrula"""
+        errors = []
+        
+        # 1. Minimum uzunluk kontrolü
+        if len(password) < self.password_policy['min_length']:
+            errors.append(f"Şifre en az {self.password_policy['min_length']} karakter olmalıdır")
+        
+        # 2. Büyük harf kontrolü
+        if self.password_policy['require_uppercase'] and not re.search(r'[A-Z]', password):
+            errors.append("Şifre en az 1 büyük harf (A-Z) içermelidir")
+        
+        # 3. Küçük harf kontrolü
+        if self.password_policy['require_lowercase'] and not re.search(r'[a-z]', password):
+            errors.append("Şifre en az 1 küçük harf (a-z) içermelidir")
+        
+        # 4. Rakam kontrolü
+        if self.password_policy['require_digits'] and not re.search(r'\d', password):
+            errors.append("Şifre en az 1 rakam (0-9) içermelidir")
+        
+        # 5. Özel karakter kontrolü
+        if self.password_policy['require_special'] and not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            errors.append("Şifre en az 1 özel karakter (!@#$%^&*(),.?\":{}|<>) içermelidir")
+        
+        # 6. Yaygın şifre kontrolü
+        common_passwords = ['password', '123456', 'admin', 'smartsafe', 'qwerty', 'abc123']
+        if password.lower() in common_passwords:
+            errors.append("Bu şifre çok yaygın, lütfen daha güvenli bir şifre seçin")
+        
+        # 7. Türkçe karakter desteği kontrolü
+        if not password.isascii():
+            errors.append("Şifre sadece İngilizce karakterler içermelidir")
+        
+        return len(errors) == 0, errors
 
     def setup_routes(self):
         """API rotalarını ayarla"""
@@ -2039,6 +2086,15 @@ Mesaj:
                     if not data.get(field):
                         return jsonify({'success': False, 'error': f'{field} gerekli'}), 400
                 
+                # Şifre validasyonu
+                is_valid, validation_errors = self.validate_password_strength(data.get('password', ''))
+                if not is_valid:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Şifre gereksinimleri karşılanmıyor',
+                        'validation_errors': validation_errors
+                    }), 400
+                
                 # Sektör validasyonu
                 valid_sectors = ['construction', 'manufacturing', 'chemical', 'food', 'warehouse', 'energy', 'petrochemical', 'marine', 'aviation']
                 if data.get('sector') not in valid_sectors:
@@ -2075,8 +2131,13 @@ Mesaj:
                         return jsonify({'success': False, 'error': f'{field} gerekli'}), 400
                 
                 # Şifre validasyonu
-                if len(data.get('password', '')) < 6:
-                    return jsonify({'success': False, 'error': 'Şifre en az 6 karakter olmalıdır'}), 400
+                is_valid, validation_errors = self.validate_password_strength(data.get('password', ''))
+                if not is_valid:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Şifre gereksinimleri karşılanmıyor',
+                        'validation_errors': validation_errors
+                    }), 400
                 
                 # Sektör validasyonu
                 valid_sectors = ['construction', 'manufacturing', 'chemical', 'food', 'warehouse', 'energy', 'petrochemical', 'marine', 'aviation']
@@ -2657,15 +2718,15 @@ Mesaj:
                                         Hesap Kurulumu Tamamlandı
                                     </h6>
                                     <div class="row g-3">
-                                        <div class="col-md-6">
+                                <div class="col-md-6">
                                             <div class="timeline-item">
                                                 <div class="timeline-icon bg-success">
                                                     <i class="fas fa-check"></i>
-                                                </div>
+                                            </div>
                                                 <div>
                                                     <strong>Hesap Oluşturuldu</strong>
                                                     <small class="d-block text-muted">Veritabanı kaydı tamamlandı</small>
-                                                </div>
+                                            </div>
                                             </div>
                                             <div class="timeline-item">
                                                 <div class="timeline-icon bg-warning">
@@ -2701,15 +2762,15 @@ Mesaj:
                                 </div>
 
                                 <div class="d-flex gap-3 justify-content-center">
-                                    <a href="/" class="btn btn-outline-secondary">
+                                                <a href="/" class="btn btn-outline-secondary">
                                         <i class="fas fa-home me-2"></i>Ana Sayfa
-                                    </a>
+                                                </a>
                                     <button class="btn btn-primary" onclick="showCompanyProcessInfo()">
                                         <i class="fas fa-question-circle me-2"></i>Şirket Süreci Hakkında
                                     </button>
-                                </div>
-                            </div>
-                        </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                         <!-- Şirket Süreci Modal -->
                         <div class="modal fade" id="companyProcessModal" tabindex="-1">
@@ -2720,20 +2781,20 @@ Mesaj:
                                             <i class="fas fa-info-circle me-2"></i>Şirket Hesap Süreci
                                         </h5>
                                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                    </div>
+                                </div>
                                     <div class="modal-body">
                                         <div class="row g-4">
                                             <div class="col-md-6">
                                                 <div class="card">
                                                     <div class="card-header">
                                                         <h6 class="mb-0"><i class="fas fa-list me-2"></i>Süreç Adımları</h6>
-                                                    </div>
+                            </div>
                                                     <div class="card-body">
                                                         <div class="timeline">
                                                             <div class="timeline-item">
                                                                 <div class="timeline-marker bg-success">
                                                                     <i class="fas fa-check"></i>
-                                                                </div>
+                        </div>
                                                                 <div class="timeline-content">
                                                                     <h6 class="mb-1">Şirket Kaydı</h6>
                                                                     <small class="text-muted">✅ Şirket bilgileri alındı</small>
@@ -4099,6 +4160,15 @@ Mesaj:
                 
                 if not stored_password or not bcrypt.checkpw(data['current_password'].encode('utf-8'), stored_password[0].encode('utf-8')):
                     return jsonify({'success': False, 'error': 'Mevcut şifre yanlış'}), 401
+                
+                # Yeni şifre validation
+                is_valid, validation_errors = self.validate_password_strength(data['new_password'])
+                if not is_valid:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Şifre gereksinimleri karşılanmıyor',
+                        'validation_errors': validation_errors
+                    }), 400
                 
                 # Yeni şifre hash'le
                 new_password_hash = bcrypt.hashpw(data['new_password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -6350,7 +6420,7 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                    return redirect(f'/company/{company_id}/login')
+                return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
@@ -7181,10 +7251,11 @@ Mesaj:
                 
                 result = self.get_subscription_info_internal(company_id)
                 logger.info(f"🔍 Internal subscription result: {result}")
-                if result['success']:
+                if result and result.get('success'):
                     return jsonify(result)
                 else:
-                    return jsonify(result), 404
+                    error_msg = result.get('error', 'Şirket bulunamadı') if result else 'Şirket bulunamadı'
+                    return jsonify({'success': False, 'error': error_msg}), 404
                 
             except Exception as e:
                 logger.error(f"❌ Abonelik bilgileri getirme hatası: {e}")
@@ -8926,6 +8997,157 @@ Mesaj:
                     border-radius: 15px;
                     border: none;
                 }
+                
+                /* Modern Business Form Styles */
+                .business-form-section {
+                    background: rgba(255, 255, 255, 0.98);
+                    border-radius: 20px;
+                    padding: 2rem;
+                    border: 1px solid rgba(30, 58, 138, 0.1);
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+                }
+                
+                .section-header {
+                    text-align: center;
+                    padding-bottom: 1.5rem;
+                    border-bottom: 2px solid rgba(30, 58, 138, 0.1);
+                }
+                
+                .section-icon-wrapper {
+                    width: 60px;
+                    height: 60px;
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 1rem;
+                    box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
+                }
+                
+                .section-icon-wrapper i {
+                    font-size: 24px;
+                    color: white;
+                }
+                
+                .section-title {
+                    color: var(--dark);
+                    font-weight: 700;
+                    font-size: 1.5rem;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .section-subtitle {
+                    font-size: 1rem;
+                    color: #6b7280;
+                    margin: 0;
+                }
+                
+                .form-group-modern {
+                    margin-bottom: 1.5rem;
+                }
+                
+                .form-label-modern {
+                    display: block;
+                    font-weight: 600;
+                    color: var(--dark);
+                    margin-bottom: 0.75rem;
+                    font-size: 0.95rem;
+                }
+                
+                .required-mark {
+                    color: #ef4444;
+                    font-weight: 700;
+                }
+                
+                .input-group-modern {
+                    position: relative;
+                }
+                
+                .form-control-modern {
+                    width: 100%;
+                    padding: 1rem 1rem 1rem 3rem;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 12px;
+                    font-size: 1rem;
+                    transition: all 0.3s ease;
+                    background: white;
+                    color: var(--dark);
+                }
+                
+                .form-control-modern:focus {
+                    outline: none;
+                    border-color: var(--primary);
+                    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+                    transform: translateY(-1px);
+                }
+                
+                .form-control-modern::placeholder {
+                    color: #9ca3af;
+                }
+                
+                .input-icon {
+                    position: absolute;
+                    left: 1rem;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    transition: color 0.3s ease;
+                }
+                
+                .form-control-modern:focus + .input-icon {
+                    color: var(--primary);
+                }
+                
+                /* Textarea özel stili */
+                .form-control-modern[rows] {
+                    padding-left: 1rem;
+                    resize: vertical;
+                    min-height: 80px;
+                }
+                
+                .form-control-modern[rows] + .input-icon {
+                    top: 1.5rem;
+                    transform: none;
+                }
+                
+                /* Address textarea özel stili */
+                .address-textarea {
+                    min-height: 120px !important;
+                    padding: 1.25rem 1rem 1rem 3rem !important;
+                    font-size: 1rem;
+                    line-height: 1.6;
+                }
+                
+                .address-icon {
+                    top: 1.25rem !important;
+                    transform: none !important;
+                    left: 1rem;
+                }
+                
+                .address-textarea:focus + .address-icon {
+                    color: var(--primary);
+                }
+                
+                /* Select özel stili */
+                .form-control-modern[data-type="select"] {
+                    cursor: pointer;
+                }
+                
+                /* Responsive tasarım */
+                @media (max-width: 768px) {
+                    .business-form-section {
+                        padding: 1.5rem;
+                    }
+                    
+                    .section-title {
+                        font-size: 1.3rem;
+                    }
+                    
+                    .form-control-modern {
+                        padding: 0.875rem 0.875rem 0.875rem 2.5rem;
+                    }
+                }
 
                 .ppe-options {
                     animation: fadeIn 0.5s ease-in-out;
@@ -9429,74 +9651,132 @@ Mesaj:
                                         </div>
                                     </div>
 
-                                    <div class="row">
-                                        <div class="col-md-6 mb-4">
-                                            <label class="form-label fw-semibold">
-                                                <i class="fas fa-building text-primary me-2"></i>Company Name *
-                                            </label>
-                                            <input type="text" class="form-control form-control-lg" name="company_name" 
-                                                   placeholder="Enter your company name" required 
-                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
+                                    <!-- Modern Business Form Section -->
+                                    <div class="business-form-section mb-5">
+                                        <div class="section-header mb-4">
+                                            <div class="section-icon-wrapper">
+                                                <i class="fas fa-building text-primary"></i>
+                                            </div>
+                                            <h5 class="section-title mb-2">Company Information</h5>
+                                            <p class="section-subtitle text-muted">Please provide your company details to get started</p>
                                         </div>
-                                        <div class="col-md-6 mb-4">
-                                            <label class="form-label fw-semibold">
-                                                <i class="fas fa-industry text-primary me-2"></i>Industry *
-                                            </label>
-                                            <select class="form-select form-select-lg" name="sector" required
-                                                    style="border-radius: 15px; border: 2px solid #e2e8f0;">
-                                                <option value="">Select your industry</option>
-                                                <option value="construction">🏗️ Construction</option>
-                                                <option value="manufacturing">🏭 Manufacturing</option>
-                                                <option value="chemical">⚗️ Chemical</option>
-                                                <option value="food">🍕 Food & Beverage</option>
-                                                <option value="warehouse">📦 Warehouse/Logistics</option>
-                                                <option value="energy">⚡ Energy</option>
-                                                <option value="petrochemical">🛢️ Petrochemical</option>
-                                                <option value="marine">🚢 Marine & Shipyard</option>
-                                                <option value="aviation">✈️ Aviation</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-6 mb-4">
-                                            <label class="form-label fw-semibold">
-                                                <i class="fas fa-user text-primary me-2"></i>Contact Person *
-                                            </label>
-                                            <input type="text" class="form-control form-control-lg" name="contact_person" 
-                                                   placeholder="Full Name" required
-                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
-                                        </div>
-                                        <div class="col-md-6 mb-4">
-                                            <label class="form-label fw-semibold">
-                                                <i class="fas fa-envelope text-primary me-2"></i>E-mail *
-                                            </label>
-                                            <input type="email" class="form-control form-control-lg" name="email" required
-                                                   placeholder="example@company.com"
-                                                   autocomplete="email"
-                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-6 mb-4">
-                                            <label class="form-label fw-semibold">
-                                                <i class="fas fa-phone text-primary me-2"></i>Phone
-                                            </label>
-                                            <input type="tel" class="form-control form-control-lg" name="phone"
-                                                   placeholder="+1 555 123 4567"
-                                                   style="border-radius: 15px; border: 2px solid #e2e8f0;">
-                                        </div>
+                                        
+                                        <div class="row g-4">
+                                            <!-- Company Name -->
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-building text-primary me-2"></i>
+                                                        Company Name <span class="required-mark">*</span>
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <input type="text" class="form-control-modern" name="company_name" 
+                                                               placeholder="Enter your company name" required>
+                                                        <span class="input-icon">
+                                                            <i class="fas fa-building text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                    </div>
-                                    
-                                    <div class="mb-4">
-                                        <label class="form-label fw-semibold">
-                                            <i class="fas fa-map-marker-alt text-primary me-2"></i>Address
-                                        </label>
-                                        <textarea class="form-control form-control-lg" name="address" rows="3"
-                                                  placeholder="Enter your company address"
-                                                  style="border-radius: 15px; border: 2px solid #e2e8f0;"></textarea>
+                                            <!-- Contact Person -->
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-user text-primary me-2"></i>
+                                                        Contact Person <span class="required-mark">*</span>
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <input type="text" class="form-control-modern" name="contact_person" 
+                                                               placeholder="Full Name" required>
+                                                        <span class="input-icon">
+                                                            <i class="fas fa-user text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Phone -->
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-phone text-primary me-2"></i>
+                                                        Phone
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <input type="tel" class="form-control-modern" name="phone"
+                                                               placeholder="+1 555 123 4567">
+                                                        <span class="input-icon">
+                                                            <i class="fas fa-phone text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Email -->
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-envelope text-primary me-2"></i>
+                                                        E-mail <span class="required-mark">*</span>
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <input type="email" class="form-control-modern" name="email" required
+                                                               placeholder="example@company.com"
+                                                               autocomplete="email">
+                                                        <span class="input-icon">
+                                                            <i class="fas fa-envelope text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Address -->
+                                            <div class="col-md-12">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                                        Address
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <textarea class="form-control-modern address-textarea" name="address" rows="4"
+                                                                placeholder="Enter your company address (street, city, state, zip code)"></textarea>
+                                                        <span class="input-icon address-icon">
+                                                            <i class="fas fa-map-marker-alt text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Industry -->
+                                            <div class="col-md-8">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-industry text-primary me-2"></i>
+                                                        Industry <span class="required-mark">*</span>
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <select class="form-control-modern" name="sector" required>
+                                                            <option value="">Select your industry</option>
+                                                            <option value="construction">🏗️ Construction</option>
+                                                            <option value="manufacturing">🏭 Manufacturing</option>
+                                                            <option value="chemical">⚗️ Chemical</option>
+                                                            <option value="food">🍕 Food & Beverage</option>
+                                                            <option value="warehouse">📦 Warehouse/Logistics</option>
+                                                            <option value="energy">⚡ Energy</option>
+                                                            <option value="petrochemical">🛢️ Petrochemical</option>
+                                                            <option value="marine">🚢 Marine & Shipyard</option>
+                                                            <option value="aviation">✈️ Aviation</option>
+                                                        </select>
+                                                        <span class="input-icon">
+                                                            <i class="fas fa-industry text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            
+                                        </div>
                                     </div>
                                     
                                     <!-- PPE Seçimi -->
@@ -10005,9 +10285,48 @@ Mesaj:
                                         <label class="form-label fw-semibold">
                                             <i class="fas fa-lock text-primary me-2"></i>Password *
                                         </label>
-                                        <input type="password" class="form-control form-control-lg" name="password" required
+                                        <input type="password" class="form-control form-control-lg" name="password" id="register_password" required
                                                placeholder="Create a secure password"
-                                               style="border-radius: 15px; border: 2px solid #e2e8f0;">
+                                               style="border-radius: 15px; border: 2px solid #e2e8f0;"
+                                               oninput="updateRegisterPasswordStrength(this.value)">
+                                        
+                                        <!-- Şifre Gücü Göstergesi -->
+                                        <div class="password-strength mt-2">
+                                            <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                                <div class="strength-fill" id="register-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
+                                            </div>
+                                            <small class="strength-text" id="register-strength-text" style="font-size: 0.8rem; color: #6c757d;">Şifre gücü: Zayıf</small>
+                                        </div>
+                                        
+                                        <!-- Şifre Gereksinimleri -->
+                                        <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
+                                            <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
+                                                <i class="fas fa-info-circle text-primary me-2"></i>
+                                                Şifre Gereksinimleri
+                                            </h6>
+                                            <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
+                                                <div class="requirement-item" id="register-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                                    <i class="fas fa-times text-danger me-2"></i>
+                                                    <span>En az 8 karakter</span>
+                                                </div>
+                                                <div class="requirement-item" id="register-req-uppercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                                    <i class="fas fa-times text-danger me-2"></i>
+                                                    <span>En az 1 büyük harf (A-Z)</span>
+                                                </div>
+                                                <div class="requirement-item" id="register-req-lowercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                                    <i class="fas fa-times text-danger me-2"></i>
+                                                    <span>En az 1 küçük harf (a-z)</span>
+                                                </div>
+                                                <div class="requirement-item" id="register-req-number" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                                    <i class="fas fa-times text-danger me-2"></i>
+                                                    <span>En az 1 rakam (0-9)</span>
+                                                </div>
+                                                <div class="requirement-item" id="register-req-special" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                                    <i class="fas fa-times text-danger me-2"></i>
+                                                    <span>En az 1 özel karakter (!@#$%^&*)</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <div class="text-center mb-4">
@@ -10738,6 +11057,65 @@ Mesaj:
                     if (event.target == modal) {
                         closeDemoModal();
                     }
+                }
+                
+                // Şifre validation fonksiyonları
+                function validatePasswordStrength(password) {
+                    const requirements = {
+                        length: password.length >= 8,
+                        uppercase: /[A-Z]/.test(password),
+                        lowercase: /[a-z]/.test(password),
+                        number: /\d/.test(password),
+                        special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+                    };
+                    return requirements;
+                }
+                
+                function updateRegisterPasswordStrength(password) {
+                    const requirements = validatePasswordStrength(password);
+                    const strengthFill = document.getElementById('register-strength-fill');
+                    const strengthText = document.getElementById('register-strength-text');
+                    
+                    if (!strengthFill || !strengthText) return;
+                    
+                    // Gereksinimleri güncelle
+                    Object.keys(requirements).forEach(req => {
+                        const element = document.getElementById(`register-req-${req}`);
+                        if (element) {
+                            if (requirements[req]) {
+                                element.innerHTML = '<i class="fas fa-check text-success me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.add('valid');
+                            } else {
+                                element.innerHTML = '<i class="fas fa-times text-danger me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.remove('valid');
+                            }
+                        }
+                    });
+                    
+                    // Güç seviyesini hesapla
+                    const validCount = Object.values(requirements).filter(Boolean).length;
+                    let strength = 'Zayıf';
+                    let width = '25%';
+                    let color = '#dc3545';
+                    
+                    if (validCount >= 5) {
+                        strength = 'Güçlü';
+                        width = '100%';
+                        color = '#20c997';
+                    } else if (validCount >= 4) {
+                        strength = 'İyi';
+                        width = '75%';
+                        color = '#28a745';
+                    } else if (validCount >= 3) {
+                        strength = 'Orta';
+                        width = '50%';
+                        color = '#ffc107';
+                    }
+                    
+                    // Güç göstergesini güncelle
+                    strengthFill.style.width = width;
+                    strengthFill.style.background = color;
+                    strengthText.textContent = `Şifre gücü: ${strength}`;
                 }
             </script>
         </body>
@@ -12511,7 +12889,46 @@ Mesaj:
                                 <i class="fas fa-lock text-warning me-2"></i>Şifre
                             </label>
                             <input type="password" class="form-control form-control-lg" id="demo_password" name="password" 
-                                   placeholder="Demo şifrenizi girin" required>
+                                   placeholder="Demo şifrenizi girin" required
+                                   oninput="updateDemoPasswordStrength(this.value)">
+                            
+                            <!-- Şifre Gücü Göstergesi -->
+                            <div class="password-strength mt-2">
+                                <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                    <div class="strength-fill" id="demo-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
+                                </div>
+                                <small class="strength-text" id="demo-strength-text" style="font-size: 0.8rem; color: #6c757d;">Şifre gücü: Zayıf</small>
+                            </div>
+                            
+                            <!-- Şifre Gereksinimleri -->
+                            <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
+                                <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
+                                    <i class="fas fa-info-circle text-warning me-2"></i>
+                                    Şifre Gereksinimleri
+                                </h6>
+                                <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
+                                    <div class="requirement-item" id="demo-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 8 karakter</span>
+                                    </div>
+                                    <div class="requirement-item" id="demo-req-uppercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 büyük harf (A-Z)</span>
+                                    </div>
+                                    <div class="requirement-item" id="demo-req-lowercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 küçük harf (a-z)</span>
+                                    </div>
+                                    <div class="requirement-item" id="demo-req-number" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 rakam (0-9)</span>
+                                    </div>
+                                    <div class="requirement-item" id="demo-req-special" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
+                                        <i class="fas fa-times text-danger me-2"></i>
+                                        <span>En az 1 özel karakter (!@#$%^&*)</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="d-grid mb-4">
@@ -13148,6 +13565,987 @@ Mesaj:
                 .settings-section {
                     display: none;
                 }
+                
+                /* Modern Subscription Card Styles */
+                .subscription-card-modern {
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+                    overflow: hidden;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .subscription-card-modern:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+                }
+                
+                .subscription-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 2rem;
+                    text-align: center;
+                    position: relative;
+                }
+                
+                .subscription-header::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+                    opacity: 0.3;
+                }
+                
+                .subscription-icon {
+                    position: relative;
+                    z-index: 1;
+                    width: 80px;
+                    height: 80px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 1rem;
+                    font-size: 2rem;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                }
+                
+                .subscription-title {
+                    position: relative;
+                    z-index: 1;
+                }
+                
+                .subscription-title h4 {
+                    font-weight: 700;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .subscription-title p {
+                    opacity: 0.9;
+                    font-size: 1rem;
+                }
+                
+                .subscription-content {
+                    padding: 2rem;
+                }
+                
+                .info-section {
+                    margin-bottom: 2rem;
+                }
+                
+                .section-title {
+                    color: #2c3e50;
+                    font-weight: 600;
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 0.5rem;
+                    border-bottom: 2px solid #e9ecef;
+                }
+                
+                .info-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 1rem;
+                }
+                
+                .info-item {
+                    display: flex;
+                    align-items: center;
+                    padding: 1rem;
+                    background: #f8f9fa;
+                    border-radius: 12px;
+                    transition: all 0.3s ease;
+                    border: 1px solid #e9ecef;
+                }
+                
+                .info-item:hover {
+                    background: white;
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+                    transform: translateY(-2px);
+                }
+                
+                .info-icon {
+                    width: 50px;
+                    height: 50px;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 1rem;
+                    color: white;
+                    font-size: 1.2rem;
+                    flex-shrink: 0;
+                }
+                
+                .info-content {
+                    flex: 1;
+                }
+                
+                .info-content label {
+                    display: block;
+                    font-size: 0.875rem;
+                    color: #6c757d;
+                    margin-bottom: 0.25rem;
+                    font-weight: 500;
+                }
+                
+                .info-value {
+                    display: block;
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .usage-card {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    border-radius: 16px;
+                    padding: 1.5rem;
+                    margin-bottom: 1.5rem;
+                    border: 1px solid #dee2e6;
+                }
+                
+                .usage-header {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 1rem;
+                }
+                
+                .usage-icon {
+                    width: 50px;
+                    height: 50px;
+                    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 1rem;
+                    color: white;
+                    font-size: 1.2rem;
+                }
+                
+                .usage-info h6 {
+                    margin: 0;
+                    color: #2c3e50;
+                    font-weight: 600;
+                }
+                
+                .usage-text {
+                    color: #6c757d;
+                    font-size: 0.9rem;
+                }
+                
+                .usage-progress {
+                    margin-top: 1rem;
+                }
+                
+                .usage-progress .progress {
+                    height: 12px;
+                    border-radius: 6px;
+                    background: #e9ecef;
+                    overflow: hidden;
+                }
+                
+                .usage-progress .progress-bar {
+                    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                    border-radius: 6px;
+                    position: relative;
+                    transition: all 0.3s ease;
+                }
+                
+                .progress-text {
+                    position: absolute;
+                    right: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: white;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                }
+                
+                .features-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 1rem;
+                }
+                
+                .feature-item {
+                    display: flex;
+                    align-items: center;
+                    padding: 1rem;
+                    background: white;
+                    border-radius: 12px;
+                    border: 1px solid #e9ecef;
+                    transition: all 0.3s ease;
+                }
+                
+                .feature-item:hover {
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+                    transform: translateY(-2px);
+                }
+                
+                .feature-icon {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 0.75rem;
+                    color: white;
+                    font-size: 1rem;
+                    flex-shrink: 0;
+                }
+                
+                .feature-content {
+                    flex: 1;
+                }
+                
+                .feature-content strong {
+                    display: block;
+                    color: #2c3e50;
+                    font-size: 0.9rem;
+                    margin-bottom: 0.25rem;
+                }
+                
+                .feature-content small {
+                    color: #6c757d;
+                    font-size: 0.8rem;
+                }
+                
+                .subscription-actions {
+                    background: #f8f9fa;
+                    padding: 2rem;
+                    text-align: center;
+                    border-top: 1px solid #e9ecef;
+                }
+                
+                .subscription-actions .btn {
+                    border-radius: 12px;
+                    font-weight: 600;
+                    padding: 0.75rem 1.5rem;
+                    transition: all 0.3s ease;
+                }
+                
+                .subscription-actions .btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+                
+                /* Responsive Design */
+                @media (max-width: 768px) {
+                    .info-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .features-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .subscription-header {
+                        padding: 1.5rem;
+                    }
+                    
+                    .subscription-content {
+                        padding: 1.5rem;
+                    }
+                    
+                    .subscription-actions {
+                        padding: 1.5rem;
+                    }
+                    
+                    .subscription-actions .btn {
+                        display: block;
+                        width: 100%;
+                        margin-bottom: 1rem;
+                    }
+                    
+                    .subscription-actions .btn:last-child {
+                        margin-bottom: 0;
+                    }
+                }
+                
+                /* Modern Profile Card Styles */
+                .profile-card-modern {
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+                    overflow: hidden;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-card-modern:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+                }
+                
+                .profile-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 2rem;
+                    text-align: center;
+                    position: relative;
+                }
+                
+                .profile-header::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+                    opacity: 0.3;
+                }
+                
+                .profile-icon {
+                    position: relative;
+                    z-index: 1;
+                    width: 80px;
+                    height: 80px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 1rem;
+                    font-size: 2rem;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                }
+                
+                .profile-title {
+                    position: relative;
+                    z-index: 1;
+                }
+                
+                .profile-title h4 {
+                    font-weight: 700;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .profile-title p {
+                    opacity: 0.9;
+                    font-size: 1rem;
+                }
+                
+                .profile-content {
+                    padding: 2rem;
+                }
+                
+                .logo-section {
+                    text-align: center;
+                }
+                
+                .logo-upload-modern {
+                    width: 200px;
+                    height: 200px;
+                    border: 3px dashed #dee2e6;
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                .logo-upload-modern:hover {
+                    border-color: #667eea;
+                    background: #f8f9fa;
+                    transform: scale(1.02);
+                }
+                
+                .logo-preview {
+                    width: 100%;
+                    height: 100%;
+                    position: relative;
+                }
+                
+                .logo-preview img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    border-radius: 17px;
+                }
+                
+                .logo-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(102, 126, 234, 0.9);
+                    color: white;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0;
+                    transition: all 0.3s ease;
+                    border-radius: 17px;
+                }
+                
+                .logo-upload-modern:hover .logo-overlay {
+                    opacity: 1;
+                }
+                
+                .logo-overlay i {
+                    font-size: 2rem;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .logo-overlay span {
+                    font-weight: 600;
+                    font-size: 0.9rem;
+                }
+                
+                .logo-placeholder {
+                    color: #6c757d;
+                }
+                
+                .logo-icon {
+                    width: 60px;
+                    height: 60px;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto;
+                    font-size: 1.5rem;
+                }
+                
+                .logo-info {
+                    margin-top: 1rem;
+                }
+                
+                .logo-info .info-item {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 0.5rem;
+                    font-size: 0.8rem;
+                    color: #6c757d;
+                }
+                
+                .logo-info .info-item i {
+                    margin-right: 0.5rem;
+                    width: 16px;
+                }
+                
+                .company-info {
+                    margin-top: 1rem;
+                }
+                
+                .section-title {
+                    color: #2c3e50;
+                    font-weight: 600;
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 0.5rem;
+                    border-bottom: 2px solid #e9ecef;
+                }
+                
+                .form-group-modern {
+                    margin-bottom: 1.5rem;
+                }
+                
+                .form-label-modern {
+                    display: block;
+                    font-weight: 600;
+                    color: #2c3e50;
+                    margin-bottom: 0.5rem;
+                    font-size: 0.9rem;
+                }
+                
+                .input-group-modern {
+                    position: relative;
+                }
+                
+                .form-control-modern,
+                .form-select-modern {
+                    width: 100%;
+                    padding: 0.75rem 1rem 0.75rem 3rem;
+                    border: 2px solid #e9ecef;
+                    border-radius: 12px;
+                    font-size: 0.95rem;
+                    transition: all 0.3s ease;
+                    background: white;
+                }
+                
+                .form-control-modern:focus,
+                .form-select-modern:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+                }
+                
+                .form-control-modern:read-only {
+                    background: #f8f9fa;
+                    color: #6c757d;
+                }
+                
+                .input-icon {
+                    position: absolute;
+                    left: 1rem;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #6c757d;
+                    font-size: 1rem;
+                }
+                
+                .form-text {
+                    display: block;
+                    margin-top: 0.25rem;
+                    font-size: 0.8rem;
+                    color: #6c757d;
+                }
+                
+                .profile-actions {
+                    background: #f8f9fa;
+                    padding: 2rem;
+                    text-align: center;
+                    border-top: 1px solid #e9ecef;
+                    margin-top: 2rem;
+                }
+                
+                .profile-actions .btn {
+                    border-radius: 12px;
+                    font-weight: 600;
+                    padding: 0.75rem 1.5rem;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-actions .btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+                
+                /* Responsive Profile Design */
+                @media (max-width: 768px) {
+                    .profile-header {
+                        padding: 1.5rem;
+                    }
+                    
+                    .profile-content {
+                        padding: 1.5rem;
+                    }
+                    
+                    .logo-upload-modern {
+                        width: 150px;
+                        height: 150px;
+                    }
+                    
+                    .profile-actions {
+                        padding: 1.5rem;
+                    }
+                    
+                    .profile-actions .btn {
+                        display: block;
+                        width: 100%;
+                        margin-bottom: 1rem;
+                    }
+                    
+                    .profile-actions .btn:last-child {
+                        margin-bottom: 0;
+                    }
+                }
+                
+                /* Modern Security Card Styles */
+                .security-card-modern {
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+                    overflow: hidden;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .security-card-modern:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+                }
+                
+                .security-header {
+                    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                    color: white;
+                    padding: 2rem;
+                    text-align: center;
+                    position: relative;
+                }
+                
+                .security-header::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="security-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23security-grid)"/></svg>');
+                    opacity: 0.3;
+                }
+                
+                .security-icon {
+                    position: relative;
+                    z-index: 1;
+                    width: 80px;
+                    height: 80px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 1rem;
+                    font-size: 2rem;
+                    color: white;
+                    backdrop-filter: blur(10px);
+                }
+                
+                .security-title {
+                    position: relative;
+                    z-index: 1;
+                }
+                
+                .security-title h4 {
+                    font-weight: 700;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .security-title p {
+                    opacity: 0.9;
+                    font-size: 1rem;
+                }
+                
+                .security-content {
+                    padding: 2rem;
+                }
+                
+                .security-section {
+                    margin-bottom: 3rem;
+                    padding: 2rem;
+                    background: #f8f9fa;
+                    border-radius: 16px;
+                    border: 1px solid #e9ecef;
+                }
+                
+                .security-section:last-child {
+                    margin-bottom: 0;
+                }
+                
+                .section-header {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 2rem;
+                }
+                
+                .section-icon {
+                    width: 60px;
+                    height: 60px;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 1.5rem;
+                    font-size: 1.5rem;
+                    flex-shrink: 0;
+                }
+                
+                .section-icon.danger {
+                    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+                }
+                
+                .section-info {
+                    flex: 1;
+                }
+                
+                .section-title {
+                    color: #2c3e50;
+                    font-weight: 600;
+                    margin-bottom: 0.5rem;
+                    font-size: 1.1rem;
+                }
+                
+                .section-description {
+                    color: #6c757d;
+                    margin: 0;
+                    font-size: 0.9rem;
+                }
+                
+                .password-form-container {
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 12px;
+                    border: 1px solid #e9ecef;
+                }
+                
+                .password-strength {
+                    margin-top: 1rem;
+                }
+                
+                .strength-bar {
+                    width: 100%;
+                    height: 8px;
+                    background: #e9ecef;
+                    border-radius: 4px;
+                    overflow: hidden;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .strength-fill {
+                    height: 100%;
+                    background: #dc3545;
+                    width: 0%;
+                    transition: all 0.3s ease;
+                    border-radius: 4px;
+                }
+                
+                .strength-fill.weak { width: 25%; background: #dc3545; }
+                .strength-fill.fair { width: 50%; background: #ffc107; }
+                .strength-fill.good { width: 75%; background: #28a745; }
+                .strength-fill.strong { width: 100%; background: #20c997; }
+                
+                .strength-text {
+                    font-size: 0.8rem;
+                    color: #6c757d;
+                }
+                
+                .password-requirements {
+                    background: #f8f9fa;
+                    padding: 1.5rem;
+                    border-radius: 12px;
+                    border: 1px solid #e9ecef;
+                }
+                
+                .requirements-title {
+                    color: #2c3e50;
+                    font-weight: 600;
+                    margin-bottom: 1rem;
+                    font-size: 0.9rem;
+                }
+                
+                .requirements-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 0.75rem;
+                }
+                
+                .requirement-item {
+                    display: flex;
+                    align-items: center;
+                    font-size: 0.8rem;
+                    color: #6c757d;
+                }
+                
+                .requirement-item i {
+                    margin-right: 0.5rem;
+                    width: 16px;
+                }
+                
+                .requirement-item.valid {
+                    color: #28a745;
+                }
+                
+                .requirement-item.valid i {
+                    color: #28a745;
+                }
+                
+                .form-actions {
+                    text-align: center;
+                    padding-top: 1rem;
+                    border-top: 1px solid #e9ecef;
+                }
+                
+                .form-actions .btn {
+                    border-radius: 12px;
+                    font-weight: 600;
+                    padding: 0.75rem 1.5rem;
+                    transition: all 0.3s ease;
+                }
+                
+                .form-actions .btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+                
+                .danger-section {
+                    background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+                    border: 2px solid #feb2b2;
+                }
+                
+                .danger-zone-container {
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 12px;
+                    border: 1px solid #feb2b2;
+                }
+                
+                .danger-warning {
+                    display: flex;
+                    align-items: center;
+                    background: #fed7d7;
+                    padding: 1.5rem;
+                    border-radius: 12px;
+                    margin-bottom: 2rem;
+                    border: 1px solid #feb2b2;
+                }
+                
+                .warning-icon {
+                    width: 50px;
+                    height: 50px;
+                    background: #dc3545;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 1rem;
+                    color: white;
+                    font-size: 1.5rem;
+                    flex-shrink: 0;
+                }
+                
+                .warning-content {
+                    flex: 1;
+                }
+                
+                .warning-title {
+                    color: #dc3545;
+                    font-weight: 700;
+                    margin-bottom: 0.5rem;
+                    font-size: 1rem;
+                }
+                
+                .warning-text {
+                    color: #721c24;
+                    margin: 0;
+                    font-size: 0.9rem;
+                }
+                
+                .form-check-modern {
+                    display: flex;
+                    align-items: flex-start;
+                    padding: 1rem;
+                    background: #fff5f5;
+                    border-radius: 12px;
+                    border: 1px solid #feb2b2;
+                }
+                
+                .form-check-input-modern {
+                    margin-right: 1rem;
+                    margin-top: 0.25rem;
+                    width: 1.2rem;
+                    height: 1.2rem;
+                }
+                
+                .form-check-label-modern {
+                    color: #721c24;
+                    font-weight: 600;
+                    font-size: 0.9rem;
+                    line-height: 1.4;
+                }
+                
+                .tips-section {
+                    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+                    border: 2px solid #b3d9ff;
+                }
+                
+                .tips-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 1.5rem;
+                    margin-top: 1.5rem;
+                }
+                
+                .tip-card {
+                    background: white;
+                    padding: 1.5rem;
+                    border-radius: 12px;
+                    text-align: center;
+                    border: 1px solid #b3d9ff;
+                    transition: all 0.3s ease;
+                }
+                
+                .tip-card:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+                }
+                
+                .tip-icon {
+                    width: 60px;
+                    height: 60px;
+                    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 1rem;
+                    color: white;
+                    font-size: 1.5rem;
+                }
+                
+                .tip-card h6 {
+                    color: #2c3e50;
+                    font-weight: 600;
+                    margin-bottom: 0.75rem;
+                    font-size: 1rem;
+                }
+                
+                .tip-card p {
+                    color: #6c757d;
+                    margin: 0;
+                    font-size: 0.85rem;
+                    line-height: 1.4;
+                }
+                
+                /* Responsive Security Design */
+                @media (max-width: 768px) {
+                    .security-header {
+                        padding: 1.5rem;
+                    }
+                    
+                    .security-content {
+                        padding: 1.5rem;
+                    }
+                    
+                    .security-section {
+                        padding: 1.5rem;
+                        margin-bottom: 2rem;
+                    }
+                    
+                    .section-header {
+                        flex-direction: column;
+                        text-align: center;
+                    }
+                    
+                    .section-icon {
+                        margin-right: 0;
+                        margin-bottom: 1rem;
+                    }
+                    
+                    .requirements-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .tips-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .form-actions .btn {
+                        display: block;
+                        width: 100%;
+                        margin-bottom: 1rem;
+                    }
+                    
+                    .form-actions .btn:last-child {
+                        margin-bottom: 0;
+                    }
+                }
             </style>
         </head>
         <body>
@@ -13252,83 +14650,203 @@ Mesaj:
                     <div class="col-md-9">
                         <!-- Şirket Profili -->
                         <div id="profile-section" class="settings-section" style="display: block;">
-                            <div class="form-section">
-                                <h5><i class="fas fa-building"></i> Şirket Profili</h5>
+                            <div class="profile-card-modern">
+                                <div class="profile-header">
+                                    <div class="profile-icon">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <div class="profile-title">
+                                        <h4 class="mb-1">Şirket Profili</h4>
+                                        <p class="text-white mb-0">Şirket bilgilerinizi güncelleyin ve yönetin</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="profile-content">
                                 <form id="profileForm">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <!-- Logo Upload -->
-                                            <div class="text-center mb-4">
-                                                <div class="logo-upload" onclick="document.getElementById('logoInput').click()">
+                                        <div class="row g-4">
+                                            <!-- Logo Upload Section -->
+                                            <div class="col-lg-4">
+                                                <div class="logo-section">
+                                                    <div class="logo-upload-modern" onclick="document.getElementById('logoInput').click()">
                                                     {% if user_data.profile_image %}
-                                                        <img src="{{ user_data.profile_image }}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;">
+                                                            <div class="logo-preview">
+                                                                <img src="{{ user_data.profile_image }}" alt="Şirket Logo">
+                                                                <div class="logo-overlay">
+                                                                    <i class="fas fa-camera"></i>
+                                                                    <span>Logo Değiştir</span>
+                                                                </div>
+                                                            </div>
                                                     {% else %}
-                                                    <div>
-                                                        <i class="fas fa-camera fa-2x text-muted mb-2"></i>
-                                                        <p class="text-muted">Logo Yükle</p>
+                                                            <div class="logo-placeholder">
+                                                                <div class="logo-icon">
+                                                                    <i class="fas fa-camera"></i>
+                                                                </div>
+                                                                <h6 class="mt-3">Logo Yükle</h6>
+                                                                <p class="text-muted small">PNG, JPG, GIF (Max 5MB)</p>
                                                     </div>
                                                     {% endif %}
                                                 </div>
                                                 <input type="file" id="logoInput" accept="image/*" style="display: none;">
+                                                    
+                                                    <div class="logo-info mt-3">
+                                                        <div class="info-item">
+                                                            <i class="fas fa-info-circle text-primary"></i>
+                                                            <span>Önerilen boyut: 300x300px</span>
                                             </div>
+                                                        <div class="info-item">
+                                                            <i class="fas fa-shield-alt text-success"></i>
+                                                            <span>Güvenli yükleme</span>
                                         </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label class="form-label">Şirket ID</label>
-                                                <input type="text" class="form-control" value="{{ company_id }}" readonly>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Şirket Adı *</label>
-                                                <input type="text" class="form-control" name="company_name" value="{{ user_data.company_name }}">
+                                            
+                                            <!-- Company Information -->
+                                            <div class="col-lg-8">
+                                                <div class="company-info">
+                                                    <h6 class="section-title">
+                                                        <i class="fas fa-info-circle text-primary me-2"></i>
+                                                        Temel Bilgiler
+                                                    </h6>
+                                                    
+                                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-fingerprint text-info me-2"></i>
+                                                                    Şirket ID
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <input type="text" class="form-control-modern" value="{{ company_id }}" readonly>
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-lock text-muted"></i>
+                                                                    </span>
+                                            </div>
+                                                                <small class="form-text">Bu alan değiştirilemez</small>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div class="col-md-6">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-building text-primary me-2"></i>
+                                                                    Şirket Adı *
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <input type="text" class="form-control-modern" name="company_name" value="{{ user_data.company_name }}" placeholder="Şirket adınızı girin">
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-building text-primary"></i>
+                                                                    </span>
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">İletişim Kişisi *</label>
-                                            <input type="text" class="form-control" name="contact_person" value="{{ user_data.contact_person }}">
+                                                        <div class="col-md-6">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-user text-success me-2"></i>
+                                                                    İletişim Kişisi *
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <input type="text" class="form-control-modern" name="contact_person" value="{{ user_data.contact_person }}" placeholder="İletişim kişisini girin">
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-user text-success"></i>
+                                                                    </span>
                                         </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Email *</label>
-                                            <input type="text" class="form-control" name="email" value="{{ user_data.email }}" 
-                                                   placeholder="ornek@email.com (Türkçe karakterler desteklenir)"
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div class="col-md-6">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-envelope text-warning me-2"></i>
+                                                                    Email *
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <input type="text" class="form-control-modern" name="email" value="{{ user_data.email }}" 
+                                                                           placeholder="ornek@email.com"
                                                    oninput="validateEmail(this)"
                                                    onblur="validateEmail(this)"
                                                    autocomplete="email">
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-envelope text-warning"></i>
+                                                                    </span>
+                                                                </div>
+                                                                <small class="form-text">Türkçe karakterler desteklenir</small>
                                         </div>
                                     </div>
                                     
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Telefon</label>
-                                            <input type="tel" class="form-control" name="phone" value="{{ user_data.phone }}">
+                                                        <div class="col-md-6">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-phone text-info me-2"></i>
+                                                                    Telefon
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <input type="tel" class="form-control-modern" name="phone" value="{{ user_data.phone }}" placeholder="+90 5XX XXX XX XX">
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-phone text-info"></i>
+                                                                    </span>
                                         </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Sektör</label>
-                                            <select class="form-select" name="sector">
-                                                <option value="construction" {% if user_data.sector == 'construction' %}selected{% endif %}>İnşaat</option>
-                                                <option value="manufacturing" {% if user_data.sector == 'manufacturing' %}selected{% endif %}>İmalat</option>
-                                                <option value="chemical" {% if user_data.sector == 'chemical' %}selected{% endif %}>Kimya</option>
-                                                <option value="food" {% if user_data.sector == 'food' %}selected{% endif %}>Gıda</option>
-                                                <option value="warehouse" {% if user_data.sector == 'warehouse' %}selected{% endif %}>Depo/Lojistik</option>
-                                                <option value="energy" {% if user_data.sector == 'energy' %}selected{% endif %}>Enerji</option>
-                                                <option value="petrochemical" {% if user_data.sector == 'petrochemical' %}selected{% endif %}>Petrokimya</option>
-                                                <option value="marine" {% if user_data.sector == 'marine' %}selected{% endif %}>Denizcilik & Tersane</option>
-                                                <option value="aviation" {% if user_data.sector == 'aviation' %}selected{% endif %}>Havacılık</option>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div class="col-md-6">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-industry text-danger me-2"></i>
+                                                                    Sektör
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <select class="form-select-modern" name="sector">
+                                                                        <option value="construction" {% if user_data.sector == 'construction' %}selected{% endif %}>🏗️ İnşaat</option>
+                                                                        <option value="manufacturing" {% if user_data.sector == 'manufacturing' %}selected{% endif %}>🏭 İmalat</option>
+                                                                        <option value="chemical" {% if user_data.sector == 'chemical' %}selected{% endif %}>🧪 Kimya</option>
+                                                                        <option value="food" {% if user_data.sector == 'food' %}selected{% endif %}>🍽️ Gıda</option>
+                                                                        <option value="warehouse" {% if user_data.sector == 'warehouse' %}selected{% endif %}>📦 Depo/Lojistik</option>
+                                                                        <option value="energy" {% if user_data.sector == 'energy' %}selected{% endif %}>⚡ Enerji</option>
+                                                                        <option value="petrochemical" {% if user_data.sector == 'petrochemical' %}selected{% endif %}>🛢️ Petrokimya</option>
+                                                                        <option value="marine" {% if user_data.sector == 'marine' %}selected{% endif %}>🚢 Denizcilik & Tersane</option>
+                                                                        <option value="aviation" {% if user_data.sector == 'aviation' %}selected{% endif %}>✈️ Havacılık</option>
                                             </select>
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-industry text-danger"></i>
+                                                                    </span>
+                                                                </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="mb-3">
-                                        <label class="form-label">Adres</label>
-                                        <textarea class="form-control" name="address" rows="3">{{ user_data.address }}</textarea>
+                                                        <div class="col-12">
+                                                            <div class="form-group-modern">
+                                                                <label class="form-label-modern">
+                                                                    <i class="fas fa-map-marker-alt text-danger me-2"></i>
+                                                                    Adres
+                                                                </label>
+                                                                <div class="input-group-modern">
+                                                                    <textarea class="form-control-modern" name="address" rows="3" placeholder="Şirket adresini girin">{{ user_data.address }}</textarea>
+                                                                    <span class="input-icon">
+                                                                        <i class="fas fa-map-marker-alt text-danger"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                     </div>
                                     
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save"></i> Değişiklikleri Kaydet
+                                        <div class="profile-actions">
+                                            <button type="submit" class="btn btn-primary btn-lg">
+                                                <i class="fas fa-save me-2"></i>
+                                                Değişiklikleri Kaydet
                                     </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-lg ms-3" onclick="resetForm()">
+                                                <i class="fas fa-undo me-2"></i>
+                                                Sıfırla
+                                            </button>
+                                        </div>
                                 </form>
+                                </div>
                             </div>
                         </div>
                         
@@ -13486,60 +15004,177 @@ Mesaj:
                         
                         <!-- Abonelik -->
                         <div id="subscription-section" class="settings-section" style="display: none;">
-                            <div class="subscription-card">
-                                <h5><i class="fas fa-credit-card"></i> Abonelik Bilgileri</h5>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="plan-feature">
-                                            <i class="fas fa-check"></i>
-                                            <strong>Plan:</strong> <span id="subscription-type">BASIC</span>
+                            <div class="subscription-card-modern">
+                                <div class="subscription-header">
+                                    <div class="subscription-icon">
+                                        <i class="fas fa-crown"></i>
                                         </div>
-                                        <div class="plan-feature">
-                                            <i class="fas fa-check"></i>
-                                            <strong>Fatura Döngüsü:</strong> <span id="billing-cycle">AYLIK</span>
+                                    <div class="subscription-title">
+                                        <h4 class="mb-1">Abonelik Bilgileri</h4>
+                                        <p class="text-white mb-0">Mevcut planınız ve kullanım detayları</p>
                                         </div>
-                                        <div class="plan-feature">
-                                            <i class="fas fa-check"></i>
-                                            <strong>Mevcut Fiyat:</strong> <span id="current-price">$99/ay</span>
                                         </div>
-                                        <div class="plan-feature">
-                                            <i class="fas fa-check"></i>
-                                            <strong>Durum:</strong> <span id="subscription-status">Aktif</span>
+                                
+                                <div class="subscription-content">
+                                    <div class="row g-4">
+                                        <!-- Plan Detayları -->
+                                        <div class="col-lg-6">
+                                            <div class="info-section">
+                                                <h6 class="section-title">
+                                                    <i class="fas fa-info-circle text-primary me-2"></i>
+                                                    Plan Detayları
+                                                </h6>
+                                                <div class="info-grid">
+                                                    <div class="info-item">
+                                                        <div class="info-icon bg-primary">
+                                                            <i class="fas fa-crown"></i>
                                         </div>
-                                        <div class="plan-feature">
-                                            <i class="fas fa-check"></i>
-                                            <strong>Bitiş Tarihi:</strong> <span id="subscription-end">--</span>
+                                                        <div class="info-content">
+                                                            <label>Plan Türü</label>
+                                                            <span id="subscription-type" class="info-value">BASIC</span>
                                         </div>
-                                        <div class="plan-feature">
-                                            <i class="fas fa-check"></i>
-                                            <strong>Kalan Gün:</strong> <span id="days-remaining">--</span>
                                         </div>
+                                                    
+                                                    <div class="info-item">
+                                                        <div class="info-icon bg-info">
+                                                            <i class="fas fa-calendar-alt"></i>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="plan-feature">
+                                                        <div class="info-content">
+                                                            <label>Fatura Döngüsü</label>
+                                                            <span id="billing-cycle" class="info-value">AYLIK</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="info-item">
+                                                        <div class="info-icon bg-success">
+                                                            <i class="fas fa-dollar-sign"></i>
+                                                        </div>
+                                                        <div class="info-content">
+                                                            <label>Mevcut Fiyat</label>
+                                                            <span id="current-price" class="info-value">$99/ay</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="info-item">
+                                                        <div class="info-icon bg-warning">
+                                                            <i class="fas fa-clock"></i>
+                                                        </div>
+                                                        <div class="info-content">
+                                                            <label>Bitiş Tarihi</label>
+                                                            <span id="subscription-end" class="info-value">--</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="info-item">
+                                                        <div class="info-icon bg-danger">
+                                                            <i class="fas fa-hourglass-half"></i>
+                                                        </div>
+                                                        <div class="info-content">
+                                                            <label>Kalan Gün</label>
+                                                            <span id="days-remaining" class="info-value">--</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="info-item">
+                                                        <div class="info-icon bg-secondary">
+                                                            <i class="fas fa-toggle-on"></i>
+                                                        </div>
+                                                        <div class="info-content">
+                                                            <label>Durum</label>
+                                                            <span id="subscription-status" class="info-value">Aktif</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Kullanım ve Özellikler -->
+                                        <div class="col-lg-6">
+                                            <div class="info-section">
+                                                <h6 class="section-title">
+                                                    <i class="fas fa-chart-line text-success me-2"></i>
+                                                    Kullanım ve Özellikler
+                                                </h6>
+                                                
+                                                <!-- Kamera Kullanımı -->
+                                                <div class="usage-card">
+                                                    <div class="usage-header">
+                                                        <div class="usage-icon">
                                             <i class="fas fa-video"></i>
-                                            <strong>Kamera Kullanımı:</strong> <span id="camera-usage">--/--</span>
                                         </div>
-                                        <div class="progress mb-3">
-                                            <div class="progress-bar bg-success" id="usage-progress" role="progressbar" style="width: 0%"></div>
+                                                        <div class="usage-info">
+                                                            <h6 class="mb-1">Kamera Kullanımı</h6>
+                                                            <span id="camera-usage" class="usage-text">--/--</span>
                                         </div>
-                                        <div class="plan-feature">
+                                                    </div>
+                                                    <div class="usage-progress">
+                                                        <div class="progress">
+                                                            <div class="progress-bar" id="usage-progress" role="progressbar" style="width: 0%">
+                                                                <span class="progress-text">0%</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Özellikler -->
+                                                <div class="features-grid">
+                                                    <div class="feature-item">
+                                                        <div class="feature-icon bg-success">
                                             <i class="fas fa-shield-alt"></i>
-                                            <strong>Güvenlik:</strong> SSL Şifreleme
                                         </div>
-                                        <div class="plan-feature">
+                                                        <div class="feature-content">
+                                                            <strong>Güvenlik</strong>
+                                                            <small>SSL Şifreleme</small>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="feature-item">
+                                                        <div class="feature-icon bg-info">
                                             <i class="fas fa-headset"></i>
-                                            <strong>Destek:</strong> 7/24 Teknik Destek
+                                        </div>
+                                                        <div class="feature-content">
+                                                            <strong>Destek</strong>
+                                                            <small>7/24 Teknik Destek</small>
+                                    </div>
+                                </div>
+                                
+                                                    <div class="feature-item">
+                                                        <div class="feature-icon bg-warning">
+                                                            <i class="fas fa-sync-alt"></i>
+                                                        </div>
+                                                        <div class="feature-content">
+                                                            <strong>Güncellemeler</strong>
+                                                            <small>Otomatik Güncelleme</small>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="feature-item">
+                                                        <div class="feature-icon bg-primary">
+                                                            <i class="fas fa-database"></i>
+                                                        </div>
+                                                        <div class="feature-content">
+                                                            <strong>Yedekleme</strong>
+                                                            <small>Günlük Yedekleme</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <div class="mt-4">
-                                    <button class="btn btn-light" onclick="openUpgradeModal()">
-                                        <i class="fas fa-upgrade"></i> Planı Yükselt
+                                <div class="subscription-actions">
+                                    <button class="btn btn-primary btn-lg" onclick="openUpgradeModal()">
+                                        <i class="fas fa-arrow-up me-2"></i>
+                                        Planı Yükselt
                                     </button>
-                                    <button class="btn btn-outline-light ms-2">
-                                        <i class="fas fa-file-invoice"></i> Fatura Geçmişi
+                                    <button class="btn btn-outline-primary btn-lg ms-3">
+                                        <i class="fas fa-file-invoice me-2"></i>
+                                        Fatura Geçmişi
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-lg ms-3">
+                                        <i class="fas fa-download me-2"></i>
+                                        Rapor İndir
                                     </button>
                                 </div>
                             </div>
@@ -13547,49 +15182,235 @@ Mesaj:
                         
                         <!-- Güvenlik -->
                         <div id="security-section" class="settings-section" style="display: none;">
-                            <div class="form-section">
-                                <h5><i class="fas fa-shield-alt"></i> Güvenlik Ayarları</h5>
-                                
-                                <div class="mb-4">
-                                    <h6>Şifre Değiştir</h6>
-                                    <form id="passwordForm">
-                                        <div class="mb-3">
-                                            <label class="form-label">Mevcut Şifre</label>
-                                            <input type="password" class="form-control" name="current_password" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Yeni Şifre</label>
-                                            <input type="password" class="form-control" name="new_password" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Yeni Şifre (Tekrar)</label>
-                                            <input type="password" class="form-control" name="confirm_password" required>
-                                        </div>
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-key"></i> Şifre Değiştir
-                                        </button>
-                                    </form>
+                            <div class="security-card-modern">
+                                <div class="security-header">
+                                    <div class="security-icon">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </div>
+                                    <div class="security-title">
+                                        <h4 class="mb-1">Güvenlik Ayarları</h4>
+                                        <p class="text-white mb-0">Hesap güvenliğinizi yönetin ve koruyun</p>
+                                    </div>
                                 </div>
                                 
-                                <div class="danger-zone">
-                                    <h6><i class="fas fa-exclamation-triangle"></i> Tehlikeli Bölge</h6>
-                                    <p>Hesabınızı kalıcı olarak silmek istiyorsanız aşağıdaki adımları takip edin.</p>
+                                <div class="security-content">
+                                    <!-- Şifre Değiştirme Bölümü -->
+                                    <div class="security-section">
+                                        <div class="section-header">
+                                            <div class="section-icon">
+                                                <i class="fas fa-key text-primary"></i>
+                                            </div>
+                                            <div class="section-info">
+                                                <h6 class="section-title">Şifre Değiştir</h6>
+                                                <p class="section-description">Hesap güvenliğiniz için güçlü bir şifre belirleyin</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="password-form-container">
+                                    <form id="passwordForm">
+                                                <div class="row g-3">
+                                                    <div class="col-md-12">
+                                                        <div class="form-group-modern">
+                                                            <label class="form-label-modern">
+                                                                <i class="fas fa-lock text-warning me-2"></i>
+                                                                Mevcut Şifre
+                                                            </label>
+                                                            <div class="input-group-modern">
+                                                                <input type="password" class="form-control-modern" name="current_password" required placeholder="Mevcut şifrenizi girin">
+                                                                <span class="input-icon">
+                                                                    <i class="fas fa-lock text-warning"></i>
+                                                                </span>
+                                        </div>
+                                        </div>
+                                        </div>
+                                                    
+                                                    <div class="col-md-6">
+                                                        <div class="form-group-modern">
+                                                            <label class="form-label-modern">
+                                                                <i class="fas fa-key text-success me-2"></i>
+                                                                Yeni Şifre
+                                                            </label>
+                                                            <div class="input-group-modern">
+                                                                <input type="password" class="form-control-modern" name="new_password" required placeholder="Yeni şifrenizi girin">
+                                                                <span class="input-icon">
+                                                                    <i class="fas fa-key text-success"></i>
+                                                                </span>
+                                                            </div>
+                                                            <div class="password-strength mt-2">
+                                                                <div class="strength-bar">
+                                                                    <div class="strength-fill" id="strength-fill"></div>
+                                                                </div>
+                                                                <small class="strength-text" id="strength-text">Şifre gücü: Zayıf</small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="col-md-6">
+                                                        <div class="form-group-modern">
+                                                            <label class="form-label-modern">
+                                                                <i class="fas fa-check-circle text-info me-2"></i>
+                                                                Yeni Şifre (Tekrar)
+                                                            </label>
+                                                            <div class="input-group-modern">
+                                                                <input type="password" class="form-control-modern" name="confirm_password" required placeholder="Şifrenizi tekrar girin">
+                                                                <span class="input-icon">
+                                                                    <i class="fas fa-check-circle text-info"></i>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="password-requirements mt-4">
+                                                    <h6 class="requirements-title">
+                                                        <i class="fas fa-info-circle text-primary me-2"></i>
+                                                        Şifre Gereksinimleri
+                                                    </h6>
+                                                    <div class="requirements-grid">
+                                                        <div class="requirement-item" id="req-length">
+                                                            <i class="fas fa-times text-danger"></i>
+                                                            <span>En az 8 karakter</span>
+                                                        </div>
+                                                        <div class="requirement-item" id="req-uppercase">
+                                                            <i class="fas fa-times text-danger"></i>
+                                                            <span>En az 1 büyük harf (A-Z)</span>
+                                                        </div>
+                                                        <div class="requirement-item" id="req-lowercase">
+                                                            <i class="fas fa-times text-danger"></i>
+                                                            <span>En az 1 küçük harf (a-z)</span>
+                                                        </div>
+                                                        <div class="requirement-item" id="req-number">
+                                                            <i class="fas fa-times text-danger"></i>
+                                                            <span>En az 1 rakam (0-9)</span>
+                                                        </div>
+                                                        <div class="requirement-item" id="req-special">
+                                                            <i class="fas fa-times text-danger"></i>
+                                                            <span>En az 1 özel karakter (!@#$%^&*)</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="form-actions mt-4">
+                                                    <button type="submit" class="btn btn-primary btn-lg">
+                                                        <i class="fas fa-key me-2"></i>
+                                                        Şifre Değiştir
+                                        </button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-lg ms-3" onclick="resetPasswordForm()">
+                                                        <i class="fas fa-undo me-2"></i>
+                                                        Sıfırla
+                                                    </button>
+                                                </div>
+                                    </form>
+                                        </div>
+                                </div>
+                                
+                                    <!-- Tehlikeli Bölge -->
+                                    <div class="security-section danger-section">
+                                        <div class="section-header">
+                                            <div class="section-icon danger">
+                                                <i class="fas fa-exclamation-triangle text-danger"></i>
+                                            </div>
+                                            <div class="section-info">
+                                                <h6 class="section-title text-danger">Tehlikeli Bölge</h6>
+                                                <p class="section-description">Bu işlem geri alınamaz! Hesabınızı kalıcı olarak silmek istiyorsanız aşağıdaki adımları takip edin.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="danger-zone-container">
+                                            <div class="danger-warning">
+                                                <div class="warning-icon">
+                                                    <i class="fas fa-radiation-alt"></i>
+                                                </div>
+                                                <div class="warning-content">
+                                                    <h6 class="warning-title">⚠️ Dikkat!</h6>
+                                                    <p class="warning-text">Hesap silme işlemi geri alınamaz. Tüm verileriniz, kamera kayıtlarınız ve ayarlarınız kalıcı olarak silinecektir.</p>
+                                                </div>
+                                            </div>
                                     
                                     <form id="deleteAccountForm">
-                                        <div class="mb-3">
-                                            <label class="form-label">Şifrenizi Girin</label>
-                                            <input type="password" class="form-control" name="password" required>
+                                                <div class="row g-3">
+                                                    <div class="col-md-12">
+                                                        <div class="form-group-modern">
+                                                            <label class="form-label-modern">
+                                                                <i class="fas fa-lock text-danger me-2"></i>
+                                                                Şifrenizi Girin
+                                                            </label>
+                                                            <div class="input-group-modern">
+                                                                <input type="password" class="form-control-modern" name="password" required placeholder="Hesap silme işlemi için şifrenizi girin">
+                                                                <span class="input-icon">
+                                                                    <i class="fas fa-lock text-danger"></i>
+                                                                </span>
                                         </div>
-                                        <div class="form-check mb-3">
-                                            <input class="form-check-input" type="checkbox" id="confirmDelete" required>
-                                            <label class="form-check-label" for="confirmDelete">
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="col-12">
+                                                        <div class="form-check-modern">
+                                                            <input class="form-check-input-modern" type="checkbox" id="confirmDelete" required>
+                                                            <label class="form-check-label-modern" for="confirmDelete">
+                                                                <i class="fas fa-exclamation-triangle text-danger me-2"></i>
                                                 Hesabımı ve tüm verilerimi kalıcı olarak silmek istiyorum
                                             </label>
                                         </div>
-                                        <button type="button" class="btn btn-danger" onclick="deleteAccount()">
-                                            <i class="fas fa-trash"></i> Hesabı Sil
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="form-actions mt-4">
+                                                    <button type="button" class="btn btn-danger btn-lg" onclick="deleteAccount()">
+                                                        <i class="fas fa-trash me-2"></i>
+                                                        Hesabı Kalıcı Olarak Sil
                                         </button>
+                                                </div>
                                     </form>
+                                </div>
+                            </div>
+                                    
+                                    <!-- Güvenlik İpuçları -->
+                                    <div class="security-section tips-section">
+                                        <div class="section-header">
+                                            <div class="section-icon">
+                                                <i class="fas fa-lightbulb text-warning"></i>
+                        </div>
+                                            <div class="section-info">
+                                                <h6 class="section-title">Güvenlik İpuçları</h6>
+                                                <p class="section-description">Hesabınızı güvende tutmak için bu önerileri takip edin</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="tips-grid">
+                                            <div class="tip-card">
+                                                <div class="tip-icon">
+                                                    <i class="fas fa-shield-alt"></i>
+                                                </div>
+                                                <h6>Güçlü Şifre</h6>
+                                                <p>En az 8 karakter, büyük/küçük harf, rakam ve özel karakter kullanın</p>
+                                            </div>
+                                            
+                                            <div class="tip-card">
+                                                <div class="tip-icon">
+                                                    <i class="fas fa-sync-alt"></i>
+                                                </div>
+                                                <h6>Düzenli Güncelleme</h6>
+                                                <p>Şifrenizi 3-6 ayda bir değiştirin</p>
+                                            </div>
+                                            
+                                            <div class="tip-card">
+                                                <div class="tip-icon">
+                                                    <i class="fas fa-user-lock"></i>
+                                                </div>
+                                                <h6>Güvenli Erişim</h6>
+                                                <p>Güvenli ağlardan erişim sağlayın</p>
+                                            </div>
+                                            
+                                            <div class="tip-card">
+                                                <div class="tip-icon">
+                                                    <i class="fas fa-eye-slash"></i>
+                                                </div>
+                                                <h6>Gizlilik</h6>
+                                                <p>Şifrenizi kimseyle paylaşmayın</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -14017,6 +15838,253 @@ Mesaj:
                     }
                 });
                 
+                // Form sıfırlama fonksiyonu
+                function resetForm() {
+                    if (confirm('⚠️ Formdaki tüm değişiklikler sıfırlanacak. Devam etmek istiyor musunuz?')) {
+                        document.getElementById('profileForm').reset();
+                        
+                        // Toast mesajı göster
+                        const toast = document.createElement('div');
+                        toast.className = 'toast-message';
+                        toast.innerHTML = '🔄 Form sıfırlandı!';
+                        toast.style.cssText = 
+                            'position: fixed;' +
+                            'top: 20px;' +
+                            'right: 20px;' +
+                            'background: #17a2b8;' +
+                            'color: white;' +
+                            'padding: 10px 20px;' +
+                            'border-radius: 5px;' +
+                            'z-index: 9999;' +
+                            'font-weight: bold;';
+                        document.body.appendChild(toast);
+                        
+                        setTimeout(() => {
+                            toast.remove();
+                        }, 3000);
+                    }
+                }
+                
+                // Şifre gücü kontrolü fonksiyonu
+                function validatePasswordStrength(password) {
+                    const requirements = {
+                        length: password.length >= 8,
+                        uppercase: /[A-Z]/.test(password),
+                        lowercase: /[a-z]/.test(password),
+                        number: /\d/.test(password),
+                        special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+                    };
+                    
+                    return requirements;
+                }
+                
+                // Şifre gücü göstergesini güncelle
+                function updatePasswordStrength(password) {
+                    const requirements = validatePasswordStrength(password);
+                    const strengthFill = document.getElementById('strength-fill');
+                    const strengthText = document.getElementById('strength-text');
+                    
+                    if (!strengthFill || !strengthText) return;
+                    
+                    // Gereksinimleri güncelle
+                    Object.keys(requirements).forEach(req => {
+                        const element = document.getElementById(`req-${req}`);
+                        if (element) {
+                            if (requirements[req]) {
+                                element.innerHTML = '<i class="fas fa-check text-success"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.add('valid');
+                            } else {
+                                element.innerHTML = '<i class="fas fa-times text-danger"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.remove('valid');
+                            }
+                        }
+                    });
+                    
+                    // Güç seviyesini hesapla
+                    const validCount = Object.values(requirements).filter(Boolean).length;
+                    let strength = 'Zayıf';
+                    let width = '25%';
+                    let color = '#dc3545';
+                    
+                    if (validCount >= 5) {
+                        strength = 'Güçlü';
+                        width = '100%';
+                        color = '#20c997';
+                    } else if (validCount >= 4) {
+                        strength = 'İyi';
+                        width = '75%';
+                        color = '#28a745';
+                    } else if (validCount >= 3) {
+                        strength = 'Orta';
+                        width = '50%';
+                        color = '#ffc107';
+                    }
+                    
+                    // Güç göstergesini güncelle
+                    strengthFill.style.width = width;
+                    strengthFill.style.background = color;
+                    strengthText.textContent = `Şifre gücü: ${strength}`;
+                }
+                
+                // Şifre input event listener'ları
+                document.addEventListener('DOMContentLoaded', function() {
+                    const newPasswordInput = document.querySelector('input[name="new_password"]');
+                    if (newPasswordInput) {
+                        newPasswordInput.addEventListener('input', function() {
+                            updatePasswordStrength(this.value);
+                        });
+                    }
+                    
+                    // Kayıt formları için şifre validation
+                    const registerPasswordInput = document.getElementById('register_password');
+                    if (registerPasswordInput) {
+                        registerPasswordInput.addEventListener('input', function() {
+                            updateRegisterPasswordStrength(this.value);
+                        });
+                    }
+                    
+                    const demoPasswordInput = document.getElementById('demo_password');
+                    if (demoPasswordInput) {
+                        demoPasswordInput.addEventListener('input', function() {
+                            updateDemoPasswordStrength(this.value);
+                        });
+                    }
+                });
+                
+                // Kayıt formu şifre gücü kontrolü
+                function updateRegisterPasswordStrength(password) {
+                    const requirements = validatePasswordStrength(password);
+                    const strengthFill = document.getElementById('register-strength-fill');
+                    const strengthText = document.getElementById('register-strength-text');
+                    
+                    if (!strengthFill || !strengthText) return;
+                    
+                    // Gereksinimleri güncelle
+                    Object.keys(requirements).forEach(req => {
+                        const element = document.getElementById(`register-req-${req}`);
+                        if (element) {
+                            if (requirements[req]) {
+                                element.innerHTML = '<i class="fas fa-check text-success me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.add('valid');
+                            } else {
+                                element.innerHTML = '<i class="fas fa-times text-danger me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.remove('valid');
+                            }
+                        }
+                    });
+                    
+                    // Güç seviyesini hesapla
+                    const validCount = Object.values(requirements).filter(Boolean).length;
+                    let strength = 'Zayıf';
+                    let width = '25%';
+                    let color = '#dc3545';
+                    
+                    if (validCount >= 5) {
+                        strength = 'Güçlü';
+                        width = '100%';
+                        color = '#20c997';
+                    } else if (validCount >= 4) {
+                        strength = 'İyi';
+                        width = '75%';
+                        color = '#28a745';
+                    } else if (validCount >= 3) {
+                        strength = 'Orta';
+                        width = '50%';
+                        color = '#ffc107';
+                    }
+                    
+                    // Güç göstergesini güncelle
+                    strengthFill.style.width = width;
+                    strengthFill.style.background = color;
+                    strengthText.textContent = `Şifre gücü: ${strength}`;
+                }
+                
+                // Demo formu şifre gücü kontrolü
+                function updateDemoPasswordStrength(password) {
+                    const requirements = validatePasswordStrength(password);
+                    const strengthFill = document.getElementById('demo-strength-fill');
+                    const strengthText = document.getElementById('demo-strength-text');
+                    
+                    if (!strengthFill || !strengthText) return;
+                    
+                    // Gereksinimleri güncelle
+                    Object.keys(requirements).forEach(req => {
+                        const element = document.getElementById(`demo-req-${req}`);
+                        if (element) {
+                            if (requirements[req]) {
+                                element.innerHTML = '<i class="fas fa-check text-success me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.add('valid');
+                            } else {
+                                element.innerHTML = '<i class="fas fa-times text-danger me-2"></i><span>' + element.querySelector('span').textContent + '</span>';
+                                element.classList.remove('valid');
+                            }
+                        }
+                    });
+                    
+                    // Güç seviyesini hesapla
+                    const validCount = Object.values(requirements).filter(Boolean).length;
+                    let strength = 'Zayıf';
+                    let width = '25%';
+                    let color = '#dc3545';
+                    
+                    if (validCount >= 5) {
+                        strength = 'Güçlü';
+                        width = '100%';
+                        color = '#20c997';
+                    } else if (validCount >= 4) {
+                        strength = 'İyi';
+                        width = '75%';
+                        color = '#28a745';
+                    } else if (validCount >= 3) {
+                        strength = 'Orta';
+                        width = '50%';
+                        color = '#ffc107';
+                    }
+                    
+                    // Güç göstergesini güncelle
+                    strengthFill.style.width = width;
+                    strengthFill.style.background = color;
+                    strengthText.textContent = `Şifre gücü: ${strength}`;
+                }
+                
+                // Şifre formu sıfırlama fonksiyonu
+                function resetPasswordForm() {
+                    if (confirm('⚠️ Şifre formundaki tüm değişiklikler sıfırlanacak. Devam etmek istiyor musunuz?')) {
+                        document.getElementById('passwordForm').reset();
+                        
+                        // Şifre gücü göstergesini sıfırla
+                        const strengthFill = document.getElementById('strength-fill');
+                        const strengthText = document.getElementById('strength-text');
+                        if (strengthFill) {
+                            strengthFill.className = 'strength-fill';
+                            strengthFill.style.width = '0%';
+                        }
+                        if (strengthText) {
+                            strengthText.textContent = 'Şifre gücü: Zayıf';
+                        }
+                        
+                        // Toast mesajı göster
+                        const toast = document.createElement('div');
+                        toast.className = 'toast-message';
+                        toast.innerHTML = '🔄 Şifre formu sıfırlandı!';
+                        toast.style.cssText = 
+                            'position: fixed;' +
+                            'top: 20px;' +
+                            'right: 20px;' +
+                            'background: #17a2b8;' +
+                            'color: white;' +
+                            'padding: 10px 20px;' +
+                            'border-radius: 5px;' +
+                            'z-index: 9999;' +
+                            'font-weight: bold;';
+                        document.body.appendChild(toast);
+                        
+                        setTimeout(() => {
+                            toast.remove();
+                        }, 3000);
+                    }
+                }
+                
                 // Logo yükleme fonksiyonu
                 function uploadLogo(file) {
                     const formData = new FormData();
@@ -14202,11 +16270,12 @@ Mesaj:
                     })
                     .then(result => {
                         console.log('📊 Abonelik yükleme sonucu:', result);
-                        console.log('🔍 Subscription data:', result.subscription);
-                        console.log('🔍 Days remaining:', result.subscription ? result.subscription.days_remaining : 'undefined');
-                        console.log('🔍 Subscription end:', result.subscription ? result.subscription.subscription_end : 'undefined');
+                        console.log('🔍 Subscription data:', result);
+                        console.log('🔍 Days remaining:', result.days_remaining);
+                        console.log('🔍 Subscription end:', result.subscription_end);
                         if (result.success) {
-                            const subscription = result.subscription;
+                            // API'den gelen response'da subscription key'i yok, direkt subscription bilgileri var
+                            const subscription = result;
                             
                             // Update subscription display in dashboard
                             const subscriptionPlanElement = document.getElementById('subscription-plan');
@@ -14355,6 +16424,12 @@ Mesaj:
                                 const usagePercentage = subscription.usage_percentage || 0;
                                 usageProgressElement.style.width = usagePercentage + '%';
                                 
+                                // Progress bar text'ini güncelle
+                                const progressText = usageProgressElement.querySelector('.progress-text');
+                                if (progressText) {
+                                    progressText.textContent = Math.round(usagePercentage) + '%';
+                                }
+                                
                                 if (usagePercentage > 80) {
                                     usageProgressElement.className = 'progress-bar bg-danger';
                                 } else if (usagePercentage > 60) {
@@ -14400,6 +16475,12 @@ Mesaj:
                             if (usageProgressElement) {
                                 usageProgressElement.style.width = '0%';
                                 usageProgressElement.className = 'progress-bar bg-success';
+                                
+                                // Progress bar text'ini güncelle
+                                const progressText = usageProgressElement.querySelector('.progress-text');
+                                if (progressText) {
+                                    progressText.textContent = '0%';
+                                }
                             }
                         }
                     })
@@ -14439,6 +16520,12 @@ Mesaj:
                         if (usageProgressElement) {
                             usageProgressElement.style.width = '0%';
                             usageProgressElement.className = 'progress-bar bg-success';
+                            
+                            // Progress bar text'ini güncelle
+                            const progressText = usageProgressElement.querySelector('.progress-text');
+                            if (progressText) {
+                                progressText.textContent = '0%';
+                            }
                         }
                     });
                 }
@@ -14635,7 +16722,8 @@ Mesaj:
                     .then(response => response.json())
                     .then(result => {
                         if (result.success) {
-                            const subscription = result.subscription;
+                            // API'den gelen response'da subscription key'i yok, direkt subscription bilgileri var
+                            const subscription = result;
                             currentPlan = subscription.subscription_type;
                             
                             // Mevcut plan bilgilerini göster
