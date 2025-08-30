@@ -9,7 +9,7 @@ import hashlib
 import secrets
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 import json
 import logging
@@ -519,6 +519,11 @@ class MultiTenantDatabase:
                 
             try:
                 cursor.execute('ALTER TABLE violations ADD COLUMN confidence REAL DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+                
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN compliant_people INTEGER DEFAULT 0')
             except sqlite3.OperationalError:
                 pass  # Kolon zaten var
             
@@ -1735,18 +1740,23 @@ class MultiTenantDatabase:
             
             # Bugünkü istatistikler
             placeholder = self.get_placeholder()
-            cursor.execute(f'''
-                SELECT 
-                    COUNT(*) as total_detections,
-                    COALESCE(SUM(people_detected), SUM(total_people), 0) as total_people,
-                    COALESCE(SUM(ppe_compliant), SUM(compliant_people), 0) as compliant_people,
-                    COALESCE(SUM(violations_count), SUM(violation_people), 0) as violation_people,
-                    AVG(compliance_rate) as avg_compliance_rate
-                FROM detections
-                WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
-            ''', (company_id,))
             
-            detection_stats = cursor.fetchone()
+            try:
+                cursor.execute(f'''
+                    SELECT 
+                        COUNT(*) as total_detections,
+                        COALESCE(SUM(people_detected), SUM(total_people), 0) as total_people,
+                        COALESCE(SUM(ppe_compliant), SUM(compliant_people), 0) as compliant_people,
+                        COALESCE(SUM(violations_count), SUM(violation_people), 0) as violation_people,
+                        AVG(compliance_rate) as avg_compliance_rate
+                    FROM detections
+                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
+                ''', (company_id,))
+                
+                detection_stats = cursor.fetchone()
+            except Exception as e:
+                logger.warning(f"⚠️ Detections query hatası, varsayılan değerler kullanılıyor: {e}")
+                detection_stats = None
             
             # PostgreSQL RealDictRow için sözlük erişimi kullan
             if detection_stats:
@@ -2118,6 +2128,106 @@ class MultiTenantDatabase:
         except Exception as e:
             logger.error(f"❌ Internal abonelik bilgileri getirme hatası: {e}")
             return {'success': False, 'error': 'Veri getirme başarısız'}
+
+    def update_company_logo_url(self, company_id: str, logo_url: str) -> bool:
+        """Şirket logo URL'ini güncelle"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            
+            # Timestamp fonksiyonu
+            if hasattr(self, 'db_adapter') and self.db_adapter.db_type == 'postgresql':
+                timestamp_func = 'CURRENT_TIMESTAMP'
+            else:
+                timestamp_func = 'datetime(\'now\')'
+            
+            # logo_url kolonunu güncelle
+            cursor.execute(f"""
+                UPDATE companies 
+                SET logo_url = {placeholder}, updated_at = {timestamp_func}
+                WHERE company_id = {placeholder}
+            """, (logo_url, company_id))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"✅ Company logo URL updated: {company_id} -> {logo_url}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to update company logo URL: {e}")
+            return False
+
+    def get_company_info(self, company_id: str) -> Optional[Dict[str, Any]]:
+        """Şirket bilgilerini getir"""
+        try:
+            print(f"🔍 MultiTenantDatabase - get_company_info çağrıldı: {company_id}")
+            
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.get_placeholder()
+            
+            query = f'''
+                SELECT company_name, sector, contact_person, email, phone, address,
+                       subscription_type, subscription_start, subscription_end, max_cameras, logo_url
+                FROM companies 
+                WHERE company_id = {placeholder}
+            '''
+            
+            print(f"🔍 MultiTenantDatabase - Query: {query}")
+            cursor.execute(query, (company_id,))
+            result = cursor.fetchone()
+            print(f"🔍 MultiTenantDatabase - Query result: {result}")
+            
+            conn.close()
+            
+            if result:
+                if hasattr(result, 'keys'):  # PostgreSQL RealDictRow
+                    print(f"🔍 MultiTenantDatabase - PostgreSQL RealDictRow formatı")
+                    company_info = {
+                        'company_name': result['company_name'],
+                        'sector': result['sector'],
+                        'contact_person': result['contact_person'],
+                        'email': result['email'],
+                        'phone': result['phone'],
+                        'address': result['address'],
+                        'subscription_type': result['subscription_type'],
+                        'subscription_start': result['subscription_start'],
+                        'subscription_end': result['subscription_end'],
+                        'max_cameras': result['max_cameras'],
+                        'logo_url': result['logo_url']
+                    }
+                    print(f"🔍 MultiTenantDatabase - Company info: {company_info}")
+                    return company_info
+                else:  # SQLite tuple
+                    print(f"🔍 MultiTenantDatabase - SQLite tuple formatı")
+                    print(f"🔍 MultiTenantDatabase - Result length: {len(result)}")
+                    company_info = {
+                        'company_name': result[0],
+                        'sector': result[1],
+                        'contact_person': result[2],
+                        'email': result[3],
+                        'phone': result[4],
+                        'address': result[5],
+                        'subscription_type': result[6],
+                        'subscription_start': result[7],
+                        'subscription_end': result[8],
+                        'max_cameras': result[9],
+                        'logo_url': result[10] if len(result) > 10 else None
+                    }
+                    print(f"🔍 MultiTenantDatabase - Company info: {company_info}")
+                    return company_info
+            else:
+                print(f"🔍 MultiTenantDatabase - Query sonucu bulunamadı")
+                return None
+            
+        except Exception as e:
+            print(f"❌ MultiTenantDatabase - get_company_info hatası: {e}")
+            logger.error(f"❌ Failed to get company info: {e}")
+            return None
 
     def get_subscription_info_internal(self, company_id):
         """Şirket abonelik bilgilerini internal API için getir"""

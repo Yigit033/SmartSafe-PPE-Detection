@@ -3248,7 +3248,8 @@ Mesaj:
             try:
                 subscription_info = self.get_subscription_info_internal(company_id)
                 if subscription_info['success']:
-                    subscription_data = subscription_info['subscription']
+                    # get_subscription_info_internal direkt subscription data döndürüyor, 'subscription' key'i yok
+                    subscription_data = subscription_info
                 else:
                     subscription_data = {
                         'subscription_type': 'BASIC',
@@ -3900,60 +3901,77 @@ Mesaj:
                 logger.error(f"❌ Settings page error: {e}")
                 return redirect(f'/company/{company_id}/login')
             
-            # Şirket bilgilerini yükle
+            # Şirket bilgilerini yükle - Database Adapter kullan
             try:
-                conn = self.db.get_connection()
-                cursor = conn.cursor()
+                if hasattr(self.db, 'get_company_info'):
+                    # Database adapter'da get_company_info fonksiyonu varsa kullan
+                    company_info = self.db.get_company_info(company_id)
+                    if not company_info:
+                        company_info = {}
+                else:
+                    # Fallback: Eski yöntem
+                    conn = self.db.get_connection()
+                    cursor = conn.cursor()
+                    
+                    placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                    cursor.execute(f'''
+                        SELECT company_name, contact_person, email, phone, sector, address, profile_image, logo_url
+                        FROM companies WHERE company_id = {placeholder}
+                    ''', (company_id,))
+                    
+                    company_data = cursor.fetchone()
+                    conn.close()
+                    
+                    if company_data:
+                        # SQLite Row object handling - try dict access first, fallback to tuple
+                        try:
+                            company_info = {
+                                'company_name': company_data.get('company_name', ''),
+                                'contact_person': company_data.get('contact_person', ''),
+                                'email': company_data.get('email', ''),
+                                'phone': company_data.get('phone', ''),
+                                'sector': company_data.get('sector', 'construction'),
+                                'address': company_data.get('address', ''),
+                                'profile_image': company_data.get('profile_image', ''),
+                                'logo_url': company_data.get('logo_url', '')
+                            }
+                        except AttributeError:
+                            # Fallback to tuple access for sqlite3.Row objects
+                            company_info = {
+                                'company_name': company_data[0] or '',
+                                'contact_person': company_data[1] or '',
+                                'email': company_data[2] or '',
+                                'phone': company_data[3] or '',
+                                'sector': company_data[4] or 'construction',
+                                'address': company_data[5] or '',
+                                'profile_image': company_data[6] or '',
+                                'logo_url': company_data[7] if len(company_data) > 7 else ''
+                            }
+                    else:
+                        company_info = {}
                 
-                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
-                cursor.execute(f'''
-                    SELECT company_name, contact_person, email, phone, sector, address, profile_image
-                    FROM companies WHERE company_id = {placeholder}
-                ''', (company_id,))
-                
-                company_data = cursor.fetchone()
-                conn.close()
-                
-                if company_data:
-                    # SQLite Row object handling - try dict access first, fallback to tuple
-                    try:
-                        user_data.update({
-                            'company_name': company_data.get('company_name', ''),
-                            'contact_person': company_data.get('contact_person', ''),
-                            'email': company_data.get('email', ''),
-                            'phone': company_data.get('phone', ''),
-                            'sector': company_data.get('sector', 'construction'),
-                            'address': company_data.get('address', ''),
-                            'profile_image': company_data.get('profile_image', '')
-                        })
-                    except AttributeError:
-                        # Fallback to tuple access for sqlite3.Row objects
-                        user_data.update({
-                            'company_name': company_data[0] or '',
-                            'contact_person': company_data[1] or '',
-                            'email': company_data[2] or '',
-                            'phone': company_data[3] or '',
-                            'sector': company_data[4] or 'construction',
-                            'address': company_data[5] or '',
-                            'profile_image': company_data[6] or ''
-                        })
+                # user_data'yı da güncelle
+                user_data.update(company_info)
                 
             except Exception as e:
                 logger.error(f"❌ Şirket bilgileri yüklenirken hata: {e}")
                 # Varsayılan değerler
-                user_data.update({
+                company_info = {
                     'company_name': '',
                     'contact_person': '',
                     'email': '',
                     'phone': '',
                     'sector': 'construction',
                     'address': '',
-                    'profile_image': ''
-                })
+                    'profile_image': '',
+                    'logo_url': ''
+                }
+                user_data.update(company_info)
             
             return render_template_string(self.get_company_settings_template(), 
                                         company_id=company_id, 
-                                        user_data=user_data)
+                                        user_data=user_data,
+                                        company=company_info)
         
         @self.app.route('/api/company/<company_id>/profile', methods=['PUT'])
         def update_company_profile(company_id):
@@ -4013,10 +4031,94 @@ Mesaj:
                     update_fields.append(f"email = {placeholder}")
                     update_values.append(data.get('email').strip())
                 
+                # Logo URL'i koru - Mevcut logo_url'i al ve güncelle
+                print(f"🔍 Logo URL koruma başlatılıyor...")
+                try:
+                    # Önce logo_url kolonunun var olup olmadığını kontrol et
+                    print(f"🔍 Logo URL kolonu kontrol ediliyor...")
+                    
+                    if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
+                        # PostgreSQL için
+                        try:
+                            cursor.execute("""
+                                SELECT column_name 
+                                FROM information_schema.columns 
+                                WHERE table_name = 'companies' AND column_name = 'logo_url'
+                            """)
+                            logo_url_exists = cursor.fetchone() is not None
+                            print(f"🔍 PostgreSQL - Logo URL kolonu mevcut mu: {logo_url_exists}")
+                        except Exception as pg_error:
+                            print(f"⚠️ PostgreSQL kolon kontrol hatası: {pg_error}")
+                            logo_url_exists = False
+                    else:
+                        # SQLite için
+                        try:
+                            cursor.execute("PRAGMA table_info(companies)")
+                            columns = cursor.fetchall()
+                            logo_url_exists = any(col[1] == 'logo_url' for col in columns)
+                            print(f"🔍 SQLite - Logo URL kolonu mevcut mu: {logo_url_exists}")
+                        except Exception as sqlite_error:
+                            print(f"⚠️ SQLite kolon kontrol hatası: {sqlite_error}")
+                            logo_url_exists = False
+                    
+                    if not logo_url_exists:
+                        print(f"🔍 Logo URL kolonu ekleniyor...")
+                        try:
+                            if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
+                                # PostgreSQL
+                                cursor.execute("ALTER TABLE companies ADD COLUMN logo_url TEXT")
+                            else:
+                                # SQLite
+                                cursor.execute("ALTER TABLE companies ADD COLUMN logo_url TEXT")
+                            conn.commit()
+                            print(f"✅ Logo URL kolonu eklendi!")
+                        except Exception as add_col_error:
+                            print(f"⚠️ Logo URL kolonu eklenirken hata: {add_col_error}")
+                    
+                    if hasattr(self.db, 'get_company_info'):
+                        # Database adapter kullan
+                        print(f"🔍 Database adapter kullanılıyor...")
+                        company_info = self.db.get_company_info(company_id)
+                        print(f"🔍 Company info: {company_info}")
+                        if company_info and company_info.get('logo_url'):
+                            current_logo_url = company_info['logo_url']
+                            # Mevcut logo URL'i koru
+                            update_fields.append(f"logo_url = {placeholder}")
+                            update_values.append(current_logo_url)
+                            print(f"🔍 Logo URL korunuyor (DB Adapter): {current_logo_url}")
+                        else:
+                            print(f"⚠️ Company info veya logo_url bulunamadı: {company_info}")
+                    else:
+                        # Fallback: Eski yöntem
+                        print(f"🔍 Fallback yöntem kullanılıyor...")
+                        cursor.execute(f'''
+                            SELECT logo_url FROM companies WHERE company_id = {placeholder}
+                        ''', (company_id,))
+                        current_logo_result = cursor.fetchone()
+                        print(f"🔍 Logo query result: {current_logo_result}")
+                        
+                        if current_logo_result:
+                            current_logo_url = current_logo_result[0] if hasattr(current_logo_result, '__getitem__') else current_logo_result.get('logo_url', '')
+                            if current_logo_url:
+                                # Mevcut logo URL'i koru
+                                update_fields.append(f"logo_url = {placeholder}")
+                                update_values.append(current_logo_url)
+                                print(f"🔍 Logo URL korunuyor (Fallback): {current_logo_url}")
+                            else:
+                                print(f"⚠️ Logo URL boş: {current_logo_url}")
+                        else:
+                            print(f"⚠️ Logo query sonucu bulunamadı")
+                except Exception as logo_error:
+                    print(f"⚠️ Logo URL koruma hatası: {logo_error}")
+                    import traceback
+                    traceback.print_exc()
+                
                 # updated_at her zaman ekle
                 update_fields.append(f"updated_at = {timestamp_func}")
                 
                 # Eğer güncellenecek alan varsa UPDATE yap
+                print(f"🔍 Update fields: {update_fields}")
+                print(f"🔍 Update values: {update_values}")
                 if update_fields:
                     update_values.append(company_id)  # WHERE clause için
                     update_sql = f"""
@@ -4024,7 +4126,9 @@ Mesaj:
                         SET {', '.join(update_fields)}
                     WHERE company_id = {placeholder}
                     """
+                    print(f"🔍 Update SQL: {update_sql}")
                     cursor.execute(update_sql, update_values)
+                    print(f"🔍 Update başarılı!")
                 
                 # Kullanıcı bilgilerini güncelle - Sadece email dolu ise
                 if data.get('email') and data.get('email').strip():
@@ -4089,46 +4193,68 @@ Mesaj:
                 file_path = os.path.join(upload_folder, filename)
                 file.save(file_path)
                 
-                # Veritabanında profil resmini güncelle
-                conn = self.db.get_connection()
-                cursor = conn.cursor()
+                # Veritabanında logo URL'ini güncelle - Database Adapter kullan
+                logo_url = f'/static/uploads/logos/{filename}'
+                print(f"🔍 Logo URL oluşturuldu: {logo_url}")
                 
-                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                print(f"🔍 Database objesi türü: {type(self.db)}")
+                print(f"🔍 Database objesi: {self.db}")
+                print(f"🔍 update_company_logo_url mevcut mu: {hasattr(self.db, 'update_company_logo_url')}")
                 
-                # Timestamp fonksiyonu
-                if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
-                    timestamp_func = 'CURRENT_TIMESTAMP'
+                if hasattr(self.db, 'update_company_logo_url'):
+                    # Database adapter'da update_company_logo_url fonksiyonu varsa kullan
+                    print(f"🔍 Database adapter ile logo URL güncelleniyor...")
+                    success = self.db.update_company_logo_url(company_id, logo_url)
+                    print(f"🔍 Logo URL güncelleme sonucu: {success}")
+                    if not success:
+                        print(f"❌ Database'de logo URL güncellenemedi: {company_id}")
+                        return jsonify({'success': False, 'error': 'Logo URL veritabanında güncellenemedi'}), 500
+                    else:
+                        print(f"✅ Logo URL başarıyla güncellendi: {company_id} -> {logo_url}")
                 else:
-                    timestamp_func = 'datetime(\'now\')'
-                
-                # profile_image kolonunun varlığını kontrol et
-                try:
-                    cursor.execute(f"""
-                        UPDATE companies 
-                        SET profile_image = {placeholder}, updated_at = {timestamp_func}
-                        WHERE company_id = {placeholder}
-                    """, (f'/static/uploads/logos/{filename}', company_id))
-                
-                    conn.commit()
-                    conn.close()
-                except Exception as db_error:
-                    # profile_image kolonu yoksa, sadece updated_at güncelle
-                    if 'profile_image' in str(db_error) and 'does not exist' in str(db_error):
-                        print(f"⚠️ profile_image kolonu bulunamadı, sadece updated_at güncelleniyor")
+                    print(f"⚠️ Database adapter'da update_company_logo_url fonksiyonu bulunamadı!")
+                    print(f"🔍 Mevcut database metodları: {[attr for attr in dir(self.db) if not attr.startswith('_')]}")
+                    
+                    # Fallback: Eski yöntem
+                    conn = self.db.get_connection()
+                    cursor = conn.cursor()
+                    
+                    placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                    
+                    # Timestamp fonksiyonu
+                    if hasattr(self.db, 'db_adapter') and self.db.db_adapter.db_type == 'postgresql':
+                        timestamp_func = 'CURRENT_TIMESTAMP'
+                    else:
+                        timestamp_func = 'datetime(\'now\')'
+                    
+                    # logo_url kolonunu güncelle
+                    try:
                         cursor.execute(f"""
                             UPDATE companies 
-                            SET updated_at = {timestamp_func}
+                            SET logo_url = {placeholder}, updated_at = {timestamp_func}
                             WHERE company_id = {placeholder}
-                        """, (company_id,))
+                        """, (logo_url, company_id))
+                        
                         conn.commit()
                         conn.close()
-                    else:
-                        raise db_error
+                    except Exception as db_error:
+                        # logo_url kolonu yoksa, sadece updated_at güncelle
+                        if 'logo_url' in str(db_error) and 'does not exist' in str(db_error):
+                            print(f"⚠️ logo_url kolonu bulunamadı, sadece updated_at güncelleniyor")
+                            cursor.execute(f"""
+                                UPDATE companies 
+                                SET updated_at = {timestamp_func}
+                                WHERE company_id = {placeholder}
+                            """, (company_id,))
+                            conn.commit()
+                            conn.close()
+                        else:
+                            raise db_error
                 
                 return jsonify({
                     'success': True, 
                     'message': 'Logo başarıyla yüklendi',
-                    'logo_url': f'/static/uploads/logos/{filename}'
+                    'logo_url': logo_url
                 })
                     
             except Exception as e:
@@ -6342,57 +6468,68 @@ Mesaj:
             if not user_data or user_data['company_id'] != company_id:
                 return redirect(f'/company/{company_id}/login')
             
-            # Şirket bilgilerini getir
+            # Şirket bilgilerini getir - Database Adapter kullan
             try:
-                conn = self.db.get_connection()
-                cursor = conn.cursor()
-                
-                placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
-                cursor.execute(f'''
-                    SELECT company_name, sector, contact_person, email, phone, address,
-                           subscription_type, subscription_start, subscription_end, max_cameras
-                    FROM companies 
-                    WHERE company_id = {placeholder}
-                ''', (company_id,))
-                
-                company_data = cursor.fetchone()
-                conn.close()
-                
-                if company_data:
-                    if hasattr(company_data, 'keys'):  # PostgreSQL RealDictRow
-                        company_info = {
-                            'company_name': company_data['company_name'],
-                            'sector': company_data['sector'],
-                            'contact_person': company_data['contact_person'],
-                            'email': company_data['email'],
-                            'phone': company_data['phone'],
-                            'address': company_data['address'],
-                            'subscription_type': company_data['subscription_type'],
-                            'subscription_start': company_data['subscription_start'],
-                            'subscription_end': company_data['subscription_end'],
-                            'max_cameras': company_data['max_cameras']
-                        }
-                    else:  # SQLite tuple
-                        company_info = {
-                            'company_name': company_data[0],
-                            'sector': company_data[1],
-                            'contact_person': company_data[2],
-                            'email': company_data[3],
-                            'phone': company_data[4],
-                            'address': company_data[5],
-                            'subscription_type': company_data[6],
-                            'subscription_start': company_data[7],
-                            'subscription_end': company_data[8],
-                            'max_cameras': company_data[9]
-                        }
+                if hasattr(self.db, 'get_company_info'):
+                    # Database adapter'da get_company_info fonksiyonu varsa kullan
+                    company_info = self.db.get_company_info(company_id)
+                    if not company_info:
+                        company_info = {}
                 else:
-                    company_info = {}
+                    # Fallback: Eski yöntem
+                    conn = self.db.get_connection()
+                    cursor = conn.cursor()
+                    
+                    placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                    cursor.execute(f'''
+                        SELECT company_name, sector, contact_person, email, phone, address,
+                               subscription_type, subscription_start, subscription_end, max_cameras, logo_url
+                        FROM companies 
+                        WHERE company_id = {placeholder}
+                    ''', (company_id,))
+                    
+                    company_data = cursor.fetchone()
+                    conn.close()
+                    
+                    if company_data:
+                        if hasattr(company_data, 'keys'):  # PostgreSQL RealDictRow
+                            company_info = {
+                                'company_name': company_data['company_name'],
+                                'sector': company_data['sector'],
+                                'contact_person': company_data['contact_person'],
+                                'email': company_data['email'],
+                                'phone': company_data['phone'],
+                                'address': company_data['address'],
+                                'subscription_type': company_data['subscription_type'],
+                                'subscription_start': company_data['subscription_start'],
+                                'subscription_end': company_data['subscription_end'],
+                                'max_cameras': company_data['max_cameras'],
+                                'logo_url': company_data['logo_url']
+                            }
+                        else:  # SQLite tuple
+                            company_info = {
+                                'company_name': company_data[0],
+                                'sector': company_data[1],
+                                'contact_person': company_data[2],
+                                'email': company_data[3],
+                                'phone': company_data[4],
+                                'address': company_data[5],
+                                'subscription_type': company_data[6],
+                                'subscription_start': company_data[7],
+                                'subscription_end': company_data[8],
+                                'max_cameras': company_data[9],
+                                'logo_url': company_data[10] if len(company_data) > 10 else None
+                            }
+                    else:
+                        company_info = {}
                 
             except Exception as e:
                 logger.error(f"❌ Şirket bilgileri alınamadı: {e}")
                 company_info = {}
             
-            return render_template('company_profile.html', company_id=company_id, company=company_info)
+            return render_template('company_profile.html', company_id=company_id, company=company_info, user_data=user_data)
+
+
 
         @self.app.route('/upgrade-modal')
         @self.app.route('/company/<company_id>/upgrade-modal')
@@ -6420,7 +6557,7 @@ Mesaj:
                 
                 if not user_data:
                     logger.warning(f"⚠️ No user data found, redirecting to login")
-                return redirect(f'/company/{company_id}/login')
+                    return redirect(f'/company/{company_id}/login')
             
                 if user_data.get('company_id') != company_id:
                     logger.warning(f"⚠️ Company ID mismatch: session={user_data.get('company_id')}, request={company_id}")
@@ -9668,14 +9805,14 @@ Mesaj:
                                                     <label class="form-label-modern">
                                                         <i class="fas fa-building text-primary me-2"></i>
                                                         Company Name <span class="required-mark">*</span>
-                                                    </label>
+                                            </label>
                                                     <div class="input-group-modern">
                                                         <input type="text" class="form-control-modern" name="company_name" 
                                                                placeholder="Enter your company name" required>
                                                         <span class="input-icon">
                                                             <i class="fas fa-building text-primary"></i>
                                                         </span>
-                                                    </div>
+                                        </div>
                                                 </div>
                                             </div>
 
@@ -9685,7 +9822,7 @@ Mesaj:
                                                     <label class="form-label-modern">
                                                         <i class="fas fa-user text-primary me-2"></i>
                                                         Contact Person <span class="required-mark">*</span>
-                                                    </label>
+                                            </label>
                                                     <div class="input-group-modern">
                                                         <input type="text" class="form-control-modern" name="contact_person" 
                                                                placeholder="Full Name" required>
@@ -9757,26 +9894,26 @@ Mesaj:
                                                     </label>
                                                     <div class="input-group-modern">
                                                         <select class="form-control-modern" name="sector" required>
-                                                            <option value="">Select your industry</option>
-                                                            <option value="construction">🏗️ Construction</option>
-                                                            <option value="manufacturing">🏭 Manufacturing</option>
-                                                            <option value="chemical">⚗️ Chemical</option>
-                                                            <option value="food">🍕 Food & Beverage</option>
-                                                            <option value="warehouse">📦 Warehouse/Logistics</option>
-                                                            <option value="energy">⚡ Energy</option>
-                                                            <option value="petrochemical">🛢️ Petrochemical</option>
-                                                            <option value="marine">🚢 Marine & Shipyard</option>
-                                                            <option value="aviation">✈️ Aviation</option>
-                                                        </select>
+                                                <option value="">Select your industry</option>
+                                                <option value="construction">🏗️ Construction</option>
+                                                <option value="manufacturing">🏭 Manufacturing</option>
+                                                <option value="chemical">⚗️ Chemical</option>
+                                                <option value="food">🍕 Food & Beverage</option>
+                                                <option value="warehouse">📦 Warehouse/Logistics</option>
+                                                <option value="energy">⚡ Energy</option>
+                                                <option value="petrochemical">🛢️ Petrochemical</option>
+                                                <option value="marine">🚢 Marine & Shipyard</option>
+                                                <option value="aviation">✈️ Aviation</option>
+                                            </select>
                                                         <span class="input-icon">
                                                             <i class="fas fa-industry text-primary"></i>
                                                         </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            
                                         </div>
+                                        </div>
+                                    </div>
+                                    
+
+                                    </div>
                                     </div>
                                     
                                     <!-- PPE Seçimi -->
@@ -14668,9 +14805,9 @@ Mesaj:
                                             <div class="col-lg-4">
                                                 <div class="logo-section">
                                                     <div class="logo-upload-modern" onclick="document.getElementById('logoInput').click()">
-                                                    {% if user_data.profile_image %}
+                                                    {% if company.logo_url %}
                                                             <div class="logo-preview">
-                                                                <img src="{{ user_data.profile_image }}" alt="Şirket Logo">
+                                                                <img src="{{ company.logo_url }}" alt="Şirket Logo">
                                                                 <div class="logo-overlay">
                                                                     <i class="fas fa-camera"></i>
                                                                     <span>Logo Değiştir</span>
@@ -15828,13 +15965,18 @@ Mesaj:
                         // Önizleme göster
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            const logoUpload = document.querySelector('.logo-upload');
-                            logoUpload.innerHTML = '<img src="' + e.target.result + '" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;">';
+                            const logoUpload = document.querySelector('.logo-upload-modern');
+                            if (logoUpload) {
+                                logoUpload.innerHTML = '<div class="logo-preview"><img src="' + e.target.result + '" alt="Logo Önizleme" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;"></div>';
+                            }
                         };
                         reader.readAsDataURL(file);
                         
                         // Dosyayı hemen yükle
                         uploadLogo(file);
+                        
+                        // File input'u reset et
+                        this.value = '';
                     }
                 });
                 
@@ -16091,7 +16233,7 @@ Mesaj:
                     formData.append('logo', file);
                     
                     // Loading göster
-                    const logoUpload = document.querySelector('.logo-upload');
+                    const logoUpload = document.querySelector('.logo-upload-modern');
                     const originalContent = logoUpload.innerHTML;
                     logoUpload.innerHTML = 
                         '<div class="d-flex align-items-center justify-content-center h-100">' +
@@ -16107,8 +16249,8 @@ Mesaj:
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            // Başarılı yükleme
-                            logoUpload.innerHTML = '<img src="' + data.logo_url + '" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;">';
+                            // Başarılı yükleme - Logo preview'i güncelle
+                            logoUpload.innerHTML = '<div class="logo-preview"><img src="' + data.logo_url + '" alt="Şirket Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px;"></div>';
                             
                             // Toast mesajı göster
                             const toast = document.createElement('div');
@@ -16129,10 +16271,16 @@ Mesaj:
                             setTimeout(() => {
                                 toast.remove();
                             }, 3000);
+                            
+                            // File input'u reset et
+                            document.getElementById('logoInput').value = '';
                         } else {
                             // Hata durumunda eski içeriği geri yükle
                             logoUpload.innerHTML = originalContent;
                             alert('❌ Logo yükleme hatası: ' + data.error);
+                            
+                            // File input'u reset et
+                            document.getElementById('logoInput').value = '';
                         }
                     })
                     .catch(error => {
@@ -16140,6 +16288,9 @@ Mesaj:
                         logoUpload.innerHTML = originalContent;
                         console.error('Logo upload error:', error);
                         alert('❌ Logo yükleme sırasında bir hata oluştu');
+                        
+                        // File input'u reset et
+                        document.getElementById('logoInput').value = '';
                     });
                 }
                 
@@ -18786,7 +18937,8 @@ Mesaj:
                         .then(result => {
                         console.log('📊 Abonelik yükleme sonucu:', result);
                             if (result.success) {
-                                const subscription = result.subscription;
+                                // API'den direkt subscription bilgileri geliyor, .subscription key'i yok
+                                const subscription = result;
                                 
                                 // Update subscription display in dashboard
                                 const subscriptionPlanElement = document.getElementById('subscription-plan');
@@ -18858,7 +19010,8 @@ Mesaj:
                         .then(result => {
                             console.log('📊 Abonelik sonucu:', result);
                             if (result.success) {
-                                const subscription = result.subscription;
+                                // API'den direkt subscription bilgileri geliyor, .subscription key'i yok
+                                const subscription = result;
                                 const subscriptionPlanElement = document.getElementById('subscription-plan');
                                 const subscriptionTrend = document.getElementById('subscription-trend');
                                 
@@ -18920,7 +19073,8 @@ Mesaj:
                                     .then(subResult => {
                                         console.log('📊 Abonelik sonucu (kamera):', subResult);
                                         if (subResult.success) {
-                                            const subscription = subResult.subscription;
+                                            // API'den direkt subscription bilgileri geliyor, .subscription key'i yok
+                                            const subscription = subResult;
                                             const cameraUsageElement = document.getElementById('camera-usage');
                                             const usageTrend = document.getElementById('usage-trend');
                                             

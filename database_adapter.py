@@ -180,6 +180,7 @@ class DatabaseAdapter:
                         api_key TEXT UNIQUE,
                         required_ppe TEXT,
                         profile_image TEXT,
+                        logo_url TEXT,
                         sector_config TEXT,
                         ppe_requirements TEXT,
                         compliance_settings TEXT,
@@ -223,6 +224,7 @@ class DatabaseAdapter:
                         api_key VARCHAR(255) UNIQUE,
                         required_ppe TEXT,
                         profile_image TEXT,
+                        logo_url TEXT,
                         sector_config JSON,
                         ppe_requirements JSON,
                         compliance_settings JSON,
@@ -1882,6 +1884,97 @@ class CameraDiscoveryManager:
         except Exception as e:
             self.logger.error(f"❌ Failed to add config camera: {e}")
             return False
+
+    def update_company_logo_url(self, company_id: str, logo_url: str) -> bool:
+        """Şirket logo URL'ini güncelle"""
+        try:
+            print(f"🔍 Database adapter - Logo URL güncelleniyor: {company_id} -> {logo_url}")
+            
+            query = '''
+                UPDATE companies 
+                SET logo_url = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = ?
+            '''
+            
+            print(f"🔍 Database adapter - Query: {query}")
+            print(f"🔍 Database adapter - Params: ({logo_url}, {company_id})")
+            
+            self.db_adapter.execute_query(query, (logo_url, company_id))
+            
+            # Güncelleme sonrası kontrol
+            print(f"🔍 Database adapter - Güncelleme sonrası kontrol...")
+            check_query = "SELECT logo_url FROM companies WHERE company_id = ?"
+            result = self.db_adapter.execute_query(check_query, (company_id,), fetch_one=True)
+            print(f"🔍 Database adapter - Kontrol sonucu: {result}")
+            
+            self.logger.info(f"✅ Company logo URL updated: {company_id} -> {logo_url}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Database adapter - Logo URL güncelleme hatası: {e}")
+            self.logger.error(f"❌ Failed to update company logo URL: {e}")
+            return False
+    
+    def get_company_info(self, company_id: str) -> Optional[Dict[str, Any]]:
+        """Şirket bilgilerini getir"""
+        try:
+            print(f"🔍 Database adapter - get_company_info çağrıldı: {company_id}")
+            
+            query = '''
+                SELECT company_name, sector, contact_person, email, phone, address,
+                       subscription_type, subscription_start, subscription_end, max_cameras, logo_url
+                FROM companies 
+                WHERE company_id = ?
+            '''
+            
+            print(f"🔍 Database adapter - Query: {query}")
+            result = self.db_adapter.execute_query(query, (company_id,), fetch_one=True)
+            print(f"🔍 Database adapter - Query result: {result}")
+            
+            if result:
+                if hasattr(result, 'keys'):  # PostgreSQL RealDictRow
+                    print(f"🔍 Database adapter - PostgreSQL RealDictRow formatı")
+                    company_info = {
+                        'company_name': result['company_name'],
+                        'sector': result['sector'],
+                        'contact_person': result['contact_person'],
+                        'email': result['email'],
+                        'phone': result['phone'],
+                        'address': result['address'],
+                        'subscription_type': result['subscription_type'],
+                        'subscription_start': result['subscription_start'],
+                        'subscription_end': result['subscription_end'],
+                        'max_cameras': result['max_cameras'],
+                        'logo_url': result['logo_url']
+                    }
+                    print(f"🔍 Database adapter - Company info: {company_info}")
+                    return company_info
+                else:  # SQLite tuple
+                    print(f"🔍 Database adapter - SQLite tuple formatı")
+                    print(f"🔍 Database adapter - Result length: {len(result)}")
+                    company_info = {
+                        'company_name': result[0],
+                        'sector': result[1],
+                        'contact_person': result[2],
+                        'email': result[3],
+                        'phone': result[4],
+                        'address': result[5],
+                        'subscription_type': result[6],
+                        'subscription_start': result[7],
+                        'subscription_end': result[8],
+                        'max_cameras': result[9],
+                        'logo_url': result[10] if len(result) > 10 else None
+                    }
+                    print(f"🔍 Database adapter - Company info: {company_info}")
+                    return company_info
+            else:
+                print(f"🔍 Database adapter - Query sonucu bulunamadı")
+                return None
+            
+        except Exception as e:
+            print(f"❌ Database adapter - get_company_info hatası: {e}")
+            self.logger.error(f"❌ Failed to get company info: {e}")
+            return None
 
 # Global camera discovery manager instance
 camera_discovery_manager = CameraDiscoveryManager(db_adapter)
