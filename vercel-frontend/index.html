@@ -1280,12 +1280,46 @@
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
                     <div class="position-relative rounded-4 shadow-lg overflow-hidden pt-3">
-                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png" preload="auto" onloadeddata="this.play().catch(e => console.log('Video autoplay blocked'))" style="background-image: url('/static/images/hero-image.png'); background-size: cover;">
+                        <video id="heroVideo" class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png" preload="auto">
                             <source src="/static/videos/hero-video.webm" type="video/webm">
                             <source src="/static/videos/hero-video.mp4" type="video/mp4">
-                            <!-- Fallback for browsers that don't support video -->
-                            <img src="/static/images/hero-image.png" alt="SmartSafe AI Demo" class="img-fluid">
                         </video>
+                        <script>
+                            // Aggressive video autoplay
+                            (function() {
+                                const video = document.getElementById('heroVideo');
+                                if (video) {
+                                    // Try to play immediately
+                                    video.play().catch(e => {
+                                        console.log('Initial autoplay blocked, trying again...');
+                                        // Retry with user interaction
+                                        document.addEventListener('click', function playVideo() {
+                                            video.play();
+                                            document.removeEventListener('click', playVideo);
+                                        }, { once: true });
+                                    });
+                                    
+                                    // Force play on load
+                                    video.addEventListener('loadeddata', function() {
+                                        setTimeout(() => {
+                                            video.play().catch(e => console.log('Video play failed:', e));
+                                        }, 100);
+                                    });
+                                    
+                                    // Intersection Observer for lazy load
+                                    if ('IntersectionObserver' in window) {
+                                        const observer = new IntersectionObserver((entries) => {
+                                            entries.forEach(entry => {
+                                                if (entry.isIntersecting) {
+                                                    video.play().catch(e => console.log('IO play failed:', e));
+                                                }
+                                            });
+                                        }, { threshold: 0.5 });
+                                        observer.observe(video);
+                                    }
+                                }
+                            })();
+                        </script>
                     </div>
                 </div>
             </div>
