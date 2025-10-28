@@ -112,7 +112,7 @@ class SmartSafeSaaSAPI:
             'http://localhost:3000',
             'http://localhost:8000',
             'http://localhost:5000',
-            'https://smartsafe-api.onrender.com',
+            'https://smartsafe-ppe-detection.onrender.com',  # Render backend URL
             'https://*.vercel.app',  # Vercel preview ve production domains
             os.getenv('FRONTEND_URL', '')  # Environment variable ile özelleştirilebilir
         ]

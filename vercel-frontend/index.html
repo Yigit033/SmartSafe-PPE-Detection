@@ -1280,7 +1280,7 @@
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
                     <div class="position-relative rounded-4 shadow-lg overflow-hidden pt-3">
-                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png" preload="metadata">
+                        <video class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png" preload="auto" onloadeddata="this.play().catch(e => console.log('Video autoplay blocked'))" style="background-image: url('/static/images/hero-image.png'); background-size: cover;">
                             <source src="/static/videos/hero-video.webm" type="video/webm">
                             <source src="/static/videos/hero-video.mp4" type="video/mp4">
                             <!-- Fallback for browsers that don't support video -->
@@ -2463,9 +2463,9 @@
 
         // API Configuration - Backend URL
         // Local test: http://localhost:5000
-        // Production: https://smartsafe-api.onrender.com
+        // Production: https://smartsafe-ppe-detection.onrender.com (RENDER URL'İNİ BURAYA YAZ!)
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const API_BASE_URL = isLocal ? 'http://localhost:5000' : 'https://smartsafe-api.onrender.com';
+        const API_BASE_URL = isLocal ? 'http://localhost:5000' : 'https://smartsafe-ppe-detection.onrender.com';
         const BACKEND_URL = API_BASE_URL;  // Backend routes için
         
         // Backend linklerini güncelle (Giriş Yap, Hemen Başla vb.)
