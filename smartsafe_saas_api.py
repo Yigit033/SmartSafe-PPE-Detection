@@ -106,8 +106,23 @@ class SmartSafeSaaSAPI:
         self.app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
         self.mail = Mail(self.app)
         
-        # Enable CORS
-        CORS(self.app)
+        # Enable CORS - Vercel Frontend + Render Backend
+        # Production'da Vercel domain'inizi ekleyin
+        allowed_origins = [
+            'http://localhost:3000',
+            'http://localhost:8000',
+            'http://localhost:5000',
+            'https://smartsafe-api.onrender.com',
+            'https://*.vercel.app',  # Vercel preview ve production domains
+            os.getenv('FRONTEND_URL', '')  # Environment variable ile özelleştirilebilir
+        ]
+        
+        # CORS konfigürasyonu
+        CORS(self.app, 
+             resources={r"/*": {"origins": allowed_origins}},
+             supports_credentials=True,
+             allow_headers=['Content-Type', 'Authorization'],
+             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
         # --- Media Gateway configuration (WebRTC/HLS/RTSP aggregator) ---
         # Allows the platform to prefer a local media gateway (e.g., MediaMTX) as the

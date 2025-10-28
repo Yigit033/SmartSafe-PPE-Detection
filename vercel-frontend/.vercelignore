@@ -1,0 +1,10 @@
+# Vercel'de build etmeye gerek olmayan dosyalar
+*.log
+*.md
+.git
+.gitignore
+deploy.ps1
+deploy.sh
+README.md
+QUICK_START.md
+
