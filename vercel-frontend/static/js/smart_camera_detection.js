@@ -1,6 +1,6 @@
-/**
- * SmartSafe AI - Akıllı Kamera Tespit Sistemi
- * Gelişmiş kamera tespiti ve yönetimi için JavaScript fonksiyonları
+﻿/**
+ * SmartSafe AI - AkÄ±llÄ± Kamera Tespit Sistemi
+ * GeliÅŸmiÅŸ kamera tespiti ve yÃ¶netimi iÃ§in JavaScript fonksiyonlarÄ±
  */
 
 class SmartCameraDetection {
@@ -15,19 +15,19 @@ class SmartCameraDetection {
     }
     
     initializeEventListeners() {
-        // Akıllı tespit butonu
+        // AkÄ±llÄ± tespit butonu
         const smartDetectBtn = document.getElementById('smartDetectBtn');
         if (smartDetectBtn) {
             smartDetectBtn.addEventListener('click', () => this.startSmartDetection());
         }
         
-        // IP adresi ile hızlı test butonu
+        // IP adresi ile hÄ±zlÄ± test butonu
         const quickTestBtn = document.getElementById('quickTestBtn');
         if (quickTestBtn) {
             quickTestBtn.addEventListener('click', () => this.quickCameraTest());
         }
         
-        // Ağ tarama butonu
+        // AÄŸ tarama butonu
         const networkScanBtn = document.getElementById('networkScanBtn');
         if (networkScanBtn) {
             networkScanBtn.addEventListener('click', () => this.startNetworkScan());
@@ -41,7 +41,7 @@ class SmartCameraDetection {
     }
     
     /**
-     * Akıllı kamera tespiti başlat
+     * AkÄ±llÄ± kamera tespiti baÅŸlat
      */
     async startSmartDetection() {
         const ipInput = document.getElementById('cameraIP');
@@ -53,11 +53,11 @@ class SmartCameraDetection {
         }
         
         if (!this.validateIPAddress(ipAddress)) {
-            this.showNotification('Geçersiz IP adresi formatı!', 'error');
+            this.showNotification('GeÃ§ersiz IP adresi formatÄ±!', 'error');
             return;
         }
         
-        this.showLoading('Akıllı kamera tespiti başlatılıyor...');
+        this.showLoading('AkÄ±llÄ± kamera tespiti baÅŸlatÄ±lÄ±yor...');
         
         try {
             const response = await fetch(`/api/company/${this.getCompanyId()}/cameras/smart-test`, {
@@ -67,7 +67,7 @@ class SmartCameraDetection {
                 },
                 body: JSON.stringify({
                     ip_address: ipAddress,
-                    name: `Akıllı Tespit Kamera ${ipAddress}`
+                    name: `AkÄ±llÄ± Tespit Kamera ${ipAddress}`
                 })
             });
             
@@ -80,50 +80,50 @@ class SmartCameraDetection {
             }
             
         } catch (error) {
-            this.handleSmartDetectionError(`Bağlantı hatası: ${error.message}`);
+            this.handleSmartDetectionError(`BaÄŸlantÄ± hatasÄ±: ${error.message}`);
         } finally {
             this.hideLoading();
         }
     }
     
     /**
-     * Akıllı tespit başarılı sonucu işle
+     * AkÄ±llÄ± tespit baÅŸarÄ±lÄ± sonucu iÅŸle
      */
     handleSmartDetectionSuccess(result, ipAddress) {
         const detectionInfo = result.detection_info;
         const cameraConfig = result.camera_config;
         
-        // Sonuçları göster
+        // SonuÃ§larÄ± gÃ¶ster
         this.showDetectionResults(detectionInfo, cameraConfig);
         
-        // Form alanlarını otomatik doldur
+        // Form alanlarÄ±nÄ± otomatik doldur
         this.autoFillCameraForm(cameraConfig);
         
-        // Başarı mesajı
+        // BaÅŸarÄ± mesajÄ±
         this.showNotification(
-            `✅ Kamera başarıyla tespit edildi!<br>
+            `âœ… Kamera baÅŸarÄ±yla tespit edildi!<br>
              Model: ${detectionInfo.detected_model}<br>
              Protokol: ${detectionInfo.protocol}<br>
              Port: ${detectionInfo.port}`,
             'success'
         );
         
-        // Tespit edilen kamerayı listeye ekle
+        // Tespit edilen kamerayÄ± listeye ekle
         this.addToDiscoveredList(detectionInfo, cameraConfig);
     }
     
     /**
-     * Akıllı tespit hatası işle
+     * AkÄ±llÄ± tespit hatasÄ± iÅŸle
      */
     handleSmartDetectionError(error) {
-        this.showNotification(`❌ Kamera tespit edilemedi: ${error}`, 'error');
+        this.showNotification(`âŒ Kamera tespit edilemedi: ${error}`, 'error');
         
-        // Hata detaylarını göster
+        // Hata detaylarÄ±nÄ± gÃ¶ster
         this.showErrorDetails(error);
     }
     
     /**
-     * Tespit sonuçlarını göster
+     * Tespit sonuÃ§larÄ±nÄ± gÃ¶ster
      */
     showDetectionResults(detectionInfo, cameraConfig) {
         const resultsContainer = document.getElementById('detectionResults');
@@ -134,14 +134,14 @@ class SmartCameraDetection {
         
         resultsContainer.innerHTML = `
             <div class="detection-result-card">
-                <h4>🎯 Tespit Sonuçları</h4>
+                <h4>ğŸ¯ Tespit SonuÃ§larÄ±</h4>
                 <div class="result-grid">
                     <div class="result-item">
                         <span class="label">Model:</span>
                         <span class="value">${detectionInfo.detected_model}</span>
                     </div>
                     <div class="result-item">
-                        <span class="label">Güven:</span>
+                        <span class="label">GÃ¼ven:</span>
                         <span class="value" style="color: ${confidenceColor}">
                             ${(detectionInfo.detection_confidence * 100).toFixed(1)}%
                         </span>
@@ -170,7 +170,7 @@ class SmartCameraDetection {
     }
     
     /**
-     * Form alanlarını otomatik doldur
+     * Form alanlarÄ±nÄ± otomatik doldur
      */
     autoFillCameraForm(cameraConfig) {
         const formFields = {
@@ -185,7 +185,7 @@ class SmartCameraDetection {
             if (field) {
                 field.value = value;
                 
-                // Select element için
+                // Select element iÃ§in
                 if (field.tagName === 'SELECT') {
                     const option = field.querySelector(`option[value="${value}"]`);
                     if (option) {
@@ -195,12 +195,12 @@ class SmartCameraDetection {
             }
         }
         
-        // Form değişikliklerini tetikle
+        // Form deÄŸiÅŸikliklerini tetikle
         this.triggerFormChange();
     }
     
     /**
-     * Hızlı kamera testi
+     * HÄ±zlÄ± kamera testi
      */
     async quickCameraTest() {
         const ipInput = document.getElementById('cameraIP');
@@ -211,10 +211,10 @@ class SmartCameraDetection {
             return;
         }
         
-        this.showLoading('Hızlı test yapılıyor...');
+        this.showLoading('HÄ±zlÄ± test yapÄ±lÄ±yor...');
         
         try {
-            // Önce akıllı tespit yap
+            // Ã–nce akÄ±llÄ± tespit yap
             const smartResult = await this.performSmartDetection(ipAddress);
             
             if (smartResult.success) {
@@ -222,23 +222,23 @@ class SmartCameraDetection {
                 const testResult = await this.performCameraTest(smartResult.camera_config);
                 
                 if (testResult.success) {
-                    this.showNotification('✅ Kamera testi başarılı!', 'success');
+                    this.showNotification('âœ… Kamera testi baÅŸarÄ±lÄ±!', 'success');
                 } else {
-                    this.showNotification(`❌ Kamera testi başarısız: ${testResult.error}`, 'error');
+                    this.showNotification(`âŒ Kamera testi baÅŸarÄ±sÄ±z: ${testResult.error}`, 'error');
                 }
             } else {
-                this.showNotification(`❌ Kamera tespit edilemedi: ${smartResult.error}`, 'error');
+                this.showNotification(`âŒ Kamera tespit edilemedi: ${smartResult.error}`, 'error');
             }
             
         } catch (error) {
-            this.showNotification(`❌ Test hatası: ${error.message}`, 'error');
+            this.showNotification(`âŒ Test hatasÄ±: ${error.message}`, 'error');
         } finally {
             this.hideLoading();
         }
     }
     
     /**
-     * Ağ tarama başlat
+     * AÄŸ tarama baÅŸlat
      */
     async startNetworkScan() {
         if (this.isScanning) {
@@ -251,7 +251,7 @@ class SmartCameraDetection {
         this.discoveredCameras = [];
         
         this.updateScanUI();
-        this.showLoading('Ağ taraması başlatılıyor...');
+        this.showLoading('AÄŸ taramasÄ± baÅŸlatÄ±lÄ±yor...');
         
         try {
             const response = await fetch(`/api/company/${this.getCompanyId()}/cameras/smart-discover`, {
@@ -273,7 +273,7 @@ class SmartCameraDetection {
             }
             
         } catch (error) {
-            this.handleNetworkScanError(`Tarama hatası: ${error.message}`);
+            this.handleNetworkScanError(`Tarama hatasÄ±: ${error.message}`);
         } finally {
             this.isScanning = false;
             this.hideLoading();
@@ -282,13 +282,13 @@ class SmartCameraDetection {
     }
     
     /**
-     * Ağ tarama başarılı sonucu işle
+     * AÄŸ tarama baÅŸarÄ±lÄ± sonucu iÅŸle
      */
     handleNetworkScanSuccess(result) {
         this.discoveredCameras = result.cameras || [];
         
         this.showNotification(
-            `✅ Ağ taraması tamamlandı! ${this.discoveredCameras.length} kamera bulundu.`,
+            `âœ… AÄŸ taramasÄ± tamamlandÄ±! ${this.discoveredCameras.length} kamera bulundu.`,
             'success'
         );
         
@@ -297,22 +297,22 @@ class SmartCameraDetection {
     }
     
     /**
-     * Ağ tarama hatası işle
+     * AÄŸ tarama hatasÄ± iÅŸle
      */
     handleNetworkScanError(error) {
-        this.showNotification(`❌ Ağ taraması başarısız: ${error}`, 'error');
+        this.showNotification(`âŒ AÄŸ taramasÄ± baÅŸarÄ±sÄ±z: ${error}`, 'error');
         this.updateScanProgress(0);
     }
     
     /**
-     * Keşfedilen kameraları göster
+     * KeÅŸfedilen kameralarÄ± gÃ¶ster
      */
     displayDiscoveredCameras() {
         const container = document.getElementById('discoveredCameras');
         if (!container) return;
         
         if (this.discoveredCameras.length === 0) {
-            container.innerHTML = '<p class="no-cameras">Keşfedilen kamera bulunamadı.</p>';
+            container.innerHTML = '<p class="no-cameras">KeÅŸfedilen kamera bulunamadÄ±.</p>';
             return;
         }
         
@@ -353,7 +353,7 @@ class SmartCameraDetection {
     }
     
     /**
-     * Keşfedilen kamerayı test et
+     * KeÅŸfedilen kamerayÄ± test et
      */
     async testCamera(index) {
         const camera = this.discoveredCameras[index];
@@ -365,20 +365,20 @@ class SmartCameraDetection {
             const result = await this.performSmartDetection(camera.ip);
             
             if (result.success) {
-                this.showNotification(`✅ ${camera.ip} testi başarılı!`, 'success');
+                this.showNotification(`âœ… ${camera.ip} testi baÅŸarÄ±lÄ±!`, 'success');
             } else {
-                this.showNotification(`❌ ${camera.ip} testi başarısız: ${result.error}`, 'error');
+                this.showNotification(`âŒ ${camera.ip} testi baÅŸarÄ±sÄ±z: ${result.error}`, 'error');
             }
             
         } catch (error) {
-            this.showNotification(`❌ Test hatası: ${error.message}`, 'error');
+            this.showNotification(`âŒ Test hatasÄ±: ${error.message}`, 'error');
         } finally {
             this.hideLoading();
         }
     }
     
     /**
-     * Keşfedilen kamerayı ekle
+     * KeÅŸfedilen kamerayÄ± ekle
      */
     async addCamera(index) {
         const camera = this.discoveredCameras[index];
@@ -408,15 +408,15 @@ class SmartCameraDetection {
             const result = await response.json();
             
             if (result.success) {
-                this.showNotification(`✅ ${camera.ip} başarıyla eklendi!`, 'success');
+                this.showNotification(`âœ… ${camera.ip} baÅŸarÄ±yla eklendi!`, 'success');
                 this.discoveredCameras.splice(index, 1);
                 this.displayDiscoveredCameras();
             } else {
-                this.showNotification(`❌ Ekleme başarısız: ${result.error}`, 'error');
+                this.showNotification(`âŒ Ekleme baÅŸarÄ±sÄ±z: ${result.error}`, 'error');
             }
             
         } catch (error) {
-            this.showNotification(`❌ Ekleme hatası: ${error.message}`, 'error');
+            this.showNotification(`âŒ Ekleme hatasÄ±: ${error.message}`, 'error');
         } finally {
             this.hideLoading();
         }
@@ -427,11 +427,11 @@ class SmartCameraDetection {
      */
     async autoAddDiscoveredCameras() {
         if (this.discoveredCameras.length === 0) {
-            this.showNotification('Eklenecek kamera bulunamadı!', 'warning');
+            this.showNotification('Eklenecek kamera bulunamadÄ±!', 'warning');
             return;
         }
         
-        const confirmed = confirm(`${this.discoveredCameras.length} kamerayı otomatik olarak eklemek istiyor musunuz?`);
+        const confirmed = confirm(`${this.discoveredCameras.length} kamerayÄ± otomatik olarak eklemek istiyor musunuz?`);
         if (!confirmed) return;
         
         this.showLoading('Kamerlar otomatik ekleniyor...');
@@ -451,15 +451,15 @@ class SmartCameraDetection {
         this.hideLoading();
         
         this.showNotification(
-            `✅ Otomatik ekleme tamamlandı!<br>
-             Başarılı: ${successCount}<br>
-             Başarısız: ${errorCount}`,
+            `âœ… Otomatik ekleme tamamlandÄ±!<br>
+             BaÅŸarÄ±lÄ±: ${successCount}<br>
+             BaÅŸarÄ±sÄ±z: ${errorCount}`,
             successCount > 0 ? 'success' : 'error'
         );
     }
     
     /**
-     * Yardımcı fonksiyonlar
+     * YardÄ±mcÄ± fonksiyonlar
      */
     validateIPAddress(ip) {
         const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
@@ -500,7 +500,7 @@ class SmartCameraDetection {
         
         document.body.appendChild(notification);
         
-        // 5 saniye sonra kaldır
+        // 5 saniye sonra kaldÄ±r
         setTimeout(() => {
             notification.remove();
         }, 5000);
@@ -511,7 +511,7 @@ class SmartCameraDetection {
         const progressBar = document.getElementById('scanProgress');
         
         if (scanBtn) {
-            scanBtn.textContent = this.isScanning ? 'Taranıyor...' : 'Ağ Tara';
+            scanBtn.textContent = this.isScanning ? 'TaranÄ±yor...' : 'AÄŸ Tara';
             scanBtn.disabled = this.isScanning;
         }
         
@@ -527,7 +527,7 @@ class SmartCameraDetection {
     }
     
     triggerFormChange() {
-        // Form değişiklik event'ini tetikle
+        // Form deÄŸiÅŸiklik event'ini tetikle
         const event = new Event('change', { bubbles: true });
         document.querySelector('#cameraIP').dispatchEvent(event);
     }
@@ -554,7 +554,7 @@ class SmartCameraDetection {
 // Global instance
 const smartDetection = new SmartCameraDetection();
 
-// Sayfa yüklendiğinde başlat
+// Sayfa yÃ¼klendiÄŸinde baÅŸlat
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🎥 Smart Camera Detection System initialized');
+    console.log('ğŸ¥ Smart Camera Detection System initialized');
 }); 
