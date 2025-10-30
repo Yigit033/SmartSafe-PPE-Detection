@@ -1,0 +1,441 @@
+{
+  "sector_rules": {
+    "construction": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "construction_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "İnşaat kaskı"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "high_visibility_vest",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Yüksek görünürlük yeleği"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "steel_toe_boots",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Çelik burunlu bot"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "work_gloves",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "İş eldiveni"
+      },
+      {
+        "ppe_type": "glasses",
+        "base_class": "glasses",
+        "sector_class": "safety_glasses",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik gözlüğü"
+      }
+    ],
+    "chemical": [
+      {
+        "ppe_type": "face_mask",
+        "base_class": "face_mask",
+        "sector_class": "chemical_respirator",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal solunum maskesi"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "chemical_gloves",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal eldiven"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "chemical_suit",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal tulum"
+      },
+      {
+        "ppe_type": "glasses",
+        "base_class": "glasses",
+        "sector_class": "chemical_goggles",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal gözlük"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "chemical_boots",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal bot"
+      }
+    ],
+    "food": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "hair_net",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Bone/Başlık"
+      },
+      {
+        "ppe_type": "face_mask",
+        "base_class": "face_mask",
+        "sector_class": "hygiene_mask",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Hijyen maskesi"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "hygiene_apron",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Hijyen önlüğü"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "hygiene_gloves",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Hijyen eldiveni"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "non_slip_shoes",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Kaymaz ayakkabı"
+      }
+    ],
+    "manufacturing": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "industrial_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Endüstriyel kask"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "reflective_vest",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Reflektörlü yelek"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "industrial_gloves",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Endüstriyel eldiven"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "steel_toe_shoes",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Çelik burunlu ayakkabı"
+      },
+      {
+        "ppe_type": "glasses",
+        "base_class": "glasses",
+        "sector_class": "safety_glasses",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik gözlüğü"
+      }
+    ],
+    "warehouse": [
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "visibility_vest",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Görünürlük yeleği"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "warehouse_shoes",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Depo ayakkabısı"
+      },
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "protective_helmet",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Koruyucu kask"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "warehouse_gloves",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Depo eldiveni"
+      }
+    ],
+    "general": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "safety_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik kaskı"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "safety_vest",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik yeleği"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "safety_gloves",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik eldiveni"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "safety_shoes",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik ayakkabısı"
+      },
+      {
+        "ppe_type": "glasses",
+        "base_class": "glasses",
+        "sector_class": "safety_glasses",
+        "is_required": false,
+        "confidence_threshold": 0.3,
+        "description": "Güvenlik gözlüğü"
+      }
+    ],
+    "energy": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "dielectric_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Dielektrik Baret"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "insulated_gloves",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Yalıtımlı Eldiven"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "arc_flash_suit",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Ark Flash Koruyucu Giysi"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "insulated_boots",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Yalıtımlı Ayakkabı"
+      },
+      {
+        "ppe_type": "glasses",
+        "base_class": "glasses",
+        "sector_class": "arc_flash_visor",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Ark Flash Vizör"
+      }
+    ],
+    "petrochemical": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "chem_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal Dayanımlı Baret"
+      },
+      {
+        "ppe_type": "face_mask",
+        "base_class": "face_mask",
+        "sector_class": "gas_mask",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Gaz Maskesi"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "chemical_suit",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal Koruyucu Tulum"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "chemical_resistant_gloves",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal Eldiven"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "chemical_boots",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Kimyasal Dayanımlı Bot"
+      }
+    ],
+    "shipyard": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "marine_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Denizcilik Bareti"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "life_vest",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Can Yeleği"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "waterproof_gloves",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Su Geçirmez Eldiven"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "marine_boots",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Denizcilik Botu"
+      },
+      {
+        "ppe_type": "harness",
+        "base_class": "harness",
+        "sector_class": "fall_protection",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Yüksekte Çalışma Kemeri"
+      }
+    ],
+    "aviation": [
+      {
+        "ppe_type": "helmet",
+        "base_class": "helmet",
+        "sector_class": "aviation_helmet",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Havacılık Bareti"
+      },
+      {
+        "ppe_type": "safety_vest",
+        "base_class": "safety_vest",
+        "sector_class": "high_vis_vest",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Yüksek Görünürlük Yeleği"
+      },
+      {
+        "ppe_type": "ear_protection",
+        "base_class": "ear_protection",
+        "sector_class": "aviation_headset",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Gürültü Önleyici Kulaklık"
+      },
+      {
+        "ppe_type": "safety_shoes",
+        "base_class": "safety_shoes",
+        "sector_class": "esd_shoes",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Anti-statik Ayakkabı"
+      },
+      {
+        "ppe_type": "gloves",
+        "base_class": "gloves",
+        "sector_class": "mechanic_gloves",
+        "is_required": true,
+        "confidence_threshold": 0.3,
+        "description": "Mekanik Eldiven"
+      }
+    ]
+  },
+  "ppe_descriptions": {
+    "construction_helmet": "İnşaat Kaskı - Düşen nesnelerden koruma",
+    "high_visibility_vest": "Yüksek Görünürlük Yeleği - Görünürlük artırma",
+    "steel_toe_boots": "Çelik Burunlu Bot - Ayak koruma",
+    "work_gloves": "İş Eldiveni - El koruma",
+    "safety_glasses": "Güvenlik Gözlüğü - Göz koruma",
+    "chemical_respirator": "Kimyasal Solunum Maskesi - Solunum yolu koruma",
+    "chemical_gloves": "Kimyasal Eldiven - Kimyasal madde koruması",
+    "chemical_suit": "Kimyasal Tulum - Tam vücut koruma",
+    "chemical_goggles": "Kimyasal Gözlük - Kimyasal sıçrama koruması",
+    "chemical_boots": "Kimyasal Bot - Ayak kimyasal koruması",
+    "hair_net": "Bone/Başlık - Saç hijyeni",
+    "hygiene_mask": "Hijyen Maskesi - Gıda hijyeni",
+    "hygiene_apron": "Hijyen Önlüğü - Gıda güvenliği",
+    "hygiene_gloves": "Hijyen Eldiveni - El hijyeni",
+    "non_slip_shoes": "Kaymaz Ayakkabı - Kayma önleme",
+    "industrial_helmet": "Endüstriyel Kask - Endüstriyel koruma",
+    "reflective_vest": "Reflektörlü Yelek - Görünürlük ve koruma",
+    "industrial_gloves": "Endüstriyel Eldiven - Makine koruması",
+    "steel_toe_shoes": "Çelik Burunlu Ayakkabı - Endüstriyel ayak koruma",
+    "visibility_vest": "Görünürlük Yeleği - Depo görünürlüğü",
+    "warehouse_shoes": "Depo Ayakkabısı - Depo güvenliği",
+    "protective_helmet": "Koruyucu Kask - Genel koruma",
+    "warehouse_gloves": "Depo Eldiveni - Malzeme taşıma"
+  }
+}

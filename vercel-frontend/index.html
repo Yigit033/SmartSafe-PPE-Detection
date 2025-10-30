@@ -1280,43 +1280,103 @@
                 </div>
                 <div class="col-lg-6" data-aos="fade-left">
                     <div class="position-relative rounded-4 shadow-lg overflow-hidden pt-3">
-                        <video id="heroVideo" class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="/static/images/hero-image.png" preload="auto">
-                            <source src="/static/videos/hero-video.webm" type="video/webm">
-                            <source src="/static/videos/hero-video.mp4" type="video/mp4">
+                        <video id="heroVideo" class="img-fluid w-100 hero-video" autoplay loop muted playsinline poster="./static/images/hero-image.png" preload="metadata" crossorigin="anonymous">
+                            <source src="./static/videos/hero-video.webm" type="video/webm">
+                            <source src="./static/videos/hero-video.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
                         </video>
                         <script>
-                            // Aggressive video autoplay
+                            // Enhanced video autoplay with better error handling
                             (function() {
                                 const video = document.getElementById('heroVideo');
+                                const videoContainer = video.parentElement;
+                                
                                 if (video) {
-                                    // Try to play immediately
-                                    video.play().catch(e => {
-                                        console.log('Initial autoplay blocked, trying again...');
-                                        // Retry with user interaction
-                                        document.addEventListener('click', function playVideo() {
-                                            video.play();
-                                            document.removeEventListener('click', playVideo);
-                                        }, { once: true });
+                                    // Log video source for debugging
+                                    console.log('Video sources:', {
+                                        webm: video.querySelector('source[type="video/webm"]')?.src,
+                                        mp4: video.querySelector('source[type="video/mp4"]')?.src
                                     });
                                     
-                                    // Force play on load
-                                    video.addEventListener('loadeddata', function() {
-                                        setTimeout(() => {
-                                            video.play().catch(e => console.log('Video play failed:', e));
-                                        }, 100);
+                                    // Error handling
+                                    video.addEventListener('error', function(e) {
+                                        console.error('Video error:', e);
+                                        console.error('Video error details:', {
+                                            error: video.error,
+                                            networkState: video.networkState,
+                                            readyState: video.readyState
+                                        });
+                                        // Show poster on error
+                                        video.style.display = 'block';
                                     });
+                                    
+                                    // Check if sources are loading
+                                    video.addEventListener('loadstart', function() {
+                                        console.log('Video loading started');
+                                    });
+                                    
+                                    video.addEventListener('loadedmetadata', function() {
+                                        console.log('Video metadata loaded');
+                                    });
+                                    
+                                    video.addEventListener('loadeddata', function() {
+                                        console.log('Video data loaded');
+                                    });
+                                    
+                                    video.addEventListener('canplay', function() {
+                                        console.log('Video can play');
+                                    });
+                                    
+                                    video.addEventListener('canplaythrough', function() {
+                                        console.log('Video can play through');
+                                    });
+                                    
+                                    // Try to play immediately
+                                    const playPromise = video.play();
+                                    
+                                    if (playPromise !== undefined) {
+                                        playPromise.then(() => {
+                                            console.log('Video playing successfully');
+                                        }).catch(e => {
+                                            console.log('Initial autoplay blocked:', e.message);
+                                            
+                                            // Retry with user interaction
+                                            const playOnInteraction = function() {
+                                                video.play().then(() => {
+                                                    console.log('Video playing after user interaction');
+                                                }).catch(err => {
+                                                    console.error('Video play failed after interaction:', err);
+                                                });
+                                                document.removeEventListener('click', playOnInteraction);
+                                                document.removeEventListener('touchstart', playOnInteraction);
+                                            };
+                                            
+                                            document.addEventListener('click', playOnInteraction, { once: true });
+                                            document.addEventListener('touchstart', playOnInteraction, { once: true });
+                                        });
+                                    }
                                     
                                     // Intersection Observer for lazy load
                                     if ('IntersectionObserver' in window) {
                                         const observer = new IntersectionObserver((entries) => {
                                             entries.forEach(entry => {
                                                 if (entry.isIntersecting) {
-                                                    video.play().catch(e => console.log('IO play failed:', e));
+                                                    video.play().catch(e => console.log('IO play failed:', e.message));
                                                 }
                                             });
-                                        }, { threshold: 0.5 });
+                                        }, { threshold: 0.25 });
                                         observer.observe(video);
                                     }
+                                    
+                                    // Fallback: Check if video is actually playing after 3 seconds
+                                    setTimeout(() => {
+                                        if (video.paused && video.readyState >= 2) {
+                                            console.log('Video not playing, attempting to play again...');
+                                            video.play().catch(e => console.log('Delayed play failed:', e.message));
+                                        } else if (video.readyState < 2) {
+                                            console.warn('Video not ready after 3 seconds. Network state:', video.networkState);
+                                        }
+                                    }, 3000);
                                 }
                             })();
                         </script>

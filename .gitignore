@@ -142,11 +142,17 @@ data/test/
 data/val/
 data/valid/
 *.csv
-*.json
+# *.json
 *.pkl
 *.pickle
 *.npy
 *.npz
+
+# Keep vercel.json and other config files
+!vercel-frontend/vercel.json
+!**/vercel.json
+!package.json
+!tsconfig.json
 
 # Database files
 *.db
@@ -183,13 +189,11 @@ desktop.ini
 $RECYCLE.BIN/
 
 # Image and video files (if too large)
-*.mp4
 *.avi
 *.mov
 *.mkv
 *.wmv
 *.flv
-*.webm
 *.m4v
 
 # Audio files
@@ -233,10 +237,10 @@ ENV/
 !demo_ppe_compliant.jpg
 !demo_ppe_violation.jpg
 
-# Keep assets folder structure but ignore large files
+# Keep assets folder structure but ignore large files (except vercel-frontend)
 assets/*.wav
 assets/*.mp3
-assets/*.mp4
+# assets/*.mp4  # Commented out to allow vercel-frontend videos
 
 # Development and testing artifacts
 test_results/
@@ -270,11 +274,8 @@ models/*/weights/
 models/*/*.pt
 models/*/*.pth
 
-# User uploads
+# User uploads (main app only, not vercel-frontend)
 static/uploads/logos/
-static/videos/
 
-# Büyük video dosyaları
-static/videos/*.mp4
-static/videos/*.webm
-static/videos/*.avi
+# Note: vercel-frontend/static/videos/ is NOT ignored
+# Those files are needed for landing page deployment
