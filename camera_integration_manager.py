@@ -2457,7 +2457,10 @@ class ProfessionalCameraManager:
                     'ppe_violations': [],
                     'timestamp': time.time(),
                     'sector': sector,
-                    'camera_id': camera_id
+                    'camera_id': camera_id,
+                    'total_people': 0,
+                    'compliant_people': 0,
+                    'violations_count': 0
                 }
             
             # Frame'i PPE detection için hazırla
@@ -2470,35 +2473,234 @@ class ProfessionalCameraManager:
                     'ppe_violations': [],
                     'timestamp': time.time(),
                     'sector': sector,
-                    'camera_id': camera_id
+                    'camera_id': camera_id,
+                    'total_people': 0,
+                    'compliant_people': 0,
+                    'violations_count': 0
                 }
             
-            # PPE Detection yap
-            detections = self.ppe_detector.detect_ppe(frame, sector, confidence=0.5)
+            # 🎯 PPE Detection yap - SH17 Model ile DETAYLI DETECTION + EKSİK PPE TESPİTİ
+            detections = self.ppe_detector.detect_ppe(frame, sector, confidence=0.25)  # Confidence düşürüldü
             
-            # Kişi sayısını hesapla
-            people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
-            
-            # Uyumluluk analizi
-            required_ppe = self.ppe_detector.get_sector_requirements(sector)
-            compliance_analysis = self.ppe_detector.analyze_compliance(detections, required_ppe)
-            
-            # Detection result'ı hazırla
-            detection_result = {
-                'detections': detections if isinstance(detections, list) else [],
-                'people_detected': people_detected,
-                'compliance_rate': int(compliance_analysis.get('score', 0) * 100) if isinstance(compliance_analysis, dict) else 100,
-                'ppe_violations': compliance_analysis.get('missing', []) if isinstance(compliance_analysis, dict) else [],
-                'timestamp': time.time(),
-                'sector': sector,
-                'camera_id': camera_id,
-                'model_type': 'SH17' if self.ppe_detector.is_sh17_available(sector) else 'Fallback'
-            }
+            # Detection sonucunu kontrol et - SH17 model liste döndürür
+            if isinstance(detections, list) and len(detections) > 0:
+                # Kişileri ve PPE itemlarını ayır
+                people = [d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person']
+                helmets = [d for d in detections if isinstance(d, dict) and d.get('class_name') in ['helmet', 'hard_hat', 'Hardhat', 'Safety Helmet', 'NO-Hardhat']]
+                vests = [d for d in detections if isinstance(d, dict) and d.get('class_name') in ['safety_vest', 'vest', 'Safety Vest', 'NO-Safety Vest']]
+                shoes = [d for d in detections if isinstance(d, dict) and d.get('class_name') in ['safety_shoes', 'shoes', 'Safety Shoes', 'NO-Safety Shoes']]
+                
+                people_detected = len(people)
+                
+                # 🎯 EKSİK PPE TESPİTİ - Her kişi için PPE kontrolü
+                violations = []
+                compliant_people = 0
+                missing_ppe_detections = []  # Eksik PPE'leri göstermek için
+                
+                if people_detected > 0:
+                    for person in people:
+                        person_bbox = person.get('bbox', [])
+                        if len(person_bbox) != 4:
+                            continue
+                        
+                        px1, py1, px2, py2 = person_bbox
+                        person_center_x = (px1 + px2) / 2
+                        person_center_y = (py1 + py2) / 2
+                        person_width = px2 - px1
+                        person_height = py2 - py1
+                        
+                        # Bu kişiye ait PPE'leri bul (proximity based) + ANATOMİK BÖLGE OPTİMİZASYONU
+                        has_helmet = False
+                        has_vest = False
+                        has_shoes = False
+                        helmet_detection = None
+                        vest_detection = None
+                        shoes_detection = None
+                        
+                        # 🎯 ANATOMİK BÖLGE TANIMLARI - HER PPE İÇİN ÖZEL GENİŞLİK
+                        # HELMET: Dar, sadece baş genişliği (%40 merkez)
+                        head_width = person_width * 0.40
+                        head_x1 = person_center_x - head_width / 2
+                        head_x2 = person_center_x + head_width / 2
+                        head_region = [head_x1, py1, head_x2, py1 + person_height * 0.15]
+                        
+                        # VEST: Geniş, omuzları kapsayan (%85 genişlik)
+                        torso_width = person_width * 0.70
+                        torso_x1 = person_center_x - torso_width / 2
+                        torso_x2 = person_center_x + torso_width / 2
+                        torso_region = [torso_x1, py1 + person_height * 0.20, torso_x2, py1 + person_height * 0.60]
+                        
+                        # SHOES: İki ayrı ayak (%35 genişlik her biri)
+                        foot_width = person_width * 0.25
+                        left_foot_x1 = px1
+                        left_foot_x2 = px1 + foot_width
+                        right_foot_x1 = px2 - foot_width
+                        right_foot_x2 = px2
+                        feet_region_left = [left_foot_x1, py2 - person_height * 0.12, left_foot_x2, py2]
+                        feet_region_right = [right_foot_x1, py2 - person_height * 0.12, right_foot_x2, py2]
+                        
+                        # Helmet kontrolü - kişinin üst kısmında olmalı
+                        for helmet in helmets:
+                            hbbox = helmet.get('bbox', [])
+                            if len(hbbox) == 4:
+                                hx1, hy1, hx2, hy2 = hbbox
+                                h_center_x = (hx1 + hx2) / 2
+                                h_center_y = (hy1 + hy2) / 2
+                                
+                                # Helmet kişinin üst kısmında ve yakın mı?
+                                if (abs(h_center_x - person_center_x) < person_width * 0.6 and 
+                                    h_center_y < person_center_y and
+                                    abs(h_center_y - py1) < person_height * 0.4):
+                                    has_helmet = True
+                                    # ✅ ANATOMİK BÖLGE: Sadece baş bölgesini çerçevele
+                                    helmet_detection = {
+                                        'bbox': head_region,
+                                        'class_name': 'Helmet',
+                                        'confidence': helmet.get('confidence', 0.9),
+                                        'missing': False
+                                    }
+                                    break
+                        
+                        # Vest kontrolü - kişinin orta kısmında olmalı
+                        for vest in vests:
+                            vbbox = vest.get('bbox', [])
+                            if len(vbbox) == 4:
+                                vx1, vy1, vx2, vy2 = vbbox
+                                v_center_x = (vx1 + vx2) / 2
+                                v_center_y = (vy1 + vy2) / 2
+                                
+                                # Vest kişinin orta kısmında ve yakın mı?
+                                if (abs(v_center_x - person_center_x) < person_width * 0.6 and
+                                    abs(v_center_y - person_center_y) < person_height * 0.4):
+                                    has_vest = True
+                                    # ✅ ANATOMİK BÖLGE: Sadece torso bölgesini çerçevele
+                                    vest_detection = {
+                                        'bbox': torso_region,
+                                        'class_name': 'Safety Vest',
+                                        'confidence': vest.get('confidence', 0.9),
+                                        'missing': False
+                                    }
+                                    break
+                        
+                        # Shoes kontrolü - kişinin alt kısmında olmalı
+                        for shoe in shoes:
+                            sbbox = shoe.get('bbox', [])
+                            if len(sbbox) == 4:
+                                sx1, sy1, sx2, sy2 = sbbox
+                                s_center_x = (sx1 + sx2) / 2
+                                s_center_y = (sy1 + sy2) / 2
+                                
+                                # Shoes kişinin alt kısmında ve yakın mı?
+                                if (abs(s_center_x - person_center_x) < person_width * 0.6 and
+                                    s_center_y > person_center_y and
+                                    abs(s_center_y - py2) < person_height * 0.3):
+                                    has_shoes = True
+                                    # ✅ ANATOMİK BÖLGE: İKİ AYRI AYAK BÖLGESİ
+                                    # Sol ayak
+                                    missing_ppe_detections.append({
+                                        'bbox': feet_region_left,
+                                        'class_name': 'Safety Shoes',
+                                        'confidence': shoe.get('confidence', 0.9),
+                                        'missing': False
+                                    })
+                                    # Sağ ayak
+                                    missing_ppe_detections.append({
+                                        'bbox': feet_region_right,
+                                        'class_name': 'Safety Shoes',
+                                        'confidence': shoe.get('confidence', 0.9),
+                                        'missing': False
+                                    })
+                                    break
+                        
+                        # ✅ MEVCUT PPE'leri ekle (anatomik bölge ile)
+                        if helmet_detection:
+                            missing_ppe_detections.append(helmet_detection)
+                        if vest_detection:
+                            missing_ppe_detections.append(vest_detection)
+                        
+                        # ❌ EKSİK PPE'leri işaretle (anatomik bölge ile)
+                        if not has_helmet:
+                            violations.append('Baret eksik')
+                            missing_ppe_detections.append({
+                                'bbox': head_region,
+                                'class_name': 'NO-Helmet',
+                                'confidence': 0.9,
+                                'missing': True
+                            })
+                        
+                        if not has_vest:
+                            violations.append('Yelek eksik')
+                            missing_ppe_detections.append({
+                                'bbox': torso_region,
+                                'class_name': 'NO-Vest',
+                                'confidence': 0.9,
+                                'missing': True
+                            })
+                        
+                        if not has_shoes:
+                            violations.append('Güvenlik ayakkabısı eksik')
+                            # Sol ayak eksik
+                            missing_ppe_detections.append({
+                                'bbox': feet_region_left,
+                                'class_name': 'NO-Shoes',
+                                'confidence': 0.9,
+                                'missing': True
+                            })
+                            # Sağ ayak eksik
+                            missing_ppe_detections.append({
+                                'bbox': feet_region_right,
+                                'class_name': 'NO-Shoes',
+                                'confidence': 0.9,
+                                'missing': True
+                            })
+                        
+                        # Compliance kontrolü
+                        if has_helmet and has_vest:  # Minimum gereksinim
+                            compliant_people += 1
+                
+                # Compliance rate hesapla
+                compliance_rate = int((compliant_people / max(people_detected, 1)) * 100) if people_detected > 0 else 100
+                
+                # Eksik PPE detection'larını ana listeye ekle
+                all_detections = detections + missing_ppe_detections
+                
+                # Detection result'ı hazırla
+                detection_result = {
+                    'detections': all_detections,  # ✅ Tüm detections + eksik PPE'ler
+                    'people_detected': people_detected,
+                    'compliance_rate': compliance_rate,
+                    'ppe_violations': list(set(violations)),  # Duplicate'leri kaldır
+                    'timestamp': time.time(),
+                    'sector': sector,
+                    'camera_id': camera_id,
+                    'model_type': 'SH17',
+                    'total_people': people_detected,
+                    'compliant_people': compliant_people,
+                    'violations_count': len(set(violations))
+                }
+            else:
+                # Hiç detection yok
+                detection_result = {
+                    'detections': [],
+                    'people_detected': 0,
+                    'compliance_rate': 100,
+                    'ppe_violations': [],
+                    'timestamp': time.time(),
+                    'sector': sector,
+                    'camera_id': camera_id,
+                    'model_type': 'SH17',
+                    'total_people': 0,
+                    'compliant_people': 0,
+                    'violations_count': 0
+                }
             
             # Sonucu cache'e kaydet
             self.detection_results[camera_id] = detection_result
             
-            logger.info(f"🎯 PPE Detection completed for {camera_id}: People: {people_detected}, PPE: {len(detections)}")
+            # Database'e kaydet
+            self.save_detection_to_database(camera_id, detection_result, sector)
+            
+            logger.info(f"🎯 PPE Detection completed for {camera_id}: People: {detection_result['people_detected']}, Violations: {detection_result['violations_count']}")
             return detection_result
             
         except Exception as e:
@@ -2511,7 +2713,10 @@ class ProfessionalCameraManager:
                 'timestamp': time.time(),
                 'sector': sector,
                 'camera_id': camera_id,
-                'error': str(e)
+                'error': str(e),
+                'total_people': 0,
+                'compliant_people': 0,
+                'violations_count': 0
             }
     
     def get_latest_detection_result(self, camera_id: str) -> Optional[Dict]:
@@ -2521,6 +2726,38 @@ class ProfessionalCameraManager:
     def get_detection_overlay(self, camera_id: str) -> Optional[Dict]:
         """Detection overlay bilgilerini al"""
         return self.detection_results.get(camera_id)
+    
+    def save_detection_to_database(self, camera_id: str, detection_result: Dict, sector: str):
+        """Detection sonucunu database'e kaydet"""
+        try:
+            from database_adapter import get_db_adapter
+            db = get_db_adapter()
+            
+            # Company ID'yi camera_id'den çıkar (format: CAM_XXXXX veya COMP_XXXXX_CAM_XXXXX)
+            company_id = "UNKNOWN"
+            if '_' in camera_id:
+                parts = camera_id.split('_')
+                if len(parts) >= 2 and parts[0] == 'COMP':
+                    company_id = f"{parts[0]}_{parts[1]}"
+            
+            # Detection data hazırla
+            detection_data = {
+                'company_id': company_id,
+                'camera_id': camera_id,
+                'detection_type': 'ppe',
+                'confidence': detection_result.get('compliance_rate', 0) / 100.0,
+                'people_detected': detection_result.get('total_people', detection_result.get('people_detected', 0)),
+                'ppe_compliant': detection_result.get('compliant_people', int(detection_result.get('people_detected', 0) * detection_result.get('compliance_rate', 0) / 100)),
+                'violations_count': detection_result.get('violations_count', len(detection_result.get('ppe_violations', []))),
+                'total_people': detection_result.get('total_people', detection_result.get('people_detected', 0))
+            }
+            
+            # Database'e kaydet
+            db.add_camera_detection_result(detection_data)
+            logger.debug(f"💾 Detection saved to database: {camera_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Save detection to database error: {e}")
 
     def process_camera_stream(self, camera_id: str, frame: np.ndarray) -> np.ndarray:
         """Kamera stream'ini işle ve PPE detection ekle"""
@@ -2604,25 +2841,61 @@ class ProfessionalCameraManager:
                         try:
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
-                            # PPE türüne göre renk belirle
-                            if class_name == 'person':
-                                color = (255, 255, 255)  # Beyaz - Kişi
-                            elif class_name in ['helmet', 'hard_hat']:
-                                color = (0, 255, 0)      # Yeşil - Baret
-                            elif class_name in ['safety_vest', 'vest']:
-                                color = (0, 255, 255)    # Sarı - Yelek
-                            elif class_name in ['safety_shoes', 'shoes']:
-                                color = (255, 0, 255)    # Magenta - Ayakkabı
+                            # 🎯 PROFESYONEL RENK KODLARI - ANATOMİK BÖLGE OPTİMİZASYONU
+                            is_missing = detection.get('missing', False)
+                            
+                            if is_missing or class_name.startswith('NO-'):
+                                # ❌ EKSİK PPE - KIRMIZI ÇERÇEVE (KALIN)
+                                color = (0, 0, 255)  # Kırmızı
+                                thickness = 3
+                                label_prefix = "??? EKSIK: "
+                            elif class_name == 'person':
+                                # 👤 KİŞİ - MAVİ ÇERÇEVE (İNCE)
+                                color = (255, 200, 0)  # Mavi
+                                thickness = 2
+                                label_prefix = ""
+                            elif class_name in ['helmet', 'hard_hat', 'Hardhat', 'Safety Helmet', 'Helmet']:
+                                # ✅ BARET VAR - YEŞİL ÇERÇEVE
+                                color = (0, 255, 0)  # Yeşil
+                                thickness = 3
+                                label_prefix = "✓ "
+                            elif class_name in ['safety_vest', 'vest', 'Safety Vest']:
+                                # ✅ YELEK VAR - YEŞİL ÇERÇEVE
+                                color = (0, 255, 0)  # Yeşil
+                                thickness = 3
+                                label_prefix = "✓ "
+                            elif class_name in ['safety_shoes', 'shoes', 'Safety Shoes']:
+                                # ✅ AYAKKABI VAR - YEŞİL ÇERÇEVE
+                                color = (0, 255, 0)  # Yeşil
+                                thickness = 3
+                                label_prefix = "✓ "
                             elif class_name in ['gloves', 'glasses']:
-                                color = (255, 255, 0)    # Cyan - Eldiven/Gözlük
+                                # ✅ ELDİVEN/GÖZLÜK VAR - YEŞİL ÇERÇEVE
+                                color = (0, 255, 0)  # Yeşil
+                                thickness = 3
+                                label_prefix = "✓ "
                             else:
-                                color = (128, 128, 128)  # Gri - Diğer
+                                # ℹ️ DİĞER - GRİ ÇERÇEVE
+                                color = (128, 128, 128)  # Gri
+                                thickness = 2
+                                label_prefix = ""
                             
                             # Bounding box çiz
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
                             
                             # Etiket hazırla
-                            label = f"{class_name} {confidence:.2f}"
+                            if is_missing:
+                                # Eksik PPE için Türkçe etiket
+                                if 'Helmet' in class_name:
+                                    label = f"{label_prefix}BARET"
+                                elif 'Vest' in class_name:
+                                    label = f"{label_prefix}YELEK"
+                                elif 'Shoes' in class_name:
+                                    label = f"{label_prefix}AYAKKABI"
+                                else:
+                                    label = f"{label_prefix}{class_name}"
+                            else:
+                                label = f"{label_prefix}{class_name} {confidence:.2f}"
                             
                             # Etiket arka planı
                             label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]

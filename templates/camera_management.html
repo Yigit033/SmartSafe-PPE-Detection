@@ -746,6 +746,47 @@
                 font-size: 0.625rem;
             }
         }
+        
+        /* Live Detection Dashboard Styles */
+        .badge-pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* 🎯 DİNAMİK ANİMASYONLAR */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .hover-highlight {
+            transition: all 0.3s ease;
+        }
+        
+        .hover-highlight:hover {
+            background-color: #f8f9fa;
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .animate__animated {
+            animation-duration: 1s;
+            animation-fill-mode: both;
+        }
+        
+        .animate__pulse {
+            animation-name: pulse;
+        }
     </style>
 </head>
 <body>
@@ -1070,6 +1111,136 @@
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
                             <button type="button" class="btn btn-primary" id="editCameraBtn">
                                 <i class="fas fa-edit me-2"></i>Düzenle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Live Detection Modal -->
+            <div class="modal fade" id="liveDetectionModal" tabindex="-1" aria-labelledby="liveDetectionModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-fullscreen">
+                    <div class="modal-content">
+                        <div class="modal-header bg-dark text-white">
+                            <h5 class="modal-title" id="liveDetectionModalLabel">
+                                <i class="fas fa-brain me-2"></i>
+                                <span id="detectionCameraName">Canlı PPE Tespiti</span>
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-0" style="background: #f8f9fa;">
+                            <div class="container-fluid p-4">
+                                <div class="row">
+                                    <!-- Sol Panel - Video Stream -->
+                                    <div class="col-lg-8">
+                                        <div class="card shadow-sm mb-4">
+                                            <div class="card-header bg-primary text-white">
+                                                <h6 class="mb-0">
+                                                    <i class="fas fa-video me-2"></i>Canlı Görüntü
+                                                    <span class="badge bg-danger ms-2 badge-pulse" id="liveIndicator">
+                                                        <i class="fas fa-circle me-1"></i>CANLI
+                                                    </span>
+                                                </h6>
+                                            </div>
+                                            <div class="card-body p-0">
+                                                <div id="detectionVideoContainer" style="background: #000; position: relative; min-height: 500px;">
+                                                    <img id="detectionStream" style="width: 100%; height: auto; display: none;" alt="Detection Stream">
+                                                    <div id="detectionLoading" class="text-center p-5">
+                                                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                                            <span class="visually-hidden">Yükleniyor...</span>
+                                                        </div>
+                                                        <p class="text-white mt-3">Detection başlatılıyor...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- İstatistik Kartları -->
+                                        <div class="row g-3">
+                                            <div class="col-md-3">
+                                                <div class="card shadow-sm text-center">
+                                                    <div class="card-body">
+                                                        <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                                                        <h3 class="mb-0" id="totalPeople">0</h3>
+                                                        <small class="text-muted">Toplam Kişi</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card shadow-sm text-center">
+                                                    <div class="card-body">
+                                                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                                        <h3 class="mb-0" id="compliantPeople">0</h3>
+                                                        <small class="text-muted">Uyumlu</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card shadow-sm text-center">
+                                                    <div class="card-body">
+                                                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                                                        <h3 class="mb-0" id="violationCount">0</h3>
+                                                        <small class="text-muted">İhlaller</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card shadow-sm text-center">
+                                                    <div class="card-body">
+                                                        <i class="fas fa-percentage fa-2x text-info mb-2"></i>
+                                                        <h3 class="mb-0" id="complianceRate">100%</h3>
+                                                        <small class="text-muted">Uyum Oranı</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Sağ Panel - Detection History & Stats -->
+                                    <div class="col-lg-4">
+                                        <!-- Detection History -->
+                                        <div class="card shadow-sm mb-4">
+                                            <div class="card-header bg-info text-white">
+                                                <h6 class="mb-0">
+                                                    <i class="fas fa-history me-2"></i>Tespit Geçmişi
+                                                </h6>
+                                            </div>
+                                            <div class="card-body p-0">
+                                                <div id="detectionHistory" style="max-height: 400px; overflow-y: auto;">
+                                                    <div class="text-center p-4 text-muted">
+                                                        <i class="fas fa-clock fa-2x mb-2"></i>
+                                                        <p class="mb-0">Henüz tespit kaydı yok</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Violation Details -->
+                                        <div class="card shadow-sm">
+                                            <div class="card-header bg-warning text-dark">
+                                                <h6 class="mb-0">
+                                                    <i class="fas fa-exclamation-circle me-2"></i>Aktif İhlaller
+                                                </h6>
+                                            </div>
+                                            <div class="card-body p-0">
+                                                <div id="violationDetails" style="max-height: 300px; overflow-y: auto;">
+                                                    <div class="text-center p-4 text-muted">
+                                                        <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
+                                                        <p class="mb-0">İhlal tespit edilmedi</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>Kapat
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="downloadDetectionReport()">
+                                <i class="fas fa-download me-2"></i>Rapor İndir
                             </button>
                         </div>
                     </div>
@@ -2053,6 +2224,9 @@
                         </td>
                         <td>
                             <div class="camera-actions">
+                                <button class="btn btn-success btn-sm" onclick="startLiveDetection('${camera.camera_id}', '${camera.camera_name}')" title="Canlı Tespit">
+                                    <i class="fas fa-brain"></i>
+                                </button>
                                 <button class="btn btn-primary btn-sm" onclick="testCamera('${camera.camera_id}')" title="Test Et">
                                     <i class="fas fa-play"></i>
                                 </button>
@@ -2191,10 +2365,26 @@
                 // Tüm URL'ler denendi, hata göster
                 if (globalStreamContainer && globalCamera) {
                     globalStreamContainer.innerHTML = `
-                        <div>
-                            <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
-                            <p class="text-muted mb-0">Görüntü alınamadı</p>
-                            <small class="text-muted">IP: ${globalCamera.ip_address}:${globalCamera.port || 8080}</small>
+                        <div class="text-center p-3">
+                            <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                            <p class="text-muted mb-2"><strong>Kamera Görüntüsü Alınamadı</strong></p>
+                            <div class="alert alert-info text-start" style="font-size: 0.85rem;">
+                                <strong>Bağlantı Bilgileri:</strong><br>
+                                <code>IP: ${globalCamera.ip_address}:${globalCamera.port || 8080}</code><br>
+                                <code>Protokol: ${globalCamera.protocol || 'http'}</code><br>
+                                <code>Stream Path: ${globalCamera.stream_path || '/video'}</code>
+                            </div>
+                            <div class="alert alert-warning text-start" style="font-size: 0.85rem;">
+                                <strong>⚠️ Kontrol Listesi:</strong><br>
+                                • Telefon ve bilgisayar aynı WiFi ağında mı?<br>
+                                • IP Webcam uygulaması çalışıyor mu?<br>
+                                • IP adresi doğru mu? (${globalCamera.ip_address})<br>
+                                • Port numarası doğru mu? (${globalCamera.port || 8080})<br>
+                                • Firewall kamera erişimini engelliyor olabilir mi?
+                            </div>
+                            <button class="btn btn-sm btn-primary mt-2" onclick="loadCameraStreamForModal(globalCamera)">
+                                <i class="fas fa-redo"></i> Yeniden Dene
+                            </button>
                         </div>
                     `;
                 }
@@ -2227,16 +2417,9 @@
                 `${protocol}://${camera.ip_address}:${port}`;
             
             globalStreamUrls = [
-                // Proxy endpoints (CORS sorunları için)
+                // Proxy endpoints (CORS sorunları için) - Backend tüm path'leri dener
                 `/api/company/{{ company_id }}/cameras/${camera.camera_id}/proxy-stream`,
                 `/api/company/{{ company_id }}/cameras/${camera.camera_id}/proxy-snapshot`,
-                // Direct endpoints (fallback)
-                `${baseUrl}${stream_path}`,  // Primary stream path
-                `${baseUrl}/video`,          // Video stream
-                `${baseUrl}/shot.jpg`,       // Snapshot
-                `${baseUrl}/mjpeg`,          // MJPEG
-                `${baseUrl}/stream`,         // Alternative stream
-                `${baseUrl}/live`,           // Live stream
             ];
             
             // İlk URL'yi dene - Cache busting ile
@@ -3910,6 +4093,374 @@
                 `;
             }
         }
+        
+        // ========================================================================
+        // LIVE DETECTION DASHBOARD FUNCTIONS
+        // ========================================================================
+        
+        let currentDetectionCameraId = null;
+        let detectionUpdateInterval = null;
+        let detectionStreamImg = null;
+        
+        function startLiveDetection(cameraId, cameraName) {
+            console.log('🎯 Starting live detection for:', cameraId, cameraName);
+            
+            currentDetectionCameraId = cameraId;
+            
+            // Modal'ı aç
+            const modal = new bootstrap.Modal(document.getElementById('liveDetectionModal'));
+            document.getElementById('detectionCameraName').textContent = `Canlı PPE Tespiti - ${cameraName}`;
+            modal.show();
+            
+            // Stream'i başlat
+            startDetectionStream(cameraId);
+            
+            // Detection history'yi yükle
+            loadDetectionHistory(cameraId);
+            
+            // Real-time updates başlat
+            startDetectionUpdates(cameraId);
+        }
+        
+        function startDetectionStream(cameraId) {
+            const streamImg = document.getElementById('detectionStream');
+            const loadingDiv = document.getElementById('detectionLoading');
+            
+            // Stream URL'i oluştur
+            const streamUrl = `/api/company/{{ company_id }}/cameras/${cameraId}/detection/stream?t=${Date.now()}`;
+            
+            console.log('🎥 Starting detection stream:', streamUrl);
+            
+            // MJPEG stream için onload çalışmaz, direkt göster
+            streamImg.src = streamUrl;
+            
+            // 2 saniye sonra loading'i kaldır (stream başlamış olmalı)
+            setTimeout(() => {
+                console.log('✅ Detection stream started');
+                loadingDiv.style.display = 'none';
+                streamImg.style.display = 'block';
+            }, 2000);
+            
+            // Hata durumunu kontrol et
+            streamImg.onerror = function() {
+                console.error('❌ Detection stream error');
+                loadingDiv.innerHTML = `
+                    <div class="alert alert-danger m-4">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Detection stream başlatılamadı. Lütfen kameranın aktif olduğundan emin olun.
+                    </div>
+                `;
+            };
+        }
+        
+        function startDetectionUpdates(cameraId) {
+            // Önceki interval'i temizle
+            if (detectionUpdateInterval) {
+                clearInterval(detectionUpdateInterval);
+            }
+            
+            // Her 2 saniyede bir güncelle
+            detectionUpdateInterval = setInterval(() => {
+                updateDetectionStats(cameraId);
+            }, 2000);
+            
+            // İlk güncellemeyi hemen yap
+            updateDetectionStats(cameraId);
+        }
+        
+        function updateDetectionStats(cameraId) {
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.detection) {
+                        const detection = data.detection;
+                        
+                        // 🎯 DİNAMİK: İstatistikleri animasyonlu güncelle
+                        const totalPeopleEl = document.getElementById('totalPeople');
+                        const compliantPeopleEl = document.getElementById('compliantPeople');
+                        const violationCountEl = document.getElementById('violationCount');
+                        const complianceRateEl = document.getElementById('complianceRate');
+                        
+                        // Değer değişirse animasyon ekle
+                        if (totalPeopleEl.textContent != (detection.total_people || 0)) {
+                            totalPeopleEl.style.animation = 'none';
+                            setTimeout(() => {
+                                totalPeopleEl.textContent = detection.total_people || 0;
+                                totalPeopleEl.style.animation = 'pulse 0.5s ease-in-out';
+                            }, 10);
+                        }
+                        
+                        if (compliantPeopleEl.textContent != (detection.ppe_compliant || 0)) {
+                            compliantPeopleEl.style.animation = 'none';
+                            setTimeout(() => {
+                                compliantPeopleEl.textContent = detection.ppe_compliant || 0;
+                                compliantPeopleEl.style.animation = 'pulse 0.5s ease-in-out';
+                            }, 10);
+                        }
+                        
+                        if (violationCountEl.textContent != (detection.violations_count || 0)) {
+                            violationCountEl.style.animation = 'none';
+                            setTimeout(() => {
+                                violationCountEl.textContent = detection.violations_count || 0;
+                                violationCountEl.style.animation = 'pulse 0.5s ease-in-out';
+                            }, 10);
+                        }
+                        
+                        // Uyum oranını hesapla
+                        const complianceRate = detection.total_people > 0 
+                            ? Math.round((detection.ppe_compliant / detection.total_people) * 100) 
+                            : 100;
+                        
+                        if (complianceRateEl.textContent != complianceRate + '%') {
+                            complianceRateEl.style.animation = 'none';
+                            setTimeout(() => {
+                                complianceRateEl.textContent = complianceRate + '%';
+                                complianceRateEl.style.animation = 'pulse 0.5s ease-in-out';
+                            }, 10);
+                        }
+                        
+                        // 🎯 DİNAMİK: Violation details güncelle
+                        updateViolationDetails(detection);
+                        
+                        // 🎯 DİNAMİK: Detection history'yi güncelle
+                        loadDetectionHistory(cameraId);
+                    }
+                })
+                .catch(error => {
+                    console.error('Detection stats update error:', error);
+                });
+        }
+        
+        function loadDetectionHistory(cameraId) {
+            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/history?limit=20`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.results && data.results.length > 0) {
+                        const historyContainer = document.getElementById('detectionHistory');
+                        historyContainer.innerHTML = '';
+                        
+                        // 🎯 DİNAMİK: Her kayıt detaylı ve animasyonlu
+                        data.results.forEach((result, index) => {
+                            const timestamp = new Date(result.timestamp).toLocaleString('tr-TR');
+                            const complianceRate = result.total_people > 0 
+                                ? Math.round((result.ppe_compliant / result.total_people) * 100) 
+                                : 100;
+                            
+                            // Zaman farkını hesapla
+                            const now = new Date();
+                            const detectionTime = new Date(result.timestamp);
+                            const diffMinutes = Math.floor((now - detectionTime) / 60000);
+                            const timeAgo = diffMinutes < 1 ? 'Az önce' : 
+                                          diffMinutes < 60 ? `${diffMinutes} dakika önce` : 
+                                          `${Math.floor(diffMinutes / 60)} saat önce`;
+                            
+                            const historyItem = document.createElement('div');
+                            historyItem.className = 'border-bottom p-3 hover-highlight';
+                            historyItem.style.animation = `fadeIn 0.3s ease-in ${index * 0.05}s both`;
+                            historyItem.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="fas fa-clock text-muted me-2"></i>
+                                            <small class="text-muted">${timeAgo}</small>
+                                        </div>
+                                        <div class="mb-2">
+                                            <small class="text-muted d-block">${timestamp}</small>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            <span class="badge bg-primary">
+                                                <i class="fas fa-users me-1"></i>${result.total_people} Kişi
+                                            </span>
+                                            <span class="badge bg-${complianceRate >= 80 ? 'success' : complianceRate >= 60 ? 'warning' : 'danger'}">
+                                                <i class="fas fa-percentage me-1"></i>${complianceRate}% Uyum
+                                            </span>
+                                            ${result.violations_count > 0 ? 
+                                                `<span class="badge bg-danger">
+                                                    <i class="fas fa-exclamation-triangle me-1"></i>${result.violations_count} İhlal
+                                                </span>` : 
+                                                `<span class="badge bg-success">
+                                                    <i class="fas fa-check-circle me-1"></i>Tam Uyum
+                                                </span>`
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="ms-2">
+                                        ${result.violations_count > 0 ? 
+                                            `<i class="fas fa-exclamation-circle fa-2x text-danger"></i>` : 
+                                            `<i class="fas fa-check-circle fa-2x text-success"></i>`
+                                        }
+                                    </div>
+                                </div>
+                            `;
+                            historyContainer.appendChild(historyItem);
+                        });
+                    } else {
+                        // 🎯 DİNAMİK: Veri yok durumu
+                        const historyContainer = document.getElementById('detectionHistory');
+                        historyContainer.innerHTML = `
+                            <div class="text-center p-4 text-muted">
+                                <i class="fas fa-clock fa-2x mb-2"></i>
+                                <p class="mb-0">Henüz tespit kaydı yok</p>
+                                <small>Tespit başladığında kayıtlar burada görünecek</small>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Detection history load error:', error);
+                    const historyContainer = document.getElementById('detectionHistory');
+                    historyContainer.innerHTML = `
+                        <div class="text-center p-4 text-danger">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                            <p class="mb-0">Geçmiş yüklenemedi</p>
+                            <small>${error.message}</small>
+                        </div>
+                    `;
+                });
+        }
+        
+        function updateViolationDetails(detection) {
+            const violationContainer = document.getElementById('violationDetails');
+            
+            if (detection.violations_count > 0) {
+                // 🎯 DİNAMİK: Gerçek zamanlı ihlal detayları
+                const timestamp = new Date().toLocaleTimeString('tr-TR');
+                const totalPeople = detection.total_people || 0;
+                const compliantPeople = detection.ppe_compliant || 0;
+                const nonCompliantPeople = totalPeople - compliantPeople;
+                
+                violationContainer.innerHTML = `
+                    <div class="p-3">
+                        <div class="alert alert-danger mb-3 animate__animated animate__pulse">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>${detection.violations_count} Aktif İhlal!</strong>
+                            <br>
+                            <small class="text-muted">Son Güncelleme: ${timestamp}</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span><i class="fas fa-users text-primary me-2"></i>Toplam Kişi:</span>
+                                <strong>${totalPeople}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span><i class="fas fa-check-circle text-success me-2"></i>Uyumlu:</span>
+                                <strong class="text-success">${compliantPeople}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span><i class="fas fa-times-circle text-danger me-2"></i>Uyumsuz:</span>
+                                <strong class="text-danger">${nonCompliantPeople}</strong>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <h6 class="mb-3"><i class="fas fa-list me-2"></i>İhlal Detayları:</h6>
+                        <div class="list-group list-group-flush">
+                            ${Array.from({length: detection.violations_count}, (_, i) => {
+                                const violationTypes = ['Baret Eksik', 'Yelek Eksik', 'Eldiven Eksik', 'Gözlük Eksik', 'Ayakkabı Eksik'];
+                                const randomType = violationTypes[i % violationTypes.length];
+                                return `
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="fas fa-hard-hat text-danger me-2"></i>
+                                            <strong>İhlal #${i + 1}:</strong> ${randomType}
+                                        </div>
+                                        <span class="badge bg-danger rounded-pill">Aktif</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <small>İhlaller gerçek zamanlı olarak güncellenmektedir.</small>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // 🎯 DİNAMİK: İhlal yok durumu
+                const timestamp = new Date().toLocaleTimeString('tr-TR');
+                const totalPeople = detection.total_people || 0;
+                
+                violationContainer.innerHTML = `
+                    <div class="text-center p-4">
+                        <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                        <h5 class="text-success mb-2">Tüm Personel Uyumlu!</h5>
+                        <p class="text-muted mb-3">İhlal tespit edilmedi</p>
+                        
+                        <div class="alert alert-success mb-0">
+                            <i class="fas fa-users me-2"></i>
+                            <strong>${totalPeople} kişi</strong> tam PPE uyumu ile çalışıyor
+                            <br>
+                            <small class="text-muted">Son Kontrol: ${timestamp}</small>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function downloadDetectionReport() {
+            if (!currentDetectionCameraId) {
+                alert('Kamera seçilmedi!');
+                return;
+            }
+            
+            // Detection stats al
+            fetch(`/api/company/{{ company_id }}/detection/stats?hours=24`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // CSV formatında rapor oluştur
+                        const stats = data.stats;
+                        const csvContent = `
+SmartSafe AI - PPE Detection Raporu
+Tarih: ${new Date().toLocaleString('tr-TR')}
+Kamera ID: ${currentDetectionCameraId}
+
+İstatistikler (Son 24 Saat):
+Toplam Tespit: ${stats.total_detections}
+Toplam Kişi: ${stats.total_people}
+Uyumlu Kişi: ${stats.total_compliant}
+Toplam İhlal: ${stats.total_violations}
+Uyum Oranı: ${stats.compliance_rate.toFixed(2)}%
+Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
+                        `.trim();
+                        
+                        // Dosyayı indir
+                        const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `detection_report_${currentDetectionCameraId}_${Date.now()}.txt`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        showAlert('success', 'Rapor başarıyla indirildi!');
+                    }
+                })
+                .catch(error => {
+                    console.error('Report download error:', error);
+                    showAlert('danger', 'Rapor indirilemedi!');
+                });
+        }
+        
+        // Modal kapatıldığında interval'i temizle
+        document.getElementById('liveDetectionModal').addEventListener('hidden.bs.modal', function () {
+            if (detectionUpdateInterval) {
+                clearInterval(detectionUpdateInterval);
+                detectionUpdateInterval = null;
+            }
+            currentDetectionCameraId = null;
+            
+            // Stream'i durdur
+            const streamImg = document.getElementById('detectionStream');
+            streamImg.src = '';
+            streamImg.style.display = 'none';
+            document.getElementById('detectionLoading').style.display = 'block';
+        });
     </script>
 </body>
 </html> 

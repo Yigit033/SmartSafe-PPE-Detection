@@ -300,6 +300,56 @@ class SmartSafeSaaSAPI:
         cache_thread.start()
         logger.info("✅ Cache management initialized")
     
+    def _create_error_frame(self, error_message: str):
+        """Hata mesajı içeren frame oluştur"""
+        import cv2
+        import numpy as np
+        
+        # 640x480 siyah frame oluştur
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        
+        # Hata mesajını frame'e yaz
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        
+        # Başlık
+        cv2.putText(frame, 'SmartSafe AI - Error', (20, 50), 
+                   font, 1.0, (0, 0, 255), 2)
+        
+        # Hata mesajını satırlara böl
+        words = error_message.split()
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            test_line = current_line + " " + word if current_line else word
+            if len(test_line) < 50:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+        
+        if current_line:
+            lines.append(current_line)
+        
+        # Satırları yaz
+        y_offset = 150
+        for line in lines:
+            cv2.putText(frame, line, (20, y_offset), 
+                       font, 0.6, (255, 255, 255), 1)
+            y_offset += 40
+        
+        # Yardım mesajı
+        cv2.putText(frame, 'Please check:', (20, y_offset + 40), 
+                   font, 0.5, (0, 255, 255), 1)
+        cv2.putText(frame, '1. Camera is online', (40, y_offset + 70), 
+                   font, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, '2. Network connection', (40, y_offset + 100), 
+                   font, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, '3. Camera credentials', (40, y_offset + 130), 
+                   font, 0.5, (255, 255, 255), 1)
+        
+        return frame
+    
     def init_enterprise_modules(self):
         """Enterprise modülleri lazy loading ile başlat - Memory optimized"""
         if ENTERPRISE_MODULES_AVAILABLE:
@@ -3441,9 +3491,9 @@ Mesaj:
                     logger.error(f"❌ Subscription info failed: {subscription_info}")
                     return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
                 
-                subscription = subscription_info['subscription']
-                current_cameras = subscription['used_cameras']
-                max_cameras = subscription['max_cameras']
+                # subscription_info doğrudan tüm bilgileri içeriyor, 'subscription' key'i yok
+                current_cameras = subscription_info['used_cameras']
+                max_cameras = subscription_info['max_cameras']
                 
                 logger.info(f"📈 Camera limits - Current: {current_cameras}, Max: {max_cameras}")
                 
@@ -3456,7 +3506,7 @@ Mesaj:
                         'limit_reached': True,
                         'current_cameras': current_cameras,
                         'max_cameras': max_cameras,
-                        'subscription_type': subscription['subscription_type']
+                        'subscription_type': subscription_info['subscription_type']
                     }), 403
                 
                 logger.info(f"✅ Camera limit check passed")
@@ -5861,16 +5911,22 @@ Mesaj:
                 else:
                     stream_url = f"http://{camera['ip_address']}:{port}{stream_path}"
                 
-                # Alternatif URL'ler
+                # Alternatif URL'ler - IP Webcam path'leri öncelikli
                 alternative_urls = [
-                    f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
+                    # IP Webcam specific paths (Android)
                     f"{protocol}://{camera['ip_address']}:{port}/video",
+                    f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/videofeed",
+                    f"{protocol}://{camera['ip_address']}:{port}/photoaf.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/photo.jpg",
+                    # Generic MJPEG paths
                     f"{protocol}://{camera['ip_address']}:{port}/mjpeg",
                     f"{protocol}://{camera['ip_address']}:{port}/stream",
                     f"{protocol}://{camera['ip_address']}:{port}/live",
                     f"{protocol}://{camera['ip_address']}:{port}/camera",
                     f"{protocol}://{camera['ip_address']}:{port}/webcam",
                     f"{protocol}://{camera['ip_address']}:{port}/video.mjpg",
+                    # Snapshot paths
                     f"{protocol}://{camera['ip_address']}:{port}/image.jpg",
                     f"{protocol}://{camera['ip_address']}:{port}/snapshot.jpg",
                     f"{protocol}://{camera['ip_address']}:{port}/snapshot.cgi",
@@ -5892,23 +5948,28 @@ Mesaj:
                     auth = HTTPBasicAuth(username, password)
                 
                 # İlk URL'yi dene
+                logger.info(f"🎥 Trying primary stream URL: {stream_url}")
                 try:
                     response = requests.get(stream_url, auth=auth, headers=headers, timeout=5, stream=True)
                     if response.status_code == 200:
+                        logger.info(f"✅ Primary stream URL successful: {stream_url}")
                         return Response(response.iter_content(chunk_size=8192), 
                                      content_type=response.headers.get('content-type', 'image/jpeg'))
                 except Exception as e:
-                    logger.warning(f"Primary stream URL failed: {e}")
+                    logger.warning(f"❌ Primary stream URL failed: {e}")
                 
                 # Alternatif URL'leri dene
-                for alt_url in alternative_urls:
+                logger.info(f"🔄 Trying {len(alternative_urls)} alternative URLs...")
+                for i, alt_url in enumerate(alternative_urls, 1):
                     try:
+                        logger.info(f"🎥 Trying alternative URL {i}/{len(alternative_urls)}: {alt_url}")
                         response = requests.get(alt_url, auth=auth, headers=headers, timeout=5, stream=True)
                         if response.status_code == 200:
+                            logger.info(f"✅ Alternative URL successful: {alt_url}")
                             return Response(response.iter_content(chunk_size=8192), 
                                          content_type=response.headers.get('content-type', 'image/jpeg'))
                     except Exception as e:
-                        logger.warning(f"Alternative URL failed {alt_url}: {e}")
+                        logger.warning(f"❌ Alternative URL {i} failed {alt_url}: {e}")
                         continue
                 
                 # Hiçbiri çalışmazsa hata döndür
@@ -5944,9 +6005,13 @@ Mesaj:
                 username = camera.get('username', '')
                 password = camera.get('password', '')
                 
-                # Snapshot URL'leri
+                # Snapshot URL'leri - IP Webcam path'leri öncelikli
                 snapshot_urls = [
+                    # IP Webcam specific paths (Android)
                     f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/photoaf.jpg",
+                    f"{protocol}://{camera['ip_address']}:{port}/photo.jpg",
+                    # Generic snapshot paths
                     f"{protocol}://{camera['ip_address']}:{port}/snapshot.jpg",
                     f"{protocol}://{camera['ip_address']}:{port}/image.jpg",
                     f"{protocol}://{camera['ip_address']}:{port}/snapshot.cgi",
@@ -7891,6 +7956,245 @@ Mesaj:
                     
             except Exception as e:
                 logger.error(f"❌ Video feed hatası: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        # ========================================================================
+        # LIVE DETECTION DASHBOARD API ENDPOINTS
+        # ========================================================================
+        
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/detection/history', methods=['GET'])
+        def get_camera_detection_history(company_id, camera_id):
+            """Get detection history for a camera"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+                
+                limit = request.args.get('limit', 100, type=int)
+                
+                # Database'den detection history al
+                from database_adapter import get_db_adapter
+                db = get_db_adapter()
+                results = db.get_camera_detection_results(camera_id, company_id, limit)
+                
+                return jsonify({
+                    'success': True,
+                    'camera_id': camera_id,
+                    'results': results,
+                    'total_count': len(results)
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Get detection history error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/detection/latest', methods=['GET'])
+        def get_camera_latest_detection(company_id, camera_id):
+            """Get latest detection result for a camera"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+                
+                # Database'den latest detection al
+                from database_adapter import get_db_adapter
+                db = get_db_adapter()
+                result = db.get_latest_camera_detection(camera_id, company_id)
+                
+                if result:
+                    return jsonify({
+                        'success': True,
+                        'camera_id': camera_id,
+                        'detection': result
+                    })
+                else:
+                    return jsonify({
+                        'success': True,
+                        'camera_id': camera_id,
+                        'detection': None,
+                        'message': 'No detection results found'
+                    })
+                
+            except Exception as e:
+                logger.error(f"❌ Get latest detection error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/company/<company_id>/detection/stats', methods=['GET'])
+        def get_company_detection_stats(company_id):
+            """Get detection statistics for company"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+                
+                hours = request.args.get('hours', 24, type=int)
+                
+                # Database'den stats al
+                from database_adapter import get_db_adapter
+                db = get_db_adapter()
+                stats = db.get_company_detection_stats(company_id, hours)
+                
+                return jsonify({
+                    'success': True,
+                    'company_id': company_id,
+                    'hours': hours,
+                    'stats': stats
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ Get detection stats error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/detection/stream', methods=['GET'])
+        def get_detection_stream(company_id, camera_id):
+            """Get live detection stream with overlay"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+                
+                # SESSION COOKIE'Yİ BURADA AL - REQUEST CONTEXT İÇİNDE!
+                session_cookie = request.cookies.get('session')
+                logger.info(f"🔑 Session cookie captured: {session_cookie[:20] if session_cookie else 'None'}...")
+                
+                # Camera manager'dan stream al
+                from camera_integration_manager import get_camera_manager
+                camera_manager = get_camera_manager()
+                
+                def generate_detection_frames():
+                    """Generate frames with detection overlay - PROXY STREAM KULLAN"""
+                    import cv2
+                    import time
+                    import requests
+                    import numpy as np
+                    
+                    logger.info(f"🎥 Detection stream başlatılıyor: {camera_id}")
+                    
+                    # Son detection sonucunu cache'le
+                    last_detection_result = None
+                    frame_count = 0
+                    
+                    try:
+                        # PROXY STREAM'DEN FRAME'LERİ AL - AYNI YÖNTEM KAMERA DETAYLARI GİBİ
+                        server_port = int(os.environ.get('PORT', 5000))
+                        proxy_stream_url = f"http://localhost:{server_port}/api/company/{company_id}/cameras/{camera_id}/proxy-stream"
+                        
+                        logger.info(f"🔗 Using proxy stream: {proxy_stream_url}")
+                        
+                        # Proxy stream'e bağlan - SESSION COOKIE İLE (outer scope'tan)
+                        headers = {}
+                        cookies = {}
+                        
+                        if session_cookie:
+                            cookies['session'] = session_cookie
+                            logger.info(f"🔑 Using session cookie for proxy stream")
+                        else:
+                            logger.warning(f"⚠️ No session cookie found!")
+                        
+                        response = requests.get(proxy_stream_url, stream=True, timeout=10, 
+                                              cookies=cookies, headers=headers)
+                        
+                        if response.status_code != 200:
+                            error_msg = f"❌ Proxy stream error: {response.status_code}"
+                            logger.error(error_msg)
+                            error_frame = self._create_error_frame(error_msg)
+                            ret, buffer = cv2.imencode('.jpg', error_frame)
+                            if ret:
+                                yield (b'--frame\r\n'
+                                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                            return
+                        
+                        logger.info(f"✅ Proxy stream connected successfully")
+                        
+                        # MJPEG stream parser - proxy stream'den frame'leri al
+                        bytes_data = b''
+                        for chunk in response.iter_content(chunk_size=8192):
+                            bytes_data += chunk
+                            
+                            # JPEG boundary bul
+                            a = bytes_data.find(b'\xff\xd8')  # JPEG start
+                            b = bytes_data.find(b'\xff\xd9')  # JPEG end
+                            
+                            if a != -1 and b != -1:
+                                jpg = bytes_data[a:b+2]
+                                bytes_data = bytes_data[b+2:]
+                                
+                                try:
+                                    # JPEG'i decode et
+                                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                                    
+                                    if frame is not None:
+                                        frame_count += 1
+                                        
+                                        # İlk 10 frame'de detection yapma - stream'i hızlı başlat
+                                        if frame_count <= 10:
+                                            # Sadece frame'i gönder
+                                            yield (b'--frame\r\n'
+                                                   b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
+                                            continue
+                                        
+                                        # HER FRAME'DE DETECTION YAP - THROTTLING YOK!
+                                        try:
+                                            if frame_count == 11:  # İlk detection'da log
+                                                logger.info(f"🔍 Starting PPE detection...")
+                                            
+                                            detection_result = camera_manager.perform_ppe_detection(
+                                                camera_id, frame, sector='construction'
+                                            )
+                                            
+                                            if detection_result:
+                                                last_detection_result = detection_result
+                                                if frame_count == 11:  # İlk detection'da log
+                                                    logger.info(f"✅ Detection successful: {len(detection_result.get('detections', []))} objects")
+                                            else:
+                                                if frame_count == 11:
+                                                    logger.warning(f"⚠️ Detection returned None")
+                                        except Exception as e:
+                                            logger.error(f"❌ Detection error: {e}")
+                                            import traceback
+                                            logger.error(traceback.format_exc())
+                                        
+                                        # Her frame'de overlay çiz
+                                        if last_detection_result:
+                                            try:
+                                                logger.debug(f"🎨 Drawing overlay with {len(last_detection_result.get('detections', []))} detections")
+                                                frame = camera_manager._draw_ppe_overlay(frame, last_detection_result)
+                                            except Exception as e:
+                                                logger.error(f"❌ Overlay error: {e}")
+                                                import traceback
+                                                logger.error(traceback.format_exc())
+                                        
+                                        # Frame'i encode et
+                                        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                                        if ret:
+                                            frame_bytes = buffer.tobytes()
+                                            yield (b'--frame\r\n'
+                                                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                                
+                                except Exception as e:
+                                    logger.error(f"❌ Frame decode error: {e}")
+                                    continue
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Detection stream error: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                        # Hata frame'i gönder
+                        error_frame = self._create_error_frame(str(e))
+                        ret, buffer = cv2.imencode('.jpg', error_frame)
+                        if ret:
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                    finally:
+                        logger.info(f"🛑 Detection stream closed: {camera_id}")
+                
+                return Response(
+                    generate_detection_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame'
+                )
+                
+            except Exception as e:
+                logger.error(f"❌ Detection stream error: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
 
     def validate_session(self):
@@ -22956,9 +23260,12 @@ def main():
         app = api_server.app
         
         # Development mode - Flask development server
-        port = int(os.environ.get('PORT', 10000))
+        # Port 5000 veya 10000 kullan (environment variable ile değiştirilebilir)
+        port = int(os.environ.get('PORT', 5000))  # Default 5000'e değiştirildi
         logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
-        app.run(host='0.0.0.0', port=port, debug=False)  # Debug=False for memory optimization
+        logger.info(f"🌐 Erişim URL: http://0.0.0.0:{port}/")
+        logger.info(f"🌐 Harici erişim: http://161.9.126.42:{port}/")
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)  # threaded=True for better performance
             
     except KeyboardInterrupt:
         logger.info("🛑 SaaS API Server stopped by user")

@@ -1557,6 +1557,161 @@ class DatabaseAdapter:
         except Exception as e:
             logger.error(f"❌ Get DVR detection sessions error: {e}")
             return []
+    
+    # IP Camera Detection Methods
+    def add_camera_detection_result(self, detection_data: Dict[str, Any]) -> bool:
+        """Add IP camera detection result to database"""
+        try:
+            if self.db_type == 'sqlite':
+                query = """
+                    INSERT INTO detections (
+                        company_id, camera_id, detection_type, confidence,
+                        people_detected, ppe_compliant, violations_count, total_people
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """
+            else:  # PostgreSQL
+                query = """
+                    INSERT INTO detections (
+                        company_id, camera_id, detection_type, confidence,
+                        people_detected, ppe_compliant, violations_count, total_people
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """
+            
+            params = (
+                detection_data.get('company_id'),
+                detection_data.get('camera_id'),
+                detection_data.get('detection_type', 'ppe'),
+                detection_data.get('confidence', 0.0),
+                detection_data.get('people_detected', 0),
+                detection_data.get('ppe_compliant', 0),
+                detection_data.get('violations_count', 0),
+                detection_data.get('total_people', 0)
+            )
+            
+            self.execute_query(query, params, fetch_all=False)
+            logger.info(f"✅ Camera detection result saved: {detection_data.get('camera_id')}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Add camera detection result error: {e}")
+            return False
+    
+    def get_camera_detection_results(self, camera_id: str, company_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get IP camera detection results"""
+        try:
+            if self.db_type == 'sqlite':
+                query = """
+                    SELECT * FROM detections
+                    WHERE camera_id = ? AND company_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """
+            else:  # PostgreSQL
+                query = """
+                    SELECT * FROM detections
+                    WHERE camera_id = %s AND company_id = %s
+                    ORDER BY timestamp DESC
+                    LIMIT %s
+                """
+            
+            params = (camera_id, company_id, limit)
+            result = self.execute_query(query, params, fetch_all=True)
+            
+            if result and isinstance(result, list):
+                # Convert to dict format
+                detections = []
+                for row in result:
+                    detection = {
+                        'id': row[0] if len(row) > 0 else None,
+                        'camera_id': row[1] if len(row) > 1 else camera_id,
+                        'company_id': row[2] if len(row) > 2 else company_id,
+                        'detection_type': row[3] if len(row) > 3 else 'ppe',
+                        'timestamp': row[4] if len(row) > 4 else None,
+                        'confidence': row[5] if len(row) > 5 else 0.0,
+                        'people_detected': row[6] if len(row) > 6 else 0,
+                        'ppe_compliant': row[7] if len(row) > 7 else 0,
+                        'violations_count': row[8] if len(row) > 8 else 0,
+                        'total_people': row[6] if len(row) > 6 else 0,
+                        'compliant_people': row[7] if len(row) > 7 else 0
+                    }
+                    detections.append(detection)
+                return detections
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ Get camera detection results error: {e}")
+            return []
+    
+    def get_latest_camera_detection(self, camera_id: str, company_id: str) -> Optional[Dict[str, Any]]:
+        """Get latest detection result for a camera"""
+        try:
+            results = self.get_camera_detection_results(camera_id, company_id, limit=1)
+            return results[0] if results else None
+        except Exception as e:
+            logger.error(f"❌ Get latest camera detection error: {e}")
+            return None
+    
+    def get_company_detection_stats(self, company_id: str, hours: int = 24) -> Dict[str, Any]:
+        """Get detection statistics for a company"""
+        try:
+            if self.db_type == 'sqlite':
+                query = """
+                    SELECT 
+                        COUNT(*) as total_detections,
+                        SUM(people_detected) as total_people,
+                        SUM(ppe_compliant) as total_compliant,
+                        SUM(violations_count) as total_violations,
+                        AVG(confidence) as avg_confidence
+                    FROM detections
+                    WHERE company_id = ?
+                    AND timestamp >= datetime('now', '-' || ? || ' hours')
+                """
+            else:  # PostgreSQL
+                query = """
+                    SELECT 
+                        COUNT(*) as total_detections,
+                        SUM(people_detected) as total_people,
+                        SUM(ppe_compliant) as total_compliant,
+                        SUM(violations_count) as total_violations,
+                        AVG(confidence) as avg_confidence
+                    FROM detections
+                    WHERE company_id = %s
+                    AND timestamp >= NOW() - INTERVAL '%s hours'
+                """
+            
+            params = (company_id, hours)
+            result = self.execute_query(query, params, fetch_all=True)
+            
+            if result and len(result) > 0:
+                row = result[0]
+                # Convert row to dict
+                stats = {
+                    'total_detections': row[0] if len(row) > 0 else 0,
+                    'total_people': row[1] if len(row) > 1 else 0,
+                    'total_compliant': row[2] if len(row) > 2 else 0,
+                    'total_violations': row[3] if len(row) > 3 else 0,
+                    'avg_confidence': row[4] if len(row) > 4 else 0.0
+                }
+                return {
+                    'total_detections': stats.get('total_detections', 0) or 0,
+                    'total_people': stats.get('total_people', 0) or 0,
+                    'total_compliant': stats.get('total_compliant', 0) or 0,
+                    'total_violations': stats.get('total_violations', 0) or 0,
+                    'avg_confidence': float(stats.get('avg_confidence', 0) or 0),
+                    'compliance_rate': (stats.get('total_compliant', 0) or 0) / max(stats.get('total_people', 1) or 1, 1) * 100
+                }
+            return {
+                'total_detections': 0,
+                'total_people': 0,
+                'total_compliant': 0,
+                'total_violations': 0,
+                'avg_confidence': 0.0,
+                'compliance_rate': 0.0
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Get company detection stats error: {e}")
+            return {}
 
 # Global database adapter instance
 db_adapter = DatabaseAdapter()

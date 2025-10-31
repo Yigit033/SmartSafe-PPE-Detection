@@ -26,7 +26,7 @@ class SH17ModelManager:
         # 🚀 PERFORMANCE OPTIMIZATION - Model caching ve inference hızlandırma
         self.model_cache = {}  # Model cache
         self.last_detection_time = {}  # Son detection zamanları
-        self.detection_throttle = 0.05  # Detection throttle (50ms - daha hızlı)
+        self.detection_throttle = 0.0  # Detection throttle KAPALI - Her frame detection
         
         # 🚀 RENDER.COM MEMORY OPTIMIZATION
         self.is_production = os.environ.get('RENDER') is not None
@@ -44,13 +44,13 @@ class SH17ModelManager:
             'aviation': ['helmet', 'safety_vest', 'gloves', 'safety_glasses', 'face_mask_medical']
         }
         
-        # SH17 class mapping
-        self.sh17_classes = [
-            'person', 'head', 'face', 'glasses', 'face_mask_medical',
-            'face_guard', 'ear', 'earmuffs', 'hands', 'gloves',
-            'foot', 'shoes', 'safety_vest', 'tools', 'helmet',
-            'medical_suit', 'safety_suit'
-        ]
+        # SH17 class mapping - DICT olmalı!
+        self.sh17_classes = {
+            0: 'person', 1: 'head', 2: 'face', 3: 'glasses', 4: 'face_mask_medical',
+            5: 'face_guard', 6: 'ear', 7: 'earmuffs', 8: 'hands', 9: 'gloves',
+            10: 'foot', 11: 'shoes', 12: 'safety_vest', 13: 'tools', 14: 'helmet',
+            15: 'medical_suit', 16: 'safety_suit'
+        }
         
         logger.info(f"🎯 SH17 Model Manager başlatıldı - Device: {self.device}")
         
@@ -265,17 +265,36 @@ class SH17ModelManager:
             detections = []
             for result in results:
                 boxes = result.boxes
-                if boxes is not None:
+                if boxes is not None and len(boxes) > 0:
                     for box in boxes:
                         try:
+                            # Güvenli index erişimi
+                            cls_tensor = box.cls
+                            conf_tensor = box.conf
+                            xyxy_tensor = box.xyxy
+                            
+                            if cls_tensor is None or len(cls_tensor) == 0:
+                                continue
+                            if conf_tensor is None or len(conf_tensor) == 0:
+                                continue
+                            if xyxy_tensor is None or len(xyxy_tensor) == 0:
+                                continue
+                            
+                            class_id = int(cls_tensor[0].item())
+                            confidence = float(conf_tensor[0].item())
+                            bbox = xyxy_tensor[0].cpu().numpy().tolist()
+                            
+                            # Class name al
+                            class_name = self.sh17_classes.get(class_id, 'unknown')
+                            
                             detection = {
-                                'class_id': int(box.cls[0]),
-                                'class_name': self.sh17_classes[int(box.cls[0])],
-                                'confidence': float(box.conf[0]),
-                                'bbox': box.xyxy[0].cpu().numpy().tolist(),
-                                                            'sector': sector,
-                                                            'model_type': 'SH17'
-                                                        }
+                                'class_id': class_id,
+                                'class_name': class_name,
+                                'confidence': confidence,
+                                'bbox': bbox,
+                                'sector': sector,
+                                'model_type': 'SH17'
+                            }
                             detections.append(detection)
                         except Exception as box_error:
                             logger.warning(f"⚠️ Box processing hatası: {box_error}")
