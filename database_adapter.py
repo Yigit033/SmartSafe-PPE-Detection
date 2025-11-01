@@ -869,6 +869,124 @@ class DatabaseAdapter:
                     )
                 ''')
 
+            # ========================================
+            # VIOLATION EVENTS TABLE - Event-based violation tracking
+            # ========================================
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS violation_events (
+                        event_id TEXT PRIMARY KEY,
+                        company_id TEXT NOT NULL,
+                        camera_id TEXT NOT NULL,
+                        person_id TEXT NOT NULL,
+                        violation_type TEXT NOT NULL,
+                        start_time REAL NOT NULL,
+                        end_time REAL,
+                        duration_seconds INTEGER,
+                        snapshot_path TEXT,
+                        resolution_snapshot_path TEXT,
+                        severity TEXT DEFAULT 'warning',
+                        status TEXT DEFAULT 'active',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                        FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS violation_events (
+                        event_id VARCHAR(255) PRIMARY KEY,
+                        company_id VARCHAR(255) REFERENCES companies(company_id),
+                        camera_id VARCHAR(255) REFERENCES cameras(camera_id),
+                        person_id VARCHAR(255) NOT NULL,
+                        violation_type VARCHAR(100) NOT NULL,
+                        start_time DOUBLE PRECISION NOT NULL,
+                        end_time DOUBLE PRECISION,
+                        duration_seconds INTEGER,
+                        snapshot_path TEXT,
+                        resolution_snapshot_path TEXT,
+                        severity VARCHAR(20) DEFAULT 'warning',
+                        status VARCHAR(20) DEFAULT 'active',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            
+            # ========================================
+            # PERSON VIOLATIONS TABLE - Monthly violation tracking per person
+            # ========================================
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS person_violations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        person_id TEXT NOT NULL,
+                        company_id TEXT NOT NULL,
+                        month TEXT NOT NULL,
+                        violation_type TEXT NOT NULL,
+                        violation_count INTEGER DEFAULT 0,
+                        total_duration_seconds INTEGER DEFAULT 0,
+                        penalty_amount REAL DEFAULT 0.0,
+                        last_violation_date TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                        UNIQUE(person_id, company_id, month, violation_type)
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS person_violations (
+                        id SERIAL PRIMARY KEY,
+                        person_id VARCHAR(255) NOT NULL,
+                        company_id VARCHAR(255) REFERENCES companies(company_id),
+                        month VARCHAR(7) NOT NULL,
+                        violation_type VARCHAR(100) NOT NULL,
+                        violation_count INTEGER DEFAULT 0,
+                        total_duration_seconds INTEGER DEFAULT 0,
+                        penalty_amount DECIMAL(10,2) DEFAULT 0.0,
+                        last_violation_date TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(person_id, company_id, month, violation_type)
+                    )
+                ''')
+            
+            # ========================================
+            # MONTHLY PENALTIES TABLE - Monthly penalty reports
+            # ========================================
+            if self.db_type == 'sqlite':
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS monthly_penalties (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id TEXT NOT NULL,
+                        person_id TEXT,
+                        month TEXT NOT NULL,
+                        total_violations INTEGER DEFAULT 0,
+                        total_duration_seconds INTEGER DEFAULT 0,
+                        total_penalty REAL DEFAULT 0.0,
+                        penalty_details TEXT,
+                        status TEXT DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
+                        UNIQUE(company_id, person_id, month)
+                    )
+                ''')
+            else:  # PostgreSQL
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS monthly_penalties (
+                        id SERIAL PRIMARY KEY,
+                        company_id VARCHAR(255) REFERENCES companies(company_id),
+                        person_id VARCHAR(255),
+                        month VARCHAR(7) NOT NULL,
+                        total_violations INTEGER DEFAULT 0,
+                        total_duration_seconds INTEGER DEFAULT 0,
+                        total_penalty DECIMAL(10,2) DEFAULT 0.0,
+                        penalty_details JSON,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(company_id, person_id, month)
+                    )
+                ''')
+
             # Create payment methods table
             if self.db_type == 'sqlite':
                 cursor.execute('''
@@ -1712,6 +1830,289 @@ class DatabaseAdapter:
         except Exception as e:
             logger.error(f"❌ Get company detection stats error: {e}")
             return {}
+
+    # ========================================
+    # VIOLATION EVENTS METHODS
+    # ========================================
+    
+    def add_violation_event(self, event_data: Dict) -> bool:
+        """Yeni ihlal event'i kaydet"""
+        try:
+            if self.db_type == 'sqlite':
+                query = '''
+                    INSERT INTO violation_events (
+                        event_id, company_id, camera_id, person_id, violation_type,
+                        start_time, end_time, duration_seconds, snapshot_path, severity, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    INSERT INTO violation_events (
+                        event_id, company_id, camera_id, person_id, violation_type,
+                        start_time, end_time, duration_seconds, snapshot_path, severity, status
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                '''
+            
+            params = (
+                event_data['event_id'],
+                event_data['company_id'],
+                event_data['camera_id'],
+                event_data['person_id'],
+                event_data['violation_type'],
+                event_data['start_time'],
+                event_data.get('end_time'),
+                event_data.get('duration_seconds'),
+                event_data.get('snapshot_path'),
+                event_data.get('severity', 'warning'),
+                event_data.get('status', 'active')
+            )
+            
+            self.execute_query(query, params)
+            logger.debug(f"✅ Violation event saved: {event_data['event_id']}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Add violation event error: {e}")
+            return False
+    
+    def update_violation_event(self, event_id: str, update_data: Dict) -> bool:
+        """İhlal event'ini güncelle (bittiğinde)"""
+        try:
+            if self.db_type == 'sqlite':
+                query = '''
+                    UPDATE violation_events 
+                    SET end_time = ?, duration_seconds = ?, status = ?, resolution_snapshot_path = ?
+                    WHERE event_id = ?
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    UPDATE violation_events 
+                    SET end_time = %s, duration_seconds = %s, status = %s, resolution_snapshot_path = %s
+                    WHERE event_id = %s
+                '''
+            
+            params = (
+                update_data.get('end_time'),
+                update_data.get('duration_seconds'),
+                update_data.get('status', 'resolved'),
+                update_data.get('resolution_snapshot_path'),
+                event_id
+            )
+            
+            self.execute_query(query, params)
+            logger.debug(f"✅ Violation event updated: {event_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Update violation event error: {e}")
+            return False
+    
+    def get_active_violations(self, camera_id: Optional[str] = None, company_id: Optional[str] = None) -> List[Dict]:
+        """Aktif ihlalleri getir"""
+        try:
+            if self.db_type == 'sqlite':
+                if camera_id:
+                    query = '''
+                        SELECT * FROM violation_events 
+                        WHERE camera_id = ? AND status = 'active'
+                        ORDER BY start_time DESC
+                    '''
+                    params = (camera_id,)
+                elif company_id:
+                    query = '''
+                        SELECT * FROM violation_events 
+                        WHERE company_id = ? AND status = 'active'
+                        ORDER BY start_time DESC
+                    '''
+                    params = (company_id,)
+                else:
+                    query = "SELECT * FROM violation_events WHERE status = 'active' ORDER BY start_time DESC"
+                    params = ()
+            else:  # PostgreSQL
+                if camera_id:
+                    query = '''
+                        SELECT * FROM violation_events 
+                        WHERE camera_id = %s AND status = 'active'
+                        ORDER BY start_time DESC
+                    '''
+                    params = (camera_id,)
+                elif company_id:
+                    query = '''
+                        SELECT * FROM violation_events 
+                        WHERE company_id = %s AND status = 'active'
+                        ORDER BY start_time DESC
+                    '''
+                    params = (company_id,)
+                else:
+                    query = "SELECT * FROM violation_events WHERE status = 'active' ORDER BY start_time DESC"
+                    params = ()
+            
+            results = self.execute_query(query, params, fetch_all=True)
+            
+            violations = []
+            for row in results:
+                violations.append({
+                    'event_id': row[0],
+                    'company_id': row[1],
+                    'camera_id': row[2],
+                    'person_id': row[3],
+                    'violation_type': row[4],
+                    'start_time': row[5],
+                    'end_time': row[6],
+                    'duration_seconds': row[7],
+                    'snapshot_path': row[8],
+                    'severity': row[9],
+                    'status': row[10]
+                })
+            
+            return violations
+            
+        except Exception as e:
+            logger.error(f"❌ Get active violations error: {e}")
+            return []
+    
+    def get_violation_history(self, camera_id: str, hours: int = 24, limit: int = 100) -> List[Dict]:
+        """İhlal geçmişini getir"""
+        try:
+            import time
+            cutoff_time = time.time() - (hours * 3600)
+            
+            if self.db_type == 'sqlite':
+                query = '''
+                    SELECT * FROM violation_events 
+                    WHERE camera_id = ? AND start_time >= ?
+                    ORDER BY start_time DESC
+                    LIMIT ?
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    SELECT * FROM violation_events 
+                    WHERE camera_id = %s AND start_time >= %s
+                    ORDER BY start_time DESC
+                    LIMIT %s
+                '''
+            
+            results = self.execute_query(query, (camera_id, cutoff_time, limit), fetch_all=True)
+            
+            violations = []
+            for row in results:
+                violations.append({
+                    'event_id': row[0],
+                    'company_id': row[1],
+                    'camera_id': row[2],
+                    'person_id': row[3],
+                    'violation_type': row[4],
+                    'start_time': row[5],
+                    'end_time': row[6],
+                    'duration_seconds': row[7],
+                    'snapshot_path': row[8],
+                    'severity': row[9],
+                    'status': row[10]
+                })
+            
+            return violations
+            
+        except Exception as e:
+            logger.error(f"❌ Get violation history error: {e}")
+            return []
+    
+    # ========================================
+    # PERSON VIOLATIONS METHODS
+    # ========================================
+    
+    def update_person_violation_stats(self, person_id: str, company_id: str, violation_type: str, duration_seconds: int) -> bool:
+        """Kişi ihlal istatistiklerini güncelle"""
+        try:
+            from datetime import datetime
+            month = datetime.now().strftime('%Y-%m')
+            
+            if self.db_type == 'sqlite':
+                # Önce mevcut kaydı kontrol et
+                check_query = '''
+                    SELECT id, violation_count, total_duration_seconds 
+                    FROM person_violations 
+                    WHERE person_id = ? AND company_id = ? AND month = ? AND violation_type = ?
+                '''
+                existing = self.execute_query(check_query, (person_id, company_id, month, violation_type), fetch_one=True)
+                
+                if existing:
+                    # Güncelle
+                    update_query = '''
+                        UPDATE person_violations 
+                        SET violation_count = violation_count + 1,
+                            total_duration_seconds = total_duration_seconds + ?,
+                            last_violation_date = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    '''
+                    self.execute_query(update_query, (duration_seconds, existing[0]))
+                else:
+                    # Yeni kayıt
+                    insert_query = '''
+                        INSERT INTO person_violations (
+                            person_id, company_id, month, violation_type,
+                            violation_count, total_duration_seconds, last_violation_date
+                        ) VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+                    '''
+                    self.execute_query(insert_query, (person_id, company_id, month, violation_type, duration_seconds))
+            else:  # PostgreSQL
+                # UPSERT kullan
+                query = '''
+                    INSERT INTO person_violations (
+                        person_id, company_id, month, violation_type,
+                        violation_count, total_duration_seconds, last_violation_date
+                    ) VALUES (%s, %s, %s, %s, 1, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (person_id, company_id, month, violation_type)
+                    DO UPDATE SET
+                        violation_count = person_violations.violation_count + 1,
+                        total_duration_seconds = person_violations.total_duration_seconds + EXCLUDED.total_duration_seconds,
+                        last_violation_date = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                '''
+                self.execute_query(query, (person_id, company_id, month, violation_type, duration_seconds))
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Update person violation stats error: {e}")
+            return False
+    
+    def get_person_monthly_violations(self, person_id: str, company_id: str, month: str) -> List[Dict]:
+        """Kişinin aylık ihlal istatistiklerini getir"""
+        try:
+            if self.db_type == 'sqlite':
+                query = '''
+                    SELECT * FROM person_violations 
+                    WHERE person_id = ? AND company_id = ? AND month = ?
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    SELECT * FROM person_violations 
+                    WHERE person_id = %s AND company_id = %s AND month = %s
+                '''
+            
+            results = self.execute_query(query, (person_id, company_id, month), fetch_all=True)
+            
+            violations = []
+            for row in results:
+                violations.append({
+                    'id': row[0],
+                    'person_id': row[1],
+                    'company_id': row[2],
+                    'month': row[3],
+                    'violation_type': row[4],
+                    'violation_count': row[5],
+                    'total_duration_seconds': row[6],
+                    'penalty_amount': row[7],
+                    'last_violation_date': row[8]
+                })
+            
+            return violations
+            
+        except Exception as e:
+            logger.error(f"❌ Get person monthly violations error: {e}")
+            return []
+
 
 # Global database adapter instance
 db_adapter = DatabaseAdapter()

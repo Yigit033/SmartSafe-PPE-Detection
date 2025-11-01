@@ -17,6 +17,8 @@ import numpy as np
 # Import existing modules
 from ppe_detection_manager import PPEDetectionManager
 from database_adapter import get_db_adapter
+from violation_tracker import get_violation_tracker
+from snapshot_manager import get_snapshot_manager
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +142,117 @@ class DVRStreamProcessor:
                         if ppe_result and ppe_result.get('success', False):
                             detection_count += 1
                             
-                            # Sonuçları kaydet
+                            # 🚨 VIOLATION TRACKER ENTEGRASYONU
+                            # DVR stream'den gelen ihlalleri event-based olarak takip et
+                            try:
+                                violations_list = ppe_result.get('ppe_violations', [])
+                                
+                                for person_violation in violations_list:
+                                    person_bbox = person_violation.get('bbox', [])
+                                    missing_ppe = person_violation.get('missing_ppe', [])
+                                    
+                                    # Violation tracker'a gönder
+                                    violation_tracker = get_violation_tracker()
+                                    
+                                    new_violations, ended_violations = violation_tracker.process_detection(
+                                        camera_id=stream_id,  # DVR stream_id'yi camera_id olarak kullan
+                                        company_id=company_id,
+                                        person_bbox=person_bbox,
+                                        violations=missing_ppe,
+                                        frame_snapshot=frame
+                                    )
+                                    
+                                    # 📸 YENİ İHLALLER İÇİN SNAPSHOT ÇEK
+                                    for new_violation in new_violations:
+                                        try:
+                                            # Kişi görünürlük kontrolü
+                                            person_visible = True
+                                            if person_bbox and len(person_bbox) == 4:
+                                                px1, py1, px2, py2 = person_bbox
+                                                if px1 < 0 or py1 < 0 or px2 > frame.shape[1] or py2 > frame.shape[0]:
+                                                    person_visible = False
+                                                person_area = (px2 - px1) * (py2 - py1)
+                                                frame_area = frame.shape[0] * frame.shape[1]
+                                                if person_area < (frame_area * 0.05):
+                                                    person_visible = False
+                                            
+                                            if not person_visible:
+                                                logger.warning(f"⚠️ DVR: Kişi frame'de yeterince görünür değil, snapshot atlandı")
+                                                self.db_adapter.add_violation_event(new_violation)
+                                                continue
+                                            
+                                            # Snapshot çek
+                                            snapshot_manager = get_snapshot_manager()
+                                            snapshot_path = snapshot_manager.capture_violation_snapshot(
+                                                frame=frame,
+                                                company_id=company_id,
+                                                camera_id=stream_id,
+                                                person_id=new_violation['person_id'],
+                                                violation_type=new_violation['violation_type'],
+                                                person_bbox=person_bbox,
+                                                event_id=new_violation['event_id']
+                                            )
+                                            
+                                            if snapshot_path:
+                                                new_violation['snapshot_path'] = snapshot_path
+                                            
+                                            # Database'e kaydet
+                                            self.db_adapter.add_violation_event(new_violation)
+                                            logger.info(f"🚨 DVR NEW VIOLATION: {new_violation['violation_type']} - {new_violation['event_id']}")
+                                        
+                                        except Exception as ve:
+                                            logger.error(f"❌ DVR violation event save error: {ve}")
+                                    
+                                    # ✅ BİTEN İHLALLER İÇİN SNAPSHOT ÇEK
+                                    for ended_violation in ended_violations:
+                                        try:
+                                            # Çözüm snapshot'ı çek
+                                            try:
+                                                snapshot_manager = get_snapshot_manager()
+                                                resolution_snapshot_path = snapshot_manager.capture_violation_snapshot(
+                                                    frame=frame,
+                                                    company_id=company_id,
+                                                    camera_id=stream_id,
+                                                    person_id=ended_violation['person_id'],
+                                                    violation_type=f"{ended_violation['violation_type']}_resolved",
+                                                    person_bbox=person_bbox,
+                                                    event_id=ended_violation['event_id']
+                                                )
+                                                
+                                                if resolution_snapshot_path:
+                                                    logger.info(f"📸 DVR RESOLUTION SNAPSHOT: {resolution_snapshot_path}")
+                                            except Exception as snap_error:
+                                                logger.warning(f"⚠️ DVR resolution snapshot error: {snap_error}")
+                                                resolution_snapshot_path = None
+                                            
+                                            # Event'i güncelle
+                                            self.db_adapter.update_violation_event(
+                                                ended_violation['event_id'],
+                                                {
+                                                    'end_time': ended_violation['end_time'],
+                                                    'duration_seconds': ended_violation['duration_seconds'],
+                                                    'status': ended_violation['status'],
+                                                    'resolution_snapshot_path': resolution_snapshot_path
+                                                }
+                                            )
+                                            
+                                            # Person violation stats'ı güncelle
+                                            self.db_adapter.update_person_violation_stats(
+                                                person_id=ended_violation['person_id'],
+                                                company_id=company_id,
+                                                violation_type=ended_violation['violation_type'],
+                                                duration_seconds=ended_violation['duration_seconds']
+                                            )
+                                            
+                                            logger.info(f"✅ DVR VIOLATION RESOLVED: {ended_violation['violation_type']} - Duration: {ended_violation['duration_seconds']}s")
+                                        
+                                        except Exception as ve:
+                                            logger.error(f"❌ DVR violation event update error: {ve}")
+                            
+                            except Exception as vt_error:
+                                logger.error(f"❌ DVR violation tracker error: {vt_error}")
+                            
+                            # Sonuçları kaydet (eski sistem)
                             self.save_detection_result(stream_id, company_id, ppe_result, detection_time)
                             
                             # Real-time dashboard için queue'ya ekle

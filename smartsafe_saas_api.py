@@ -8143,6 +8143,8 @@ Mesaj:
                                             )
                                             
                                             if detection_result:
+                                                # Company ID ekle
+                                                detection_result['company_id'] = company_id
                                                 last_detection_result = detection_result
                                                 if frame_count == 11:  # İlk detection'da log
                                                     logger.info(f"✅ Detection successful: {len(detection_result.get('detections', []))} objects")

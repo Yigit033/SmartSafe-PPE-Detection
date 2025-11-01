@@ -52,7 +52,7 @@ class DatabaseConfig:
         else:
             # Default to SQLite for development
             self.db_type = 'sqlite'
-            self.database_name = 'smartsafe_saas.db'
+            self.database_name = 'data/databases/smartsafe_saas.db'
             self.host = None
             self.port = None
             self.username = None
