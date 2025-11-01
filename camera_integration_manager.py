@@ -20,6 +20,10 @@ import base64
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 
+# Violation tracking imports
+from violation_tracker import get_violation_tracker
+from snapshot_manager import get_snapshot_manager
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -2657,6 +2661,136 @@ class ProfessionalCameraManager:
                         # Compliance kontrolü
                         if has_helmet and has_vest:  # Minimum gereksinim
                             compliant_people += 1
+                        
+                        # 🚨 VIOLATION TRACKER - Event-based ihlal takibi
+                        person_violations_list = []
+                        if not has_helmet:
+                            person_violations_list.append('Baret eksik')
+                        if not has_vest:
+                            person_violations_list.append('Yelek eksik')
+                        if not has_shoes:
+                            person_violations_list.append('Güvenlik ayakkabısı eksik')
+                        
+                        # Violation tracker'a gönder
+                        if person_violations_list:
+                            try:
+                                violation_tracker = get_violation_tracker()
+                                
+                                # Company ID'yi database'den al
+                                from database_adapter import get_db_adapter
+                                db = get_db_adapter()
+                                camera_info = db.get_camera_by_id(camera_id)
+                                company_id = camera_info.get('company_id', 'UNKNOWN') if camera_info else 'UNKNOWN'
+                                
+                                new_violations, ended_violations = violation_tracker.process_detection(
+                                    camera_id=camera_id,
+                                    company_id=company_id,
+                                    person_bbox=person_bbox,
+                                    violations=person_violations_list,
+                                    frame_snapshot=frame
+                                )
+                                
+                                # 📸 YENİ İHLALLER İÇİN SNAPSHOT ÇEK (İLK KEZ)
+                                # Sadece yeni başlayan ihlaller için snapshot çekiyoruz
+                                for new_violation in new_violations:
+                                    try:
+                                        # ✅ Kişinin frame'de görünür olduğundan emin ol
+                                        person_visible = True
+                                        if person_bbox:
+                                            px1, py1, px2, py2 = person_bbox
+                                            # Kişi frame içinde mi kontrol et
+                                            if px1 < 0 or py1 < 0 or px2 > frame.shape[1] or py2 > frame.shape[0]:
+                                                person_visible = False
+                                            # Kişi çok küçük mü kontrol et (minimum %5 frame)
+                                            person_area = (px2 - px1) * (py2 - py1)
+                                            frame_area = frame.shape[0] * frame.shape[1]
+                                            if person_area < (frame_area * 0.05):
+                                                person_visible = False
+                                        
+                                        if not person_visible:
+                                            logger.warning(f"⚠️ Kişi frame'de yeterince görünür değil, snapshot atlandı")
+                                            # Database'e snapshot olmadan kaydet
+                                            from database_adapter import get_db_adapter
+                                            db = get_db_adapter()
+                                            db.add_violation_event(new_violation)
+                                            continue
+                                        
+                                        # 📸 SNAPSHOT ÇEK - İLK İHLAL ANI (EKSİK EKİPMANLARLA)
+                                        snapshot_manager = get_snapshot_manager()
+                                        snapshot_path = snapshot_manager.capture_violation_snapshot(
+                                            frame=frame,
+                                            company_id=company_id,
+                                            camera_id=camera_id,
+                                            person_id=new_violation['person_id'],
+                                            violation_type=new_violation['violation_type'],
+                                            person_bbox=person_bbox,
+                                            event_id=new_violation['event_id']
+                                        )
+                                        
+                                        # Snapshot path'i violation event'e ekle
+                                        if snapshot_path:
+                                            new_violation['snapshot_path'] = snapshot_path
+                                        
+                                        # Database'e kaydet
+                                        from database_adapter import get_db_adapter
+                                        db = get_db_adapter()
+                                        db.add_violation_event(new_violation)
+                                        
+                                        logger.info(f"🚨 NEW VIOLATION + SNAPSHOT: {new_violation['violation_type']} - {new_violation['event_id']}")
+                                    except Exception as ve:
+                                        logger.error(f"❌ Violation event save error: {ve}")
+                                
+                                # ✅ BİTEN İHLALLER İÇİN SNAPSHOT ÇEK (ÇÖZÜM ANI)
+                                # Kişi ekipmanlarını taktığında son durumu kaydet
+                                for ended_violation in ended_violations:
+                                    try:
+                                        from database_adapter import get_db_adapter
+                                        db = get_db_adapter()
+                                        
+                                        # 📸 ÇÖZÜM SNAPSHOT'I ÇEK (TAM EKİPMANLARLA)
+                                        # Bu snapshot kişinin ekipmanları taktıktan sonraki halini gösterir
+                                        try:
+                                            snapshot_manager = get_snapshot_manager()
+                                            resolution_snapshot_path = snapshot_manager.capture_violation_snapshot(
+                                                frame=frame,
+                                                company_id=company_id,
+                                                camera_id=camera_id,
+                                                person_id=ended_violation['person_id'],
+                                                violation_type=f"{ended_violation['violation_type']}_resolved",
+                                                person_bbox=person_bbox,
+                                                event_id=ended_violation['event_id']
+                                            )
+                                            
+                                            if resolution_snapshot_path:
+                                                logger.info(f"📸 RESOLUTION SNAPSHOT: {resolution_snapshot_path}")
+                                        except Exception as snap_error:
+                                            logger.warning(f"⚠️ Resolution snapshot error: {snap_error}")
+                                        
+                                        # Event'i güncelle (resolution snapshot path ile)
+                                        db.update_violation_event(
+                                            ended_violation['event_id'],
+                                            {
+                                                'end_time': ended_violation['end_time'],
+                                                'duration_seconds': ended_violation['duration_seconds'],
+                                                'status': ended_violation['status'],
+                                                'resolution_snapshot_path': resolution_snapshot_path if 'resolution_snapshot_path' in locals() else None
+                                            }
+                                        )
+                                        
+                                        # Person violation stats'ı güncelle
+                                        db.update_person_violation_stats(
+                                            person_id=ended_violation['person_id'],
+                                            company_id=company_id,
+                                            violation_type=ended_violation['violation_type'],
+                                            duration_seconds=ended_violation['duration_seconds']
+                                        )
+                                        
+                                        logger.info(f"✅ VIOLATION RESOLVED: {ended_violation['violation_type']} - Duration: {ended_violation['duration_seconds']}s")
+                                    except Exception as ve:
+                                        logger.error(f"❌ Violation event update error: {ve}")
+                                        
+                            except Exception as vt_error:
+                                logger.error(f"❌ Violation tracker error: {vt_error}")
                 
                 # Compliance rate hesapla
                 compliance_rate = int((compliant_people / max(people_detected, 1)) * 100) if people_detected > 0 else 100
@@ -2733,12 +2867,19 @@ class ProfessionalCameraManager:
             from database_adapter import get_db_adapter
             db = get_db_adapter()
             
-            # Company ID'yi camera_id'den çıkar (format: CAM_XXXXX veya COMP_XXXXX_CAM_XXXXX)
-            company_id = "UNKNOWN"
-            if '_' in camera_id:
-                parts = camera_id.split('_')
-                if len(parts) >= 2 and parts[0] == 'COMP':
-                    company_id = f"{parts[0]}_{parts[1]}"
+            # Company ID'yi detection_result'tan al veya database'den bul
+            company_id = detection_result.get('company_id')
+            
+            if not company_id:
+                # Camera bilgisinden company_id bul
+                try:
+                    camera_info = db.get_camera_by_id(camera_id)
+                    if camera_info:
+                        company_id = camera_info.get('company_id', 'UNKNOWN')
+                    else:
+                        company_id = 'UNKNOWN'
+                except:
+                    company_id = 'UNKNOWN'
             
             # Detection data hazırla
             detection_data = {
