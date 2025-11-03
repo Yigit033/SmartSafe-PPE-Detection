@@ -35,6 +35,7 @@ pyotp>=2.8.0
 
 # Email & Validation
 email-validator>=2.0.0
+sendgrid==6.11.0  # SendGrid API for reliable email delivery (Render.com compatible)
 
 # Data Processing & Visualization (memory optimized)
 pandas>=1.5.0

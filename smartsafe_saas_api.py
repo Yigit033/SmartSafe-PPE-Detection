@@ -15,6 +15,15 @@ from flask_limiter.util import get_remote_address
 from flask_mail import Mail, Message
 import sqlite3
 import json
+
+# SendGrid imports (conditional - graceful fallback if not available)
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail as SendGridMail, Email, To, Content
+    SENDGRID_AVAILABLE = True
+except ImportError:
+    SENDGRID_AVAILABLE = False
+    logger.warning("⚠️ SendGrid not installed. Email will use SMTP only.")
 import threading
 import time
 import requests
@@ -684,45 +693,115 @@ class SmartSafeSaaSAPI:
             logger.error(f"❌ Demo kanal limiti hatası: {e}")
             return channels
     
-    def _send_demo_notification(self, email: str, message: str):
-        """Demo bildirim maili gönder - PostgreSQL ve SQLite uyumlu"""
+    def _send_email_with_sendgrid(self, to_email: str, subject: str, content: str) -> bool:
+        """
+        SendGrid API kullanarak mail gönder
+        Returns: True if successful, False otherwise
+        """
+        if not SENDGRID_AVAILABLE:
+            logger.debug("SendGrid not available, skipping")
+            return False
+            
         try:
-            # Mevcut mail sistemi kullanılarak
+            api_key = os.getenv('SENDGRID_API_KEY')
+            if not api_key:
+                logger.debug("SENDGRID_API_KEY not set")
+                return False
+            
+            from_email = os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
+            
+            # SendGrid mail objesi oluştur
+            message = SendGridMail(
+                from_email=Email(from_email),
+                to_emails=To(to_email),
+                subject=subject,
+                plain_text_content=Content("text/plain", content)
+            )
+            
+            # SendGrid API ile gönder
+            sg = SendGridAPIClient(api_key)
+            response = sg.send(message)
+            
+            if response.status_code in [200, 201, 202]:
+                logger.info(f"✅ SendGrid ile mail gönderildi: {to_email} (status: {response.status_code})")
+                return True
+            else:
+                logger.warning(f"⚠️ SendGrid beklenmeyen status: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ SendGrid mail gönderim hatası: {e}")
+            return False
+    
+    def _send_demo_notification(self, email: str, message: str):
+        """
+        Demo bildirim maili gönder - PostgreSQL ve SQLite uyumlu
+        SMTP → SendGrid fallback → Log fallback
+        """
+        mail_sent = False
+        subject = "SmartSafe AI Demo Hesap Bilgileri"
+        
+        # 1. Önce SMTP dene
+        try:
             if hasattr(self, 'mail') and self.mail:
                 msg = Message(
-                    subject="SmartSafe AI Demo Hesap Bilgileri",
+                    subject=subject,
                     recipients=[email],
                     body=message,
                     sender=os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
                 )
                 self.mail.send(msg)
-                logger.info(f"✅ Demo mail gönderildi: {email}")
-            else:
-                # Mail sistemi yoksa log'a yaz
-                logger.info(f"📧 Demo mail içeriği (mail sistemi aktif değil):\n{message}")
-                
-        except Exception as e:
-            logger.error(f"❌ Demo mail gönderim hatası: {e}")
+                logger.info(f"✅ SMTP ile demo mail gönderildi: {email}")
+                mail_sent = True
+                return
+        except Exception as smtp_error:
+            logger.warning(f"⚠️ SMTP başarısız: {smtp_error}")
+        
+        # 2. SMTP başarısızsa SendGrid dene
+        if not mail_sent:
+            logger.info("🔄 SendGrid ile deneniyor...")
+            mail_sent = self._send_email_with_sendgrid(email, subject, message)
+        
+        # 3. Her iki yöntem de başarısızsa log'a yaz
+        if not mail_sent:
+            logger.error(f"❌ Tüm mail yöntemleri başarısız oldu: {email}")
+            logger.warning(f"⚠️ Mail gönderilemedi. Log'daki mesaj içeriğini manuel gönderin.")
+            logger.info(f"📧 Mail içeriği:\n{message}")
 
     def _send_company_notification(self, email: str, message: str):
-        """Şirket kayıt bildirim maili gönder - PostgreSQL ve SQLite uyumlu"""
+        """
+        Şirket kayıt bildirim maili gönder - PostgreSQL ve SQLite uyumlu
+        SMTP → SendGrid fallback → Log fallback
+        """
+        mail_sent = False
+        subject = "SmartSafe AI Şirket Hesap Bilgileri"
+        
+        # 1. Önce SMTP dene
         try:
-            # Mevcut mail sistemi kullanılarak
             if hasattr(self, 'mail') and self.mail:
                 msg = Message(
-                    subject="SmartSafe AI Şirket Hesap Bilgileri",
+                    subject=subject,
                     recipients=[email],
                     body=message,
                     sender=os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
                 )
                 self.mail.send(msg)
-                logger.info(f"✅ Şirket kayıt maili gönderildi: {email}")
-            else:
-                # Mail sistemi yoksa log'a yaz
-                logger.info(f"📧 Şirket kayıt mail içeriği (mail sistemi aktif değil):\n{message}")
-                
-        except Exception as e:
-            logger.error(f"❌ Şirket kayıt mail gönderim hatası: {e}")
+                logger.info(f"✅ SMTP ile şirket maili gönderildi: {email}")
+                mail_sent = True
+                return
+        except Exception as smtp_error:
+            logger.warning(f"⚠️ SMTP başarısız: {smtp_error}")
+        
+        # 2. SMTP başarısızsa SendGrid dene
+        if not mail_sent:
+            logger.info("🔄 SendGrid ile deneniyor...")
+            mail_sent = self._send_email_with_sendgrid(email, subject, message)
+        
+        # 3. Her iki yöntem de başarısızsa log'a yaz
+        if not mail_sent:
+            logger.error(f"❌ Tüm mail yöntemleri başarısız oldu: {email}")
+            logger.warning(f"⚠️ Mail gönderilemedi. Log'daki mesaj içeriğini manuel gönderin.")
+            logger.info(f"📧 Mail içeriği:\n{message}")
 
     def validate_password_strength(self, password: str) -> tuple[bool, list[str]]:
         """Şifre gücünü kontrol et - 5 temel gereksinimi doğrula"""
