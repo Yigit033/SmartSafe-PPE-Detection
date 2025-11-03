@@ -70,6 +70,12 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://app.getsmartsafeai.com/api/$1" },
+    { "source": "/app", "destination": "https://app.getsmartsafeai.com/app" },
+    { "source": "/app/(.*)", "destination": "https://app.getsmartsafeai.com/app/$1" },
+    { "source": "/company/(.*)", "destination": "https://app.getsmartsafeai.com/company/$1" }
   ]
 }
 
