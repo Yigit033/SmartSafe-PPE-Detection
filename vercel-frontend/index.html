@@ -2557,10 +2557,10 @@
 
         // API Configuration - Backend URL
         // Local test: http://localhost:5000
-        // Production: https://app.getsmartsafeai.com (RENDER URL'İNİ BURAYA YAZ!)
+        // Production: Vercel proxy ile aynı origin altında /api
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const API_BASE_URL = isLocal ? 'http://localhost:5000' : 'https://app.getsmartsafeai.com';
-        const BACKEND_URL = API_BASE_URL;  // Backend routes için
+        const API_BASE_URL = isLocal ? 'http://localhost:5000' : '/api';
+        const BACKEND_URL = isLocal ? 'http://localhost:5000' : '';  // Backend routes için (/app, /company/...)
         
         // Backend linklerini güncelle (Giriş Yap, Hemen Başla vb.)
         document.addEventListener('DOMContentLoaded', function() {
