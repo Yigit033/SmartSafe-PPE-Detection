@@ -76,6 +76,9 @@
     { "source": "/app", "destination": "https://app.getsmartsafeai.com/app" },
     { "source": "/app/(.*)", "destination": "https://app.getsmartsafeai.com/app/$1" },
     { "source": "/company/(.*)", "destination": "https://app.getsmartsafeai.com/company/$1" }
-  ]
+  ],
+  "github": {
+    "silent": true
+  }
 }
 
