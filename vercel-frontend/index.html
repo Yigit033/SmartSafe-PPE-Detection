@@ -3325,7 +3325,7 @@
                 Demo Hesabı Oluşturuluyor...
             `;
             
-            // Loading mesajı göster
+            // Loading mesajı - gösterilecek içerik
             const loadingMessage = `
                 <div class="text-center">
                     <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
@@ -3365,17 +3365,18 @@
                     </div>
                 </div>
             `;
-            
-            // Form'u gizle ve loading mesajını göster
+            // Loading mesajını DOM'a uygula (formu gizle, mesajı göster)
             const demoRequestForm = document.getElementById('demoRequestForm');
             const demoSuccessMessage = document.getElementById('demoSuccessMessage');
-            
             if (demoRequestForm && demoSuccessMessage) {
                 demoRequestForm.style.display = 'none';
-                demoSuccessMessage.innerHTML = loadingMessage;
                 demoSuccessMessage.style.display = 'block';
-            } else {
-                console.error('âŒ Demo form elementleri bulunamadı');
+                demoSuccessMessage.innerHTML = loadingMessage;
+            }
+
+            // Eğer elemanlar bulunamazsa kullanıcıyı bilgilendir ve iptal et
+            if (!demoRequestForm || !demoSuccessMessage) {
+                console.error('Demo form elementleri bulunamadı');
                 toastr.error('Form yüklenirken hata oluştu. Lütfen sayfayı yenileyin.');
                 return;
             }
@@ -3490,8 +3491,12 @@
                         </div>
                     `;
                     
-                    // Loading mesajını gizle ve başarı mesajını göster
-                    document.getElementById('demoSuccessMessage').innerHTML = successMessage;
+                    // Başarı mesajını göster
+                    const successBox = document.getElementById('demoSuccessMessage');
+                    if (successBox) {
+                        successBox.style.display = 'block';
+                        successBox.innerHTML = successMessage;
+                    }
                     
                     // Form'u temizle - Güvenli reset
                     const demoForm = document.getElementById('demoForm');
