@@ -2530,7 +2530,7 @@
             
             const formData = new FormData(this);
             
-            fetch(`${API_BASE_URL}/api/contact`, {
+            fetch(`${API_BASE_URL}/contact`, {
                 method: 'POST',
                 body: formData
             })
@@ -3210,17 +3210,19 @@
                 }
             };
 
-            // Toggle language dropdown
-            languageBtn.addEventListener('click', function() {
-                languageSelector.classList.toggle('active');
-            });
+            // Toggle language dropdown (guard for missing elements)
+            if (languageBtn && languageSelector) {
+                languageBtn.addEventListener('click', function() {
+                    languageSelector.classList.toggle('active');
+                });
 
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!languageSelector.contains(e.target)) {
-                    languageSelector.classList.remove('active');
-                }
-            });
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!languageSelector.contains(e.target)) {
+                        languageSelector.classList.remove('active');
+                    }
+                });
+            }
 
             // Handle language selection
             languageOptions.forEach(option => {
@@ -3387,7 +3389,7 @@
                 password: formData.get('demo_password')
             };
             
-            fetch(`${API_BASE_URL}/api/request-demo`, {
+            fetch(`${API_BASE_URL}/request-demo`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
