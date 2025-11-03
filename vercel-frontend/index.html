@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -3390,20 +3390,31 @@
                 password: formData.get('demo_password')
             };
             
+            // Timeout controller
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 saniye timeout
+            
             fetch(`${API_BASE_URL}/request-demo`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(demoData)
+                body: JSON.stringify(demoData),
+                signal: controller.signal
             })
-            .then(response => response.json())
+            .then(response => {
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     // Demo hesabı başarıyla oluşturuldu - PROFESYONEL AKIŞ
                     const successMessage = `
                         <div class="text-center demo-success-info">
-                            <div class="success-icon mb-3">ğŸ‰</div>
+                            <div class="success-icon mb-3">‰</div>
                             <h3 class="text-success mb-3 fw-bold">Demo Hesabınız Başarıyla Oluşturuldu!</h3>
                             <p class="lead text-muted mb-4">Demo hesap bilgileriniz email adresinize gönderilecektir.</p>
                             
@@ -3517,7 +3528,7 @@
                     
                     // Duplicate email hatası için özel mesaj
                     if (data.error && data.error.includes('zaten kullanılıyor')) {
-                        toastr.warning('âš ï¸ ' + data.error);
+                        toastr.warning('⚠️ ' + data.error);
                     } else {
                         toastr.error('âŒ Hata: ' + data.error);
                     }
@@ -3529,6 +3540,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
+                clearTimeout(timeoutId);
                 
                 // Hata durumunda form'u geri göster
                 const demoRequestForm = document.getElementById('demoRequestForm');
@@ -3545,7 +3557,14 @@
                     submitButton.innerHTML = originalButtonText;
                 }
                 
-                toastr.error('Bir hata oluştu. Lütfen tekrar deneyin.');
+                // Hata tipine göre mesaj
+                if (error.name === 'AbortError') {
+                    toastr.error('⏱️ İstek zaman aşımına uğradı. Backend uyanıyor, lütfen 30 saniye bekleyip tekrar deneyin.');
+                } else if (error.message && error.message.includes('502')) {
+                    toastr.error('🔄 Backend hazırlanıyor. Lütfen 30 saniye bekleyip tekrar deneyin.');
+                } else {
+                    toastr.error('❌ Bir hata oluştu: ' + (error.message || 'Lütfen tekrar deneyin.'));
+                }
             });
         }
         
@@ -3934,7 +3953,7 @@
                                                         </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Talep</h6>
-                                                            <small class="text-muted">âœ… Şirket bilgileri alındı</small>
+                                                            <small class="text-muted">… Şirket bilgileri alındı</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
@@ -3952,7 +3971,7 @@
                                                         </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Giriş</h6>
-                                                            <small class="text-muted">ğŸ“§ Mail'deki link ile giriş</small>
+                                                            <small class="text-muted">📧 Mail'deki link ile giriş</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
@@ -3961,7 +3980,7 @@
                                                         </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Satış Ekibi</h6>
-                                                            <small class="text-muted">ğŸ“ 24 saat içinde iletişim</small>
+                                                            <small class="text-muted">📞 24 saat içinde iletişim</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4085,7 +4104,7 @@
                                                         <div class="timeline-marker bg-success"></div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Talep</h6>
-                                                            <small class="text-muted">âœ… Tamamlandı</small>
+                                                            <small class="text-muted">… Tamamlandı</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
@@ -4099,14 +4118,14 @@
                                                         <div class="timeline-marker bg-secondary"></div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Giriş</h6>
-                                                            <small class="text-muted">ğŸ“§ Mail gelince</small>
+                                                            <small class="text-muted">📧 Mail gelince</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
                                                         <div class="timeline-marker bg-secondary"></div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Satış Ekibi</h6>
-                                                            <small class="text-muted">ğŸ“ 24 saat içinde</small>
+                                                            <small class="text-muted">📞 24 saat içinde</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4499,3 +4518,4 @@
     </div>
 </body>
 </html> 
+
