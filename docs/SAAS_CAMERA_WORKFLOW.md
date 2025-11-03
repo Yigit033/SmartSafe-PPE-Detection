@@ -15,7 +15,7 @@ Sadece onay, limit belirleme ve destek verirsiniz.
 ### **A. Şirket Başvurusu**
 ```bash
 # Şirket sahibi:
-1. https://smartsafeai.onrender.com/ → "Şirket Kaydı"
+1. https://app.getsmartsafeai.com/ → "Şirket Kaydı"
 2. Formu doldurur:
    - Şirket adı: "ACME İnşaat Ltd."
    - Sektör: "İnşaat"
@@ -145,7 +145,7 @@ Sadece onay, limit belirleme ve destek verirsiniz.
 #### **Adım 1: Başvuru**
 ```bash
 # Şirket sahibi Ahmet Bey:
-1. https://smartsafeai.onrender.com/ → "Demo Talep Et"
+1. https://app.getsmartsafeai.com/ → "Demo Talep Et"
 2. Şirket bilgilerini girer
 3. "5 kamera kurulacak" bilgisini verir
 ```

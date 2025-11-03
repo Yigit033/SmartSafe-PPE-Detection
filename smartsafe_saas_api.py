@@ -112,7 +112,9 @@ class SmartSafeSaaSAPI:
             'http://localhost:3000',
             'http://localhost:8000',
             'http://localhost:5000',
-            'https://smartsafe-ppe-detection.onrender.com',  # Render backend URL
+            'https://getsmartsafeai.com',  # Production frontend domain
+            'https://www.getsmartsafeai.com',  # WWW variant
+            'https://app.getsmartsafeai.com',  # Backend custom domain
             'https://*.vercel.app',  # Vercel preview ve production domains
             os.getenv('FRONTEND_URL', '')  # Environment variable ile özelleştirilebilir
         ]
@@ -2334,7 +2336,7 @@ Mesaj:
                         - Kamera Limiti: 2
                         
                         🌐 Demo Login Linki:
-                        https://smartsafeai.onrender.com/company/{result}/login
+                        https://app.getsmartsafeai.com/company/{result}/login
                         
                         📧 MANUEL MAİL GÖNDERİMİ GEREKİYOR!
                         
@@ -2354,7 +2356,7 @@ Mesaj:
                         - Şifre: {data.get('password')}
                         
                         🌐 Demo Giriş Linki:
-                        https://smartsafeai.onrender.com/company/{result}/login
+                        https://app.getsmartsafeai.com/company/{result}/login
                         
                         📋 Demo Hesap Özellikleri:
                         - Süre: 7 gün ücretsiz
@@ -2563,7 +2565,7 @@ Mesaj:
                         - Şifre: {data.get('password')}
                         
                         🌐 Giriş Linki:
-                        https://smartsafeai.onrender.com/company/{company_id}/login
+                        https://app.getsmartsafeai.com/company/{company_id}/login
                         
                         📧 MANUEL MAİL GÖNDERİMİ GEREKİYOR!
                         
@@ -2583,7 +2585,7 @@ Mesaj:
                         - Şifre: {data.get('password')}
                         
                         🌐 Giriş Linki:
-                        https://smartsafeai.onrender.com/company/{company_id}/login
+                        https://app.getsmartsafeai.com/company/{company_id}/login
                         
                         💳 Abonelik Bilgileri:
                         - Plan: {selected_plan['name']}
