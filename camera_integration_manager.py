@@ -2449,8 +2449,15 @@ class ProfessionalCameraManager:
             logger.error(f"❌ Smart discovery failed: {e}")
             return []
 
-    def perform_ppe_detection(self, camera_id: str, frame: np.ndarray, sector: str = 'construction') -> Dict:
-        """IP Kamera için PPE Detection yap"""
+    def perform_ppe_detection(self, camera_id: str, frame: np.ndarray, sector: str = 'construction', company_id: Optional[str] = None) -> Dict:
+        """IP Kamera için PPE Detection yap
+        
+        Args:
+            camera_id: Kamera ID
+            frame: Video frame
+            sector: Sektör tipi
+            company_id: Şirket ID (opsiyonel, yoksa database'den bulunur)
+        """
         try:
             if self.ppe_detector is None:
                 logger.warning("⚠️ PPE Detection Manager yüklü değil")
@@ -2676,11 +2683,34 @@ class ProfessionalCameraManager:
                             try:
                                 violation_tracker = get_violation_tracker()
                                 
-                                # Company ID'yi database'den al
-                                from database_adapter import get_db_adapter
-                                db = get_db_adapter()
-                                camera_info = db.get_camera_by_id(camera_id)
-                                company_id = camera_info.get('company_id', 'UNKNOWN') if camera_info else 'UNKNOWN'
+                                # Company ID'yi al (parametre veya database'den)
+                                if company_id is None:
+                                    from database_adapter import get_db_adapter
+                                    db = get_db_adapter()
+                                    # Önce camera_id ile company_id'yi bulmaya çalış (tüm company'lerde ara)
+                                    try:
+                                        # SQLite için: company_id olmadan arama yap
+                                        if db.db_type == 'sqlite':
+                                            query = 'SELECT company_id FROM cameras WHERE camera_id = ? AND status != ? LIMIT 1'
+                                        else:  # PostgreSQL
+                                            query = 'SELECT company_id FROM cameras WHERE camera_id = %s AND status != %s LIMIT 1'
+                                        
+                                        result = db.execute_query(query, (camera_id, 'deleted'), fetch_all=False)
+                                        if result and isinstance(result, dict):
+                                            company_id = result.get('company_id', 'UNKNOWN')
+                                        elif result:
+                                            # Eğer dict değilse (fallback)
+                                            company_id = str(result).strip() if result else 'UNKNOWN'
+                                        else:
+                                            company_id = 'UNKNOWN'
+                                    except Exception as db_error:
+                                        logger.warning(f"⚠️ Company ID bulunamadı: {db_error}, UNKNOWN kullanılıyor")
+                                        import traceback
+                                        logger.debug(f"⚠️ Company ID traceback: {traceback.format_exc()}")
+                                        company_id = 'UNKNOWN'
+                                
+                                if company_id == 'UNKNOWN':
+                                    logger.warning(f"⚠️ Company ID UNKNOWN olarak kullanılıyor - camera_id: {camera_id}")
                                 
                                 new_violations, ended_violations = violation_tracker.process_detection(
                                     camera_id=camera_id,
@@ -2730,6 +2760,9 @@ class ProfessionalCameraManager:
                                         # Snapshot path'i violation event'e ekle
                                         if snapshot_path:
                                             new_violation['snapshot_path'] = snapshot_path
+                                            logger.info(f"📸 VIOLATION SNAPSHOT SAVED: {snapshot_path} - {new_violation['violation_type']} - Camera: {camera_id}")
+                                        else:
+                                            logger.warning(f"⚠️ Violation snapshot kaydedilemedi: {new_violation['violation_type']} - Camera: {camera_id} - Person: {new_violation['person_id']}")
                                         
                                         # Database'e kaydet
                                         from database_adapter import get_db_adapter
@@ -2762,9 +2795,13 @@ class ProfessionalCameraManager:
                                             )
                                             
                                             if resolution_snapshot_path:
-                                                logger.info(f"📸 RESOLUTION SNAPSHOT: {resolution_snapshot_path}")
+                                                logger.info(f"📸 RESOLUTION SNAPSHOT SAVED: {resolution_snapshot_path} - {ended_violation['violation_type']} resolved")
+                                            else:
+                                                logger.warning(f"⚠️ Resolution snapshot kaydedilemedi: {ended_violation['violation_type']} - {camera_id}")
                                         except Exception as snap_error:
-                                            logger.warning(f"⚠️ Resolution snapshot error: {snap_error}")
+                                            logger.error(f"❌ Resolution snapshot error: {snap_error}")
+                                            import traceback
+                                            logger.error(f"❌ Snapshot traceback: {traceback.format_exc()}")
                                         
                                         # Event'i güncelle (resolution snapshot path ile)
                                         db.update_violation_event(
@@ -2871,14 +2908,28 @@ class ProfessionalCameraManager:
             company_id = detection_result.get('company_id')
             
             if not company_id:
-                # Camera bilgisinden company_id bul
+                # Camera bilgisinden company_id bul (tüm company'lerde ara)
                 try:
-                    camera_info = db.get_camera_by_id(camera_id)
-                    if camera_info:
-                        company_id = camera_info.get('company_id', 'UNKNOWN')
+                    from database_adapter import get_db_adapter
+                    db = get_db_adapter()
+                    # Camera_id ile company_id'yi bul
+                    if db.db_type == 'sqlite':
+                        query = 'SELECT company_id FROM cameras WHERE camera_id = ? AND status != ? LIMIT 1'
+                    else:  # PostgreSQL
+                        query = 'SELECT company_id FROM cameras WHERE camera_id = %s AND status != %s LIMIT 1'
+                    
+                    result = db.execute_query(query, (camera_id, 'deleted'), fetch_all=False)
+                    if result and isinstance(result, dict):
+                        company_id = result.get('company_id', 'UNKNOWN')
+                    elif result:
+                        # Eğer dict değilse (fallback)
+                        company_id = str(result).strip() if result else 'UNKNOWN'
                     else:
                         company_id = 'UNKNOWN'
-                except:
+                except Exception as db_error:
+                    logger.warning(f"⚠️ Company ID bulunamadı: {db_error}")
+                    import traceback
+                    logger.debug(f"⚠️ Company ID traceback: {traceback.format_exc()}")
                     company_id = 'UNKNOWN'
             
             # Detection data hazırla
