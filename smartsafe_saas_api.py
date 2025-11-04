@@ -44,6 +44,7 @@ from smartsafe_construction_system import ConstructionPPEDetector, ConstructionP
 from smartsafe_sector_detector_factory import SectorDetectorFactory
 from database_adapter import get_db_adapter
 from camera_integration_manager import DVRConfig
+from snapshot_manager import get_snapshot_manager
 from dvr_ppe_integration import get_dvr_ppe_manager
 import cv2
 import numpy as np
@@ -66,6 +67,7 @@ detection_threads = {}
 camera_captures = {}  # Kamera yakalama nesneleri
 frame_buffers = {}    # Frame buffer'ları
 detection_results = {} # Tespit sonuçları
+live_violation_state = {}  # SaaS canlı tespit için ihlal durumu (start/resolution)
 
 # İYİLEŞTİRİLDİ: Response Caching
 response_cache = {}
@@ -8900,6 +8902,59 @@ Mesaj:
                                 except queue.Empty:
                                     pass
                                 detection_results[camera_key].put_nowait(detection_data)
+
+                            # === NEW: Persist detection to DB for dynamic widgets ===
+                            try:
+                                from database_adapter import get_db_adapter
+                                db = get_db_adapter()
+                                # Normalize fields
+                                total_people = detection_data.get('total_people', detection_data.get('people_detected', 0))
+                                compliance_rate = detection_data.get('analysis', {}).get('compliance_rate', detection_data.get('compliance_rate', 0))
+                                compliant_people = detection_data.get('analysis', {}).get('ppe_compliant',
+                                                         int(total_people * (compliance_rate or 0) / 100))
+                                violations_count = detection_data.get('analysis', {}).get('violations_count',
+                                                            len(detection_data.get('violations', [])))
+
+                                db.add_camera_detection_result({
+                                    'company_id': company_id,
+                                    'camera_id': camera_id,
+                                    'detection_type': 'ppe',
+                                    'confidence': (compliance_rate or 0) / 100.0,
+                                    'people_detected': total_people,
+                                    'ppe_compliant': compliant_people,
+                                    'violations_count': violations_count,
+                                    'total_people': total_people
+                                })
+                            except Exception as persist_error:
+                                logger.warning(f"⚠️ Detection persist warning: {persist_error}")
+
+                            # === NEW: Snapshot business rule (start once, resolve once) ===
+                            try:
+                                violations_count = detection_data.get('analysis', {}).get('violations_count',
+                                                            len(detection_data.get('violations', [])))
+                                prev_active = live_violation_state.get(camera_key, False)
+                                now_active = violations_count > 0
+                                if frame is not None:
+                                    snapshot_manager = get_snapshot_manager()
+                                    # İhlal başladı (0 -> >0)
+                                    if now_active and not prev_active:
+                                        snapshot_manager.capture_full_frame_snapshot(
+                                            frame=frame,
+                                            company_id=str(company_id),
+                                            camera_id=str(camera_id),
+                                            tag='violation_start'
+                                        )
+                                    # İhlal çözüldü (>0 -> 0)
+                                    if (not now_active) and prev_active:
+                                        snapshot_manager.capture_full_frame_snapshot(
+                                            frame=frame,
+                                            company_id=str(company_id),
+                                            camera_id=str(camera_id),
+                                            tag='violation_resolved'
+                                        )
+                                live_violation_state[camera_key] = now_active
+                            except Exception as snap_error:
+                                logger.warning(f"⚠️ Snapshot rule warning: {snap_error}")
                             
                             last_detection_time = current_time
                     
@@ -10856,52 +10911,38 @@ Mesaj:
                                             <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
                                                 <div class="strength-fill" id="register-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
                                             </div>
-                                            <small class="strength-text" id="register-strength-text" style="font-size: 0.8rem; color: #6c757d;">Şifre gücü: Zayıf</small>
+                                            <small class="strength-text" id="register-strength-text" style="font-size: 0.8rem; color: #6c757d;">Password strength: Weak</small>
                                         </div>
                                         
                                         <!-- Şifre Gereksinimleri -->
                                         <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
                                             <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
                                                 <i class="fas fa-info-circle text-primary me-2"></i>
-                                                Şifre Gereksinimleri
+                                                Password Requirements
                                             </h6>
                                             <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
                                                 <div class="requirement-item" id="register-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
                                                     <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>En az 8 karakter</span>
+                                                    <span>At least 8 characters</span>
                                                 </div>
                                                 <div class="requirement-item" id="register-req-uppercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
                                                     <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>En az 1 büyük harf (A-Z)</span>
+                                                    <span>At least 1 uppercase letter (A-Z)</span>
                                                 </div>
                                                 <div class="requirement-item" id="register-req-lowercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
                                                     <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>En az 1 küçük harf (a-z)</span>
+                                                    <span>At least 1 lowercase letter (a-z)</span>
                                                 </div>
                                                 <div class="requirement-item" id="register-req-number" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
                                                     <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>En az 1 rakam (0-9)</span>
+                                                    <span>At least 1 number (0-9)</span>
                                                 </div>
                                                 <div class="requirement-item" id="register-req-special" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
                                                     <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>En az 1 özel karakter (!@#$%^&*)</span>
+                                                    <span>At least 1 special character (!@#$%^&*)</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    
-                                    <div class="text-center mb-4">
-                                        <div class="alert alert-success border-0" style="background: rgba(34, 197, 94, 0.1); border-radius: 15px;">
-                                            <i class="fas fa-gift text-success me-2"></i> 
-                                            <strong>First month free!</strong> Instant setup.
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="d-grid">
-                                        <button type="submit" class="btn btn-primary btn-lg" 
-                                                style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
-                                                                                            <i class="fas fa-rocket me-2"></i> Register & Get Started
-                                        </button>
                                     </div>
                                 </form>
                                 
@@ -10941,9 +10982,9 @@ Mesaj:
                                         <div class="alert alert-info border-0 mt-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 10px;">
                                             <small class="text-muted">
                                                 <i class="fas fa-info-circle me-2"></i>
-                                                <strong>Company ID Formatları:</strong><br>
-                                                • <strong>Normal Hesap:</strong> COMP_ABC123 (kayıt sonrası verilir)<br>
-                                                • <strong>Demo Hesap:</strong> demo_20241217_143022 (demo form sonrası verilir)
+                                                <strong>Company ID Formats:</strong><br>
+                                                • <strong>Standard Account:</strong> COMP_ABC123 (assigned after registration)<br>
+                                                • <strong>Demo Account:</strong> demo_20241217_143022 (assigned after demo request)
                                             </small>
                                         </div>
                                     </form>
@@ -11676,7 +11717,7 @@ Mesaj:
                     // Güç göstergesini güncelle
                     strengthFill.style.width = width;
                     strengthFill.style.background = color;
-                    strengthText.textContent = `Şifre gücü: ${strength}`;
+                    strengthText.textContent = `Password strength: ${strength}`;
                 }
             </script>
         </body>
@@ -13458,14 +13499,14 @@ Mesaj:
                                 <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
                                     <div class="strength-fill" id="demo-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
                                 </div>
-                                <small class="strength-text" id="demo-strength-text" style="font-size: 0.8rem; color: #6c757d;">Şifre gücü: Zayıf</small>
+                                <small class="strength-text" id="demo-strength-text" style="font-size: 0.8rem; color: #6c757d;">Password strength: Weak</small>
                             </div>
                             
                             <!-- Şifre Gereksinimleri -->
                             <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
                                 <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
                                     <i class="fas fa-info-circle text-warning me-2"></i>
-                                    Şifre Gereksinimleri
+                                    Password Requirements
                                 </h6>
                                 <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
                                     <div class="requirement-item" id="demo-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
@@ -15801,7 +15842,7 @@ Mesaj:
                                                                 <div class="strength-bar">
                                                                     <div class="strength-fill" id="strength-fill"></div>
                                                                 </div>
-                                                                <small class="strength-text" id="strength-text">Şifre gücü: Zayıf</small>
+                                                                <small class="strength-text" id="strength-text">Password strength: Weak</small>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -15825,7 +15866,7 @@ Mesaj:
                                                 <div class="password-requirements mt-4">
                                                     <h6 class="requirements-title">
                                                         <i class="fas fa-info-circle text-primary me-2"></i>
-                                                        Şifre Gereksinimleri
+                                                        Password Requirements
                                                     </h6>
                                                     <div class="requirements-grid">
                                                         <div class="requirement-item" id="req-length">
@@ -16489,7 +16530,7 @@ Mesaj:
                     // Güç göstergesini güncelle
                     strengthFill.style.width = width;
                     strengthFill.style.background = color;
-                    strengthText.textContent = `Şifre gücü: ${strength}`;
+                    strengthText.textContent = `Password strength: ${strength}`;
                 }
                 
                 // Şifre input event listener'ları
@@ -16562,7 +16603,7 @@ Mesaj:
                     // Güç göstergesini güncelle
                     strengthFill.style.width = width;
                     strengthFill.style.background = color;
-                    strengthText.textContent = `Şifre gücü: ${strength}`;
+                    strengthText.textContent = `Password strength: ${strength}`;
                 }
                 
                 // Demo formu şifre gücü kontrolü
@@ -16626,7 +16667,7 @@ Mesaj:
                             strengthFill.style.width = '0%';
                         }
                         if (strengthText) {
-                            strengthText.textContent = 'Şifre gücü: Zayıf';
+                            strengthText.textContent = 'Password strength: Weak';
                         }
                         
                         // Toast mesajı göster

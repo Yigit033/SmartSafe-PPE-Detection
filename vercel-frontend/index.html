@@ -2362,7 +2362,7 @@
                             <li><a href="#sectors" data-translate="footer_sector_solutions">Sektörel Çözümler</a></li>
                             <li><a href="#benefits" data-translate="footer_safety_benefits">İş Güvenliği Avantajları</a></li>
                             <li><a href="#demo" data-translate="footer_live_demo">Canlı Demo</a></li>
-                            <li><a href="/app" class="backend-link" data-translate="footer_company_register">Şirket Kaydı</a></li>
+                            <li><a href="/app" class="backend-link" data-translate="footer_company_register">Şirket Kaydı</a></li>
                         </ul>
                     </div>
                     <div class="col-lg-4">
@@ -3071,7 +3071,7 @@
             });
         });
         
-        // Şifre validation fonksiyonları
+        // Şifre validation fonksiyonları
         function validatePasswordStrength(password) {
             const requirements = {
                 length: password.length >= 8,
@@ -3127,7 +3127,7 @@
             // Güç göstergesini güncelle
             strengthFill.style.width = width;
             strengthFill.style.background = color;
-            strengthText.textContent = `Şifre gücü: ${strength}`;
+            strengthText.textContent = `Şifre gücü: ${strength}`;
         }
     </script>
     <script>
@@ -3309,9 +3309,9 @@
                 return;
             }
             
-            // Şifre validasyonu
+            // Şifre validasyonu
             if (formData.get('demo_password').length < 6) {
-                toastr.error('Şifre en az 6 karakter olmalıdır!');
+                toastr.error('Şifre en az 6 karakter olmalıdır!');
                 return;
             }
             
@@ -3411,7 +3411,7 @@
             })
             .then(data => {
                 if (data.success) {
-                    // Demo hesabı başarıyla oluşturuldu - PROFESYONEL AKIŞ
+                    // Demo hesabı başarıyla oluşturuldu - PROFESYONEL AKIŞ
                     const successMessage = `
                         <div class="text-center demo-success-info">
                             <div class="success-icon mb-3">‰</div>
@@ -3953,7 +3953,7 @@
                                                         </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Demo Talep</h6>
-                                                            <small class="text-muted">… Şirket bilgileri alındı</small>
+                                                            <small class="text-muted">… Şirket bilgileri alındı</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
@@ -3962,7 +3962,7 @@
                                                         </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Email Bekleniyor</h6>
-                                                            <small class="text-muted">â³ 24 saat içinde demo bilgileri</small>
+                                                    <small class="text-muted">⏳ 24 saat içinde demo bilgileri</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
@@ -3980,7 +3980,7 @@
                                                         </div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Satış Ekibi</h6>
-                                                            <small class="text-muted">📞 24 saat içinde iletişim</small>
+                                                            <small class="text-muted">📞 24 saat içinde iletişim</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4111,7 +4111,7 @@
                                                         <div class="timeline-marker bg-warning"></div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Email Bekleniyor</h6>
-                                                            <small class="text-muted">â³ 24 saat içinde</small>
+                                                            <small class="text-muted">⏳ 24 saat içinde</small>
                                                         </div>
                                                     </div>
                                                     <div class="timeline-item">
@@ -4125,7 +4125,7 @@
                                                         <div class="timeline-marker bg-secondary"></div>
                                                         <div class="timeline-content">
                                                             <h6 class="mb-1">Satış Ekibi</h6>
-                                                            <small class="text-muted">📞 24 saat içinde</small>
+                                                            <small class="text-muted">📞 24 saat içinde</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4406,7 +4406,7 @@
                 <form id="demoForm">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Şirket Adı *</label>
+                            <label class="form-label fw-bold">Şirket Adı *</label>
                             <input type="text" class="form-control" name="demo_company_name" required>
                         </div>
                         <div class="col-md-6">
@@ -4462,11 +4462,11 @@
                                 <small class="strength-text" id="landing-demo-strength-text" style="font-size: 0.8rem; color: #6c757d;">Şifre gücü: Zayıf</small>
                             </div>
                             
-                            <!-- Şifre Gereksinimleri -->
+                            <!-- Şifre Gereksinimleri -->
                             <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
                                 <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
                                     <i class="fas fa-info-circle text-warning me-2"></i>
-                                    Şifre Gereksinimleri
+                                    Şifre Gereksinimleri
                                 </h6>
                                 <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
                                     <div class="requirement-item" id="landing-demo-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
