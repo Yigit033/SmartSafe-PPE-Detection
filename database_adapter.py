@@ -1072,17 +1072,39 @@ class DatabaseAdapter:
                         result = cursor.fetchall()
                     else:
                         result = cursor.fetchone()
-                        
+                    
+                    # Check if result is empty
+                    if not result:
+                        logger.debug(f"ℹ️ Query returned no results")
+                        return None if not fetch_all else []
+                    
                     # Convert to list of dictionaries for better handling
-                    if result and len(result) > 0:
+                    try:
+                        # Check if cursor.description exists (for SELECT queries)
+                        if not cursor.description:
+                            logger.warning(f"⚠️ No cursor description available")
+                            return None if not fetch_all else []
+                        
                         columns = [description[0] for description in cursor.description]
                         if fetch_all:
-                            result = [dict(zip(columns, row)) for row in result]
+                            if isinstance(result, list) and len(result) > 0:
+                                result = [dict(zip(columns, row)) for row in result]
+                            else:
+                                result = []
                         else:
-                            result = dict(zip(columns, result))
+                            # Single result - convert to dict
+                            if isinstance(result, (tuple, list)):
+                                result = dict(zip(columns, result))
+                            elif hasattr(result, 'keys'):  # Already a dict-like object (PostgreSQL RealDictRow)
+                                result = dict(result)
+                            else:
+                                result = dict(zip(columns, [result]))
                         
-                        logger.info(f"✅ Query executed successfully: {len(result) if isinstance(result, list) else 1} rows returned")
+                        logger.debug(f"✅ Query executed successfully: {len(result) if isinstance(result, list) else 1} rows returned")
                         return result
+                    except Exception as convert_error:
+                        logger.error(f"❌ Result conversion error: {convert_error}")
+                        return None if not fetch_all else []
                     
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
@@ -1767,6 +1789,85 @@ class DatabaseAdapter:
             return results[0] if results else None
         except Exception as e:
             logger.error(f"❌ Get latest camera detection error: {e}")
+            return None
+    
+    def get_camera_by_id(self, camera_id: str, company_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get camera by ID and company ID
+        
+        Args:
+            camera_id: Camera ID
+            company_id: Company ID
+            
+        Returns:
+            Camera dictionary or None if not found
+        """
+        try:
+            if self.db_type == 'sqlite':
+                query = '''
+                    SELECT camera_id, company_id, camera_name, location, ip_address, 
+                           port, rtsp_url, username, password, protocol, stream_path,
+                           auth_type, resolution, fps, quality, audio_enabled,
+                           night_vision, motion_detection, recording_enabled,
+                           camera_type, status, last_detection, last_test_time,
+                           connection_retries, timeout, created_at, updated_at
+                    FROM cameras 
+                    WHERE camera_id = ? AND company_id = ? AND status != 'deleted'
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    SELECT camera_id, company_id, camera_name, location, ip_address, 
+                           port, rtsp_url, username, password, protocol, stream_path,
+                           auth_type, resolution, fps, quality, audio_enabled,
+                           night_vision, motion_detection, recording_enabled,
+                           camera_type, status, last_detection, last_test_time,
+                           connection_retries, timeout, created_at, updated_at
+                    FROM cameras 
+                    WHERE camera_id = %s AND company_id = %s AND status != 'deleted'
+                '''
+            
+            result = self.execute_query(query, (camera_id, company_id), fetch_one=True)
+            
+            if result:
+                if hasattr(result, 'keys'):  # PostgreSQL RealDictRow
+                    return dict(result)
+                else:  # SQLite tuple or list
+                    if isinstance(result, (list, tuple)) and len(result) >= 2:
+                        return {
+                            'camera_id': result[0],
+                            'company_id': result[1],
+                            'camera_name': result[2] if len(result) > 2 else None,
+                            'location': result[3] if len(result) > 3 else None,
+                            'ip_address': result[4] if len(result) > 4 else None,
+                            'port': result[5] if len(result) > 5 else 8080,
+                            'rtsp_url': result[6] if len(result) > 6 else None,
+                            'username': result[7] if len(result) > 7 else None,
+                            'password': result[8] if len(result) > 8 else None,
+                            'protocol': result[9] if len(result) > 9 else 'http',
+                            'stream_path': result[10] if len(result) > 10 else '/video',
+                            'auth_type': result[11] if len(result) > 11 else 'basic',
+                            'resolution': result[12] if len(result) > 12 else '1920x1080',
+                            'fps': result[13] if len(result) > 13 else 25,
+                            'quality': result[14] if len(result) > 14 else 80,
+                            'audio_enabled': result[15] if len(result) > 15 else False,
+                            'night_vision': result[16] if len(result) > 16 else False,
+                            'motion_detection': result[17] if len(result) > 17 else True,
+                            'recording_enabled': result[18] if len(result) > 18 else True,
+                            'camera_type': result[19] if len(result) > 19 else 'ip_camera',
+                            'status': result[20] if len(result) > 20 else 'active',
+                            'last_detection': result[21] if len(result) > 21 else None,
+                            'last_test_time': result[22] if len(result) > 22 else None,
+                            'connection_retries': result[23] if len(result) > 23 else 3,
+                            'timeout': result[24] if len(result) > 24 else 10,
+                            'created_at': result[25] if len(result) > 25 else None,
+                            'updated_at': result[26] if len(result) > 26 else None
+                        }
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Get camera by ID error: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return None
     
     def get_company_detection_stats(self, company_id: str, hours: int = 24) -> Dict[str, Any]:

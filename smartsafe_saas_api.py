@@ -1113,7 +1113,7 @@ class SmartSafeSaaSAPI:
                                     try:
                                         # PPE Detection yap
                                         detection_result = camera_manager.perform_ppe_detection(
-                                            camera_id, frame, sector='construction'
+                                            camera_id, frame, sector='construction', company_id=company_id
                                         )
                                         last_detection_time = current_time
                                         
@@ -1623,7 +1623,7 @@ class SmartSafeSaaSAPI:
                                     try:
                                         # PPE Detection yap
                                         detection_result = camera_manager.perform_ppe_detection(
-                                            camera_id, frame, sector='construction'
+                                            camera_id, frame, sector='construction', company_id=company_id
                                         )
                                         
                                         # Frame'e overlay ekle
@@ -8244,7 +8244,7 @@ Mesaj:
                                                 logger.info(f"🔍 Starting PPE detection...")
                                             
                                             detection_result = camera_manager.perform_ppe_detection(
-                                                camera_id, frame, sector='construction'
+                                                camera_id, frame, sector='construction', company_id=company_id
                                             )
                                             
                                             if detection_result:
@@ -8938,20 +8938,28 @@ Mesaj:
                                     snapshot_manager = get_snapshot_manager()
                                     # İhlal başladı (0 -> >0)
                                     if now_active and not prev_active:
-                                        snapshot_manager.capture_full_frame_snapshot(
+                                        snapshot_path = snapshot_manager.capture_full_frame_snapshot(
                                             frame=frame,
                                             company_id=str(company_id),
                                             camera_id=str(camera_id),
                                             tag='violation_start'
                                         )
+                                        if snapshot_path:
+                                            logger.info(f"📸 SaaS VIOLATION START SNAPSHOT: {snapshot_path} - Camera: {camera_id}")
+                                        else:
+                                            logger.warning(f"⚠️ SaaS Violation start snapshot kaydedilemedi: {camera_id}")
                                     # İhlal çözüldü (>0 -> 0)
                                     if (not now_active) and prev_active:
-                                        snapshot_manager.capture_full_frame_snapshot(
+                                        snapshot_path = snapshot_manager.capture_full_frame_snapshot(
                                             frame=frame,
                                             company_id=str(company_id),
                                             camera_id=str(camera_id),
                                             tag='violation_resolved'
                                         )
+                                        if snapshot_path:
+                                            logger.info(f"📸 SaaS VIOLATION RESOLVED SNAPSHOT: {snapshot_path} - Camera: {camera_id}")
+                                        else:
+                                            logger.warning(f"⚠️ SaaS Violation resolved snapshot kaydedilemedi: {camera_id}")
                                 live_violation_state[camera_key] = now_active
                             except Exception as snap_error:
                                 logger.warning(f"⚠️ Snapshot rule warning: {snap_error}")
@@ -10943,6 +10951,13 @@ Mesaj:
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary btn-lg" 
+                                                style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
+                                                                                            <i class="fas fa-rocket me-2"></i> Register & Get Started
+                                        </button>
                                     </div>
                                 </form>
                                 

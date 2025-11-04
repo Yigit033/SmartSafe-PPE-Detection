@@ -195,6 +195,9 @@ class DVRStreamProcessor:
                                             
                                             if snapshot_path:
                                                 new_violation['snapshot_path'] = snapshot_path
+                                                logger.info(f"📸 DVR VIOLATION SNAPSHOT SAVED: {snapshot_path} - {new_violation['violation_type']}")
+                                            else:
+                                                logger.warning(f"⚠️ DVR Snapshot kaydedilemedi: {new_violation['violation_type']} - {stream_id}")
                                             
                                             # Database'e kaydet
                                             self.db_adapter.add_violation_event(new_violation)
@@ -220,9 +223,13 @@ class DVRStreamProcessor:
                                                 )
                                                 
                                                 if resolution_snapshot_path:
-                                                    logger.info(f"📸 DVR RESOLUTION SNAPSHOT: {resolution_snapshot_path}")
+                                                    logger.info(f"📸 DVR RESOLUTION SNAPSHOT SAVED: {resolution_snapshot_path} - {ended_violation['violation_type']} resolved")
+                                                else:
+                                                    logger.warning(f"⚠️ DVR Resolution snapshot kaydedilemedi: {ended_violation['violation_type']} - {stream_id}")
                                             except Exception as snap_error:
-                                                logger.warning(f"⚠️ DVR resolution snapshot error: {snap_error}")
+                                                logger.error(f"❌ DVR resolution snapshot error: {snap_error}")
+                                                import traceback
+                                                logger.error(f"❌ DVR Snapshot traceback: {traceback.format_exc()}")
                                                 resolution_snapshot_path = None
                                             
                                             # Event'i güncelle
