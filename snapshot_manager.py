@@ -124,6 +124,47 @@ class SnapshotManager:
         except Exception as e:
             logger.error(f"❌ Snapshot capture error: {e}")
             return None
+
+    def capture_full_frame_snapshot(
+        self,
+        frame: np.ndarray,
+        company_id: str,
+        camera_id: str,
+        tag: str = "violation"
+    ) -> Optional[str]:
+        """
+        Tüm frame'den hızlı bir snapshot al ve kaydet.
+        Bounding box olmayan akışlar (SaaS canlı tespit) için güvenli fallback.
+        """
+        try:
+            if frame is None or frame.size == 0:
+                logger.warning("⚠️ Empty frame, cannot capture full snapshot")
+                return None
+
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            snapshot_dir = self.base_path / company_id / camera_id / date_str
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = int(datetime.now().timestamp())
+            filename = f"full_{tag}_{timestamp}.jpg"
+            filepath = snapshot_dir / filename
+
+            # Bilgi paneli ekle
+            panel_height = 40
+            panel = np.zeros((panel_height, frame.shape[1], 3), dtype=np.uint8)
+            panel[:] = (0, 0, 180)
+            cv2.putText(panel, f"{tag.upper()} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", (10, 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+            final_img = np.vstack([panel, frame])
+
+            cv2.imwrite(str(filepath), final_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            relative_path = str(filepath.relative_to(self.base_path))
+            logger.info(f"📸 Full snapshot saved: {relative_path}")
+            return relative_path
+        except Exception as e:
+            logger.error(f"❌ Full snapshot capture error: {e}")
+            return None
     
     def _get_violation_text(self, violation_type: str) -> str:
         """İhlal tipini Türkçe metne çevir"""

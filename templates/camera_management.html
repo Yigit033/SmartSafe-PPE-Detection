@@ -4506,40 +4506,33 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
          */
         async function updateCameraDetectionStatus(cameraId) {
             try {
-                const response = await fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`);
-                const data = await response.json();
-                
+                const [statusRes, latestRes] = await Promise.all([
+                    fetch(`/api/company/{{ company_id }}/detection-status/${cameraId}`),
+                    fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`)
+                ]);
+                const statusData = await statusRes.json();
+                const latestData = await latestRes.json();
+
                 const statusElement = document.getElementById(`detection-status-${cameraId}`);
                 if (!statusElement) return;
-                
-                if (data.success && data.detection) {
-                    // Detection aktif
-                    const detection = data.detection;
-                    const violationCount = detection.violations_count || 0;
+
+                const isActive = statusData && statusData.success ? !!statusData.is_active : false;
+                const detection = latestData && latestData.success ? latestData.detection : null;
+                const violationCount = detection ? (detection.violations_count || 0) : 0;
+                const badge = isActive
+                    ? `<span class="badge bg-success pulse-animation"><i class="fas fa-brain"></i> Aktif</span>`
+                    : `<span class="badge bg-secondary"><i class="fas fa-pause-circle"></i> Durdu</span>`;
+
+                let extra = '';
+                if (detection) {
                     const complianceRate = detection.total_people > 0 
                         ? Math.round((detection.ppe_compliant / detection.total_people) * 100) 
                         : 100;
-                    
-                    statusElement.innerHTML = `
-                        <span class="badge bg-success pulse-animation">
-                            <i class="fas fa-brain"></i> Aktif
-                        </span>
-                        <br>
-                        <small class="text-${violationCount > 0 ? 'danger' : 'success'}">
-                            ${violationCount > 0 ? `${violationCount} İhlal` : 'Tam Uyum'}
-                        </small>
-                    `;
-                } else {
-                    // Detection durdu
-                    statusElement.innerHTML = `
-                        <span class="badge bg-secondary">
-                            <i class="fas fa-pause-circle"></i> Durdu
-                        </span>
-                    `;
+                    extra = `<br><small class="text-${violationCount > 0 ? 'danger' : 'success'}">${violationCount > 0 ? `${violationCount} İhlal` : `${complianceRate}% Uyum`}</small>`;
                 }
+                statusElement.innerHTML = `${badge}${extra}`;
             } catch (error) {
                 console.error(`Detection status update error for ${cameraId}:`, error);
-                // Hata durumunda badge'i koru (değiştirme)
             }
         }
         
