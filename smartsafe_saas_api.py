@@ -16,6 +16,18 @@ from flask_mail import Mail, Message
 import sqlite3
 import json
 
+import threading
+import time
+import requests
+import logging
+import re
+
+# Configure logging - Memory optimized
+import os
+log_level = logging.WARNING if os.environ.get('RENDER') else logging.INFO
+logging.basicConfig(level=log_level, format='%(levelname)s:%(name)s:%(message)s')
+logger = logging.getLogger(__name__)
+
 # SendGrid imports (conditional - graceful fallback if not available)
 try:
     from sendgrid import SendGridAPIClient
@@ -24,14 +36,8 @@ try:
 except ImportError:
     SENDGRID_AVAILABLE = False
     logger.warning("⚠️ SendGrid not installed. Email will use SMTP only.")
-import threading
-import time
-import requests
-import logging
-import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-import os
 from dotenv import load_dotenv
 from smartsafe_multitenant_system import MultiTenantDatabase
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
@@ -48,12 +54,6 @@ import bcrypt
 
 # Load environment variables
 load_dotenv()
-
-# Configure logging - Memory optimized
-import os
-log_level = logging.WARNING if os.environ.get('RENDER') else logging.INFO
-logging.basicConfig(level=log_level, format='%(levelname)s:%(name)s:%(message)s')
-logger = logging.getLogger(__name__)
 
 # Enterprise modülleri import et
 # Lazy loading için enterprise modülleri startup'ta yükleme - Memory optimization
@@ -8099,6 +8099,28 @@ Mesaj:
             except Exception as e:
                 logger.error(f"❌ Get latest detection error: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/company/<company_id>/cameras/<camera_id>/violations/active', methods=['GET'])
+        def get_camera_active_violations(company_id, camera_id):
+            """Get active violations for a camera (real-time list)"""
+            try:
+                user_data = self.validate_session()
+                if not user_data or user_data.get('company_id') != company_id:
+                    return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
+                from database_adapter import get_db_adapter
+                db = get_db_adapter()
+                violations = db.get_active_violations(camera_id=camera_id, company_id=company_id)
+
+                return jsonify({
+                    'success': True,
+                    'camera_id': camera_id,
+                    'count': len(violations),
+                    'violations': violations
+                })
+            except Exception as e:
+                logger.error(f"❌ Get camera active violations error: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
         
         @self.app.route('/api/company/<company_id>/detection/stats', methods=['GET'])
         def get_company_detection_stats(company_id):
@@ -11604,7 +11626,7 @@ Mesaj:
                         length: password.length >= 8,
                         uppercase: /[A-Z]/.test(password),
                         lowercase: /[a-z]/.test(password),
-                        number: /\d/.test(password),
+                        number: /[0-9]/.test(password),
                         special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
                     };
                     return requirements;
@@ -16415,7 +16437,7 @@ Mesaj:
                         length: password.length >= 8,
                         uppercase: /[A-Z]/.test(password),
                         lowercase: /[a-z]/.test(password),
-                        number: /\d/.test(password),
+                        number: /[0-9]/.test(password),
                         special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
                     };
                     
