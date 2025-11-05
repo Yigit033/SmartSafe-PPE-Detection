@@ -8,38 +8,31 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 import seaborn as sns
+from utils.visual_overlay import draw_styled_box, get_class_color
 
 def draw_detection_results(frame: np.ndarray, 
                          detections: List[Dict],
                          show_confidence: bool = True) -> np.ndarray:
     """Draw detection results on frame"""
     
-    colors = {
-        'person': (255, 255, 255),
-        'hard_hat': (0, 255, 0),
-        'safety_vest': (0, 255, 255),
-        'mask': (255, 0, 255),
-        'violation': (0, 0, 255)
-    }
-    
     for detection in detections:
         bbox = detection.get('bbox', [0, 0, 0, 0])
         class_name = detection.get('class_name', 'unknown')
         confidence = detection.get('confidence', 0.0)
+        is_missing = detection.get('missing', False)
         
         x1, y1, x2, y2 = [int(coord) for coord in bbox]
-        color = colors.get(class_name, (128, 128, 128))
         
-        # Draw bounding box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        # Renk belirleme
+        color = get_class_color(class_name, is_missing=is_missing)
         
-        # Draw label
+        # Label hazırla
         label = f"{class_name}"
         if show_confidence:
             label += f" {confidence:.2f}"
-            
-        cv2.putText(frame, label, (x1, y1 - 10), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        
+        # Profesyonel bounding box çiz
+        frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
     
     return frame
 

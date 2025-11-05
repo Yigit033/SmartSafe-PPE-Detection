@@ -1112,9 +1112,29 @@ class SmartSafeSaaSAPI:
                                 if frame_count % 5 == 0 and (current_time - last_detection_time) > 0.2:
                                     try:
                                         # PPE Detection yap
-                                        detection_result = camera_manager.perform_ppe_detection(
-                                            camera_id, frame, sector='construction', company_id=company_id
-                                        )
+                                        # Resolve sector from company configuration
+                                        try:
+                                            company_data = self.db.get_company(company_id)
+                                            sector = (company_data.get('sector') if isinstance(company_data, dict)
+                                                      else (company_data[4] if isinstance(company_data, (list, tuple)) and len(company_data) > 4 else None))
+                                        except Exception as _sec_err:
+                                            sector = None
+                                        # Optional hybrid path via SectorDetectorFactory
+                                        use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
+                                        if use_hybrid and sector:
+                                            try:
+                                                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                                                detector = SectorDetectorFactory.get_detector(sector, company_id)
+                                                detection_result = detector.detect_ppe(frame, camera_id)
+                                            except Exception as _hybrid_err:
+                                                logger.warning(f"⚠️ Hybrid detection failed, falling back: {str(_hybrid_err)}")
+                                                detection_result = camera_manager.perform_ppe_detection(
+                                                    camera_id, frame, sector=sector, company_id=company_id
+                                                )
+                                        else:
+                                            detection_result = camera_manager.perform_ppe_detection(
+                                                camera_id, frame, sector=sector, company_id=company_id
+                                            )
                                         last_detection_time = current_time
                                         
                                         # Detection sonuçlarını frame'e çiz
@@ -1622,9 +1642,27 @@ class SmartSafeSaaSAPI:
                                 if frame_count % detection_frequency == 0 and (current_time - last_detection_time) > 0.5:
                                     try:
                                         # PPE Detection yap
-                                        detection_result = camera_manager.perform_ppe_detection(
-                                            camera_id, frame, sector='construction', company_id=company_id
-                                        )
+                                        try:
+                                            company_data = self.db.get_company(company_id)
+                                            sector = (company_data.get('sector') if isinstance(company_data, dict)
+                                                      else (company_data[4] if isinstance(company_data, (list, tuple)) and len(company_data) > 4 else None))
+                                        except Exception as _sec_err:
+                                            sector = None
+                                        use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
+                                        if use_hybrid and sector:
+                                            try:
+                                                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                                                detector = SectorDetectorFactory.get_detector(sector, company_id)
+                                                detection_result = detector.detect_ppe(frame, camera_id)
+                                            except Exception as _hybrid_err:
+                                                logger.warning(f"⚠️ Hybrid detection failed, falling back: {str(_hybrid_err)}")
+                                                detection_result = camera_manager.perform_ppe_detection(
+                                                    camera_id, frame, sector=sector, company_id=company_id
+                                                )
+                                        else:
+                                            detection_result = camera_manager.perform_ppe_detection(
+                                                camera_id, frame, sector=sector, company_id=company_id
+                                            )
                                         
                                         # Frame'e overlay ekle
                                         if detection_result and 'detections' in detection_result:
@@ -8243,9 +8281,27 @@ Mesaj:
                                             if frame_count == 11:  # İlk detection'da log
                                                 logger.info(f"🔍 Starting PPE detection...")
                                             
-                                            detection_result = camera_manager.perform_ppe_detection(
-                                                camera_id, frame, sector='construction', company_id=company_id
-                                            )
+                                            try:
+                                                company_data = self.db.get_company(company_id)
+                                                sector = (company_data.get('sector') if isinstance(company_data, dict)
+                                                          else (company_data[4] if isinstance(company_data, (list, tuple)) and len(company_data) > 4 else None))
+                                            except Exception as _sec_err:
+                                                sector = None
+                                            use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
+                                            if use_hybrid and sector:
+                                                try:
+                                                    from smartsafe_sector_detector_factory import SectorDetectorFactory
+                                                    detector = SectorDetectorFactory.get_detector(sector, company_id)
+                                                    detection_result = detector.detect_ppe(frame, camera_id)
+                                                except Exception as _hybrid_err:
+                                                    logger.warning(f"⚠️ Hybrid detection failed, falling back: {str(_hybrid_err)}")
+                                                    detection_result = camera_manager.perform_ppe_detection(
+                                                        camera_id, frame, sector=sector, company_id=company_id
+                                                    )
+                                            else:
+                                                detection_result = camera_manager.perform_ppe_detection(
+                                                    camera_id, frame, sector=sector, company_id=company_id
+                                                )
                                             
                                             if detection_result:
                                                 # Company ID ekle
@@ -9187,25 +9243,16 @@ Mesaj:
                     class_name = detection.get('class_name', 'unknown')
                     confidence = detection.get('confidence', 0)
                     
-                    # Sınıfa göre renk
-                    if class_name == 'person':
-                        color = (255, 0, 0)  # Mavi
-                    elif 'helmet' in class_name or 'baret' in class_name:
-                        color = (0, 255, 0)  # Yeşil
-                    elif 'vest' in class_name or 'yelek' in class_name:
-                        color = (0, 255, 255)  # Sarı
-                    elif 'mask' in class_name or 'maske' in class_name:
-                        color = (255, 0, 255)  # Magenta
-                    else:
-                        color = (128, 128, 128)  # Gri
+                    # Sınıfa göre renk belirle
+                    from utils.visual_overlay import draw_styled_box, get_class_color
                     
-                    # Bounding box çiz
-                    cv2.rectangle(result_image, (x1, y1), (x2, y2), color, 2)
+                    color = get_class_color(class_name, is_missing=False)
                     
                     # Label
                     label = f"{class_name} ({confidence:.2f})"
-                    cv2.putText(result_image, label, (x1, y1-10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                    
+                    # Profesyonel bounding box çiz
+                    result_image = draw_styled_box(result_image, x1, y1, x2, y2, label, color)
             
             return result_image
             
@@ -22694,35 +22741,15 @@ smartsafe_requests_total 100
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
                             # PPE türüne göre renk belirle
-                            if class_name == 'person':
-                                color = (255, 255, 255)  # Beyaz - Kişi
-                            elif class_name in ['helmet', 'hard_hat']:
-                                color = (0, 255, 0)      # Yeşil - Baret
-                            elif class_name in ['safety_vest', 'vest']:
-                                color = (0, 255, 255)    # Sarı - Yelek
-                            elif class_name in ['safety_shoes', 'shoes']:
-                                color = (255, 0, 255)    # Magenta - Ayakkabı
-                            elif class_name in ['gloves', 'glasses']:
-                                color = (255, 255, 0)    # Cyan - Eldiven/Gözlük
-                            else:
-                                color = (128, 128, 128)  # Gri - Diğer
+                            from utils.visual_overlay import draw_styled_box, get_class_color
                             
-                            # Bounding box çiz
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                            color = get_class_color(class_name, is_missing=False)
                             
                             # Etiket hazırla
                             label = f"{class_name} {confidence:.2f}"
                             
-                            # Etiket arka planı
-                            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
-                            cv2.rectangle(frame, 
-                                        (x1, y1 - label_size[1] - 10),
-                                        (x1 + label_size[0], y1),
-                                        color, -1)
-                            
-                            # Etiket metni
-                            cv2.putText(frame, label, (x1, y1 - 5),
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            # Profesyonel bounding box çiz
+                            frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
                         except Exception as bbox_error:
                             logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
                             continue

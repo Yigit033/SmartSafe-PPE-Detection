@@ -300,6 +300,8 @@ class EnhancedPPEDetector:
         }
         
         # Detection kutularını çiz
+        from utils.visual_overlay import draw_styled_box
+        
         for detection in detections:
             x1, y1, x2, y2 = detection.bbox
             
@@ -310,9 +312,8 @@ class EnhancedPPEDetector:
                 color = colors['ppe']
                 label = f"{detection.sector_class} {detection.confidence:.2f}"
             
-            cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(image, label, (x1, y1-10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            # Profesyonel bounding box çiz
+            image = draw_styled_box(image, x1, y1, x2, y2, label, color)
         
         # Compliance durumunu göster
         h, w = image.shape[:2]
