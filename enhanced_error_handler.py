@@ -270,7 +270,7 @@ class EnhancedErrorHandler:
             
             # Try to reconnect camera
             try:
-                from camera_integration_manager import get_camera_manager
+                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                 camera_manager = get_camera_manager()
                 
                 # Disconnect and reconnect
@@ -299,7 +299,7 @@ class EnhancedErrorHandler:
         try:
             # Try to reconnect database
             try:
-                from database_config import get_db_connection
+                from src.smartsafe.database.database_config import get_db_connection
                 conn = get_db_connection()
                 if conn:
                     cursor = conn.cursor()
@@ -362,7 +362,7 @@ class EnhancedErrorHandler:
             
             # Clear caches if available
             try:
-                from camera_integration_manager import get_camera_manager
+                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                 camera_manager = get_camera_manager()
                 
                 # Clear frame buffers

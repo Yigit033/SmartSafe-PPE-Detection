@@ -41,11 +41,11 @@ from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from smartsafe_multitenant_system import MultiTenantDatabase
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
-from smartsafe_sector_detector_factory import SectorDetectorFactory
-from database_adapter import get_db_adapter
-from camera_integration_manager import DVRConfig
-from snapshot_manager import get_snapshot_manager
-from dvr_ppe_integration import get_dvr_ppe_manager
+from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+from src.smartsafe.database.database_adapter import get_db_adapter
+from src.smartsafe.integrations.cameras.camera_integration_manager import DVRConfig
+from src.smartsafe.detection.snapshot_manager import get_snapshot_manager
+from src.smartsafe.integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
 import cv2
 import numpy as np
 import base64

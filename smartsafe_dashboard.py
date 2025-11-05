@@ -13,8 +13,8 @@ import os
 import cv2
 import numpy as np
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
-from smartsafe_sector_detector_factory import SectorDetectorFactory
-from smartsafe_sector_manager import SmartSafeSectorManager
+from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+from src.smartsafe.sector.smartsafe_sector_manager import SmartSafeSectorManager
 import threading
 import time
 import base64

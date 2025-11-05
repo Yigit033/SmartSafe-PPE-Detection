@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import cv2
 import logging
-from smartsafe_sector_manager import SmartSafeSectorManager
+from src.smartsafe.sector.smartsafe_sector_manager import SmartSafeSectorManager
 from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
 
 # Hibrit sistem import

@@ -21,8 +21,8 @@ from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 
 # Violation tracking imports
-from violation_tracker import get_violation_tracker
-from snapshot_manager import get_snapshot_manager
+from src.smartsafe.detection.violation_tracker import get_violation_tracker
+from src.smartsafe.detection.snapshot_manager import get_snapshot_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -110,7 +110,7 @@ class DVRManager:
         self.fps_counters = {}
         
         # Database integration
-        from database_adapter import get_db_adapter
+        from src.smartsafe.database.database_adapter import get_db_adapter
         self.db_adapter = get_db_adapter()
         
         logger.info("📺 DVR Manager initialized with database integration")

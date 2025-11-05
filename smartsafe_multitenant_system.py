@@ -18,7 +18,7 @@ from flask import Flask, request, jsonify, session, redirect, url_for, render_te
 from flask_cors import CORS
 import bcrypt
 from dotenv import load_dotenv
-from database_adapter import get_db_adapter
+from src.smartsafe.database.database_adapter import get_db_adapter
 
 # Load environment variables
 load_dotenv()

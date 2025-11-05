@@ -16,9 +16,9 @@ import numpy as np
 
 # Import existing modules
 from ppe_detection_manager import PPEDetectionManager
-from database_adapter import get_db_adapter
-from violation_tracker import get_violation_tracker
-from snapshot_manager import get_snapshot_manager
+from src.smartsafe.database.database_adapter import get_db_adapter
+from src.smartsafe.detection.violation_tracker import get_violation_tracker
+from src.smartsafe.detection.snapshot_manager import get_snapshot_manager
 
 logger = logging.getLogger(__name__)
 
