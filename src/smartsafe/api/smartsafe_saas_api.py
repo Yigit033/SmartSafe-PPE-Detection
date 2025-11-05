@@ -52,9 +52,18 @@ import base64
 import queue
 from io import BytesIO
 import bcrypt
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
+
+# Resolve project root (for templates/static after src/ restructure)
+try:
+    # __file__ = .../src/smartsafe/api/smartsafe_saas_api.py
+    # parents[3] => project root (one above 'src')
+    BASE_DIR = Path(__file__).resolve().parents[3]
+except Exception:
+    BASE_DIR = Path(__file__).resolve().parent
 
 # Enterprise modülleri import et
 # Lazy loading için enterprise modülleri startup'ta yükleme - Memory optimization
@@ -80,9 +89,11 @@ class SmartSafeSaaSAPI:
     """SmartSafe AI SaaS API Server"""
     
     def __init__(self):
-        self.app = Flask(__name__, 
-                        template_folder='templates',
-                        static_folder='static')
+        self.app = Flask(
+                        __name__,
+                        template_folder=str(BASE_DIR / 'templates'),
+                        static_folder=str(BASE_DIR / 'static')
+                        )
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)

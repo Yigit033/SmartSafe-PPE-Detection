@@ -2793,8 +2793,8 @@ class ProfessionalCameraManager:
                                 
                                 # Company ID'yi al (parametre veya database'den)
                                 if company_id is None:
-                                from database_adapter import get_db_adapter
-                                db = get_db_adapter()
+                                    from database_adapter import get_db_adapter
+                                    db = get_db_adapter()
                                     # Önce camera_id ile company_id'yi bulmaya çalış (tüm company'lerde ara)
                                     try:
                                         # SQLite için: company_id olmadan arama yap
