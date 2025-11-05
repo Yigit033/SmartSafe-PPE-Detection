@@ -223,17 +223,17 @@ class OptimizedPPEDetector:
             confidence = det['confidence']
             
             # Color based on class
-            color = self.colors.get(class_name, (255, 255, 255))
-            if class_name in ['helmet', 'safety_vest', 'safety_suit']:
-                color = self.colors['compliant']
+            from utils.visual_overlay import draw_styled_box, get_class_color
             
-            # Draw box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            color = get_class_color(class_name, is_missing=False)
+            if class_name in ['helmet', 'safety_vest', 'safety_suit']:
+                color = (0, 255, 0)  # Yeşil - Uyumlu
             
             # Draw label
             label = f"{class_name} {confidence:.2f}"
-            cv2.putText(frame, label, (x1, y1-10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            
+            # Profesyonel bounding box çiz
+            frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
         
         # Draw compliance status
         y_offset = 30

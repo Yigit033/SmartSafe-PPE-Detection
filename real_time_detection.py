@@ -554,23 +554,19 @@ class PPEDetectionSystem:
         """Draw detections and status on frame"""
         try:
             # Draw detections
+            from utils.visual_overlay import draw_styled_box
+            
             for det in detections:
                 x1, y1, x2, y2 = det.bbox
                 color = self.colors.get(det.class_name, (255, 255, 255))
-                
-                # Draw bounding box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 
                 # Draw label
                 label = f"{det.class_name} {det.confidence:.2f}"
                 if det.track_id is not None:
                     label += f" ID:{det.track_id}"
                 
-                label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
-                cv2.rectangle(frame, (x1, y1 - label_size[1] - 10), 
-                                (x1 + label_size[0], y1), color, -1)
-                cv2.putText(frame, label, (x1, y1 - 5), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                # Profesyonel bounding box çiz
+                frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
             
             # Draw person status (SH17 dataset)
             y_offset = 30

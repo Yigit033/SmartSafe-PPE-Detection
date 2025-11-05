@@ -39,7 +39,7 @@ class DVRStreamProcessor:
         
         logger.info("✅ DVR Stream Processor initialized")
     
-    def start_dvr_detection(self, dvr_id: str, channel: int, company_id: str, detection_mode: str = 'construction', use_sh17: bool = False) -> Dict[str, Any]:
+    def start_dvr_detection(self, dvr_id: str, channel: int, company_id: str, detection_mode: Optional[str] = None, use_sh17: bool = False) -> Dict[str, Any]:
         """DVR kanalından PPE detection başlatır"""
         
         try:
@@ -57,6 +57,17 @@ class DVRStreamProcessor:
                 f"&channel={channel}&stream=0.sdp"
             )
             
+            # Resolve sector/detection_mode from company configuration when not provided
+            if not detection_mode:
+                try:
+                    company = self.db_adapter.get_company(company_id) if hasattr(self.db_adapter, 'get_company') else None
+                    if company:
+                        if isinstance(company, dict):
+                            detection_mode = company.get('sector') or detection_mode
+                        elif isinstance(company, (list, tuple)) and len(company) >= 5:
+                            detection_mode = company[4] or detection_mode
+                except Exception as sec_err:
+                    logger.warning(f"⚠️ DVR sector resolve failed for company {company_id}: {sec_err}")
             logger.info(f"🎥 Starting DVR detection: {stream_id} - {rtsp_url}")
             logger.info(f"🔧 Detection System: {'SH17' if use_sh17 else 'Klasik'}")
             

@@ -216,30 +216,12 @@ class DetectionUtils:
         """
         x1, y1, x2, y2 = [int(coord) for coord in box]
         
-        # Draw bounding box
-        cv2.rectangle(image, (x1, y1), (x2, y2), color, thickness)
-        
         # Prepare label text
         label_text = f"{label} {confidence:.2f}"
         
-        # Get text size
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.6
-        text_thickness = 2
-        (text_width, text_height), baseline = cv2.getTextSize(
-            label_text, font, font_scale, text_thickness
-        )
-        
-        # Draw label background
-        cv2.rectangle(image, 
-                     (x1, y1 - text_height - baseline - 5),
-                     (x1 + text_width, y1),
-                     color, -1)
-        
-        # Draw label text
-        cv2.putText(image, label_text,
-                   (x1, y1 - baseline - 5),
-                   font, font_scale, (255, 255, 255), text_thickness)
+        # Profesyonel bounding box çiz
+        from utils.visual_overlay import draw_styled_box
+        image = draw_styled_box(image, x1, y1, x2, y2, label_text, color, thickness)
         
         return image
     

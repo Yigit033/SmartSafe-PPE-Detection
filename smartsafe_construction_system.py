@@ -441,16 +441,19 @@ class ConstructionPPEDetector:
                     x1, y1, x2, y2 = person_box
                     
                     # PPE durumuna göre kutu rengi
+                    from utils.visual_overlay import draw_styled_box
+                    
                     ppe_status = detection.get('ppe_status', {})
                     is_compliant = detection.get('compliant', False)
                     
                     box_color = (0, 255, 0) if is_compliant else (0, 0, 255)
-                    cv2.rectangle(annotated_image, (x1, y1), (x2, y2), box_color, 2)
                     
                     # Worker ID
                     worker_id = detection.get('worker_id', f'Person_{i+1}')
-                    cv2.putText(annotated_image, worker_id, (x1, y1-10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
+                    label = f"{worker_id}"
+                    
+                    # Profesyonel bounding box çiz
+                    annotated_image = draw_styled_box(annotated_image, x1, y1, x2, y2, label, box_color)
                     
                     # PPE durumu
                     y_offset = y1 + 20

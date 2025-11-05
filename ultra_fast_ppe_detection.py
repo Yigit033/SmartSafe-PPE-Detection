@@ -190,10 +190,15 @@ class UltraFastPPEDetector:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
         # Draw detection boxes
+        from utils.visual_overlay import draw_styled_box
+        
         for det in detections:
             if det['class_name'] == 'person':
                 x1, y1, x2, y2 = det['bbox']
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 1)
+                label = "PERSON"
+                color = (255, 255, 255)  # Beyaz
+                # Profesyonel bounding box çiz
+                frame = draw_styled_box(frame, x1, y1, x2, y2, label, color, thickness=1)
         
         return frame
     

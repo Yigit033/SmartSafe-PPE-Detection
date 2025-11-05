@@ -3,7 +3,6 @@
 """
 PPE Detection System - Professional Launcher
 Version: 2.0
-Author: AI Assistant
 Date: 2025
 
 Commercial-grade PPE detection system with multiple optimization modes.
