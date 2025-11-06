@@ -194,7 +194,7 @@ class SmartSafeSaaSAPI:
         
         # PPE Detection Manager başlat
         try:
-            from ppe_detection_manager import PPEDetectionManager
+            from src.smartsafe.integrations.cameras.ppe_detection_manager import PPEDetectionManager
             self.ppe_manager = PPEDetectionManager()
             if not self.ppe_manager.load_models():
                 logger.warning("⚠️ PPE Detection Manager yüklenemedi, fallback kullanılacak")
@@ -400,7 +400,7 @@ class SmartSafeSaaSAPI:
         """Lazy load camera manager"""
         if self.camera_manager is None:
             try:
-                from camera_integration_manager import get_camera_manager
+                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                 self.camera_manager = get_camera_manager()
                 logger.info("✅ Camera Manager lazy loaded")
             except ImportError:
@@ -1134,7 +1134,7 @@ class SmartSafeSaaSAPI:
                                         use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
                                         if use_hybrid and sector:
                                             try:
-                                                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                                                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                                                 detector = SectorDetectorFactory.get_detector(sector, company_id)
                                                 detection_result = detector.detect_ppe(frame, camera_id)
                                             except Exception as _hybrid_err:
@@ -1662,7 +1662,7 @@ class SmartSafeSaaSAPI:
                                         use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
                                         if use_hybrid and sector:
                                             try:
-                                                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                                                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                                                 detector = SectorDetectorFactory.get_detector(sector, company_id)
                                                 detection_result = detector.detect_ppe(frame, camera_id)
                                             except Exception as _hybrid_err:
@@ -5226,7 +5226,7 @@ Mesaj:
                 scan_time = '2.0 saniye'
                 
                 try:
-                    from camera_discovery import IPCameraDiscovery
+                    from src.smartsafe.integrations.cameras.camera_discovery import IPCameraDiscovery
                     discovery = IPCameraDiscovery()
                     result = discovery.scan_network(network_range, timeout=2)
                     discovered_cameras = result['cameras']
@@ -5235,7 +5235,7 @@ Mesaj:
                     # Auto sync to database if enabled
                     if auto_sync and discovered_cameras:
                         try:
-                            from database_adapter import get_camera_discovery_manager
+                            from src.smartsafe.database.database_adapter import get_camera_discovery_manager
                             discovery_manager = get_camera_discovery_manager()
                             sync_result = discovery_manager.sync_discovered_cameras_to_db(company_id, discovered_cameras)
                             
@@ -5300,7 +5300,7 @@ Mesaj:
                 # Try enhanced real camera manager first
                 test_result = None
                 try:
-                    from camera_integration_manager import RealCameraManager, RealCameraConfig
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import RealCameraManager, RealCameraConfig
                     
                     real_camera_manager = RealCameraManager()
                     
@@ -5392,7 +5392,7 @@ Mesaj:
                 logger.info(f"🧠 Smart camera test for {ip_address}")
                 
                 try:
-                    from camera_integration_manager import SmartCameraDetector
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import SmartCameraDetector
                     
                     detector = SmartCameraDetector()
                     detection_result = detector.smart_detect_camera(ip_address)
@@ -5404,7 +5404,7 @@ Mesaj:
                         path = detection_result.get('path', '/video')
                         
                         # Basic kamera testi
-                        from camera_integration_manager import CameraSource
+                        from src.smartsafe.integrations.cameras.camera_integration_manager import CameraSource
                         import time
                         
                         # Connection URL oluştur
@@ -6297,7 +6297,7 @@ Mesaj:
                 logger.info(f"🧠 Smart camera discovery for company {company_id}")
                 
                 try:
-                    from camera_integration_manager import ProfessionalCameraManager
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import ProfessionalCameraManager
                     
                     camera_manager = ProfessionalCameraManager()
                     discovered_cameras = camera_manager.smart_discover_cameras(network_range)
@@ -6447,7 +6447,7 @@ Mesaj:
                 
                 # Kamera yöneticisinden kamerayı ayır
                 try:
-                    from camera_integration_manager import get_camera_manager
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                     camera_manager = get_camera_manager()
                     
                     # Kamerayı bağlantıdan ayır
@@ -6508,7 +6508,7 @@ Mesaj:
                     }), 500
                 
                 try:
-                    from camera_integration_manager import get_camera_manager
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                     camera_manager = get_camera_manager()
                     
                     # Kamera konfigürasyonunu güncelle
@@ -6562,7 +6562,7 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 try:
-                    from camera_integration_manager import get_camera_manager
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                     camera_manager = get_camera_manager()
                     
                     status = camera_manager.get_camera_status(camera_id)
@@ -6605,7 +6605,7 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 try:
-                    from camera_integration_manager import get_camera_manager
+                    from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                     camera_manager = get_camera_manager()
                     
                     # Mevcut durumu al
@@ -7675,14 +7675,14 @@ Mesaj:
                 
                 # Step 1: Network discovery
                 try:
-                    from camera_discovery import IPCameraDiscovery
+                    from src.smartsafe.integrations.cameras.camera_discovery import IPCameraDiscovery
                     discovery = IPCameraDiscovery()
                     discovery_result = discovery.scan_network(network_range, timeout=2)
                     result['discovery_result'] = discovery_result
                     
                     # Step 2: Sync discovered cameras to database
                     if discovery_result.get('cameras'):
-                        from database_adapter import get_camera_discovery_manager
+                        from src.smartsafe.database.database_adapter import get_camera_discovery_manager
                         discovery_manager = get_camera_discovery_manager()
                         db_sync_result = discovery_manager.sync_discovered_cameras_to_db(
                             company_id, 
@@ -7696,7 +7696,7 @@ Mesaj:
                 
                 # Step 3: Config file sync
                 try:
-                    from database_adapter import get_camera_discovery_manager
+                    from src.smartsafe.database.database_adapter import get_camera_discovery_manager
                     discovery_manager = get_camera_discovery_manager()
                     config_sync_result = discovery_manager.sync_config_cameras_to_db(company_id)
                     result['config_sync_result'] = config_sync_result
@@ -8105,7 +8105,7 @@ Mesaj:
                 limit = request.args.get('limit', 100, type=int)
                 
                 # Database'den detection history al
-                from database_adapter import get_db_adapter
+                from src.smartsafe.database.database_adapter import get_db_adapter
                 db = get_db_adapter()
                 results = db.get_camera_detection_results(camera_id, company_id, limit)
                 
@@ -8129,7 +8129,7 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Unauthorized'}), 401
                 
                 # Database'den latest detection al
-                from database_adapter import get_db_adapter
+                from src.smartsafe.database.database_adapter import get_db_adapter
                 db = get_db_adapter()
                 result = db.get_latest_camera_detection(camera_id, company_id)
                 
@@ -8159,7 +8159,7 @@ Mesaj:
                 if not user_data or user_data.get('company_id') != company_id:
                     return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
-                from database_adapter import get_db_adapter
+                from src.smartsafe.database.database_adapter import get_db_adapter
                 db = get_db_adapter()
                 violations = db.get_active_violations(camera_id=camera_id, company_id=company_id)
 
@@ -8184,7 +8184,7 @@ Mesaj:
                 hours = request.args.get('hours', 24, type=int)
                 
                 # Database'den stats al
-                from database_adapter import get_db_adapter
+                from src.smartsafe.database.database_adapter import get_db_adapter
                 db = get_db_adapter()
                 stats = db.get_company_detection_stats(company_id, hours)
                 
@@ -8212,7 +8212,7 @@ Mesaj:
                 logger.info(f"🔑 Session cookie captured: {session_cookie[:20] if session_cookie else 'None'}...")
                 
                 # Camera manager'dan stream al
-                from camera_integration_manager import get_camera_manager
+                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
                 camera_manager = get_camera_manager()
                 
                 def generate_detection_frames():
@@ -8301,7 +8301,7 @@ Mesaj:
                                             use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
                                             if use_hybrid and sector:
                                                 try:
-                                                    from smartsafe_sector_detector_factory import SectorDetectorFactory
+                                                    from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                                                     detector = SectorDetectorFactory.get_detector(sector, company_id)
                                                     detection_result = detector.detect_ppe(frame, camera_id)
                                                 except Exception as _hybrid_err:
@@ -8972,7 +8972,7 @@ Mesaj:
 
                             # === NEW: Persist detection to DB for dynamic widgets ===
                             try:
-                                from database_adapter import get_db_adapter
+                                from src.smartsafe.database.database_adapter import get_db_adapter
                                 db = get_db_adapter()
                                 # Normalize fields
                                 total_people = detection_data.get('total_people', detection_data.get('people_detected', 0))
@@ -21914,7 +21914,7 @@ smartsafe_requests_total 100
         try:
             # Sektörel detector'ı kullan - Güvenli import
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 logger.info("🔍 Construction detector aranıyor...")
                 detector = SectorDetectorFactory.get_detector('construction')
                 
@@ -22158,7 +22158,7 @@ smartsafe_requests_total 100
         """İmalat sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('manufacturing')
                 
                 if detector:
@@ -22178,7 +22178,7 @@ smartsafe_requests_total 100
         """Gıda sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('food')
                 
                 if detector:
@@ -22198,7 +22198,7 @@ smartsafe_requests_total 100
         """Lojistik/Depo sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('warehouse')
                 
                 if detector:
@@ -22218,7 +22218,7 @@ smartsafe_requests_total 100
         """Enerji sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('energy')
                 
                 if detector:
@@ -22238,7 +22238,7 @@ smartsafe_requests_total 100
         """Petrokimya sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('petrochemical')
                 
                 if detector:
@@ -22258,7 +22258,7 @@ smartsafe_requests_total 100
         """Denizcilik sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('marine')
                 
                 if detector:
@@ -22278,7 +22278,7 @@ smartsafe_requests_total 100
         """Havacılık sektörü PPE analizi - Sektörel sistem ile entegre"""
         try:
             try:
-                from smartsafe_sector_detector_factory import SectorDetectorFactory
+                from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                 detector = SectorDetectorFactory.get_detector('aviation')
                 
                 if detector:
@@ -22297,7 +22297,7 @@ smartsafe_requests_total 100
     def analyze_chemical_ppe(self, person_roi):
         """Kimyasal sektör PPE analizi - Sektörel sistem ile entegre"""
         try:
-            from smartsafe_sector_detector_factory import SectorDetectorFactory
+            from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
             detector = SectorDetectorFactory.get_detector('chemical')
             
             if detector:
@@ -22312,7 +22312,7 @@ smartsafe_requests_total 100
     def analyze_general_ppe(self, person_roi):
         """Genel PPE analizi - Sektörel sistem ile entegre"""
         try:
-            from smartsafe_sector_detector_factory import SectorDetectorFactory
+            from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
             detector = SectorDetectorFactory.get_detector('construction')  # Default
             
             if detector:

@@ -2127,8 +2127,8 @@ class ProfessionalCameraManager:
             Keşif ve senkronizasyon sonucu
         """
         try:
-            from database_adapter import get_camera_discovery_manager
-            from camera_discovery import IPCameraDiscovery
+            from src.smartsafe.database.database_adapter import get_camera_discovery_manager
+            from src.smartsafe.integrations.cameras.camera_discovery import IPCameraDiscovery
             
             result = {
                 'network_scan': {},
@@ -2213,7 +2213,7 @@ class ProfessionalCameraManager:
         """
         try:
             import yaml
-            from database_adapter import get_camera_discovery_manager
+            from src.smartsafe.database.database_adapter import get_camera_discovery_manager
             
             result = {
                 'config_loaded': False,
@@ -2270,7 +2270,7 @@ class ProfessionalCameraManager:
             Kameralar listesi
         """
         try:
-            from database_adapter import get_db_adapter
+            from src.smartsafe.database.database_adapter import get_db_adapter
             
             db_adapter = get_db_adapter()
             
@@ -2464,14 +2464,14 @@ class ProfessionalCameraManager:
                 try:
                     if not company_id:
                         # Attempt to resolve company_id from camera mapping
-                        from database_adapter import get_db_adapter
+                        from src.smartsafe.database.database_adapter import get_db_adapter
                         db_local = get_db_adapter()
                         # Reuse existing helper if available; fallback to cameras table scan
                         camera_info = db_local.get_camera_by_id(camera_id, company_id or '') if hasattr(db_local, 'get_camera_by_id') else None
                         if camera_info and camera_info.get('company_id'):
                             company_id = camera_info.get('company_id')
                     if company_id:
-                        from database_adapter import get_db_adapter
+                        from src.smartsafe.database.database_adapter import get_db_adapter
                         db_local = get_db_adapter()
                         company = db_local.get_company(company_id) if hasattr(db_local, 'get_company') else None
                         if company:
@@ -2793,7 +2793,7 @@ class ProfessionalCameraManager:
                                 
                                 # Company ID'yi al (parametre veya database'den)
                                 if company_id is None:
-                                    from database_adapter import get_db_adapter
+                                    from src.smartsafe.database.database_adapter import get_db_adapter
                                     db = get_db_adapter()
                                     # Önce camera_id ile company_id'yi bulmaya çalış (tüm company'lerde ara)
                                     try:
@@ -2848,7 +2848,7 @@ class ProfessionalCameraManager:
                                         if not person_visible:
                                             logger.warning(f"⚠️ Kişi frame'de yeterince görünür değil, snapshot atlandı")
                                             # Database'e snapshot olmadan kaydet
-                                            from database_adapter import get_db_adapter
+                                            from src.smartsafe.database.database_adapter import get_db_adapter
                                             db = get_db_adapter()
                                             db.add_violation_event(new_violation)
                                             continue
@@ -2873,7 +2873,7 @@ class ProfessionalCameraManager:
                                             logger.warning(f"⚠️ Violation snapshot kaydedilemedi: {new_violation['violation_type']} - Camera: {camera_id} - Person: {new_violation['person_id']}")
                                         
                                         # Database'e kaydet
-                                        from database_adapter import get_db_adapter
+                                        from src.smartsafe.database.database_adapter import get_db_adapter
                                         db = get_db_adapter()
                                         db.add_violation_event(new_violation)
                                         
@@ -2885,7 +2885,7 @@ class ProfessionalCameraManager:
                                 # Kişi ekipmanlarını taktığında son durumu kaydet
                                 for ended_violation in ended_violations:
                                     try:
-                                        from database_adapter import get_db_adapter
+                                        from src.smartsafe.database.database_adapter import get_db_adapter
                                         db = get_db_adapter()
                                         
                                         # 📸 ÇÖZÜM SNAPSHOT'I ÇEK (TAM EKİPMANLARLA)
@@ -2940,7 +2940,7 @@ class ProfessionalCameraManager:
                 # Sektöre göre gereklilik seti (varsa DB'den oku)
                 required_set = {'helmet','safety_vest'}
                 try:
-                    from database_adapter import get_db_adapter
+                    from src.smartsafe.database.database_adapter import get_db_adapter
                     db_local = get_db_adapter()
                     company = db_local.get_company(company_id) if company_id else None
                     if company:
@@ -3039,7 +3039,7 @@ class ProfessionalCameraManager:
     def save_detection_to_database(self, camera_id: str, detection_result: Dict, sector: str):
         """Detection sonucunu database'e kaydet"""
         try:
-            from database_adapter import get_db_adapter
+            from src.smartsafe.database.database_adapter import get_db_adapter
             db = get_db_adapter()
             
             # Company ID'yi detection_result'tan al veya database'den bul
@@ -3048,7 +3048,7 @@ class ProfessionalCameraManager:
             if not company_id:
                 # Camera bilgisinden company_id bul (tüm company'lerde ara)
                 try:
-                    from database_adapter import get_db_adapter
+                    from src.smartsafe.database.database_adapter import get_db_adapter
                     db = get_db_adapter()
                     # Camera_id ile company_id'yi bul
                     if db.db_type == 'sqlite':

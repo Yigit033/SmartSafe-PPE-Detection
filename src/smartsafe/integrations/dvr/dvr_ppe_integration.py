@@ -15,7 +15,7 @@ from datetime import datetime
 import numpy as np
 
 # Import existing modules
-from ppe_detection_manager import PPEDetectionManager
+from src.smartsafe.integrations.cameras.ppe_detection_manager import PPEDetectionManager
 from src.smartsafe.database.database_adapter import get_db_adapter
 from src.smartsafe.detection.violation_tracker import get_violation_tracker
 from src.smartsafe.detection.snapshot_manager import get_snapshot_manager
