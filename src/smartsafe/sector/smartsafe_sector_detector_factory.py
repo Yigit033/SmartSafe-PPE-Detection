@@ -11,7 +11,7 @@ from datetime import datetime
 import cv2
 import logging
 from src.smartsafe.sector.smartsafe_sector_manager import SmartSafeSectorManager
-from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
+from src.smartsafe.integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
 
 # Hibrit sistem import
 try:
@@ -156,7 +156,7 @@ class BaseSectorDetector(ABC):
     def get_company_ppe_config(self, company_id: str) -> Dict:
         """Şirketin PPE konfigürasyonunu al"""
         try:
-            from smartsafe_multitenant_system import MultiTenantDatabase
+            from src.smartsafe.services.multitenant_system import MultiTenantDatabase
             db = MultiTenantDatabase()
             
             conn = db.get_connection()

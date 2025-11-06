@@ -39,8 +39,8 @@ except ImportError:
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
-from smartsafe_multitenant_system import MultiTenantDatabase
-from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
+from src.smartsafe.services.multitenant_system import MultiTenantDatabase
+from src.smartsafe.integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
 from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
 from src.smartsafe.database.database_adapter import get_db_adapter
 from src.smartsafe.integrations.cameras.camera_integration_manager import DVRConfig
@@ -1268,7 +1268,7 @@ class SmartSafeSaaSAPI:
                     )
                 
                 # Import stream handler
-                from dvr_stream_handler import get_stream_handler
+                from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
                 stream_handler = get_stream_handler()
                 
                 # Generate stream ID
@@ -1328,7 +1328,7 @@ class SmartSafeSaaSAPI:
             
             try:
                 # Import stream handler
-                from dvr_stream_handler import get_stream_handler
+                from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
                 stream_handler = get_stream_handler()
                 
                 # Generate stream ID
@@ -1361,7 +1361,7 @@ class SmartSafeSaaSAPI:
             
             try:
                 # Import stream handler
-                from dvr_stream_handler import get_stream_handler
+                from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
                 stream_handler = get_stream_handler()
                 
                 # Generate stream ID
@@ -1476,7 +1476,7 @@ class SmartSafeSaaSAPI:
                     return jsonify({'error': 'DVR system not found'}), 404
 
                 # Start stream if needed
-                from dvr_stream_handler import get_stream_handler
+                from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
                 stream_handler = get_stream_handler()
                 stream_id = f"{dvr_id}_ch{channel_number:02d}"
 
@@ -1816,7 +1816,7 @@ class SmartSafeSaaSAPI:
                 if not dvr_system:
                     return jsonify({'success': False, 'error': 'DVR system not found'}), 404
 
-                from dvr_stream_handler import get_stream_handler
+                from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
                 stream_handler = get_stream_handler()
 
                 # For previews, try first N channels quickly for responsiveness

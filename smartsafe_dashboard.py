@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import os
 import cv2
 import numpy as np
-from smartsafe_construction_system import ConstructionPPEDetector, ConstructionPPEConfig
+from src.smartsafe.integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
 from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
 from src.smartsafe.sector.smartsafe_sector_manager import SmartSafeSectorManager
 import threading
