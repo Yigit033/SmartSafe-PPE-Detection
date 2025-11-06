@@ -74,11 +74,11 @@ def check_imports():
     print("="*80)
     
     modules = [
-        ('violation_tracker', 'get_violation_tracker'),
-        ('snapshot_manager', 'get_snapshot_manager'),
-        ('database_adapter', 'get_db_adapter'),
-        ('camera_integration_manager', 'ProfessionalCameraManager'),
-        ('dvr_ppe_integration', 'get_dvr_ppe_manager')
+        ('src.smartsafe.detection.violation_tracker', 'get_violation_tracker'),
+        ('src.smartsafe.detection.snapshot_manager', 'get_snapshot_manager'),
+        ('src.smartsafe.database.database_adapter', 'get_db_adapter'),
+        ('src.smartsafe.integrations.cameras.camera_integration_manager', 'ProfessionalCameraManager'),
+        ('src.smartsafe.integrations.dvr.dvr_ppe_integration', 'get_dvr_ppe_manager')
     ]
     
     all_ok = True
@@ -111,12 +111,12 @@ def check_violation_tracking_integration():
     # camera_integration_manager.py kontrolü
     print("\n📹 Normal Kamera Sistemi:")
     try:
-        with open('camera_integration_manager.py', 'r', encoding='utf-8') as f:
+        with open('src/smartsafe/integrations/cameras/camera_integration_manager.py', 'r', encoding='utf-8') as f:
             content = f.read()
             
             checks = [
-                ('violation_tracker import', 'from violation_tracker import'),
-                ('snapshot_manager import', 'from snapshot_manager import'),
+                ('violation_tracker import', 'from src.smartsafe.detection.violation_tracker import'),
+                ('snapshot_manager import', 'from src.smartsafe.detection.snapshot_manager import'),
                 ('Violation tracker çağrısı', 'violation_tracker = get_violation_tracker()'),
                 ('Snapshot manager çağrısı', 'snapshot_manager = get_snapshot_manager()'),
                 ('Görünürlük kontrolü', 'person_visible'),
@@ -137,12 +137,12 @@ def check_violation_tracking_integration():
     # dvr_ppe_integration.py kontrolü
     print("\n🎥 DVR/NVR Sistemi:")
     try:
-        with open('dvr_ppe_integration.py', 'r', encoding='utf-8') as f:
+        with open('src/smartsafe/integrations/dvr/dvr_ppe_integration.py', 'r', encoding='utf-8') as f:
             content = f.read()
             
             checks = [
-                ('violation_tracker import', 'from violation_tracker import'),
-                ('snapshot_manager import', 'from snapshot_manager import'),
+                ('violation_tracker import', 'from src.smartsafe.detection.violation_tracker import'),
+                ('snapshot_manager import', 'from src.smartsafe.detection.snapshot_manager import'),
                 ('Violation tracker çağrısı', 'violation_tracker = get_violation_tracker()'),
                 ('Snapshot manager çağrısı', 'snapshot_manager = get_snapshot_manager()'),
                 ('Görünürlük kontrolü', 'person_visible'),
@@ -203,7 +203,7 @@ def check_database_compatibility():
     print("="*80)
     
     try:
-        with open('database_adapter.py', 'r', encoding='utf-8') as f:
+        with open('src/smartsafe/database/database_adapter.py', 'r', encoding='utf-8') as f:
             content = f.read()
             
             print("\n✅ SQLite Uyumluluğu:")
@@ -273,7 +273,7 @@ def main():
     if schema_ok and imports_ok:
         print("\n✅ SİSTEM HAZIR!")
         print("\n🎯 Sonraki Adımlar:")
-        print("   1. Sunucuyu başlatın: python smartsafe_saas_api.py")
+        print("   1. Sunucuyu başlatın: python -m src.smartsafe.api.smartsafe_saas_api")
         print("   2. Kamerayı veya DVR'ı açın")
         print("   3. İhlal oluşturun ve kontrol edin:")
         print("      python check_violations.py")

@@ -412,7 +412,7 @@ class SmartSafeSaaSAPI:
         """Lazy load config manager"""
         if self.config_manager is None:
             try:
-                from professional_config_manager import ProfessionalConfigManager
+                from src.smartsafe.services.professional_config_manager import ProfessionalConfigManager
                 self.config_manager = ProfessionalConfigManager()
                 logger.info("✅ Config Manager lazy loaded")
             except ImportError:
@@ -424,7 +424,7 @@ class SmartSafeSaaSAPI:
         """Lazy load performance optimizer"""
         if self.performance_optimizer is None:
             try:
-                from performance_optimizer import PerformanceOptimizer
+                from src.smartsafe.services.performance_optimizer import PerformanceOptimizer
                 self.performance_optimizer = PerformanceOptimizer()
                 logger.info("✅ Performance Optimizer lazy loaded")
             except ImportError:
