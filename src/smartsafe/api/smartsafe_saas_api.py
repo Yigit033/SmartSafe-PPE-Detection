@@ -99,16 +99,22 @@ class SmartSafeSaaSAPI:
         # 🎯 PRODUCTION-GRADE: Template caching'i devre dışı bırak (development mode)
         self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
         self.app.config['TEMPLATES_AUTO_RELOAD'] = True
+        self.app.config['DEBUG'] = True
+        self.app.jinja_env.auto_reload = True
+        self.app.jinja_env.cache = None
         
-        @self.app.after_request
-        def add_header(response):
+        # Cache headers'ı devre dışı bırak
+        def add_no_cache_headers(response):
             response.cache_control.max_age = 0
             response.cache_control.no_cache = True
             response.cache_control.no_store = True
             response.cache_control.must_revalidate = True
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             return response
+        
+        self.app.after_request(add_no_cache_headers)
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
         try:

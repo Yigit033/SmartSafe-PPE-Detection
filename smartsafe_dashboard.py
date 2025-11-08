@@ -25,19 +25,6 @@ app = Flask(__name__)
 app.secret_key = 'smartsafe_ai_2024_secure_key'
 CORS(app)
 
-# 🎯 PRODUCTION-GRADE: Template caching'i devre dışı bırak (development mode)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-app.config['TEMPLATES_AUTO_RELOAD'] = True
-@app.after_request
-def add_header(response):
-    response.cache_control.max_age = 0
-    response.cache_control.no_cache = True
-    response.cache_control.no_store = True
-    response.cache_control.must_revalidate = True
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
-
 # Global değişkenler
 sector_manager = SmartSafeSectorManager()
 active_detectors = {}

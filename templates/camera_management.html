@@ -1006,19 +1006,19 @@
                                 
                                 <!-- Action Buttons -->
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-success btn-sm" onclick="startDVRDetection('DVR_192_168_1_109')">
+                                    <button class="btn btn-success btn-sm" id="startDetectionBtn" onclick="startDVRDetectionDynamic()">
                                         <i class="fas fa-play me-2"></i>Detection Başlat
                                     </button>
-                                    <button class="btn btn-danger btn-sm" onclick="stopDVRDetection('DVR_192_168_1_109')">
+                                    <button class="btn btn-danger btn-sm" id="stopDetectionBtn" onclick="stopDVRDetectionDynamic()">
                                         <i class="fas fa-stop me-2"></i>Detection Durdur
                                     </button>
-                                    <button class="btn btn-info btn-sm" onclick="updateDVRDetectionStatus('DVR_192_168_1_109')">
+                                    <button class="btn btn-info btn-sm" id="statusDetectionBtn" onclick="updateDVRDetectionStatusDynamic()">
                                         <i class="fas fa-sync me-2"></i>Durum Güncelle
                                     </button>
                                 </div>
                                 
                                 <!-- Status Display -->
-                                <div class="mt-3" id="dvr-status-DVR_192_168_1_109">
+                                <div class="mt-3" id="dvr-status-display">
                                     <span class="badge bg-secondary">Durum Bekleniyor</span>
                                 </div>
                             </div>
@@ -3144,6 +3144,15 @@
                     });
                     dvrList.innerHTML = html;
                     console.log('✅ DVR systems loaded successfully');
+                    
+                    // 🎯 PRODUCTION-GRADE: Sayfa yüklendiğinde ilk DVR'ın kanallarını otomatik yükle
+                    if (data.dvr_systems.length > 0) {
+                        const firstDVR = data.dvr_systems[0];
+                        console.log(`🔄 Auto-loading channels for first DVR: ${firstDVR.dvr_id}`);
+                        setTimeout(() => {
+                            discoverDVRChannels(firstDVR.dvr_id);
+                        }, 500);
+                    }
                 } else {
                     console.log('📋 No DVR systems found');
                     dvrList.innerHTML = `
@@ -3152,6 +3161,16 @@
                             <p>Henüz DVR sistemi eklenmemiş</p>
                         </div>
                     `;
+                    
+                    // 🎯 PRODUCTION-GRADE: DVR yoksa grid'i temizle
+                    const grid = document.getElementById('dvrChannelsGrid');
+                    if (grid) {
+                        grid.innerHTML = `
+                            <div class="col-12 text-center text-muted">
+                                <small><i class="fas fa-info-circle"></i> Kanal görmek için önce DVR sistemi ekleyin</small>
+                            </div>
+                        `;
+                    }
                 }
             } catch (error) {
                 console.error('❌ DVR sistemleri yüklenirken hata:', error);
@@ -3206,6 +3225,11 @@
         async function discoverDVRChannels(dvrId) {
             try {
                 console.log(`🔍 Discovering channels for DVR: ${dvrId}`);
+                
+                // 🎯 PRODUCTION-GRADE: Aktif DVR ID'yi set et
+                currentActiveDVRId = dvrId;
+                console.log(`✅ Active DVR ID set to: ${currentActiveDVRId}`);
+                
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/discover`, {
                     method: 'POST'
                 });
@@ -3506,11 +3530,39 @@
             }
         }
         
+        // 🎯 PRODUCTION-GRADE: Global DVR ID Tracker
+        let currentActiveDVRId = null;
+        
         // 🎯 PRODUCTION-GRADE: Dinamik Kanal Yönetimi Fonksiyonları
         
         function getSelectedChannels() {
             const checkboxes = document.querySelectorAll('input[name="dvrChannels"]:checked');
             return Array.from(checkboxes).map(cb => parseInt(cb.value));
+        }
+        
+        // 🎯 PRODUCTION-GRADE: Dinamik Detection Fonksiyonları
+        function startDVRDetectionDynamic() {
+            if (!currentActiveDVRId) {
+                showAlert('Lütfen önce DVR kanallarını keşfedin!', 'warning');
+                return;
+            }
+            startDVRDetection(currentActiveDVRId);
+        }
+        
+        function stopDVRDetectionDynamic() {
+            if (!currentActiveDVRId) {
+                showAlert('Lütfen önce DVR kanallarını keşfedin!', 'warning');
+                return;
+            }
+            stopDVRDetection(currentActiveDVRId);
+        }
+        
+        function updateDVRDetectionStatusDynamic() {
+            if (!currentActiveDVRId) {
+                showAlert('Lütfen önce DVR kanallarını keşfedin!', 'warning');
+                return;
+            }
+            updateDVRDetectionStatus(currentActiveDVRId);
         }
         
         // Tüm kanalları seç
@@ -3649,12 +3701,19 @@
         
         // DVR form submit event listener
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔄 DOMContentLoaded event fired');
+            console.log('📍 Company ID:', '{{ company_id }}');
+            
             const dvrForm = document.getElementById('dvrAddForm');
             if (dvrForm) {
                 dvrForm.addEventListener('submit', addDVRSystem);
+                console.log('✅ DVR form listener attached');
+            } else {
+                console.warn('⚠️ DVR form not found');
             }
             
             // DVR sistemlerini yükle
+            console.log('🔄 Loading DVR systems...');
             loadDVRSystems();
         });
         
