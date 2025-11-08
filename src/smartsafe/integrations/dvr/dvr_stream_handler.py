@@ -471,8 +471,8 @@ class DVRStreamHandler:
                 elif 'aviation' in stream_id.lower():
                     sector = 'aviation'
             
-            # PPE detection yap
-            detections = sh17_manager.detect_ppe(frame, sector=sector, confidence=0.5)
+            # 🎯 PPE detection yap - PRODUCTION-GRADE (lowered confidence threshold)
+            detections = sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
             
             # Detection result'ı hazırla - String değil Dict olarak döndür
             people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])

@@ -120,6 +120,125 @@ class DetectionUtils:
         return intersection / union if union > 0 else 0.0
     
     @staticmethod
+    def calculate_proximity_score(person_box: Tuple[int, int, int, int],
+                                 ppe_box: Tuple[int, int, int, int],
+                                 ppe_type: str) -> float:
+        """
+        🎯 PRODUCTION-GRADE: Calculate proximity score for PPE-Person association
+        Considers anatomical positioning and spatial relationships
+        
+        Args:
+            person_box: Person bounding box (x1, y1, x2, y2)
+            ppe_box: PPE bounding box (x1, y1, x2, y2)
+            ppe_type: Type of PPE (helmet, vest, shoes, gloves, glasses)
+            
+        Returns:
+            Proximity score (0.0 to 1.0) - higher is better match
+        """
+        px1, py1, px2, py2 = person_box
+        ex1, ey1, ex2, ey2 = ppe_box
+        
+        # Person dimensions
+        person_width = px2 - px1
+        person_height = py2 - py1
+        person_center_x = (px1 + px2) / 2
+        person_center_y = (py1 + py2) / 2
+        
+        # PPE dimensions
+        ppe_width = ex2 - ex1
+        ppe_height = ey2 - ey1
+        ppe_center_x = (ex1 + ex2) / 2
+        ppe_center_y = (ey1 + ey2) / 2
+        
+        # Anatomical region expectations (normalized to person height)
+        anatomical_regions = {
+            'helmet': {'y_min': -0.2, 'y_max': 0.15, 'x_range': 0.4},  # Head region
+            'glasses': {'y_min': -0.1, 'y_max': 0.05, 'x_range': 0.3},  # Face region
+            'vest': {'y_min': 0.1, 'y_max': 0.6, 'x_range': 0.8},       # Torso region
+            'gloves': {'y_min': 0.2, 'y_max': 0.7, 'x_range': 0.6},     # Hands region
+            'shoes': {'y_min': 0.85, 'y_max': 1.1, 'x_range': 0.5}      # Feet region
+        }
+        
+        region = anatomical_regions.get(ppe_type, {'y_min': -0.5, 'y_max': 1.2, 'x_range': 1.0})
+        
+        # Calculate relative position
+        rel_y = (ppe_center_y - py1) / person_height if person_height > 0 else 0
+        rel_x_dist = abs(ppe_center_x - person_center_x) / person_width if person_width > 0 else 0
+        
+        # Anatomical position score
+        y_in_range = region['y_min'] <= rel_y <= region['y_max']
+        x_in_range = rel_x_dist <= region['x_range']
+        
+        anatomical_score = 0.0
+        if y_in_range and x_in_range:
+            anatomical_score = 0.9  # Strong match
+        elif y_in_range or x_in_range:
+            anatomical_score = 0.5  # Partial match
+        else:
+            anatomical_score = 0.1  # Weak match
+        
+        # IoU-based proximity
+        iou = DetectionUtils.calculate_iou(person_box, ppe_box)
+        
+        # Size compatibility score
+        size_ratio = min(ppe_width, ppe_height) / max(person_width, person_height) if max(person_width, person_height) > 0 else 0
+        size_score = min(1.0, size_ratio * 2)  # PPE should be smaller than person
+        
+        # Combined score: weighted average
+        # Anatomical position is most important (60%), IoU (25%), size (15%)
+        proximity_score = (anatomical_score * 0.6) + (iou * 0.25) + (size_score * 0.15)
+        
+        return min(1.0, proximity_score)
+    
+    @staticmethod
+    def associate_ppe_with_person(person_box: Tuple[int, int, int, int],
+                                 ppe_detections: List[Dict],
+                                 confidence_threshold: float = 0.25) -> Dict[str, List[Dict]]:
+        """
+        🎯 PRODUCTION-GRADE: Associate PPE items with a person using advanced spatial reasoning
+        
+        Args:
+            person_box: Person bounding box
+            ppe_detections: List of PPE detections with class_name and bbox
+            confidence_threshold: Minimum confidence for association
+            
+        Returns:
+            Dictionary mapping PPE types to associated detections
+        """
+        associated_ppe = {}
+        
+        for ppe_detection in ppe_detections:
+            ppe_type = ppe_detection.get('class_name', '').lower()
+            ppe_box = ppe_detection.get('bbox', (0, 0, 0, 0))
+            ppe_confidence = ppe_detection.get('confidence', 0.0)
+            
+            # Calculate proximity score
+            proximity = DetectionUtils.calculate_proximity_score(person_box, ppe_box, ppe_type)
+            
+            # Combined score: confidence * proximity
+            combined_score = (ppe_confidence * 0.4) + (proximity * 0.6)
+            
+            # Association threshold (lowered for production - catches more valid PPE)
+            if combined_score >= confidence_threshold:
+                if ppe_type not in associated_ppe:
+                    associated_ppe[ppe_type] = []
+                
+                associated_ppe[ppe_type].append({
+                    'detection': ppe_detection,
+                    'proximity_score': proximity,
+                    'combined_score': combined_score,
+                    'confidence': ppe_confidence
+                })
+        
+        # Keep only best match for each PPE type
+        for ppe_type in associated_ppe:
+            if associated_ppe[ppe_type]:
+                best_match = max(associated_ppe[ppe_type], key=lambda x: x['combined_score'])
+                associated_ppe[ppe_type] = best_match
+        
+        return associated_ppe
+    
+    @staticmethod
     def resize_with_padding(image: np.ndarray, 
                            target_size: Tuple[int, int],
                            fill_value: int = 114) -> Tuple[np.ndarray, float, Tuple[int, int]]:

@@ -2620,27 +2620,35 @@ class ProfessionalCameraManager:
                         feet_region_left = [left_foot_x1, py2 - person_height * 0.15, left_foot_x2, py2]
                         feet_region_right = [right_foot_x1, py2 - person_height * 0.15, right_foot_x2, py2]
                         
-                        # Helmet kontrolü - kişinin üst kısmında olmalı (pozitif/negatif çakışma kuralı)
+                        # 🎯 PRODUCTION-GRADE: Helmet kontrolü - Geliştirilmiş spatial reasoning
+                        from src.smartsafe.detection.utils.detection_utils import DetectionUtils
+                        
+                        best_helmet_match = None
+                        best_helmet_score = 0.0
+                        
                         for helmet in helmets_pos:
                             hbbox = helmet.get('bbox', [])
                             if len(hbbox) == 4:
-                                hx1, hy1, hx2, hy2 = hbbox
-                                h_center_x = (hx1 + hx2) / 2
-                                h_center_y = (hy1 + hy2) / 2
+                                # Proximity score ile association
+                                proximity = DetectionUtils.calculate_proximity_score(
+                                    person_bbox, hbbox, 'helmet'
+                                )
+                                confidence = helmet.get('confidence', 0.5)
+                                combined_score = (confidence * 0.4) + (proximity * 0.6)
                                 
-                                # Helmet kişinin üst kısmında ve yakın mı?
-                                if (abs(h_center_x - person_center_x) < person_width * 0.7 and 
-                                    h_center_y < person_center_y and
-                                    abs(h_center_y - py1) < person_height * 0.45):
-                                    has_helmet = True
-                                    # ✅ ANATOMİK BÖLGE: Sadece baş bölgesini çerçevele
-                                    helmet_detection = {
-                                        'bbox': head_region,
-                                        'class_name': 'Helmet',
-                                        'confidence': helmet.get('confidence', 0.9),
-                                        'missing': False
-                                    }
-                                    break
+                                if combined_score > best_helmet_score and combined_score >= 0.25:
+                                    best_helmet_score = combined_score
+                                    best_helmet_match = helmet
+                        
+                        if best_helmet_match:
+                            has_helmet = True
+                            helmet_detection = {
+                                'bbox': head_region,
+                                'class_name': 'Helmet',
+                                'confidence': best_helmet_match.get('confidence', 0.9),
+                                'missing': False,
+                                'proximity_score': best_helmet_score
+                            }
 
                         # Negatif helmet ile çakışma: yüksek skor/IoU önceliği, fark <0.1 ise pozitif lehine
                         if has_helmet:
@@ -2654,26 +2662,34 @@ class ProfessionalCameraManager:
                                     else:
                                         logger.debug("Helmet conflict: POSITIVE kept (tie or lower NO-)")
                         
-                        # Vest kontrolü - kişinin orta kısmında olmalı
+                        # 🎯 PRODUCTION-GRADE: Vest kontrolü - Geliştirilmiş spatial reasoning
+                        best_vest_match = None
+                        best_vest_score = 0.0
+                        
                         for vest in vests_pos:
                             vbbox = vest.get('bbox', [])
                             if len(vbbox) == 4:
-                                vx1, vy1, vx2, vy2 = vbbox
-                                v_center_x = (vx1 + vx2) / 2
-                                v_center_y = (vy1 + vy2) / 2
+                                # Proximity score ile association
+                                proximity = DetectionUtils.calculate_proximity_score(
+                                    person_bbox, vbbox, 'vest'
+                                )
+                                confidence = vest.get('confidence', 0.5)
+                                combined_score = (confidence * 0.4) + (proximity * 0.6)
                                 
-                                # Vest kişinin orta kısmında ve yakın mı?
-                                if (abs(v_center_x - person_center_x) < person_width * 0.7 and
-                                    abs(v_center_y - person_center_y) < person_height * 0.45):
-                                    has_vest = True
-                                    # ✅ ANATOMİK BÖLGE: Sadece torso bölgesini çerçevele
-                                    vest_detection = {
-                                        'bbox': torso_region,
-                                        'class_name': 'Safety Vest',
-                                        'confidence': vest.get('confidence', 0.9),
-                                        'missing': False
-                                    }
-                                    break
+                                if combined_score > best_vest_score and combined_score >= 0.25:
+                                    best_vest_score = combined_score
+                                    best_vest_match = vest
+                        
+                        if best_vest_match:
+                            has_vest = True
+                            # ✅ ANATOMİK BÖLGE: Sadece torso bölgesini çerçevele
+                            vest_detection = {
+                                'bbox': torso_region,
+                                'class_name': 'Safety Vest',
+                                'confidence': best_vest_match.get('confidence', 0.9),
+                                'missing': False,
+                                'proximity_score': best_vest_score
+                            }
 
                         if has_vest:
                             for n in vests_neg:
@@ -2686,31 +2702,38 @@ class ProfessionalCameraManager:
                                     else:
                                         logger.debug("Vest conflict: POSITIVE kept (tie or lower NO-)")
                         
-                        # Shoes kontrolü - kişinin alt kısmında olmalı
+                        # 🎯 PRODUCTION-GRADE: Shoes kontrolü - Geliştirilmiş spatial reasoning
+                        best_shoe_match = None
+                        best_shoe_score = 0.0
+                        
                         for shoe in shoes_pos:
                             sbbox = shoe.get('bbox', [])
                             if len(sbbox) == 4:
-                                sx1, sy1, sx2, sy2 = sbbox
-                                s_center_x = (sx1 + sx2) / 2
-                                s_center_y = (sy1 + sy2) / 2
+                                # Proximity score ile association
+                                proximity = DetectionUtils.calculate_proximity_score(
+                                    person_bbox, sbbox, 'shoes'
+                                )
+                                confidence = shoe.get('confidence', 0.5)
+                                combined_score = (confidence * 0.4) + (proximity * 0.6)
                                 
-                                # Shoes kişinin alt kısmında ve yakın mı?
-                                if (abs(s_center_x - person_center_x) < person_width * 0.7 and
-                                    s_center_y > person_center_y and
-                                    abs(s_center_y - py2) < person_height * 0.4):
-                                    has_shoes = True
-                                    # ✅ ANATOMİK BÖLGE: tekleştirilmiş gösterim (sade)
-                                    foot_union = [min(feet_region_left[0], feet_region_right[0]),
-                                                 min(feet_region_left[1], feet_region_right[1]),
-                                                 max(feet_region_left[2], feet_region_right[2]),
-                                                 max(feet_region_left[3], feet_region_right[3])]
-                                    missing_ppe_detections.append({
-                                        'bbox': foot_union,
-                                        'class_name': 'Safety Shoes',
-                                        'confidence': shoe.get('confidence', 0.9),
-                                        'missing': False
-                                    })
-                                    break
+                                if combined_score > best_shoe_score and combined_score >= 0.25:
+                                    best_shoe_score = combined_score
+                                    best_shoe_match = shoe
+                        
+                        if best_shoe_match:
+                            has_shoes = True
+                            # ✅ ANATOMİK BÖLGE: tekleştirilmiş gösterim (sade)
+                            foot_union = [min(feet_region_left[0], feet_region_right[0]),
+                                         min(feet_region_left[1], feet_region_right[1]),
+                                         max(feet_region_left[2], feet_region_right[2]),
+                                         max(feet_region_left[3], feet_region_right[3])]
+                            missing_ppe_detections.append({
+                                'bbox': foot_union,
+                                'class_name': 'Safety Shoes',
+                                'confidence': best_shoe_match.get('confidence', 0.9),
+                                'missing': False,
+                                'proximity_score': best_shoe_score
+                            })
 
                         # Negatif ayakkabı ile çakışma
                         if has_shoes:

@@ -948,59 +948,44 @@
                             <div class="mt-4 p-3 border rounded bg-light">
                                 <h6><i class="fas fa-shield-alt me-2"></i>DVR PPE Detection</h6>
                                 
-                                <!-- Channel Selection -->
+                                <!-- 🎯 PRODUCTION-GRADE: Dinamik Kanal Seçimi -->
                                 <div class="mb-3">
-                                    <label class="form-label">Kanal Seçimi:</label>
-                                    <div class="row">
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="1" id="ch1">
-                                                <label class="form-check-label" for="ch1">Kanal 1</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="2" id="ch2">
-                                                <label class="form-check-label" for="ch2">Kanal 2</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="3" id="ch3">
-                                                <label class="form-check-label" for="ch3">Kanal 3</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="4" id="ch4">
-                                                <label class="form-check-label" for="ch4">Kanal 4</label>
-                                            </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">📺 Kanal Seçimi (Dinamik):</label>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-primary" onclick="selectAllChannels()" title="Tümünü Seç">
+                                                <i class="fas fa-check-double"></i> Tümü
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="clearAllChannels()" title="Seçimi Kaldır">
+                                                <i class="fas fa-times"></i> Temizle
+                                            </button>
+                                            <button type="button" class="btn btn-outline-info" onclick="toggleChannelFilters()" title="Filtreleri Göster">
+                                                <i class="fas fa-filter"></i> Filtrele
+                                            </button>
                                         </div>
                                     </div>
-                                    <div class="row mt-2">
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="5" id="ch5">
-                                                <label class="form-check-label" for="ch5">Kanal 5</label>
-                                            </div>
+                                    
+                                    <!-- Kanal Filtreleri -->
+                                    <div id="channelFilters" style="display:none;" class="mb-3 p-2 bg-light rounded">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" id="filterActive" checked onchange="applyChannelFilters()">
+                                            <label class="form-check-label" for="filterActive">Aktif Kanallar</label>
                                         </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="6" id="ch6">
-                                                <label class="form-check-label" for="ch6">Kanal 6</label>
-                                            </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" id="filterInactive" onchange="applyChannelFilters()">
+                                            <label class="form-check-label" for="filterInactive">İnaktif Kanallar</label>
                                         </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="7" id="ch7">
-                                                <label class="form-check-label" for="ch7">Kanal 7</label>
-                                            </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" id="filterOnline" checked onchange="applyChannelFilters()">
+                                            <label class="form-check-label" for="filterOnline">Çevrimiçi</label>
                                         </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="dvrChannels" value="8" id="ch8">
-                                                <label class="form-check-label" for="ch8">Kanal 8</label>
-                                            </div>
+                                    </div>
+                                    
+                                    <!-- Dinamik Kanal Grid -->
+                                    <div id="dvrChannelsGrid" class="row g-2">
+                                        <!-- Kanallar JavaScript tarafından dinamik olarak yüklenecek -->
+                                        <div class="col-12 text-center text-muted">
+                                            <small><i class="fas fa-info-circle"></i> Kanalları yüklemek için DVR keşfi yapın</small>
                                         </div>
                                     </div>
                                 </div>
@@ -3217,6 +3202,7 @@
         }
         
         // DVR kanallarını keşfet ve göster
+        // 🎯 PRODUCTION-GRADE: DVR Kanal Keşfi - Dinamik Grid Yükleme
         async function discoverDVRChannels(dvrId) {
             try {
                 console.log(`🔍 Discovering channels for DVR: ${dvrId}`);
@@ -3228,7 +3214,12 @@
                 
                 if (data.success) {
                     showAlert(`✅ ${data.channels.length} kanal keşfedildi!`, 'success');
+                    
+                    // Eski container'ı güncelle
                     displayDVRChannels(dvrId, data.channels);
+                    
+                    // Yeni dinamik grid'i de güncelle
+                    renderDVRChannelsGrid(data.channels);
                 } else {
                     showAlert(`❌ Kanal keşfi hatası: ${data.error}`, 'danger');
                 }
@@ -3515,9 +3506,145 @@
             }
         }
         
+        // 🎯 PRODUCTION-GRADE: Dinamik Kanal Yönetimi Fonksiyonları
+        
         function getSelectedChannels() {
             const checkboxes = document.querySelectorAll('input[name="dvrChannels"]:checked');
             return Array.from(checkboxes).map(cb => parseInt(cb.value));
+        }
+        
+        // Tüm kanalları seç
+        function selectAllChannels() {
+            const checkboxes = document.querySelectorAll('input[name="dvrChannels"]');
+            checkboxes.forEach(cb => cb.checked = true);
+            saveChannelSelection();
+            showAlert('✅ Tüm kanallar seçildi', 'success');
+        }
+        
+        // Seçimi kaldır
+        function clearAllChannels() {
+            const checkboxes = document.querySelectorAll('input[name="dvrChannels"]');
+            checkboxes.forEach(cb => cb.checked = false);
+            saveChannelSelection();
+            showAlert('✅ Seçim temizlendi', 'info');
+        }
+        
+        // Filtreleri aç/kapat
+        function toggleChannelFilters() {
+            const filters = document.getElementById('channelFilters');
+            filters.style.display = filters.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // Kanal filtrelerini uygula
+        function applyChannelFilters() {
+            const filterActive = document.getElementById('filterActive').checked;
+            const filterInactive = document.getElementById('filterInactive').checked;
+            const filterOnline = document.getElementById('filterOnline').checked;
+            
+            const channelCards = document.querySelectorAll('[data-channel-card]');
+            channelCards.forEach(card => {
+                const isActive = card.dataset.channelActive === 'true';
+                const isOnline = card.dataset.channelOnline === 'true';
+                
+                let show = false;
+                if (isActive && filterActive) show = true;
+                if (!isActive && filterInactive) show = true;
+                if (isOnline && filterOnline) show = true;
+                
+                card.style.display = show ? 'block' : 'none';
+            });
+        }
+        
+        // Kanal seçimini LocalStorage'a kaydet
+        function saveChannelSelection() {
+            const channels = getSelectedChannels();
+            localStorage.setItem('dvrSelectedChannels', JSON.stringify(channels));
+        }
+        
+        // Kanal seçimini LocalStorage'dan yükle
+        function loadChannelSelection() {
+            const saved = localStorage.getItem('dvrSelectedChannels');
+            if (saved) {
+                try {
+                    const channels = JSON.parse(saved);
+                    const checkboxes = document.querySelectorAll('input[name="dvrChannels"]');
+                    checkboxes.forEach(cb => {
+                        cb.checked = channels.includes(parseInt(cb.value));
+                    });
+                } catch (e) {
+                    console.warn('⚠️ Kanal seçimi yüklenemedi:', e);
+                }
+            }
+        }
+        
+        // Dinamik kanal grid'i oluştur
+        function renderDVRChannelsGrid(channels) {
+            const grid = document.getElementById('dvrChannelsGrid');
+            if (!channels || channels.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-12 text-center text-muted">
+                        <small><i class="fas fa-info-circle"></i> Kanal bulunamadı. DVR keşfi yapın.</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            channels.forEach(ch => {
+                const channelNum = ch.channel_number || ch.number || ch.id;
+                const channelName = ch.name || `Kanal ${channelNum}`;
+                const isActive = ch.status === 'active' || ch.status === 'online';
+                const isOnline = ch.online !== false;
+                const statusBadge = isActive ? '<span class="badge bg-success">Aktif</span>' : '<span class="badge bg-secondary">İnaktif</span>';
+                const onlineBadge = isOnline ? '<span class="badge bg-info">Çevrimiçi</span>' : '<span class="badge bg-danger">Çevrimdışı</span>';
+                
+                html += `
+                    <div class="col-md-6 col-lg-4" data-channel-card data-channel-active="${isActive}" data-channel-online="${isOnline}">
+                        <div class="card h-100 border-0 shadow-sm hover-shadow" style="transition: all 0.3s;">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="card-title mb-1">
+                                            <i class="fas fa-video text-primary"></i> ${channelName}
+                                        </h6>
+                                        <small class="text-muted">Kanal #${channelNum}</small>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="dvrChannels" value="${channelNum}" id="ch${channelNum}" onchange="saveChannelSelection()">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    ${statusBadge}
+                                    ${onlineBadge}
+                                </div>
+                                ${ch.resolution ? `<small class="text-muted d-block">📐 ${ch.resolution}</small>` : ''}
+                                ${ch.fps ? `<small class="text-muted d-block">⚡ ${ch.fps} FPS</small>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            grid.innerHTML = html;
+            loadChannelSelection();
+        }
+        
+        // DVR kanallarını keşfet ve grid'i güncelle
+        async function discoverAndLoadDVRChannels(dvrId) {
+            try {
+                const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
+                const data = await response.json();
+                
+                if (data.success && data.channels) {
+                    renderDVRChannelsGrid(data.channels);
+                    showAlert(`✅ ${data.channels.length} kanal keşfedildi!`, 'success');
+                } else {
+                    showAlert('⚠️ Kanal keşfi başarısız', 'warning');
+                }
+            } catch (error) {
+                console.error('❌ Kanal keşfi hatası:', error);
+                showAlert('❌ Kanal keşfi sırasında hata oluştu', 'danger');
+            }
         }
         
         // DVR form submit event listener

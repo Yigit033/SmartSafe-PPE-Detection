@@ -135,18 +135,18 @@ class DVRStreamProcessor:
                     if frame_count % self.frame_skip != 0:
                         continue
                     
-                    # PPE Detection yap - SH17 veya Klasik sistem
+                    # 🎯 PPE Detection yap - PRODUCTION-GRADE SH17 veya Klasik sistem
                     detection_start = time.time()
                     try:
                         if use_sh17 and hasattr(self, 'sh17_manager'):
-                            # SH17 detection
-                            ppe_result = self.sh17_manager.detect_ppe(frame, detection_mode, 0.5)
+                            # 🎯 PRODUCTION-GRADE SH17 detection - Lowered confidence threshold
+                            ppe_result = self.sh17_manager.detect_ppe(frame, detection_mode, confidence=0.25)
                             detection_time = time.time() - detection_start
                             
-                            # SH17 sonuçlarını klasik formata çevir
-                            ppe_result = self._convert_sh17_to_classic_format(ppe_result, detection_mode)
+                            # SH17 sonuçlarını klasik formata çevir (production-grade)
+                            ppe_result = self._convert_sh17_to_classic_format_production(ppe_result, detection_mode, frame)
                         else:
-                            # Klasik detection
+                            # 🎯 PRODUCTION-GRADE Klasik detection
                             ppe_result = self.ppe_manager.detect_ppe_comprehensive(frame, detection_mode)
                             detection_time = time.time() - detection_start
                         
@@ -311,8 +311,81 @@ class DVRStreamProcessor:
         except Exception as e:
             logger.error(f"❌ DVR stream processing error: {e}")
     
+    def _convert_sh17_to_classic_format_production(self, sh17_result: List[Dict], detection_mode: str, frame: np.ndarray) -> Dict[str, Any]:
+        """🎯 PRODUCTION-GRADE: SH17 sonuçlarını klasik PPE formatına çevirir - Advanced spatial reasoning ile"""
+        try:
+            if not sh17_result:
+                return self._create_empty_result()
+            
+            # Kişileri ve PPE itemlarını ayır
+            people = [d for d in sh17_result if isinstance(d, dict) and d.get('class_name') == 'person']
+            helmets_pos = [d for d in sh17_result if isinstance(d, dict) and d.get('class_name') in ['helmet','hard_hat','Hardhat','Safety Helmet']]
+            vests_pos = [d for d in sh17_result if isinstance(d, dict) and d.get('class_name') in ['safety_vest','vest','Safety Vest']]
+            shoes_pos = [d for d in sh17_result if isinstance(d, dict) and d.get('class_name') in ['safety_shoes','shoes','Safety Shoes']]
+            
+            people_detected = len(people)
+            ppe_violations = []
+            ppe_compliant = 0
+            
+            # 🎯 PRODUCTION-GRADE: Her kişi için advanced PPE association
+            from src.smartsafe.detection.utils.detection_utils import DetectionUtils
+            
+            for person_idx, person in enumerate(people):
+                person_bbox = person.get('bbox', [])
+                if len(person_bbox) != 4:
+                    continue
+                
+                # Proximity scoring ile PPE association
+                associated_ppe = DetectionUtils.associate_ppe_with_person(
+                    person_bbox, 
+                    helmets_pos + vests_pos + shoes_pos,
+                    confidence_threshold=0.25
+                )
+                
+                # Compliance kontrolü
+                has_helmet = 'helmet' in associated_ppe
+                has_vest = 'safety_vest' in associated_ppe or 'vest' in associated_ppe
+                
+                if has_helmet and has_vest:
+                    ppe_compliant += 1
+                else:
+                    missing_ppe = []
+                    if not has_helmet:
+                        missing_ppe.append('Baret eksik')
+                    if not has_vest:
+                        missing_ppe.append('Yelek eksik')
+                    
+                    violation = {
+                        'person_id': f"person_{person_idx + 1}",
+                        'missing_ppe': missing_ppe,
+                        'confidence': person.get('confidence', 0.0),
+                        'bbox': person_bbox,
+                        'ppe_status': {
+                            'compliant': False,
+                            'missing_ppe': missing_ppe,
+                            'detected_ppe': list(associated_ppe.keys())
+                        }
+                    }
+                    ppe_violations.append(violation)
+            
+            return {
+                'success': True,
+                'people_detected': people_detected,
+                'compliant_people': ppe_compliant,
+                'ppe_compliant': ppe_compliant,
+                'ppe_violations': ppe_violations,
+                'detection_system': 'SH17-Production',
+                'detection_mode': detection_mode,
+                'total_people': people_detected,
+                'violations_count': len(ppe_violations)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ SH17 production format conversion error: {e}")
+            return self._create_empty_result()
+    
     def _convert_sh17_to_classic_format(self, sh17_result: List[Dict], detection_mode: str) -> Dict[str, Any]:
-        """SH17 sonuçlarını klasik PPE formatına çevirir"""
+        """SH17 sonuçlarını klasik PPE formatına çevirir (Legacy)"""
         try:
             if not sh17_result:
                 return self._create_empty_result()
