@@ -104,12 +104,32 @@ class DVRStreamProcessor:
         logger.info(f"🔧 Detection System: {'SH17' if use_sh17 else 'Klasik'}")
         
         try:
-            # RTSP stream'i aç
+            # 🎯 PRODUCTION-GRADE: RTSP stream açma - Fallback mekanizması ile
             cap = cv2.VideoCapture(rtsp_url)
             
             if not cap.isOpened():
-                logger.error(f"❌ Failed to open RTSP stream: {rtsp_url}")
-                return
+                logger.warning(f"⚠️ Failed to open RTSP stream with URL: {rtsp_url}")
+                logger.info(f"🔄 Trying alternative RTSP formats...")
+                
+                # Alternative RTSP URLs'leri dene
+                alternative_urls = [
+                    rtsp_url.replace('&', '?'),  # & yerine ? kullan
+                    rtsp_url.replace('stream=0.sdp', 'stream=1'),  # stream parametresi değiştir
+                    rtsp_url.split('&stream')[0],  # stream parametresini kaldır
+                ]
+                
+                for alt_url in alternative_urls:
+                    logger.info(f"🔄 Trying alternative URL: {alt_url}")
+                    cap = cv2.VideoCapture(alt_url)
+                    if cap.isOpened():
+                        logger.info(f"✅ Connected with alternative URL: {alt_url}")
+                        rtsp_url = alt_url
+                        break
+                
+                if not cap.isOpened():
+                    logger.error(f"❌ Failed to open RTSP stream with all formats: {rtsp_url}")
+                    logger.error(f"❌ DVR may not support RTSP or credentials are incorrect")
+                    return
             
             # Stream'i active streams'e ekle
             self.active_streams[stream_id] = cap

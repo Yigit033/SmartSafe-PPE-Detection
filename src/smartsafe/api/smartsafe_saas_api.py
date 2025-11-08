@@ -96,6 +96,20 @@ class SmartSafeSaaSAPI:
                         )
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
+        # 🎯 PRODUCTION-GRADE: Template caching'i devre dışı bırak (development mode)
+        self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+        self.app.config['TEMPLATES_AUTO_RELOAD'] = True
+        
+        @self.app.after_request
+        def add_header(response):
+            response.cache_control.max_age = 0
+            response.cache_control.no_cache = True
+            response.cache_control.no_store = True
+            response.cache_control.must_revalidate = True
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
+        
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
         try:
             from src.smartsafe.models.sh17_model_manager import SH17ModelManager
