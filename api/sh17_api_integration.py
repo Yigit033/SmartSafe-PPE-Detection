@@ -11,7 +11,7 @@ import base64
 import cv2
 import numpy as np
 from flask import Flask, request, jsonify
-from models.sh17_model_manager import SH17ModelManager
+from src.smartsafe.models.sh17_model_manager import SH17ModelManager
 
 class SH17API:
     def __init__(self):

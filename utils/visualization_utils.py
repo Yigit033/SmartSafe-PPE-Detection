@@ -8,7 +8,7 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils.visual_overlay import draw_styled_box, get_class_color
+from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
 
 def draw_detection_results(frame: np.ndarray, 
                          detections: List[Dict],

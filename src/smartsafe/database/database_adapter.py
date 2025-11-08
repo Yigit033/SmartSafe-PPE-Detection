@@ -20,7 +20,7 @@ import bcrypt
 def get_secure_db_connector():
     """Get secure DB connector when needed"""
     try:
-        from utils.secure_database_connector import get_secure_db_connector
+        from src.smartsafe.utils.secure_database_connector import get_secure_db_connector
         return get_secure_db_connector()
     except ImportError:
         return None

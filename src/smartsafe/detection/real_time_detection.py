@@ -34,7 +34,7 @@ import playsound
 from threading import Thread
 
 # Custom utilities
-from utils.data_utils import PPEDataLoader
+from src.smartsafe.utils.data_utils import PPEDataLoader
 
 # Configure logging
 logging.basicConfig(
@@ -554,7 +554,7 @@ class PPEDetectionSystem:
         """Draw detections and status on frame"""
         try:
             # Draw detections
-            from utils.visual_overlay import draw_styled_box
+            from src.smartsafe.detection.utils.visual_overlay import draw_styled_box
             
             for det in detections:
                 x1, y1, x2, y2 = det.bbox

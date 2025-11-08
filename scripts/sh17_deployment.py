@@ -131,7 +131,7 @@ class SH17Deployment:
             
             # Model manager'ı test et
             sys.path.append(str(self.project_root))
-            from models.sh17_model_manager import SH17ModelManager
+            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
             
             manager = SH17ModelManager()
             manager.load_models()

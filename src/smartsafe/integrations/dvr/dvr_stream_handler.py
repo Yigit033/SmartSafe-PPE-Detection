@@ -445,7 +445,7 @@ class DVRStreamHandler:
         """Perform PPE detection on a frame"""
         try:
             # SH17 Model Manager'ı başlat
-            from models.sh17_model_manager import SH17ModelManager
+            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
             sh17_manager = SH17ModelManager()
             
             # Stream info'dan sector bilgisini al (varsayılan: construction)
@@ -783,7 +783,7 @@ class DVRStreamHandler:
                         if frame_count % detection_frequency == 0:
                             try:
                                 # SH17 Model Manager'ı import et
-                                from models.sh17_model_manager import SH17ModelManager
+                                from src.smartsafe.models.sh17_model_manager import SH17ModelManager
                                 
                                 # Detection yap
                                 detection_result = self._perform_ppe_detection(frame, stream_id)

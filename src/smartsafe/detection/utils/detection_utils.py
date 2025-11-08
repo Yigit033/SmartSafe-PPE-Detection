@@ -220,7 +220,7 @@ class DetectionUtils:
         label_text = f"{label} {confidence:.2f}"
         
         # Profesyonel bounding box çiz
-        from utils.visual_overlay import draw_styled_box
+        from src.smartsafe.detection.utils.visual_overlay import draw_styled_box
         image = draw_styled_box(image, x1, y1, x2, y2, label_text, color, thickness)
         
         return image

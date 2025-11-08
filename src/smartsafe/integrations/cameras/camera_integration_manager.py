@@ -1545,7 +1545,7 @@ class ProfessionalCameraManager:
     def _init_ppe_detector(self):
         """PPE Detection Manager'ı başlat"""
         try:
-            from models.sh17_model_manager import SH17ModelManager
+            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
             self.ppe_detector = SH17ModelManager()
             logger.info("✅ PPE Detection Manager yüklendi")
         except Exception as e:
@@ -3119,7 +3119,7 @@ class ProfessionalCameraManager:
         except Exception as e:
             logger.error(f"❌ Stream processing hatası {camera_id}: {e}")
             return frame
-    
+
     def _draw_ppe_overlay(self, frame: np.ndarray, detection_data: Dict) -> np.ndarray:
         """PPE Detection overlay'ini frame'e çiz"""
         try:
@@ -3135,7 +3135,7 @@ class ProfessionalCameraManager:
             
             # Başlık
             cv2.putText(frame, 'SmartSafe AI - PPE Detection', (10, 25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
             # İstatistikler
             people_count = detection_data.get('people_detected', 0)
@@ -3143,20 +3143,20 @@ class ProfessionalCameraManager:
             violations = detection_data.get('ppe_violations', [])
             
             cv2.putText(frame, f'People: {people_count}', (10, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
             cv2.putText(frame, f'Compliance: {compliance_rate}%', (120, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
             cv2.putText(frame, f'Violations: {len(violations)}', (280, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
             # Uyum durumu göstergesi - frame boyutuna göre ayarla
             indicator_x = min(600, frame_width - 20)
             color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
             cv2.circle(frame, (indicator_x, 40), 15, color, -1)
             
-            # 🎯 BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
+            #  BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
             detections = detection_data.get('detections', [])
             if detections and isinstance(detections, list):
                 for detection in detections:
@@ -3171,11 +3171,11 @@ class ProfessionalCameraManager:
                         try:
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
-                            # 🎯 PROFESYONEL RENK KODLARI - ANATOMİK BÖLGE OPTİMİZASYONU
+                            #  PROFESYONEL RENK KODLARI - ANATOMİK BÖLGE OPTİMİZASYONU
                             is_missing = detection.get('missing', False) or class_name.startswith('NO-')
                             
                             # Renk belirleme
-                            from utils.visual_overlay import draw_styled_box, get_class_color
+                            from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
                             
                             color = get_class_color(class_name, is_missing=is_missing)
                             
@@ -3188,42 +3188,47 @@ class ProfessionalCameraManager:
                                     label = "YELEK EKSIK"
                                 elif 'Shoes' in class_name or 'ayakkabı' in class_name.lower():
                                     label = "AYAKKABI EKSIK"
+                                    label = "BARET EKSIK"
+                                elif 'Vest' in class_name or 'yelek' in class_name.lower():
+                                    label = "YELEK EKSIK"
+                                elif 'Shoes' in class_name or 'ayakkabı' in class_name.lower():
+                                    label = "AYAKKABI EKSIK"
                                 else:
                                     label = f"{class_name} EKSIK"
                             else:
                                 label = f"{class_name} {confidence:.2f}"
-                            
-                            # Profesyonel bounding box çiz
-                            frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
+                                
+                                # Profesyonel bounding box çiz
+                                frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
                         except Exception as bbox_error:
                             logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
                             continue
-            
-            # İhlal detayları
-            if violations and isinstance(violations, list):
-                y_offset = 100
-                for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
-                    if isinstance(violation, str):
-                        cv2.putText(frame, f'Violation {i+1}: {violation}', (10, y_offset), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
-                        y_offset += 20
-            
-            # Zaman damgası
-            timestamp = detection_data.get('timestamp', '')
-            if timestamp:
-                try:
-                    if isinstance(timestamp, (int, float)):
-                        # Unix timestamp'i string'e çevir
-                        import datetime
-                        timestamp_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                    else:
-                        timestamp_str = str(timestamp)[:19]
-                    
-                    cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-                except Exception as ts_error:
-                    logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
-            
+                
+                # İhlal detayları
+                if violations and isinstance(violations, list):
+                    y_offset = 100
+                    for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
+                        if isinstance(violation, str):
+                            cv2.putText(frame, f'Violation {i+1}: {violation}', (10, y_offset), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                            y_offset += 20
+                
+                # Zaman damgası
+                timestamp = detection_data.get('timestamp', '')
+                if timestamp:
+                    try:
+                        if isinstance(timestamp, (int, float)):
+                            # Unix timestamp'i string'e çevir
+                            import datetime
+                            timestamp_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            timestamp_str = str(timestamp)[:19]
+                        
+                        cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                    except Exception as ts_error:
+                        logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
+                
         except Exception as e:
             logger.error(f"❌ PPE Overlay çizim hatası: {e}")
         

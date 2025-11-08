@@ -415,7 +415,7 @@ class ConstructionPPEDetector:
             # Başlık bilgileri
             title_text = f"İnşaat Güvenlik İzleme - Kamera: {detection_result.get('camera_id', 'Unknown')}"
             cv2.putText(annotated_image, title_text, (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             
             # Genel bilgiler
             analysis = detection_result.get('analysis', {})
@@ -423,73 +423,79 @@ class ConstructionPPEDetector:
             total_people = analysis.get('total_people', 0)
             
             # Uyum oranı
-            compliance_color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            compliance_color = (
+                (0, 255, 0) if compliance_rate >= 80 
+                else (0, 165, 255) if compliance_rate >= 60 
+                else (0, 0, 255)
+            )
             cv2.putText(annotated_image, f"Uyum Oranı: {compliance_rate:.1f}%", 
-                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, compliance_color, 2)
+                        (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, compliance_color, 2)
             
             # Toplam kişi sayısı
             cv2.putText(annotated_image, f"Toplam Kişi: {total_people}", 
-                       (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                        (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
             # Detection sonuçları
             detections = detection_result.get('detections', [])
-            
             for i, detection in enumerate(detections):
-                # Kişi kutusunu çiz
-                person_box = detection.get('bbox')
-                if person_box:
-                    x1, y1, x2, y2 = person_box
-                    
-                    # PPE durumuna göre kutu rengi
-                    from utils.visual_overlay import draw_styled_box
-                    
-                    ppe_status = detection.get('ppe_status', {})
-                    is_compliant = detection.get('compliant', False)
-                    
-                    box_color = (0, 255, 0) if is_compliant else (0, 0, 255)
-                    
-                    # Worker ID
-                    worker_id = detection.get('worker_id', f'Person_{i+1}')
-                    label = f"{worker_id}"
-                    
-                    # Profesyonel bounding box çiz
-                    annotated_image = draw_styled_box(annotated_image, x1, y1, x2, y2, label, box_color)
-                    
-                    # PPE durumu
-                    y_offset = y1 + 20
-                    for ppe_type, status in ppe_status.items():
-                        if ppe_type in ['helmet', 'safety_vest', 'safety_shoes']:
-                            ppe_name = {
-                                'helmet': 'Baret',
-                                'safety_vest': 'Yelek', 
-                                'safety_shoes': 'Ayakkabı'
-                            }.get(ppe_type, ppe_type)
-                            
-                            status_color = (0, 255, 0) if status else (0, 0, 255)
-                            status_text = "✓" if status else "✗"
-                            
-                            cv2.putText(annotated_image, f"{ppe_name}: {status_text}", 
-                                       (x1, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, status_color, 1)
-                            y_offset += 15
+                # Çalışan kimliği
+                worker_id = detection.get('worker_id', f'Person_{i+1}')
+                label = f"{worker_id}"
+
+                # Bounding box koordinatları (x1, y1, x2, y2)
+                bbox = detection.get('bbox', [0, 0, 0, 0])
+                x1, y1, x2, y2 = map(int, bbox)
+                
+                # Renk belirleme (örnek olarak yeşil)
+                box_color = (0, 255, 0)
+
+                # Profesyonel bounding box çiz
+                annotated_image = draw_styled_box(annotated_image, x1, y1, x2, y2, label, box_color)
+
+                # PPE durumu
+                ppe_status = detection.get('ppe_status', {})
+                y_offset = y1 + 20
+                for ppe_type, status in ppe_status.items():
+                    if ppe_type in ['helmet', 'safety_vest', 'safety_shoes']:
+                        ppe_name = {
+                            'helmet': 'Baret',
+                            'safety_vest': 'Yelek',
+                            'safety_shoes': 'Ayakkabı'
+                        }.get(ppe_type, ppe_type)
+                        
+                        status_color = (0, 255, 0) if status else (0, 0, 255)
+                        status_text = "✓" if status else "✗"
+                        
+                        cv2.putText(
+                            annotated_image,
+                            f"{ppe_name}: {status_text}",
+                            (x1, y_offset),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.4,
+                            status_color,
+                            1
+                        )
+                        y_offset += 15
             
             # İhlal listesi (sağ üst köşe)
             violations = analysis.get('individual_results', [])
             if violations:
-                cv2.putText(annotated_image, "İHLALLER:", (width-200, 30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                cv2.putText(annotated_image, "İHLALLER:", (width - 200, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
                 
-                for i, violation in enumerate(violations[:5]):  # Max 5 ihlal göster
+                for i, violation in enumerate(violations[:5]):  # Maksimum 5 ihlal göster
                     violation_text = f"• {violation.get('missing_ppe', ['Unknown'])[0]}"
-                    cv2.putText(annotated_image, violation_text, (width-200, 55 + i*20), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                    cv2.putText(annotated_image, violation_text, 
+                                (width - 200, 55 + i * 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
             
             # Timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cv2.putText(annotated_image, timestamp, (10, height-20), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(annotated_image, timestamp, (10, height - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
             return annotated_image
-            
+
         except Exception as e:
             logger.error(f"❌ Görüntü çizim hatası: {e}")
             return image  # Hata durumunda orijinal görüntüyü döndür

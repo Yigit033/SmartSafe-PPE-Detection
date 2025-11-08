@@ -300,7 +300,7 @@ class EnhancedPPEDetector:
         }
         
         # Detection kutularını çiz
-        from utils.visual_overlay import draw_styled_box
+        from src.smartsafe.detection.utils.visual_overlay import draw_styled_box
         
         for detection in detections:
             x1, y1, x2, y2 = detection.bbox

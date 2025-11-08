@@ -98,7 +98,7 @@ class SmartSafeSaaSAPI:
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
         try:
-            from models.sh17_model_manager import SH17ModelManager
+            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
             self.sh17_manager = SH17ModelManager()
             # RENDER.COM OPTIMIZATION: Modelleri başlangıçta yükleme, lazy loading kullan
             if not self.sh17_manager.lazy_loading:
@@ -6332,7 +6332,7 @@ Mesaj:
                     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
                 
                 try:
-                    from utils.camera_model_database import get_camera_database
+                    from src.smartsafe.utils.camera_model_database import get_camera_database
                     
                     db = get_camera_database()
                     models = {}
@@ -9255,7 +9255,7 @@ Mesaj:
                     confidence = detection.get('confidence', 0)
                     
                     # Sınıfa göre renk belirle
-                    from utils.visual_overlay import draw_styled_box, get_class_color
+                    from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
                     
                     color = get_class_color(class_name, is_missing=False)
                     
@@ -22752,7 +22752,7 @@ smartsafe_requests_total 100
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
                             # PPE türüne göre renk belirle
-                            from utils.visual_overlay import draw_styled_box, get_class_color
+                            from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
                             
                             color = get_class_color(class_name, is_missing=False)
                             
