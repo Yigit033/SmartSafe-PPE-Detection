@@ -15,7 +15,7 @@ from src.smartsafe.integrations.construction.construction_ppe_system import Cons
 
 # Hibrit sistem import
 try:
-    from utils.hybrid_ppe_system import HybridPPESystem
+    from src.smartsafe.sector.utils.hybrid_ppe_system import HybridPPESystem
     HYBRID_SYSTEM_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("✅ Hibrit PPE sistemi yüklendi")
