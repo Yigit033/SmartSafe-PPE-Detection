@@ -62,4 +62,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:5000/health || exit 1
 
 # Run the application
-CMD ["python", "smartsafe_saas_api.py"] 
+CMD ["python", "-m", "src.smartsafe.api.smartsafe_saas_api"]
