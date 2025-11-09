@@ -598,7 +598,7 @@ class EnhancedPPEDetectionManager:
         
         # SH17 Model Manager entegrasyonu
         try:
-            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
+            from models.sh17_model_manager import SH17ModelManager
             self.sh17_manager = SH17ModelManager()
             self.sh17_manager.load_models()
             self.sh17_available = True

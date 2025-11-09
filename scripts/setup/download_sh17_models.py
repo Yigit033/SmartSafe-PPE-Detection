@@ -124,7 +124,7 @@ class SH17ModelDownloader:
         """Modellerin doğru yüklendiğini kontrol et"""
         logger.info("🔍 Modeller kontrol ediliyor...")
         
-        from src.smartsafe.models.sh17_model_manager import SH17ModelManager
+        from models.sh17_model_manager import SH17ModelManager
         
         manager = SH17ModelManager()
         manager.load_models()

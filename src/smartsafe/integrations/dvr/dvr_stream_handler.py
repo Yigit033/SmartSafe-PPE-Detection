@@ -441,13 +441,9 @@ class DVRStreamHandler:
             logger.error(f"❌ Get status error: {e}")
             return None
     
-    def _perform_ppe_detection(self, frame, stream_id: str) -> Dict:
-        """Perform PPE detection on a frame"""
+    def _perform_ppe_detection(self, frame, stream_id: str, use_pose: bool = True) -> Dict:
+        """Perform PPE detection on a frame with optional pose-aware detection"""
         try:
-            # SH17 Model Manager'ı başlat
-            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
-            sh17_manager = SH17ModelManager()
-            
             # Stream info'dan sector bilgisini al (varsayılan: construction)
             sector = 'construction'  # Varsayılan sektör
             if stream_id in self.active_streams:
@@ -470,6 +466,28 @@ class DVRStreamHandler:
                     sector = 'marine_shipyard'
                 elif 'aviation' in stream_id.lower():
                     sector = 'aviation'
+            
+            # 🚀 FAZ 3: POSE-AWARE DETECTION FOR DVR/NVR
+            if use_pose:
+                try:
+                    from src.smartsafe.detection.pose_aware_ppe_detector import get_pose_aware_detector
+                    from models.sh17_model_manager import SH17ModelManager
+                    
+                    sh17_manager = SH17ModelManager()
+                    pose_detector = get_pose_aware_detector(ppe_detector=sh17_manager)
+                    
+                    logger.info(f"🎯 Using POSE-AWARE detection for DVR stream {stream_id}")
+                    result = pose_detector.detect_with_pose(frame, sector, confidence=0.25)
+                    
+                    return result
+                    
+                except Exception as pose_error:
+                    logger.warning(f"⚠️ DVR Pose-aware detection failed, falling back to standard: {pose_error}")
+                    # Fall through to standard detection
+            
+            # 🎯 FAZ 1-2: STANDARD DETECTION (FALLBACK)
+            from models.sh17_model_manager import SH17ModelManager
+            sh17_manager = SH17ModelManager()
             
             # 🎯 PPE detection yap - PRODUCTION-GRADE (lowered confidence threshold)
             detections = sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
@@ -783,7 +801,7 @@ class DVRStreamHandler:
                         if frame_count % detection_frequency == 0:
                             try:
                                 # SH17 Model Manager'ı import et
-                                from src.smartsafe.models.sh17_model_manager import SH17ModelManager
+                                from models.sh17_model_manager import SH17ModelManager
                                 
                                 # Detection yap
                                 detection_result = self._perform_ppe_detection(frame, stream_id)

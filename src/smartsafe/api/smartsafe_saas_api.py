@@ -97,28 +97,33 @@ class SmartSafeSaaSAPI:
         self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
         
         # 🎯 PRODUCTION-GRADE: Template caching'i devre dışı bırak (development mode)
+        is_development = not (os.environ.get('RENDER') or os.environ.get('FLASK_ENV') == 'production')
+        
         self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
         self.app.config['TEMPLATES_AUTO_RELOAD'] = True
-        self.app.config['DEBUG'] = True
+        self.app.config['DEBUG'] = is_development  # Only in development
         self.app.jinja_env.auto_reload = True
         self.app.jinja_env.cache = None
         
-        # Cache headers'ı devre dışı bırak
+        # Cache headers'ı devre dışı bırak - AFTER_REQUEST DECORATOR İLE!
+        @self.app.after_request
         def add_no_cache_headers(response):
+            """🎯 CRITICAL: Browser cache'i tamamen devre dışı bırak"""
             response.cache_control.max_age = 0
             response.cache_control.no_cache = True
             response.cache_control.no_store = True
             response.cache_control.must_revalidate = True
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
-            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, public'
+            # HTML sayfaları için ekstra header
+            if response.content_type and 'text/html' in response.content_type:
+                response.headers['X-UA-Compatible'] = 'IE=Edge,chrome=1'
             return response
-        
-        self.app.after_request(add_no_cache_headers)
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
         try:
-            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
+            from models.sh17_model_manager import SH17ModelManager
             self.sh17_manager = SH17ModelManager()
             # RENDER.COM OPTIMIZATION: Modelleri başlangıçta yükleme, lazy loading kullan
             if not self.sh17_manager.lazy_loading:

@@ -1545,7 +1545,7 @@ class ProfessionalCameraManager:
     def _init_ppe_detector(self):
         """PPE Detection Manager'ı başlat"""
         try:
-            from src.smartsafe.models.sh17_model_manager import SH17ModelManager
+            from models.sh17_model_manager import SH17ModelManager
             self.ppe_detector = SH17ModelManager()
             logger.info("✅ PPE Detection Manager yüklendi")
         except Exception as e:
@@ -2449,7 +2449,7 @@ class ProfessionalCameraManager:
             logger.error(f"❌ Smart discovery failed: {e}")
             return []
 
-    def perform_ppe_detection(self, camera_id: str, frame: np.ndarray, sector: Optional[str] = None, company_id: Optional[str] = None) -> Dict:
+    def perform_ppe_detection(self, camera_id: str, frame: np.ndarray, sector: Optional[str] = None, company_id: Optional[str] = None, use_pose: bool = True) -> Dict:
         """IP Kamera için PPE Detection yap
         
         Args:
@@ -2457,8 +2457,35 @@ class ProfessionalCameraManager:
             frame: Video frame
             sector: Sektör tipi
             company_id: Şirket ID (opsiyonel, yoksa database'den bulunur)
+            use_pose: Pose-aware detection kullan (YOLOv8-Pose)
         """
         try:
+            # 🚀 FAZ 3: POSE-AWARE DETECTION
+            if use_pose:
+                try:
+                    from src.smartsafe.detection.pose_aware_ppe_detector import get_pose_aware_detector
+                    pose_detector = get_pose_aware_detector(ppe_detector=self.ppe_detector)
+                    
+                    logger.info(f"🎯 Using POSE-AWARE detection for camera {camera_id}")
+                    result = pose_detector.detect_with_pose(frame, sector, confidence=0.25)
+                    
+                    # Add camera_id and company_id to result
+                    result['camera_id'] = camera_id
+                    result['company_id'] = company_id
+                    
+                    # Cache and save result
+                    self.detection_results[camera_id] = result
+                    self.save_detection_to_database(camera_id, result, sector)
+                    
+                    logger.info(f"✅ Pose-aware detection: People: {result['people_detected']}, "
+                               f"Compliance: {result['compliance_rate']}%, Violations: {result['violations_count']}")
+                    return result
+                    
+                except Exception as pose_error:
+                    logger.warning(f"⚠️ Pose-aware detection failed, falling back to standard: {pose_error}")
+                    # Fall through to standard detection
+            
+            # 🎯 FAZ 1-2: STANDARD ANATOMICAL DETECTION (FALLBACK)
             # Sector resolution: fetch from DB if not explicitly provided
             if not sector:
                 try:
@@ -2598,27 +2625,35 @@ class ProfessionalCameraManager:
                         vest_detection = None
                         shoes_detection = None
                         
-                        # 🎯 ANATOMİK BÖLGE TANIMLARI - HER PPE İÇİN ÖZEL GENİŞLİK (tolerans artırıldı)
+                        # Frame boyutlarını al (bbox clipping için)
+                        frame_height, frame_width = frame.shape[:2]
+                        
                         # HELMET: yalnızca baş genişliği (%40) + yükseklik %24
                         head_width = person_width * 0.40
-                        head_x1 = person_center_x - head_width / 2
-                        head_x2 = person_center_x + head_width / 2
-                        head_region = [head_x1, py1, head_x2, py1 + person_height * 0.24]
+                        head_x1 = max(0, person_center_x - head_width / 2)
+                        head_x2 = min(frame_width, person_center_x + head_width / 2)
+                        head_y1 = max(0, py1)
+                        head_y2 = min(frame_height, py1 + person_height * 0.24)
+                        head_region = [head_x1, head_y1, head_x2, head_y2]
                         
                         # VEST: Geniş, omuzları kapsayan (%70 genişlik) dikey 0.20-0.65
                         torso_width = person_width * 0.70
-                        torso_x1 = person_center_x - torso_width / 2
-                        torso_x2 = person_center_x + torso_width / 2
-                        torso_region = [torso_x1, py1 + person_height * 0.20, torso_x2, py1 + person_height * 0.65]
+                        torso_x1 = max(0, person_center_x - torso_width / 2)
+                        torso_x2 = min(frame_width, person_center_x + torso_width / 2)
+                        torso_y1 = max(0, py1 + person_height * 0.20)
+                        torso_y2 = min(frame_height, py1 + person_height * 0.65)
+                        torso_region = [torso_x1, torso_y1, torso_x2, torso_y2]
                         
                         # SHOES: İki ayrı ayak (%25 genişlik her biri) - yakınlık toleransı artırıldı
                         foot_width = person_width * 0.25
-                        left_foot_x1 = px1
-                        left_foot_x2 = px1 + foot_width
-                        right_foot_x1 = px2 - foot_width
-                        right_foot_x2 = px2
-                        feet_region_left = [left_foot_x1, py2 - person_height * 0.15, left_foot_x2, py2]
-                        feet_region_right = [right_foot_x1, py2 - person_height * 0.15, right_foot_x2, py2]
+                        left_foot_x1 = max(0, px1)
+                        left_foot_x2 = min(frame_width, px1 + foot_width)
+                        right_foot_x1 = max(0, px2 - foot_width)
+                        right_foot_x2 = min(frame_width, px2)
+                        feet_y1 = max(0, py2 - person_height * 0.15)
+                        feet_y2 = min(frame_height, py2)
+                        feet_region_left = [left_foot_x1, feet_y1, left_foot_x2, feet_y2]
+                        feet_region_right = [right_foot_x1, feet_y1, right_foot_x2, feet_y2]
                         
                         # 🎯 PRODUCTION-GRADE: Helmet kontrolü - Geliştirilmiş spatial reasoning
                         from src.smartsafe.detection.utils.detection_utils import DetectionUtils
@@ -3144,9 +3179,11 @@ class ProfessionalCameraManager:
             return frame
 
     def _draw_ppe_overlay(self, frame: np.ndarray, detection_data: Dict) -> np.ndarray:
-        """PPE Detection overlay'ini frame'e çiz"""
+        """PPE Detection overlay'ini frame'e çiz - PRODUCTION GRADE"""
         try:
             import cv2
+            
+            logger.info(f"🎨 Drawing overlay - Detections: {len(detection_data.get('detections', []))}")
             
             # Frame boyutunu al
             frame_height, frame_width = frame.shape[:2]
@@ -3179,53 +3216,101 @@ class ProfessionalCameraManager:
             color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
             cv2.circle(frame, (indicator_x, 40), 15, color, -1)
             
-            #  BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
+            # 🎯 BOUNDING BOX ÇİZİMİ - TÜM DETECTION'LARI ÇİZ (PERSON + PPE)
             detections = detection_data.get('detections', [])
+            logger.info(f"🔍 Processing {len(detections)} detections for overlay")
+            
             if detections and isinstance(detections, list):
-                for detection in detections:
+                for idx, detection in enumerate(detections):
                     if not isinstance(detection, dict):
+                        logger.warning(f"⚠️ Detection {idx} is not a dict: {type(detection)}")
                         continue
                         
                     bbox = detection.get('bbox', [])
                     class_name = detection.get('class_name', 'unknown')
                     confidence = detection.get('confidence', 0.0)
                     
+                    logger.debug(f"📦 Detection {idx}: {class_name} @ {confidence:.2f} - bbox: {bbox}")
+                    
                     if len(bbox) == 4:  # x1, y1, x2, y2
                         try:
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
-                            #  PROFESYONEL RENK KODLARI - ANATOMİK BÖLGE OPTİMİZASYONU
+                            # 🔧 STRICT BBOX CLIPPING - Ensure bbox never exceeds frame boundaries
+                            x1 = max(0, min(x1, frame_width - 1))
+                            x2 = max(x1 + 1, min(x2, frame_width))
+                            y1 = max(0, min(y1, frame_height - 1))
+                            y2 = max(y1 + 1, min(y2, frame_height))
+                            
+                            logger.debug(f"📦 Clipped bbox: ({x1},{y1})-({x2},{y2}) [frame: {frame_width}x{frame_height}]")
+                            
+                            # 🎨 RENK BELİRLEME - CLASS'A GÖRE
                             is_missing = detection.get('missing', False) or class_name.startswith('NO-')
                             
-                            # Renk belirleme
-                            from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
+                            # Renk mapping
+                            color_map = {
+                                'person': (255, 165, 0),      # Turuncu
+                                'helmet': (0, 255, 0),        # Yeşil
+                                'safety_vest': (0, 255, 255), # Sarı
+                                'vest': (0, 255, 255),        # Sarı
+                                'shoes': (255, 0, 255),       # Mor
+                                'gloves': (255, 255, 0),      # Cyan
+                                'goggles': (0, 128, 255),     # Turuncu-Kırmızı
+                                'mask': (128, 0, 255),        # Pembe
+                            }
                             
-                            color = get_class_color(class_name, is_missing=is_missing)
+                            # Class name'i normalize et
+                            class_lower = class_name.lower()
+                            color = (0, 0, 255)  # Default: Kırmızı
                             
-                            # Etiket hazırla
+                            for key, col in color_map.items():
+                                if key in class_lower:
+                                    color = col if not is_missing else (0, 0, 255)
+                                    break
+                            
+                            # Eksik PPE için kırmızı
+                            if is_missing:
+                                color = (0, 0, 255)
+                            
+                            # 📝 ETİKET HAZIRLA
                             if is_missing:
                                 # Eksik PPE için Türkçe etiket
-                                if 'Helmet' in class_name or 'baret' in class_name.lower():
+                                if 'helmet' in class_lower or 'baret' in class_lower:
                                     label = "BARET EKSIK"
-                                elif 'Vest' in class_name or 'yelek' in class_name.lower():
+                                elif 'vest' in class_lower or 'yelek' in class_lower:
                                     label = "YELEK EKSIK"
-                                elif 'Shoes' in class_name or 'ayakkabı' in class_name.lower():
-                                    label = "AYAKKABI EKSIK"
-                                    label = "BARET EKSIK"
-                                elif 'Vest' in class_name or 'yelek' in class_name.lower():
-                                    label = "YELEK EKSIK"
-                                elif 'Shoes' in class_name or 'ayakkabı' in class_name.lower():
+                                elif 'shoes' in class_lower or 'ayakkabı' in class_lower:
                                     label = "AYAKKABI EKSIK"
                                 else:
                                     label = f"{class_name} EKSIK"
                             else:
-                                label = f"{class_name} {confidence:.2f}"
-                                
-                                # Profesyonel bounding box çiz
-                                frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
+                                label = f"{class_name.upper()} {confidence:.2f}"
+                            
+                            # 🎨 BOUNDING BOX ÇİZ
+                            # Ana dikdörtgen
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                            
+                            # Etiket arka planı
+                            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+                            label_y = max(y1 - 10, label_size[1] + 10)
+                            cv2.rectangle(frame, 
+                                        (x1, label_y - label_size[1] - 5), 
+                                        (x1 + label_size[0] + 5, label_y + 5), 
+                                        color, -1)
+                            
+                            # Etiket metni
+                            cv2.putText(frame, label, (x1 + 2, label_y), 
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                            
+                            logger.debug(f"✅ Drew box for {class_name} at ({x1},{y1})-({x2},{y2})")
+                            
                         except Exception as bbox_error:
-                            logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
+                            logger.error(f"❌ Bounding box çizim hatası: {bbox_error}")
+                            import traceback
+                            logger.error(traceback.format_exc())
                             continue
+                
+                logger.info(f"✅ Overlay complete - Drew {len(detections)} boxes")
                 
                 # İhlal detayları
                 if violations and isinstance(violations, list):
@@ -3251,9 +3336,13 @@ class ProfessionalCameraManager:
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
                     except Exception as ts_error:
                         logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
+            else:
+                logger.warning(f"⚠️ No detections to draw")
                 
         except Exception as e:
             logger.error(f"❌ PPE Overlay çizim hatası: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         return frame
 

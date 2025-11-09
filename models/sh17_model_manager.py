@@ -16,7 +16,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SH17ModelManager:
+    """
+    🎯 SINGLETON PATTERN - Sadece 1 instance oluşturulur
+    Bu sayede modeller sadece 1 kere yüklenir ve memory tasarrufu sağlanır
+    """
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls, *args, **kwargs):
+        """Singleton pattern - sadece 1 instance oluştur"""
+        if cls._instance is None:
+            logger.info("🆕 Creating new SH17ModelManager instance (Singleton)")
+            cls._instance = super(SH17ModelManager, cls).__new__(cls)
+        else:
+            logger.info("♻️ Reusing existing SH17ModelManager instance (Singleton)")
+        return cls._instance
+    
     def __init__(self, models_dir='models'):
+        # Singleton pattern - sadece ilk instance'da initialize et
+        if self._initialized:
+            logger.info("✅ SH17ModelManager already initialized, skipping...")
+            return
+            
+        logger.info("🔧 Initializing SH17ModelManager for the first time...")
         self.models_dir = models_dir
         # CUDA sorunları nedeniyle CPU kullan
         self.device = 'cpu'
@@ -61,8 +83,17 @@ class SH17ModelManager:
         else:
             logger.info("🚀 Production mode: Lazy loading enabled - models will load on demand")
         
+        # 🎯 SINGLETON: İlk initialization tamamlandı
+        SH17ModelManager._initialized = True
+        logger.info("✅ SH17ModelManager initialization complete (Singleton)")
+        
     def load_models(self):
         """Tüm SH17 modellerini yükle ve fallback model'i hazırla"""
+        # 🎯 SINGLETON: Modeller zaten yüklendiyse skip et
+        if self.models:
+            logger.info("✅ SH17 modelleri zaten yüklü, skip ediliyor...")
+            return
+            
         logger.info("📦 SH17 modelleri yükleniyor...")
         
         # Production ortamında model dosyaları yoksa YOLOv8 modelleri kullan

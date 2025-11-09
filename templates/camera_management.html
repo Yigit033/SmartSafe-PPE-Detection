@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartSafe AI - Kamera Yönetimi</title>
+    <!-- 🎯 CRITICAL: Browser cache'i bypass et -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <!-- HLS.js for Gateway HLS playback -->
@@ -939,10 +943,10 @@
                                 </div>
                             </div>
                             
-                            <!-- DVR Kanalları Container -->
-                            <div id="dvrChannelsContainer" class="mt-4">
-                                <!-- Keşfedilen kanallar burada gösterilecek -->
-                            </div>
+                            <!-- 🎯 ESKİ DVR Kanalları Container - KALDIRILDI (Yeni dinamik grid kullanılıyor) -->
+                            <!-- <div id="dvrChannelsContainer" class="mt-4">
+                                Keşfedilen kanallar burada gösterilecek
+                            </div> -->
                             
                             <!-- DVR PPE Detection Controls -->
                             <div class="mt-4 p-3 border rounded bg-light">
@@ -3253,54 +3257,14 @@
             }
         }
         
-        // DVR kanallarını göster
+        // 🎯 DVR kanallarını göster - YENİ DİNAMİK GRID KULLAN
         function displayDVRChannels(dvrId, channels) {
-            const channelsContainer = document.getElementById('dvrChannelsContainer');
-            if (!channelsContainer) {
-                console.error('❌ DVR channels container not found');
-                return;
-            }
+            console.log(`📺 Displaying ${channels.length} DVR channels in dynamic grid`);
             
-            let html = `
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-list"></i> DVR Kanalları (${channels.length})</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-            `;
+            // Yeni dinamik grid'i güncelle
+            renderDVRChannelsGrid(channels);
             
-            channels.forEach(channel => {
-                html += `
-                    <div class="col-md-3 mb-3">
-                        <div class="card border-primary">
-                            <div class="card-body text-center">
-                                <h6 class="card-title">Kanal ${channel.channel_number}</h6>
-                                <p class="card-text small text-muted">${channel.name}</p>
-                                <div class="btn-group btn-group-sm w-100">
-                                    <button class="btn btn-outline-info" onclick="showDVRChannelLive('${dvrId}', ${channel.channel_number})" title="Canlı Görüntü">
-                                        <i class="fas fa-video"></i>
-                                    </button>
-                                    <button class="btn btn-outline-success" onclick="startDVRStream('${dvrId}', ${channel.channel_number})" title="Stream Başlat">
-                                        <i class="fas fa-play"></i>
-                                    </button>
-                                    <button class="btn btn-outline-warning" onclick="startDVRDetectionForChannel('${dvrId}', ${channel.channel_number})" title="Detection Başlat">
-                                        <i class="fas fa-shield-alt"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            html += `
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            channelsContainer.innerHTML = html;
+            // ESKİ CONTAINER KALDIRILDI - Artık sadece dinamik grid kullanılıyor
         }
         
         // Belirli bir kanal için detection başlat

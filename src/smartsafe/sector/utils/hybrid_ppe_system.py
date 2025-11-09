@@ -15,7 +15,27 @@ import sqlite3
 from pathlib import Path
 
 # Import our custom modules
-from .enhanced_ppe_detector import EnhancedPPEDetector, PPEDetection, ComplianceResult
+try:
+    from src.smartsafe.detection.utils.enhanced_ppe_detector import EnhancedPPEDetector, PPEDetection, ComplianceResult
+except ImportError:
+    # Fallback: utils klasöründen dene
+    try:
+        import sys
+        from pathlib import Path
+        utils_path = Path(__file__).resolve().parents[4] / 'utils'
+        if str(utils_path) not in sys.path:
+            sys.path.insert(0, str(utils_path))
+        from enhanced_ppe_detector import EnhancedPPEDetector, PPEDetection, ComplianceResult
+    except ImportError as e:
+        logger.warning(f"⚠️ EnhancedPPEDetector import edilemedi: {e}")
+        # Dummy classes oluştur
+        class EnhancedPPEDetector:
+            pass
+        class PPEDetection:
+            pass
+        class ComplianceResult:
+            pass
+
 from .sector_ppe_mapper import SectorPPEMapper, SectorPPERule
 
 logger = logging.getLogger(__name__)
