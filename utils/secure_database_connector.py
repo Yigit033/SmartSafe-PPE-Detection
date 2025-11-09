@@ -44,13 +44,13 @@ class SecureDatabaseConnector:
             self.cert_path = None
             self.root_cert_path = None
         
-        # Connection settings
-        self.max_retries = 3  # Reduced retries for faster failure
-        self.retry_delay = 1  # Reduced delay
-        self.connection_timeout = 10  # Reduced timeout
-        self.keepalives_idle = 30
-        self.keepalives_interval = 10
-        self.keepalives_count = 5
+        # Connection settings - Optimized for Render.com cold starts
+        self.max_retries = 5  # More retries for production
+        self.retry_delay = 2  # Exponential backoff: 2, 4, 6, 8, 10
+        self.connection_timeout = 45  # Increased for Render.com cold start (15-30s)
+        self.keepalives_idle = 10  # More frequent keepalives
+        self.keepalives_interval = 5
+        self.keepalives_count = 10
 
     def resolve_host(self, host: str) -> Optional[str]:
         """Resolve hostname to IP address"""

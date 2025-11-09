@@ -49,7 +49,39 @@ class DatabaseAdapter:
         self.config = self._get_database_config()
         self.db_type = self.config.database_type
         self.secure_connector = get_secure_db_connector()
+        self.connection_pool = None  # Will be initialized for PostgreSQL
+        self._init_connection_pool()
         logger.info(f"🗄️ Database adapter initialized: {self.db_type}")
+    
+    def _init_connection_pool(self):
+        """Initialize connection pool for PostgreSQL"""
+        try:
+            if self.db_type == 'postgresql' and self.secure_connector:
+                # Connection pooling for PostgreSQL
+                from psycopg2 import pool
+                database_url = os.getenv('DATABASE_URL')
+                if database_url:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(database_url)
+                    
+                    # Create connection pool
+                    self.connection_pool = pool.SimpleConnectionPool(
+                        minconn=1,
+                        maxconn=10,  # Max 10 connections
+                        host=parsed.hostname,
+                        port=parsed.port or 5432,
+                        database=parsed.path[1:],
+                        user=parsed.username,
+                        password=parsed.password,
+                        connect_timeout=45,  # Match secure connector timeout
+                        keepalives=1,
+                        keepalives_idle=10,
+                        keepalives_interval=5,
+                        keepalives_count=10
+                    )
+                    logger.info("✅ PostgreSQL connection pool initialized (min=1, max=10)")
+        except Exception as e:
+            logger.warning(f"⚠️ Connection pool initialization failed: {e}, will use direct connections")
     
     def _get_database_config(self) -> DatabaseConfig:
         """Get database configuration based on environment"""
@@ -80,7 +112,7 @@ class DatabaseAdapter:
         )
     
     def get_connection(self, timeout: int = 30):
-        """Get database connection with thread safety"""
+        """Get database connection with thread safety and connection pooling"""
         try:
             if self.db_type == 'sqlite':
                 # Create new connection for each request to avoid thread issues
@@ -92,6 +124,16 @@ class DatabaseAdapter:
                 connection.row_factory = sqlite3.Row
                 return connection
             else:  # PostgreSQL
+                # Try to use connection pool first
+                if self.connection_pool:
+                    try:
+                        conn = self.connection_pool.getconn()
+                        logger.debug("✅ Got connection from pool")
+                        return conn
+                    except Exception as pool_error:
+                        logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
+                
+                # Fallback to direct connection via secure connector
                 secure_connector = get_secure_db_connector()
                 if secure_connector:
                     return secure_connector.get_connection()

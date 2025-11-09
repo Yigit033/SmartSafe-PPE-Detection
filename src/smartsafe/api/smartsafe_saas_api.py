@@ -2471,7 +2471,7 @@ Mesaj:
                             'optional': ['gloves', 'glasses']
                         }
                     
-                    # Admin mailine demo hesap bilgisi gönder
+                    # Admin mailine demo hesap bilgisi gönder (ASYNC - non-blocking)
                     try:
                         admin_email = os.getenv('ADMIN_EMAIL', 'yigittilaver2000@gmail.com')
                         demo_notification = f"""
@@ -2535,9 +2535,16 @@ Mesaj:
                         ⚠️ NOT: Bu mail manuel olarak gönderilmelidir!
                         """
                         
-                        # Mail gönderimi (mevcut mail sistemi kullanılarak)
-                        self._send_demo_notification(admin_email, demo_notification)
-                        logger.info(f"✅ Demo hesap bildirimi admin mailine gönderildi: {admin_email}")
+                        # 🚀 ASYNC EMAIL SENDING - Non-blocking, doesn't delay response
+                        import threading
+                        mail_thread = threading.Thread(
+                            target=self._send_demo_notification,
+                            args=(admin_email, demo_notification),
+                            daemon=True,
+                            name=f"demo_mail_{result}"
+                        )
+                        mail_thread.start()
+                        logger.info(f"✅ Demo hesap bildirimi async olarak gönderilmeye başlandı: {admin_email}")
                         
                     except Exception as mail_error:
                         logger.error(f"❌ Demo mail gönderim hatası: {mail_error}")
@@ -2767,9 +2774,16 @@ Mesaj:
                         ⚠️ NOT: Bu mail manuel olarak gönderilmelidir!
                         """
                         
-                        # Mail gönderimi
-                        self._send_company_notification(admin_email, company_notification)
-                        logger.info(f"✅ Şirket kayıt bildirimi admin mailine gönderildi: {admin_email}")
+                        # 🚀 ASYNC EMAIL SENDING - Non-blocking, doesn't delay response
+                        import threading
+                        mail_thread = threading.Thread(
+                            target=self._send_company_notification,
+                            args=(admin_email, company_notification),
+                            daemon=True,
+                            name=f"company_mail_{company_id}"
+                        )
+                        mail_thread.start()
+                        logger.info(f"✅ Şirket kayıt bildirimi async olarak gönderilmeye başlandı: {admin_email}")
                         
                     except Exception as mail_error:
                         logger.error(f"❌ Şirket kayıt mail gönderim hatası: {mail_error}")
