@@ -95,8 +95,8 @@ class DatabaseConfig:
             return create_engine(
                 connection_string,
                 # Connection pool settings - optimized for Render.com
-                pool_size=5,              # Base connections in pool
-                max_overflow=10,          # Additional connections when needed
+                pool_size=3,              # Base connections in pool
+                max_overflow=5,          # Additional connections when needed
                 pool_timeout=30,          # Wait 30s for available connection
                 pool_recycle=1800,        # Recycle connections every 30 minutes
                 pool_pre_ping=True,       # Test connections before using

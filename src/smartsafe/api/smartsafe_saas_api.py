@@ -23638,6 +23638,7 @@ def create_emergency_app():
     
     @emergency_app.route('/api/status')
     def api_status():
+        from datetime import datetime
         return jsonify({
             "status": "emergency_fallback",
             "message": "Main system temporarily unavailable",
@@ -23645,6 +23646,7 @@ def create_emergency_app():
         })
     
     return emergency_app
+
 
 def create_app():
     """Factory function to create Flask app"""
@@ -23663,96 +23665,46 @@ def create_app():
         import traceback
         traceback.print_exc()
         
-        # Emergency fallback app
-        from flask import Flask
-        app = Flask(__name__)
-        
-        @app.route('/health')
-        def health():
-            return {'status': 'error', 'message': 'Emergency fallback app - main app failed to initialize'}
-        
-        @app.route('/')
-        def index():
-            return {'status': 'error', 'message': 'Main application failed to start'}
-        
+        app = create_emergency_app()
         print("⚠️ Emergency fallback Flask app created")
         return app
 
-# Create the app instance
+
+# Create the app instance (used by Gunicorn)
 app = create_app()
 
-if __name__ == "__main__" and not os.environ.get('RENDER'):
-    # Local-only server start (Render uses the block below)
-    print("🚀 Local development Flask server starting...")
-    try:
-        api_server = SmartSafeSaaSAPI()
-        app = api_server.app
-        logger.info("✅ Ana SmartSafe API başarıyla başlatıldı (local)")
-    except Exception as main_error:
-        logger.error(f"❌ Ana API başlatma hatası: {main_error}")
-        app = create_emergency_app()
-        logger.info("✅ Emergency fallback sistem başlatıldı (local)")
-        
-    try:
-        port = int(os.environ.get('PORT', 5000))
-        host = '0.0.0.0'
-        print(f"🌐 Platform: Local Development")
-        print(f"🌐 Starting server on {host}:{port}")
-        print(f"🔧 Environment: {app.config.get('ENV', 'development')}")
-        print(f"🔧 Debug mode: {app.config.get('DEBUG', False)}")
-        app.run(
-            host=host, 
-            port=port, 
-            debug=False, 
-            threaded=True,
-            use_reloader=False,
-            use_debugger=False
-        )
-    except Exception as e:
-        print(f"❌ Server start error: {e}")
-        import traceback
-        traceback.print_exc()
-        import sys
-        sys.exit(1)
-
-# RENDER.COM DEPLOYMENT ENTRY POINT
-if __name__ == '__main__':
-    import os
-    import logging
-    
-    # Set logging level for production
+# =============================================================================
+# LOCAL DEVELOPMENT ENTRY POINT
+# =============================================================================
+if __name__ == "__main__":
+    import os, logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-    
-    try:
-        # Get port from environment (Render.com sets this)
-        port = int(os.environ.get('PORT', 10000))
-        host = '0.0.0.0'
-        
-        logger.info(f"🚀 Starting SmartSafe SaaS API Server")
-        logger.info(f"🌐 Host: {host}, Port: {port}")
-        logger.info(f"🔧 Environment: Production (Render.com)")
-        
-        # Initialize the API server
-        api_server = SmartSafeSaaSAPI()
-        app = api_server.app
-        
-        # Production optimizations
-        app.config['DEBUG'] = False
-        app.config['TESTING'] = False
-        
-        # Start the Flask application
-        app.run(
-            host=host, 
-            port=port, 
-            debug=False,  # Production mode
-            threaded=True,  # Handle multiple requests
-            use_reloader=False  # Disable auto-reload for production
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Server startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-        import sys
-        sys.exit(1)
+
+    env = os.getenv("ENV", "local").lower()
+    port = int(os.getenv("PORT", 5000 if env == "local" else 10000))
+    host = "0.0.0.0"
+
+    logger.info(f"🚀 Starting SmartSafe SaaS API")
+    logger.info(f"🌐 Host: {host}, Port: {port}")
+    logger.info(f"🔧 Environment: {env}")
+
+    if env == "local":
+        # Only run Flask built-in server locally
+        logger.info("🧩 Running in LOCAL mode (Flask dev server)")
+        try:
+            app.run(
+                host=host,
+                port=port,
+                debug=True,
+                threaded=True,
+                use_reloader=True
+            )
+        except Exception as e:
+            logger.error(f"❌ Local server failed: {e}")
+            app = create_emergency_app()
+            app.run(host=host, port=port, debug=True)
+    else:
+        # Production mode (Render/Gunicorn)
+        logger.info("✅ Production environment detected — Gunicorn will serve the app.")
+
