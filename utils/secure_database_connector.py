@@ -56,16 +56,24 @@ class SecureDatabaseConnector:
         """Resolve hostname to IP address"""
         try:
             # Try IPv4 first
-            answers = dns.resolver.resolve(host, 'A')
-            return str(answers[0])
-        except Exception:
             try:
+                answers = dns.resolver.resolve(host, 'A')
+                ip = str(answers[0])
+                logger.info(f"✅ Resolved {host} to {ip}")
+                return ip
+            except Exception:
                 # Try IPv6 if IPv4 fails
-                answers = dns.resolver.resolve(host, 'AAAA')
-                return str(answers[0])
-            except Exception as e:
-                logger.warning(f"Could not resolve host {host}: {e}")
-                return None
+                try:
+                    answers = dns.resolver.resolve(host, 'AAAA')
+                    ip = str(answers[0])
+                    logger.info(f"✅ Resolved {host} to {ip} (IPv6)")
+                    return ip
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not resolve host {host}: {e}")
+                    return None
+        except Exception as e:
+            logger.warning(f"⚠️ DNS resolution error: {e}")
+            return None
     
     def get_ssl_config(self) -> Dict[str, Any]:
         """Get SSL configuration based on available certificates"""
@@ -132,8 +140,11 @@ class SecureDatabaseConnector:
                     'password': os.getenv('SUPABASE_PASSWORD')
                 }
         
-        if not all(params.values()):
-            raise ValueError("Missing required database connection parameters")
+        # Validate parameters
+        if not all([params.get('host'), params.get('user'), params.get('password')]):
+            error_msg = "Missing required database connection parameters"
+            logger.error(f"❌ {error_msg}")
+            raise ValueError(error_msg)
         
         # Add SSL configuration
         params.update(self.get_ssl_config())

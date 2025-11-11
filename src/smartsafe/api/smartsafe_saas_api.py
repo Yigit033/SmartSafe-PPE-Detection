@@ -237,9 +237,10 @@ class SmartSafeSaaSAPI:
             'require_special': True
         }
         
-        # İYİLEŞTİRİLDİ: Enhanced Error Handlers
+        # İYİLEŞTİRİLDİ: Enhanced Error Handlers - Production Grade
         @self.app.errorhandler(404)
         def not_found(error):
+            logger.warning(f"404 Not Found: {request.path}")
             return jsonify({
                 'error': 'Resource not found',
                 'message': 'The requested resource could not be found',
@@ -250,10 +251,44 @@ class SmartSafeSaaSAPI:
         
         @self.app.errorhandler(500)
         def internal_error(error):
+            logger.error(f"500 Internal Server Error: {error}", exc_info=True)
             return jsonify({
                 'error': 'Internal server error',
                 'message': 'An unexpected error occurred',
                 'code': 'INTERNAL_ERROR',
+                'timestamp': datetime.now().isoformat(),
+                'path': request.path
+            }), 500
+        
+        @self.app.errorhandler(502)
+        def bad_gateway(error):
+            logger.error(f"502 Bad Gateway: {error}", exc_info=True)
+            return jsonify({
+                'error': 'Bad gateway',
+                'message': 'The server is temporarily unavailable',
+                'code': 'BAD_GATEWAY',
+                'timestamp': datetime.now().isoformat(),
+                'path': request.path
+            }), 502
+        
+        @self.app.errorhandler(503)
+        def service_unavailable(error):
+            logger.error(f"503 Service Unavailable: {error}", exc_info=True)
+            return jsonify({
+                'error': 'Service unavailable',
+                'message': 'The server is temporarily unavailable',
+                'code': 'SERVICE_UNAVAILABLE',
+                'timestamp': datetime.now().isoformat(),
+                'path': request.path
+            }), 503
+        
+        @self.app.errorhandler(Exception)
+        def handle_exception(error):
+            logger.error(f"Unhandled exception: {error}", exc_info=True)
+            return jsonify({
+                'error': 'Internal server error',
+                'message': str(error) if not self.is_production else 'An unexpected error occurred',
+                'code': 'UNHANDLED_ERROR',
                 'timestamp': datetime.now().isoformat(),
                 'path': request.path
             }), 500
@@ -879,6 +914,58 @@ class SmartSafeSaaSAPI:
     def setup_routes(self):
         """API rotalarını ayarla"""
         app = self.app
+
+        # 🏥 HEALTH CHECK ENDPOINT - Production monitoring
+        @app.route('/health', methods=['GET'])
+        def health_check():
+            """Health check endpoint for Render.com monitoring"""
+            try:
+                # Check database connection
+                db_status = 'unknown'
+                try:
+                    conn = self.db_adapter.get_connection()
+                    if conn:
+                        db_status = 'ok'
+                        conn.close() if hasattr(conn, 'close') else None
+                    else:
+                        db_status = 'degraded'
+                except Exception as e:
+                    logger.warning(f"⚠️ Health check DB error: {e}")
+                    db_status = 'degraded'
+                
+                # Check model loading
+                model_status = 'ok'
+                try:
+                    from models.sh17_model_manager import SH17ModelManager
+                    manager = SH17ModelManager()
+                    if not manager.models and not manager.fallback_model:
+                        model_status = 'degraded'
+                except Exception as e:
+                    logger.warning(f"⚠️ Health check model error: {e}")
+                    model_status = 'degraded'
+                
+                # Overall status
+                overall_status = 'ok' if db_status == 'ok' and model_status == 'ok' else 'degraded'
+                
+                response = {
+                    'status': overall_status,
+                    'timestamp': datetime.now().isoformat(),
+                    'database': db_status,
+                    'models': model_status,
+                    'version': '1.0',
+                    'environment': 'production' if self.is_production else 'development'
+                }
+                
+                status_code = 200 if overall_status == 'ok' else 503
+                logger.info(f"🏥 Health check: {overall_status} (DB: {db_status}, Models: {model_status})")
+                return jsonify(response), status_code
+            except Exception as e:
+                logger.error(f"❌ Health check error: {e}", exc_info=True)
+                return jsonify({
+                    'status': 'error',
+                    'timestamp': datetime.now().isoformat(),
+                    'message': str(e) if not self.is_production else 'Health check failed'
+                }), 500
 
         @app.route('/api/company/<company_id>/dvr/add', methods=['POST'])
         def add_dvr_system(company_id):

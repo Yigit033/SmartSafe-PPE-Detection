@@ -54,6 +54,10 @@ class SH17ModelManager:
         self.is_production = os.environ.get('RENDER') is not None
         self.lazy_loading = self.is_production  # Production'da lazy loading aktif
         
+        # 🚀 MODEL CACHE OPTIMIZATION - Production'da model cache'i enable et
+        self.enable_model_cache = self.is_production
+        logger.info(f"🎯 Production mode: {self.is_production}, Lazy loading: {self.lazy_loading}, Model cache: {self.enable_model_cache}")
+        
         self.sector_mapping = {
             'construction': ['helmet', 'safety_vest', 'safety_shoes', 'gloves'],
             'manufacturing': ['helmet', 'safety_vest', 'gloves', 'safety_glasses'],
@@ -141,32 +145,68 @@ class SH17ModelManager:
                 except Exception as e:
                     logger.warning(f"❌ {sector} modeli yüklenemedi: {e}")
             else:
-                logger.warning(f"⚠️ {sector} modeli bulunamadı: {path}")
+                logger.debug(f"ℹ️ {sector} modeli bulunamadı: {path}")
         
-        # Production-ready fallback model yükle
+        # Production-ready fallback model yükle - ENHANCED PATH RESOLUTION
         try:
-            # Production ortamında otomatik YOLOv8n indirme
-            logger.info("🔄 Production ortamında YOLOv8n model indiriliyor...")
-            self.fallback_model = YOLO('yolov8n.pt')  # Otomatik indir
-            self.fallback_model.to(self.device)
-            logger.info("✅ YOLOv8n fallback model başarıyla indirildi ve yüklendi")
+            # Production ortamında pre-downloaded model'i kontrol et
+            if is_production:
+                # Docker'da indirilen modelleri kontrol et
+                docker_model_paths = [
+                    '/app/data/models/yolov8n.pt',
+                    '/app/data/models/yolov8s.pt',
+                    '/app/data/models/yolov8m.pt',
+                    'data/models/yolov8n.pt',
+                    'yolov8n.pt'
+                ]
+                
+                for model_path in docker_model_paths:
+                    if os.path.exists(model_path):
+                        try:
+                            self.fallback_model = YOLO(model_path)
+                            self.fallback_model.to(self.device)
+                            logger.info(f"✅ Fallback model yüklendi (pre-downloaded): {model_path}")
+                            return loaded_models > 0
+                        except Exception as e:
+                            logger.warning(f"⚠️ Pre-downloaded model yükleme hatası {model_path}: {e}")
+                            continue
+                
+                # Pre-downloaded model bulunamadıysa, otomatik indir
+                logger.info("🔄 Pre-downloaded model bulunamadı, YOLOv8n otomatik indiriliyor...")
+                self.fallback_model = YOLO('yolov8n.pt')  # Otomatik indir
+                self.fallback_model.to(self.device)
+                logger.info("✅ YOLOv8n fallback model başarıyla indirildi ve yüklendi")
+            else:
+                # Development'ta direkt indir
+                self.fallback_model = YOLO('yolov8n.pt')
+                self.fallback_model.to(self.device)
+                logger.info("✅ YOLOv8n fallback model yüklendi")
+                
         except Exception as e:
-            logger.warning(f"⚠️ Otomatik YOLOv8n indirme hatası: {e}")
-            # Manuel fallback yolları dene
-            fallback_paths = ['yolov8n.pt', 'models/yolov8n.pt', '/app/models/yolov8n.pt']
+            logger.warning(f"⚠️ Fallback model yükleme hatası: {e}")
+            # Manuel fallback yolları dene - ENHANCED
+            fallback_paths = [
+                '/app/data/models/yolov8n.pt',
+                '/app/data/models/yolov8s.pt',
+                'data/models/yolov8n.pt',
+                'data/models/yolov8s.pt',
+                'yolov8n.pt',
+                'yolov8s.pt'
+            ]
+            
             for fallback_path in fallback_paths:
                 if os.path.exists(fallback_path):
                     try:
                         self.fallback_model = YOLO(fallback_path)
                         self.fallback_model.to(self.device)
                         logger.info(f"✅ Fallback model yüklendi: {fallback_path}")
-                        break
+                        return loaded_models > 0
                     except Exception as load_error:
                         logger.warning(f"⚠️ Fallback model yükleme hatası {fallback_path}: {load_error}")
                         continue
-            else:
-                logger.warning("⚠️ Hiç fallback model bulunamadı, basit detection sistemi aktif")
-                self.fallback_model = None
+            
+            logger.error("❌ Hiç fallback model bulunamadı, sistem limited mode'de çalışacak")
+            self.fallback_model = None
                 
         logger.info(f"📊 Toplam {loaded_models} SH17 model yüklendi")
         

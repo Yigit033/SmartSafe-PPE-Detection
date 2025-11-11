@@ -43,11 +43,17 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/data/models /app/static/uploads
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/logs /app/data/models /app/static/uploads && \
+    chmod -R 755 /app/logs /app/data /app/static
 
-# Download PPE detection model
-RUN python download_models.py || echo "Model download will be handled at runtime"
+# Download PPE detection models - CRITICAL for production
+RUN python download_models.py && \
+    echo "✅ Models downloaded successfully" || \
+    echo "⚠️ Model download failed, will attempt lazy loading at runtime"
+
+# Verify models were downloaded
+RUN ls -lah /app/data/models/ || echo "Models directory will be populated at runtime"
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash smartsafe

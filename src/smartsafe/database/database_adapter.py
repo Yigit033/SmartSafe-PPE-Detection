@@ -20,9 +20,19 @@ import bcrypt
 def get_secure_db_connector():
     """Get secure DB connector when needed"""
     try:
-        from src.smartsafe.utils.secure_database_connector import get_secure_db_connector
-        return get_secure_db_connector()
-    except ImportError:
+        # Try multiple import paths for flexibility
+        try:
+            from src.smartsafe.utils.secure_database_connector import get_secure_db_connector as get_connector
+            return get_connector()
+        except ImportError:
+            try:
+                from utils.secure_database_connector import get_secure_db_connector as get_connector
+                return get_connector()
+            except ImportError:
+                logger.warning("⚠️ Could not import secure_database_connector from any path")
+                return None
+    except Exception as e:
+        logger.warning(f"⚠️ Error getting secure DB connector: {e}")
         return None
 import time
 import traceback
@@ -58,28 +68,43 @@ class DatabaseAdapter:
         try:
             if self.db_type == 'postgresql' and self.secure_connector:
                 # Connection pooling for PostgreSQL
-                from psycopg2 import pool
+                try:
+                    from psycopg2 import pool
+                except ImportError:
+                    logger.warning("⚠️ psycopg2 pool not available, will use direct connections")
+                    return
+                
                 database_url = os.getenv('DATABASE_URL')
                 if database_url:
-                    from urllib.parse import urlparse
-                    parsed = urlparse(database_url)
-                    
-                    # Create connection pool
-                    self.connection_pool = pool.SimpleConnectionPool(
-                        minconn=1,
-                        maxconn=10,  # Max 10 connections
-                        host=parsed.hostname,
-                        port=parsed.port or 5432,
-                        database=parsed.path[1:],
-                        user=parsed.username,
-                        password=parsed.password,
-                        connect_timeout=45,  # Match secure connector timeout
-                        keepalives=1,
-                        keepalives_idle=10,
-                        keepalives_interval=5,
-                        keepalives_count=10
-                    )
-                    logger.info("✅ PostgreSQL connection pool initialized (min=1, max=10)")
+                    try:
+                        from urllib.parse import urlparse
+                        parsed = urlparse(database_url)
+                        
+                        # Validate parsed URL
+                        if not all([parsed.hostname, parsed.username, parsed.password]):
+                            logger.warning("⚠️ Invalid DATABASE_URL format, skipping connection pool")
+                            return
+                        
+                        # Create connection pool
+                        self.connection_pool = pool.SimpleConnectionPool(
+                            minconn=1,
+                            maxconn=10,  # Max 10 connections
+                            host=parsed.hostname,
+                            port=parsed.port or 5432,
+                            database=parsed.path[1:] if parsed.path else 'postgres',
+                            user=parsed.username,
+                            password=parsed.password,
+                            connect_timeout=45,  # Match secure connector timeout
+                            keepalives=1,
+                            keepalives_idle=10,
+                            keepalives_interval=5,
+                            keepalives_count=10
+                        )
+                        logger.info("✅ PostgreSQL connection pool initialized (min=1, max=10)")
+                    except Exception as pool_error:
+                        logger.warning(f"⚠️ Connection pool creation failed: {pool_error}, will use direct connections")
+                else:
+                    logger.warning("⚠️ DATABASE_URL not set, skipping connection pool")
         except Exception as e:
             logger.warning(f"⚠️ Connection pool initialization failed: {e}, will use direct connections")
     
@@ -134,12 +159,22 @@ class DatabaseAdapter:
                         logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
                 
                 # Fallback to direct connection via secure connector
-                secure_connector = get_secure_db_connector()
-                if secure_connector:
-                    return secure_connector.get_connection()
-                else:
-                    logger.error("❌ Secure connector not available")
-                    return None
+                try:
+                    secure_connector = get_secure_db_connector()
+                    if secure_connector:
+                        return secure_connector.get_connection()
+                    else:
+                        logger.warning("⚠️ Secure connector not available, falling back to SQLite")
+                        # Force fallback to SQLite
+                        self.config = self._get_sqlite_config()
+                        self.db_type = self.config.database_type
+                        return self.get_connection(timeout)
+                except Exception as e:
+                    logger.warning(f"⚠️ PostgreSQL connection failed: {e}, falling back to SQLite")
+                    # Force fallback to SQLite
+                    self.config = self._get_sqlite_config()
+                    self.db_type = self.config.database_type
+                    return self.get_connection(timeout)
         except Exception as e:
             logger.error(f"❌ Database connection error: {e}")
             return None

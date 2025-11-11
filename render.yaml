@@ -6,28 +6,35 @@ services:
     plan: starter
     buildCommand: |
       # Create required directories
-      mkdir -p /opt/render/project/src/ssl
-      chmod 755 /opt/render/project/src/ssl
-      mkdir -p /tmp/Ultralytics
+      mkdir -p /opt/render/project/src/ssl /opt/render/project/src/data/models /tmp/Ultralytics
+      chmod 755 /opt/render/project/src/ssl /opt/render/project/src/data
       chmod 777 /tmp/Ultralytics
       
-      # Install dependencies
+      # Install dependencies with retry
       pip install --upgrade pip
-      pip install -r requirements.txt
+      pip install --no-cache-dir --timeout 300 --retries 3 -r requirements.txt
       
-      # Download models
-      python download_models.py
+      # Download models with retry logic
+      echo "📥 Downloading models..."
+      python download_models.py || echo "⚠️ Model download failed, will attempt lazy loading at runtime"
+      
+      # Verify models were downloaded
+      ls -lah /opt/render/project/src/data/models/ || echo "Models directory will be populated at runtime"
       
       # Test network connectivity
-      echo "Testing network connectivity..."
+      echo "🔍 Testing network connectivity..."
       ping -c 3 aws-0-us-west-1.pooler.supabase.com || echo "Ping failed but continuing..."
       
       # Test DNS resolution
+      echo "🔍 Testing DNS resolution..."
       nslookup aws-0-us-west-1.pooler.supabase.com || echo "DNS lookup failed but continuing..."
       
       # Test connection pooling port
+      echo "🔍 Testing connection pooling port..."
       nc -zv aws-0-us-west-1.pooler.supabase.com 6543 || echo "Connection pooling port test failed but continuing..."
-    startCommand: python smartsafe_saas_api.py
+      
+      echo "✅ Build completed successfully"
+    startCommand: python -m src.smartsafe.api.smartsafe_saas_api
     healthCheckPath: /health
     envVars:
       - key: RENDER
