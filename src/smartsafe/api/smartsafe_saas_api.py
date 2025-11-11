@@ -10295,17 +10295,17 @@ Mesaj:
                                                     onclick="toggleSubscriptionPlans()" 
                                                     id="toggleSubscriptionBtn"
                                                     style="border-radius: 15px; border: 2px solid #1E3A8A; font-weight: 600; background: rgba(30, 58, 138, 0.05);">
-                                                <i class="fas fa-crown text-warning me-2"></i>
                                                 <span id="toggleBtnText">Abonelik Planını Seç</span>
                                                 <i class="fas fa-chevron-down ms-2" id="toggleIcon"></i>
                                             </button>
-                                                </div>
+                                        </div>
+
                                         
                                         <!-- Gizli Abonelik Planları -->
                                         <div id="subscriptionPlansContainer" style="display: none;">
                                             <div class="glass-card p-4 mb-4" style="background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.1); border-radius: 15px;">
                                                 <h5 class="text-center mb-4">
-                                                    <i class="fas fa-crown text-warning me-2"></i>
+                                                    <i class="text-center mb-4"></i>
                                                     Abonelik Planı Seçin
                                                 </h5>
                                                 
