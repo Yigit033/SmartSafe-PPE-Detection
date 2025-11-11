@@ -91,12 +91,22 @@ class DatabaseConfig:
             else:
                 connect_args['sslmode'] = 'require'
             
+            # 🚀 PRODUCTION POOL OPTIMIZATION - Render.com optimized
             return create_engine(
                 connection_string,
-                pool_pre_ping=True,
-                pool_recycle=300,
+                # Connection pool settings - optimized for Render.com
+                pool_size=5,              # Base connections in pool
+                max_overflow=10,          # Additional connections when needed
+                pool_timeout=30,          # Wait 30s for available connection
+                pool_recycle=1800,        # Recycle connections every 30 minutes
+                pool_pre_ping=True,       # Test connections before using
+                # Connection arguments
                 connect_args=connect_args,
-                echo=False
+                echo=False,
+                # Additional optimizations
+                execution_options={
+                    "isolation_level": "READ_COMMITTED"
+                }
             )
         else:
             raise ValueError(f"Unsupported database type: {self.db_type}")
