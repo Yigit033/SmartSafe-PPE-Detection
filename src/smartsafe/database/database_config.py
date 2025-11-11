@@ -96,7 +96,7 @@ class DatabaseConfig:
                 connection_string,
                 # Connection pool settings - optimized for Render.com
                 pool_size=3,              # Base connections in pool
-                max_overflow=5,          # Additional connections when needed
+                max_overflow=1,          # Additional connections when needed
                 pool_timeout=30,          # Wait 30s for available connection
                 pool_recycle=1800,        # Recycle connections every 30 minutes
                 pool_pre_ping=True,       # Test connections before using

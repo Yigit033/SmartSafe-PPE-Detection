@@ -13,13 +13,14 @@ backlog = 2048
 
 # Worker processes - Memory optimized for Render.com
 workers = 1  # Single worker for free tier (512MB limit)
-worker_class = "sync"
-worker_connections = 500  # Reduced for memory optimization
+worker_class = "gthread"
+threads = 3
+worker_connections = 100  # Reduced for memory optimization
 timeout = 120  # Timeout for requests
 keepalive = 5  # Keep connections alive
-max_requests = 50  # Restart worker after 50 requests
-max_requests_jitter = 5  # Add jitter to prevent thundering herd
-preload_app = True  # Preload app for memory efficiency
+max_requests = 100  # Restart worker after 50 requests
+max_requests_jitter = 10  # Add jitter to prevent thundering herd
+preload_app = False  
 
 # Render.com specific settings
 daemon = False  # Don't daemonize on Render.com
