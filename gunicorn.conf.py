@@ -14,9 +14,9 @@ backlog = 2048
 # Worker processes - Memory optimized for Render.com
 workers = 1  # Single worker for free tier (512MB limit)
 worker_class = "gthread"
-threads = 3
+threads = 4
 worker_connections = 100  # Reduced for memory optimization
-timeout = 120  # Timeout for requests
+timeout = 180  # Timeout for requests
 keepalive = 5  # Keep connections alive
 max_requests = 100  # Restart worker after 50 requests
 max_requests_jitter = 10  # Add jitter to prevent thundering herd
