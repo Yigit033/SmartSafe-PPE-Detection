@@ -16,11 +16,11 @@ workers = 1  # Single worker for free tier (512MB limit)
 worker_class = "gthread"
 threads = 4
 worker_connections = 100  # Reduced for memory optimization
-timeout = 180  # Timeout for requests
+timeout = 300  # Timeout for requests (5 minutes - allows cold start + initialization)
 keepalive = 5  # Keep connections alive
-max_requests = 100  # Restart worker after 50 requests
+max_requests = 100  # Restart worker after 100 requests
 max_requests_jitter = 10  # Add jitter to prevent thundering herd
-preload_app = False  
+preload_app = False  # Don't preload app - allows lazy initialization
 
 # Render.com specific settings
 daemon = False  # Don't daemonize on Render.com

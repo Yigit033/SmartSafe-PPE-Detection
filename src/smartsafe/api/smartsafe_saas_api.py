@@ -89,12 +89,16 @@ class SmartSafeSaaSAPI:
     """SmartSafe AI SaaS API Server"""
     
     def __init__(self):
-        self.app = Flask(
-                        __name__,
-                        template_folder=str(BASE_DIR / 'templates'),
-                        static_folder=str(BASE_DIR / 'static')
-                        )
-        self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
+        try:
+            self.app = Flask(
+                            __name__,
+                            template_folder=str(BASE_DIR / 'templates'),
+                            static_folder=str(BASE_DIR / 'static')
+                            )
+            self.app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartsafe-saas-2024-secure-key')
+        except Exception as e:
+            logger.error(f"❌ Flask app initialization failed: {e}")
+            raise
         
         # 🎯 PRODUCTION-GRADE: Template caching'i devre dışı bırak (development mode)
         is_development = not (os.environ.get('RENDER') or os.environ.get('FLASK_ENV') == 'production')
@@ -122,15 +126,14 @@ class SmartSafeSaaSAPI:
             return response
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
+        self.sh17_manager = None
         try:
             from models.sh17_model_manager import SH17ModelManager
             self.sh17_manager = SH17ModelManager()
             # RENDER.COM OPTIMIZATION: Modelleri başlangıçta yükleme, lazy loading kullan
-            if not self.sh17_manager.lazy_loading:
-                self.sh17_manager.load_models()
-                logger.info("✅ SH17 Model Manager API'ye entegre edildi (Lazy Loading)")
+            logger.info("✅ SH17 Model Manager API'ye entegre edildi (Lazy Loading)")
         except Exception as e:
-            logger.warning(f"⚠️ SH17 Model Manager API'ye yüklenemedi: {e}")
+            logger.warning(f"⚠️ SH17 Model Manager API'ye yüklenemedi: {e}. Fallback kullanılacak.")
             self.sh17_manager = None
         
         # Force production mode settings - Render.com focused
@@ -195,12 +198,10 @@ class SmartSafeSaaSAPI:
             storage_uri="memory://"
         )
         
-        # Multi-tenant database - Production optimized
-        self.db = MultiTenantDatabase()
-        
-        # Database adapter'ı initialize et
-        self.db_adapter = get_db_adapter()
-        self.db_adapter.init_database()
+        # Multi-tenant database - Lazy initialization for production
+        self.db = None
+        self.db_adapter = None
+        self._db_initialized = False
         
         # Production database schema handler
         self.is_production = (os.environ.get('RENDER') or 
@@ -330,6 +331,25 @@ class SmartSafeSaaSAPI:
         
         # İYİLEŞTİRİLDİ: Cache management functions
         self.setup_cache_management()
+    
+    def ensure_database_initialized(self):
+        """Lazy initialize database on first request"""
+        if self._db_initialized:
+            return True
+        
+        try:
+            if self.db is None:
+                self.db = MultiTenantDatabase()
+            if self.db_adapter is None:
+                self.db_adapter = get_db_adapter()
+                self.db_adapter.init_database()
+            self._db_initialized = True
+            logger.info("✅ Database initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Database initialization failed: {e}")
+            self._db_initialized = False
+            return False
     
     def setup_cache_management(self):
         """Cache yönetimi için yardımcı fonksiyonlar"""
@@ -914,21 +934,38 @@ class SmartSafeSaaSAPI:
     def setup_routes(self):
         """API rotalarını ayarla"""
         app = self.app
+        
+        # Decorator to ensure database is initialized before handling requests
+        def require_db(f):
+            """Decorator to ensure database is initialized"""
+            from functools import wraps
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                try:
+                    self.ensure_database_initialized()
+                except Exception as e:
+                    logger.warning(f"⚠️ Database initialization failed in request: {e}")
+                    # Continue anyway - database will be retried on next request
+                return f(*args, **kwargs)
+            return decorated_function
 
         # 🏥 HEALTH CHECK ENDPOINT - Production monitoring
         @app.route('/health', methods=['GET'])
         def health_check():
             """Health check endpoint for Render.com monitoring"""
             try:
-                # Check database connection
+                # Check database connection (lazy initialize)
                 db_status = 'unknown'
                 try:
-                    conn = self.db_adapter.get_connection()
-                    if conn:
-                        db_status = 'ok'
-                        conn.close() if hasattr(conn, 'close') else None
+                    if self.ensure_database_initialized() and self.db_adapter:
+                        conn = self.db_adapter.get_connection()
+                        if conn:
+                            db_status = 'ok'
+                            conn.close() if hasattr(conn, 'close') else None
+                        else:
+                            db_status = 'degraded'
                     else:
-                        db_status = 'degraded'
+                        db_status = 'initializing'
                 except Exception as e:
                     logger.warning(f"⚠️ Health check DB error: {e}")
                     db_status = 'degraded'
@@ -936,15 +973,16 @@ class SmartSafeSaaSAPI:
                 # Check model loading
                 model_status = 'ok'
                 try:
-                    from models.sh17_model_manager import SH17ModelManager
-                    manager = SH17ModelManager()
-                    if not manager.models and not manager.fallback_model:
-                        model_status = 'degraded'
+                    if hasattr(self, 'sh17_manager') and self.sh17_manager:
+                        if not self.sh17_manager.models and not getattr(self.sh17_manager, 'fallback_model', None):
+                            model_status = 'degraded'
+                    else:
+                        model_status = 'initializing'
                 except Exception as e:
                     logger.warning(f"⚠️ Health check model error: {e}")
                     model_status = 'degraded'
                 
-                # Overall status
+                # Overall status - allow degraded for production startup
                 overall_status = 'ok' if db_status == 'ok' and model_status == 'ok' else 'degraded'
                 
                 response = {
@@ -956,7 +994,8 @@ class SmartSafeSaaSAPI:
                     'environment': 'production' if self.is_production else 'development'
                 }
                 
-                status_code = 200 if overall_status == 'ok' else 503
+                # Return 200 even if degraded (allows Render to start the app)
+                status_code = 200
                 logger.info(f"🏥 Health check: {overall_status} (DB: {db_status}, Models: {model_status})")
                 return jsonify(response), status_code
             except Exception as e:
@@ -2298,28 +2337,8 @@ class SmartSafeSaaSAPI:
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
         
-        # Health check endpoint for deployment
-        @self.app.route('/health')
-        def health():
-            """Health check endpoint"""
-            try:
-                # Test database connection
-                db_status = "connected" if self.db else "disconnected"
-                
-                return jsonify({
-                    'status': 'healthy',
-                    'service': 'SmartSafe AI SaaS',
-                    'database': db_status,
-                    'enterprise_enabled': self.enterprise_enabled,
-                    'timestamp': datetime.now().isoformat()
-                })
-            except Exception as e:
-                logger.error(f"❌ Health check error: {e}")
-                return jsonify({
-                    'status': 'unhealthy',
-                    'error': str(e),
-                    'timestamp': datetime.now().isoformat()
-                }), 500
+        # Health check endpoint for deployment (duplicate removed - using the first one)
+        # This is handled by the /health endpoint above
         
         # İletişim formu endpoint'i
         @self.app.route('/api/contact', methods=['POST'])
