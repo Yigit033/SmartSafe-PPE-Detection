@@ -73,7 +73,7 @@ qrcode>=7.4.0
 loguru>=0.7.2
 
 # Audio Support (optional - for audio alerts)
-pygame>=2.5.2  # Re-enabled for audio alerts
+# pygame>=2.5.2  # Re-enabled for audio alerts (Temporarily disabled due to install error)
 
 # Additional Python Standard Library Extensions (removed for memory optimization)
 # pathlib2>=2.3.0  # Not needed for Python 3.7+
