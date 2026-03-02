@@ -26,6 +26,66 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# Kanonik PPE tanımları: model sınıf adları, anatomik bölge ve overlay/ihlal etiketleri
+PPE_CONFIG = {
+    'helmet': {
+        'model_classes': ['helmet', 'hard_hat', 'hardhat', 'baret'],
+        'region': 'head',
+        'pos_label': 'Helmet',
+        'neg_label': 'NO-Helmet',
+        'violation_tr': 'Baret eksik',
+        'default_critical': True,
+    },
+    'safety_vest': {
+        'model_classes': ['safety_vest', 'vest', 'yelek'],
+        'region': 'torso',
+        'pos_label': 'Safety Vest',
+        'neg_label': 'NO-Vest',
+        'violation_tr': 'Yelek eksik',
+        'default_critical': True,
+    },
+    'safety_shoes': {
+        'model_classes': ['safety_shoes', 'shoes', 'shoe', 'ayakkabı', 'ayakkabi'],
+        'region': 'feet',
+        'pos_label': 'Safety Shoes',
+        'neg_label': 'NO-Shoes',
+        'violation_tr': 'Güvenlik ayakkabısı eksik',
+        'default_critical': True,
+    },
+    'gloves': {
+        'model_classes': ['gloves'],
+        'region': 'hands',
+        'pos_label': 'Gloves',
+        'neg_label': 'NO-Gloves',
+        'violation_tr': 'Eldiven eksik',
+        'default_critical': False,
+    },
+    'safety_glasses': {
+        'model_classes': ['safety_glasses', 'glasses'],
+        'region': 'head',
+        'pos_label': 'Safety Glasses',
+        'neg_label': 'NO-Glasses',
+        'violation_tr': 'Gözlük eksik',
+        'default_critical': False,
+    },
+    'face_mask': {
+        'model_classes': ['face_mask_medical', 'face_mask', 'mask'],
+        'region': 'head',
+        'pos_label': 'Face Mask',
+        'neg_label': 'NO-Mask',
+        'violation_tr': 'Maske eksik',
+        'default_critical': False,
+    },
+    'safety_suit': {
+        'model_classes': ['safety_suit', 'medical_suit', 'apron'],
+        'region': 'torso',
+        'pos_label': 'Safety Suit',
+        'neg_label': 'NO-Suit',
+        'violation_tr': 'Koruyucu tulum eksik',
+        'default_critical': False,
+    },
+}
+
 
 class PoseAwarePPEDetector:
     """
@@ -86,7 +146,8 @@ class PoseAwarePPEDetector:
             logger.warning("⚠️ Falling back to anatomical detection without pose")
     
     def detect_with_pose(self, frame: np.ndarray, sector: Optional[str] = None, 
-                        confidence: float = 0.25) -> Dict:
+                        confidence: float = 0.25,
+                        required_ppe: Optional[List[str]] = None) -> Dict:
         """
         Perform pose-aware PPE detection
         
@@ -142,7 +203,7 @@ class PoseAwarePPEDetector:
             
             # 5️⃣ Calculate compliance with pose-aware scoring
             compliance_result = self._calculate_pose_aware_compliance(
-                enhanced_detections, sector
+                enhanced_detections, sector, required_ppe
             )
             
             # 🔍 QUALITY CHECK - If compliance is 0% and we have people, might be detection issue
@@ -485,79 +546,156 @@ class PoseAwarePPEDetector:
             feet_y1 = max(0, py2 - person_height * 0.15)
             feet_y2 = min(frame_height, py2)
             feet_region = [feet_x1, feet_y1, feet_x2, feet_y2]
+
+        # 🎯 HANDS REGION - Using wrists and elbows (approximate area for gloves)
+        hands_region = None
+        left_elbow = get_kpt(7)
+        right_elbow = get_kpt(8)
+        left_wrist = get_kpt(9)
+        right_wrist = get_kpt(10)
+
+        hand_points = [p for p in [left_elbow, right_elbow, left_wrist, right_wrist] if p]
+        if hand_points:
+            hand_xs = [p['x'] for p in hand_points]
+            hand_ys = [p['y'] for p in hand_points]
+
+            valid_xs = [x for x in hand_xs if 0 <= x < frame_width]
+            valid_ys = [y for y in hand_ys if 0 <= y < frame_height]
+
+            if valid_xs and valid_ys:
+                hands_width = max(valid_xs) - min(valid_xs)
+                hands_height = max(valid_ys) - min(valid_ys)
+
+                if hands_width < 5:
+                    hands_width = (px2 - px1) * 0.3
+                if hands_height < 5:
+                    hands_height = (py2 - py1) * 0.2
+
+                hands_x1 = min(valid_xs) - hands_width * 0.4
+                hands_x2 = max(valid_xs) + hands_width * 0.4
+                hands_y1 = min(valid_ys) - hands_height * 0.4
+                hands_y2 = max(valid_ys) + hands_height * 0.4
+
+                hands_region = clip_bbox(hands_x1, hands_y1, hands_x2, hands_y2)
+
+        # Fallback: approximate hands region from torso if keypoints missing
+        if hands_region is None:
+            if torso_region is not None:
+                tx1, ty1, tx2, ty2 = torso_region
+                t_height = ty2 - ty1
+                hands_x1 = tx1
+                hands_x2 = tx2
+                hands_y1 = ty1 + t_height * 0.3
+                hands_y2 = ty2 + t_height * 0.3
+                hands_region = clip_bbox(hands_x1, hands_y1, hands_x2, hands_y2)
+            else:
+                # Use middle-lower part of the person bbox
+                person_width = px2 - px1
+                person_height = py2 - py1
+                hands_width = person_width * 0.6
+                person_center_x = (px1 + px2) / 2
+                hands_x1 = max(0, person_center_x - hands_width / 2)
+                hands_x2 = min(frame_width, person_center_x + hands_width / 2)
+                hands_y1 = max(0, py1 + person_height * 0.35)
+                hands_y2 = min(frame_height, py1 + person_height * 0.75)
+                hands_region = [hands_x1, hands_y1, hands_x2, hands_y2]
+
+        # Full body region can be useful for suits or fallback
+        full_body_region = clip_bbox(px1, py1, px2, py2)
         
         return {
             'head': head_region,
             'torso': torso_region,
-            'feet': feet_region
+            'feet': feet_region,
+            'hands': hands_region,
+            'full_body': full_body_region
         }
     
     def _associate_ppe_with_pose(self, persons: List[Dict], ppe_detections: List[Dict],
                                 frame_shape: Tuple) -> List[Dict]:
-        """Associate PPE items with persons using pose-based anatomical regions"""
-        
-        # Separate PPE by type (with multiple class name variations)
-        helmets = [d for d in ppe_detections if any(x in d.get('class_name', '').lower() 
-                  for x in ['helmet', 'hard_hat', 'hardhat', 'baret'])
-                  and not d.get('class_name', '').startswith('NO-')]
-        vests = [d for d in ppe_detections if any(x in d.get('class_name', '').lower() 
-                for x in ['vest', 'safety_vest', 'yelek'])
-                and not d.get('class_name', '').startswith('NO-')]
-        shoes = [d for d in ppe_detections if any(x in d.get('class_name', '').lower() 
-                for x in ['shoe', 'shoes', 'safety_shoes', 'ayakkabı', 'ayakkabi'])
-                and not d.get('class_name', '').startswith('NO-')]
-        
-        logger.debug(f"🔍 PPE separation: {len(helmets)} helmets, {len(vests)} vests, {len(shoes)} shoes")
-        
-        enhanced_persons = []
-        
+        """Associate PPE items with persons using pose-based anatomical regions."""
+
+        # Normalize PPE detections by class name (lowercase) and group by canonical PPE type
+        ppe_by_type: Dict[str, List[Dict]] = {ptype: [] for ptype in PPE_CONFIG.keys()}
+
+        for det in ppe_detections:
+            class_name = str(det.get('class_name', '')).lower()
+            if class_name.startswith('no-'):
+                # Sistem tarafından üretilen negatif kutuları dikkate alma
+                continue
+            for ppe_type, cfg in PPE_CONFIG.items():
+                if any(cls in class_name for cls in cfg['model_classes']):
+                    ppe_by_type[ppe_type].append(det)
+                    break
+
+        logger.debug(
+            "🔍 PPE separation (by type): " +
+            ", ".join(f"{ptype}={len(items)}" for ptype, items in ppe_by_type.items())
+        )
+
+        enhanced_persons: List[Dict] = []
+
         for person in persons:
             regions = person['anatomical_regions']
             person_bbox = person['bbox']
-            
-            # Find best matching PPE for each region (with type-specific thresholds)
-            best_helmet = self._find_best_ppe_match(helmets, regions['head'], person_bbox, 'helmet')
-            best_vest = self._find_best_ppe_match(vests, regions['torso'], person_bbox, 'vest')
-            best_shoes = self._find_best_ppe_match(shoes, regions['feet'], person_bbox, 'shoes')
-            
-            # Build enhanced person data
-            enhanced_person = {
-                'person': person,
-                'ppe': {
-                    'helmet': best_helmet,
-                    'vest': best_vest,
-                    'shoes': best_shoes
-                },
-                'regions': regions,
-                'compliance': {
-                    'has_helmet': best_helmet is not None,
-                    'has_vest': best_vest is not None,
-                    'has_shoes': best_shoes is not None
+
+            person_ppe: Dict[str, Optional[Dict]] = {}
+            compliance: Dict[str, bool] = {}
+
+            for ppe_type, cfg in PPE_CONFIG.items():
+                region_name = cfg['region']
+                region_bbox = regions.get(region_name)
+                if region_bbox is None:
+                    # Fallback: full body bölgesini kullan
+                    region_bbox = regions.get('full_body', person_bbox)
+
+                best_match = self._find_best_ppe_match(
+                    ppe_by_type.get(ppe_type, []),
+                    region_bbox,
+                    person_bbox,
+                    ppe_type=ppe_type
+                )
+
+                person_ppe[ppe_type] = best_match
+                compliance[ppe_type] = best_match is not None
+
+            enhanced_persons.append(
+                {
+                    'person': person,
+                    'ppe': person_ppe,
+                    'regions': regions,
+                    'compliance': compliance,
                 }
-            }
-            
-            enhanced_persons.append(enhanced_person)
-        
+            )
+
         return enhanced_persons
     
     def _find_best_ppe_match(self, ppe_items: List[Dict], region: List[float], 
                             person_bbox: List[float], ppe_type: str = 'general') -> Optional[Dict]:
-        """Find best PPE match for anatomical region using IoU with type-specific thresholds"""
+        """Find best PPE match for anatomical region using IoU with type-specific thresholds."""
         best_match = None
         best_iou = 0.0
         
         # Type-specific thresholds (shoes need lower threshold due to occlusion)
         iou_threshold = {
             'helmet': 0.05,
-            'vest': 0.05,
-            'shoes': 0.02,  # Lower for shoes - often partially visible
+            'safety_vest': 0.05,
+            'safety_shoes': 0.02,  # Lower for shoes - often partially visible
+            'gloves': 0.05,
+            'safety_glasses': 0.05,
+            'face_mask': 0.05,
+            'safety_suit': 0.05,
             'general': 0.05
         }.get(ppe_type, 0.05)
         
         person_iou_threshold = {
             'helmet': 0.1,
-            'vest': 0.1,
-            'shoes': 0.05,  # Lower for shoes
+            'safety_vest': 0.1,
+            'safety_shoes': 0.05,  # Lower for shoes
+            'gloves': 0.1,
+            'safety_glasses': 0.1,
+            'face_mask': 0.1,
+            'safety_suit': 0.1,
             'general': 0.1
         }.get(ppe_type, 0.1)
         
@@ -604,13 +742,46 @@ class PoseAwarePPEDetector:
             return 0.0
     
     def _calculate_pose_aware_compliance(self, enhanced_persons: List[Dict], 
-                                        sector: Optional[str]) -> Dict:
+                                        sector: Optional[str],
+                                        required_ppe: Optional[List[str]] = None) -> Dict:
         """Calculate compliance with pose-aware scoring"""
         
         total_people = len(enhanced_persons)
         compliant_people = 0
         violations = []
         all_detections = []
+        
+        # Pose-aware sistemin desteklediği PPE türleri (kanonik isimler)
+        supported_types = set(PPE_CONFIG.keys())
+        supported_required: Optional[List[str]] = None
+        
+        if required_ppe is not None:
+            # İsimleri normalize et (case-insensitive, trim)
+            normalized_required = []
+            for item in required_ppe:
+                if item is None:
+                    continue
+                try:
+                    normalized_required.append(str(item).strip().lower())
+                except Exception:
+                    continue
+            # Sadece pose-aware'in gerçekten takip edebildiği PPE türlerini dikkate al
+            supported_required = [item for item in normalized_required if item in supported_types]
+            # Desteklenmeyen PPE türleri SH17/hybrid tarafında ele alınır;
+            # burada sadece log ile bilgilendiriyoruz, uyum hesabına dahil etmiyoruz.
+            unsupported = [item for item in normalized_required if item not in supported_types]
+            if unsupported:
+                logger.debug(f"⚠️ Pose-aware compliance, şu PPE türlerini desteklemiyor ve yoksayıyor: {unsupported}")
+
+        # Violation üretimi için: PPE sadece zorunluysa "eksik" sayılır.
+        # required_ppe None ise: sadece default_critical=True olan PPE'ler ihlal üretir.
+        def is_required_for_violation(ppe_type: str) -> bool:
+            cfg = PPE_CONFIG.get(ppe_type, {})
+            if required_ppe is None:
+                return bool(cfg.get('default_critical', False))
+            if supported_required is None:
+                return False
+            return ppe_type in supported_required
         
         for person_data in enhanced_persons:
             person = person_data['person']
@@ -621,63 +792,55 @@ class PoseAwarePPEDetector:
             # Add person detection
             all_detections.append(person)
             
-            # Add PPE detections with anatomical regions
-            if ppe['helmet']:
-                all_detections.append({
-                    'bbox': regions['head'],
-                    'class_name': 'Helmet',
-                    'confidence': ppe['helmet'].get('confidence', 0.9),
-                    'missing': False,
-                    'pose_based': True
-                })
-            else:
-                violations.append('Baret eksik')
-                all_detections.append({
-                    'bbox': regions['head'],
-                    'class_name': 'NO-Helmet',
-                    'confidence': 0.9,
-                    'missing': True,
-                    'pose_based': True
-                })
+            # Add PPE detections with anatomical regions (positive + negative)
+            for ppe_type, cfg in PPE_CONFIG.items():
+                region_name = cfg['region']
+                region_bbox = regions.get(region_name) or regions.get('full_body')
+                if region_bbox is None:
+                    continue
+
+                item = ppe.get(ppe_type)
+                if item:
+                    all_detections.append(
+                        {
+                            'bbox': region_bbox,
+                            'class_name': cfg['pos_label'],
+                            'confidence': float(item.get('confidence', 0.9)),
+                            'missing': False,
+                            'pose_based': True,
+                        }
+                    )
+                else:
+                    if is_required_for_violation(ppe_type):
+                        violations.append(cfg['violation_tr'])
+                        all_detections.append(
+                            {
+                                'bbox': region_bbox,
+                                'class_name': cfg['neg_label'],
+                                'confidence': 0.9,
+                                'missing': True,
+                                'pose_based': True,
+                            }
+                        )
             
-            if ppe['vest']:
-                all_detections.append({
-                    'bbox': regions['torso'],
-                    'class_name': 'Safety Vest',
-                    'confidence': ppe['vest'].get('confidence', 0.9),
-                    'missing': False,
-                    'pose_based': True
-                })
+            # Check compliance
+            # Eğer required_ppe None değilse, konfig'e göre; None ise sadece default_critical PPE'ler.
+            if required_ppe is not None:
+                if not supported_required:
+                    # Konfig sadece desteklenmeyen PPE'ler içeriyorsa, pose-aware açısından herkes uyumlu sayılır.
+                    is_compliant = True
+                else:
+                    is_compliant = True
+                    for ppe_type in supported_required:
+                        if not compliance.get(ppe_type, False):
+                            is_compliant = False
+                            break
             else:
-                violations.append('Yelek eksik')
-                all_detections.append({
-                    'bbox': regions['torso'],
-                    'class_name': 'NO-Vest',
-                    'confidence': 0.9,
-                    'missing': True,
-                    'pose_based': True
-                })
-            
-            if ppe['shoes']:
-                all_detections.append({
-                    'bbox': regions['feet'],
-                    'class_name': 'Safety Shoes',
-                    'confidence': ppe['shoes'].get('confidence', 0.9),
-                    'missing': False,
-                    'pose_based': True
-                })
-            else:
-                violations.append('Güvenlik ayakkabısı eksik')
-                all_detections.append({
-                    'bbox': regions['feet'],
-                    'class_name': 'NO-Shoes',
-                    'confidence': 0.9,
-                    'missing': True,
-                    'pose_based': True
-                })
-            
-            # Check compliance (minimum: helmet + vest)
-            if compliance['has_helmet'] and compliance['has_vest']:
+                # Geriye uyumlu davranış: default_critical=True olan PPE'ler gereklidir (kask+yelek+ayakkabı).
+                critical_types = [t for t, cfg in PPE_CONFIG.items() if cfg.get('default_critical', False)]
+                is_compliant = all(compliance.get(t, False) for t in critical_types)
+
+            if is_compliant:
                 compliant_people += 1
         
         compliance_rate = int((compliant_people / max(total_people, 1)) * 100) if total_people > 0 else 100

@@ -13889,6 +13889,32 @@ smartsafe_requests_total 100
             else:
                 sector = 'construction'
                 logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
+
+            # Şirket bazlı zorunlu PPE konfigürasyonunu al (varsa)
+            # None  => konfig yok / bilinmiyor → eski davranış (helmet+vest zorunlu)
+            # []    => kullanıcı "hiçbir PPE zorunlu değil" seçmiş → herkes uyumlu, violation yok
+            required_ppe = None
+            if self.db is not None:
+                try:
+                    company_ppe_config = self.db.get_company_ppe_config(company_id)
+                    if isinstance(company_ppe_config, dict) and 'required' in company_ppe_config:
+                        raw_required = company_ppe_config.get('required')
+                        # Normalize isimler (lowercase, trim) - SH17 ve pose-aware tarafı için güvenli
+                        if isinstance(raw_required, list):
+                            normalized = []
+                            for item in raw_required:
+                                if item is None:
+                                    continue
+                                try:
+                                    normalized.append(str(item).strip().lower())
+                                except Exception:
+                                    continue
+                            required_ppe = normalized
+                        else:
+                            required_ppe = None
+                except Exception as cfg_err:
+                    logger.warning(f"⚠️ PPE config okunamadı, varsayılan kullanılacak: {cfg_err}")
+                    required_ppe = None
             
             if self.sh17_manager:
                 logger.info(f"🎯 SH17 PPE Detection - Sektör: {sector}")
@@ -13948,7 +13974,8 @@ smartsafe_requests_total 100
                         try:
                             if pose_detector is not None:
                                 # PoseAwarePPEDetector: person pose + PPE region analysis
-                                pose_result = pose_detector.detect_with_pose(frame, sector, optimized_confidence)
+                                # required_ppe listesi (settings / şirket konfigürasyonu) burada uyum hesabına iletilir.
+                                pose_result = pose_detector.detect_with_pose(frame, sector, optimized_confidence, required_ppe=required_ppe)
                                 
                                 if isinstance(pose_result, dict):
                                     people_detected = pose_result.get('people_detected', 0)
@@ -13965,18 +13992,16 @@ smartsafe_requests_total 100
                             elif use_sh17 and model_manager:
                                 results = model_manager.detect_ppe(frame, sector, optimized_confidence)
                                 people_detected = sum(1 for d in results if d.get('class_name') == 'person')
-                                
-                                try:
-                                    company_ppe_config = self.db.get_company_ppe_config(company_id) if self.db else None
-                                    required_ppe = company_ppe_config.get('required', []) if company_ppe_config else []
-                                except Exception:
-                                    required_ppe = []
-                                
+
                                 if people_detected > 0 and required_ppe:
-                                    compliance_result = model_manager.analyze_compliance(results, required_ppe)
-                                    ppe_compliant = compliance_result.get('total_detected', 0)
-                                    missing = compliance_result.get('missing', [])
-                                    ppe_violations = [f"Missing: {item}" for item in missing]
+                                    try:
+                                        compliance_result = model_manager.analyze_compliance(results, required_ppe)
+                                        ppe_compliant = compliance_result.get('total_detected', 0)
+                                        missing = compliance_result.get('missing', [])
+                                        ppe_violations = [f"Missing: {item}" for item in missing]
+                                    except Exception as comp_err:
+                                        logger.error(f"❌ SH17 compliance analizi hatası: {comp_err}")
+                                        ppe_compliant = people_detected
                                 else:
                                     ppe_compliant = people_detected
                             else:
