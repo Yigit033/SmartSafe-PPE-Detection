@@ -47,13 +47,10 @@ limit_request_field_size = 8190
 # Access log format
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
-# Application path - Dynamic for Render.com
-import os
+# Application path
 _project_root = os.path.dirname(os.path.abspath(__file__))
-_src_path = os.path.join(_project_root, 'src')
-
 chdir = _project_root
-pythonpath = _src_path
+pythonpath = _project_root
 
 # SSL (disabled for Render.com)
 keyfile = None

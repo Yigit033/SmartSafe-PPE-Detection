@@ -55,11 +55,15 @@ load_dotenv()
 
 # Resolve project root (for templates/static after src/ restructure)
 try:
-    # __file__ = .../backend/api/smartsafe_saas_api.py
-    # parents[2] => project root (one above 'backend')
+    # Bu dosya: core/api/smartsafe_saas_api.py
+    # parents[0]: core/api
+    # parents[1]: core
+    # parents[2]: smart-safe (Root)
     BASE_DIR = Path(__file__).resolve().parents[2]
-except Exception:
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    print(f"📍 Project Base Directory: {BASE_DIR}")
+except Exception as e:
+    BASE_DIR = Path.cwd().parent if Path.cwd().name == 'backend' else Path.cwd()
+    print(f"⚠️ BASE_DIR Fallback: {BASE_DIR}")
 
 # Enterprise modülleri import et
 # Lazy loading için enterprise modülleri startup'ta yükleme - Memory optimization
@@ -81,17 +85,23 @@ response_cache = {}
 cache_timestamps = {}
 CACHE_DURATION = 300  # 5 dakika cache süresi
 
-
-
+# Global API server instance for static access
 class SmartSafeSaaSAPI:
     """SmartSafe AI SaaS API Server"""
     
     def __init__(self):
         try:
+            static_dir = str(BASE_DIR / 'frontend' / 'output')
+            template_dir = str(BASE_DIR / 'frontend' / 'templates')
+            
+            print(f"📁 Static Directory: {static_dir}")
+            print(f"📁 Template Directory: {template_dir}")
+            
             self.app = Flask(
                             __name__,
-                            template_folder=str(BASE_DIR / 'frontend' / 'templates'),
-                            static_folder=str(BASE_DIR / 'frontend' / 'output')
+                            template_folder=template_dir,
+                            static_folder=static_dir,
+                            static_url_path='/static'
                             )
             _secret = os.getenv('SECRET_KEY')
             if not _secret:
