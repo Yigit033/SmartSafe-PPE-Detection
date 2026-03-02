@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSafe AI - Şirket Profili</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.95);
+            border: none;
+        }
+        .profile-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        .profile-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            margin: 0 auto 20px;
+        }
+        .info-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        .info-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-right: 15px;
+        }
+        .info-content {
+            flex: 1;
+        }
+        .info-label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .info-value {
+            color: #7f8c8d;
+        }
+        .subscription-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .subscription-starter { background: #e8f5e8; color: #27ae60; }
+        .subscription-professional { background: #e3f2fd; color: #1976d2; }
+        .subscription-enterprise { background: #fce4ec; color: #c2185b; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
+                <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                    <i class="fas fa-video"></i> Kameralar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/users">
+                    <i class="fas fa-users"></i> Kullanıcılar
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/reports">
+                    <i class="fas fa-chart-line"></i> Raporlar
+                </a>
+                <a class="nav-link active" href="/company/{{ company_id }}/settings">
+                    <i class="fas fa-cog"></i> Ayarlar
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="profile-section">
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <h2>{{ company.company_name or 'Şirket Adı' }}</h2>
+                        <p class="text-muted">Şirket Profili</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4 class="mb-3"><i class="fas fa-info-circle text-primary"></i> Temel Bilgiler</h4>
+                            
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Şirket Adı</div>
+                                    <div class="info-value">{{ company.company_name or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-industry"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Sektör</div>
+                                    <div class="info-value">{{ company.sector or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">İletişim Kişisi</div>
+                                    <div class="info-value">{{ company.contact_person or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-envelope"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">E-posta</div>
+                                    <div class="info-value">{{ company.email or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-phone"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Telefon</div>
+                                    <div class="info-value">{{ company.phone or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Adres</div>
+                                    <div class="info-value">{{ company.address or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <h4 class="mb-3"><i class="fas fa-crown text-warning"></i> Abonelik Bilgileri</h4>
+                            
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-crown"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Abonelik Planı</div>
+                                    <div class="info-value">
+                                        {% if company.subscription_type %}
+                                            <span class="subscription-badge subscription-{{ company.subscription_type.lower() }}">
+                                                {{ company.subscription_type.upper() }}
+                                            </span>
+                                        {% else %}
+                                            Belirtilmemiş
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Başlangıç Tarihi</div>
+                                    <div class="info-value">{{ company.subscription_start or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-calendar-times"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Bitiş Tarihi</div>
+                                    <div class="info-value">{{ company.subscription_end or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="info-item">
+                                <div class="info-icon">
+                                    <i class="fas fa-video"></i>
+                                </div>
+                                <div class="info-content">
+                                    <div class="info-label">Maksimum Kamera Sayısı</div>
+                                    <div class="info-value">{{ company.max_cameras or 'Belirtilmemiş' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a href="/company/{{ company_id }}/settings" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Profili Düzenle
+                        </a>
+                        <a href="/company/{{ company_id }}/dashboard" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Dashboard'a Dön
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
