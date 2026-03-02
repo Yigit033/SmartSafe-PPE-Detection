@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--company-id",
         "-c",
-        default="demo_company",
+        default="demo_20260301_200734",
         help="Company ID to resolve sector and PPE config (defaults to demo_company).",
     )
     parser.add_argument(
