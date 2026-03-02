@@ -206,12 +206,53 @@ class PoseAwarePPEDetector:
                 enhanced_detections, sector, required_ppe
             )
             
-            # 🔍 QUALITY CHECK - If compliance is 0% and we have people, might be detection issue
+            # 🔍 QUALITY CHECK - If compliance is 0% and we have people, might be detection/association issue
             if compliance_result['people_detected'] > 0 and compliance_result['compliance_rate'] == 0:
                 logger.warning(f"⚠️ 0% compliance detected for {compliance_result['people_detected']} people - checking quality")
-                # Log for debugging
+                # Log high-level stats
                 logger.debug(f"PPE detections available: {len(ppe_detections)}")
                 logger.debug(f"Persons with pose: {len(persons_with_pose)}")
+
+                # 🧪 Detailed IoU debug for helmet vs head/person bboxes.
+                # Amaç: SH17 'helmet' kutularını gerçekten head bölgesiyle neden eşleştiremediğimizi görmek.
+                try:
+                    helmet_cfg = PPE_CONFIG.get('helmet', {})
+                    helmet_classes = [str(c).lower() for c in helmet_cfg.get('model_classes', [])]
+
+                    helmet_items = []
+                    for det in ppe_detections:
+                        cname = str(det.get('class_name', '')).lower()
+                        if any(cls in cname for cls in helmet_classes):
+                            helmet_items.append(det)
+
+                    if helmet_items:
+                        logger.debug(
+                            f"🧪 Helmet IoU debug: {len(helmet_items)} helmet candidates, "
+                            f"{len(persons_with_pose)} persons"
+                        )
+                        for idx, person in enumerate(persons_with_pose):
+                            regions = person.get('anatomical_regions', {}) or {}
+                            head_region = regions.get('head') or regions.get('full_body') or person.get('bbox')
+                            person_bbox = person.get('bbox')
+
+                            logger.debug(
+                                f"Person {idx}: head_region={head_region}, person_bbox={person_bbox}"
+                            )
+
+                            for h in helmet_items:
+                                hb = h.get('bbox', [])
+                                if not head_region or not person_bbox or len(hb) != 4:
+                                    continue
+
+                                iou_head = self._calculate_iou(hb, head_region)
+                                iou_person = self._calculate_iou(hb, person_bbox)
+                                logger.debug(
+                                    f"  helmet_bbox={hb}, "
+                                    f"IoU_head={iou_head:.3f}, IoU_person={iou_person:.3f}"
+                                )
+                except Exception as debug_err:
+                    # Debug amaçlı; ana akışı asla bozmasın.
+                    logger.debug(f"Helmet IoU debug failed: {debug_err}")
             
             elapsed = time.time() - start_time
             logger.info(f"⚡ Pose-aware detection: {len(persons_with_pose)} persons, "
@@ -675,10 +716,12 @@ class PoseAwarePPEDetector:
         """Find best PPE match for anatomical region using IoU with type-specific thresholds."""
         best_match = None
         best_iou = 0.0
+        best_person_iou = 0.0
+        best_center_y: Optional[float] = None
         
         # Type-specific thresholds (shoes need lower threshold due to occlusion)
         iou_threshold = {
-            'helmet': 0.05,
+            'helmet': 0.03,        # slightly more tolerant for helmets
             'safety_vest': 0.05,
             'safety_shoes': 0.02,  # Lower for shoes - often partially visible
             'gloves': 0.05,
@@ -689,7 +732,7 @@ class PoseAwarePPEDetector:
         }.get(ppe_type, 0.05)
         
         person_iou_threshold = {
-            'helmet': 0.1,
+            'helmet': 0.08,        # allow slightly weaker overlap with person
             'safety_vest': 0.1,
             'safety_shoes': 0.05,  # Lower for shoes
             'gloves': 0.1,
@@ -711,9 +754,39 @@ class PoseAwarePPEDetector:
             
             if iou > best_iou and person_iou > person_iou_threshold:  # Must overlap with person
                 best_iou = iou
+                best_person_iou = person_iou
                 best_match = ppe
+                try:
+                    _, py1, _, py2 = person_bbox
+                    _, y1, _, y2 = ppe_bbox
+                    best_center_y = (float(y1) + float(y2)) / 2.0
+                except Exception:
+                    best_center_y = None
         
-        return best_match if best_iou > iou_threshold else None
+        # Standart kural: bölge IoU eşiğinin üzerinde ise kabul et
+        if best_match is not None and best_iou > iou_threshold:
+            return best_match
+        
+        # Ek güvenli fallback: Özellikle kask için, baş bölgesine IoU düşük olsa bile
+        # kask kutusu kişinin üst kısmında ve kişi ile makul IoU'ya sahipse kabul et.
+        if ppe_type == 'helmet' and best_match is not None and best_person_iou > 0:
+            try:
+                px1, py1, px2, py2 = person_bbox
+                person_height = max(float(py2) - float(py1), 1.0)
+                top_fraction = py1 + person_height * 0.45  # üst ~%45'lik dilim "baş" kabul
+                
+                if best_center_y is not None and best_person_iou >= 0.20 and best_center_y <= top_fraction:
+                    logger.debug(
+                        f"✅ Helmet fallback match accepted: best_iou={best_iou:.3f}, "
+                        f"person_iou={best_person_iou:.3f}, center_y={best_center_y:.1f}, "
+                        f"person_top_limit={top_fraction:.1f}"
+                    )
+                    return best_match
+            except Exception:
+                # Fallback teşhis amaçlı; hata durumunda sadece normal kurala geri döneriz.
+                pass
+        
+        return None
     
     def _calculate_iou(self, box1: List[float], box2: List[float]) -> float:
         """Calculate Intersection over Union"""

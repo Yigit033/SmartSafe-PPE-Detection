@@ -9,6 +9,7 @@
     "generate": ".\\venv\\Scripts\\python scripts/setup/generate_frontend_assets.py",
     "test": ".\\venv\\Scripts\\python test_sector_integration.py",
     "install:python": ".\\venv\\Scripts\\python -m pip install -r requirements.txt",
+    "test:offline-video": ".\\venv\\Scripts\\python scripts/offline_video_ppe_test.py",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\""
   },
   "devDependencies": {

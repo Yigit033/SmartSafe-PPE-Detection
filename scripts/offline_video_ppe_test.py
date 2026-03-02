@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import time
 from typing import List, Optional
 
 import cv2
@@ -17,7 +18,7 @@ from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_cl
 
 
 # Varsayılan test videosu (proje köküne göre göreli yol)
-DEFAULT_VIDEO_PATH = os.path.join("tests", "Videos", "insaat01.mp4")
+DEFAULT_VIDEO_PATH = os.path.join("tests", "Videos", "video001.mp4")
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,6 +49,23 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help="Process every Nth frame (default: 3) for speed.",
+    )
+    parser.add_argument(
+        "--debug-raw",
+        action="store_true",
+        help="Log raw SH17 detections for the first few processed frames to analyze model behaviour.",
+    )
+    parser.add_argument(
+        "--raw-conf",
+        type=float,
+        default=0.3,
+        help="Confidence threshold used when logging raw SH17 detections (default: 0.3).",
+    )
+    parser.add_argument(
+        "--debug-frames",
+        type=int,
+        default=5,
+        help="Number of frames to log raw detections for when --debug-raw is enabled (default: 5).",
     )
     parser.add_argument(
         "--no-window",
@@ -112,6 +130,9 @@ def main() -> None:
     required_ppe = get_required_ppe_for_company(api, args.company_id)
 
     frame_idx = 0
+    start_time = time.time()
+    first_helmet_time: Optional[float] = None
+    first_helmet_frame: Optional[int] = None
     window_name = f"PPE Test - {os.path.basename(args.video)} ({sector})"
 
     while True:
@@ -123,6 +144,33 @@ def main() -> None:
         if args.skip > 1 and frame_idx % args.skip != 0:
             continue
 
+        # Optional: inspect raw SH17 detections for the first few frames
+        if args.debug_raw and frame_idx <= args.debug_frames:
+            raw = api.sh17_manager.detect_ppe(frame, sector=sector, confidence=args.raw_conf)
+            ppe_classes = [
+                "helmet",
+                "safety_vest",
+                "safety_suit",
+                "shoes",
+                "gloves",
+                "glasses",
+                "face_mask_medical",
+            ]
+            interesting = [
+                {
+                    "cls": d.get("class_name"),
+                    "conf": round(float(d.get("confidence", 0.0)), 3),
+                    "bbox": [round(float(v), 1) for v in d.get("bbox", [])],
+                    "model_type": d.get("model_type"),
+                }
+                for d in raw
+                if d.get("class_name") in ppe_classes
+            ]
+            print(
+                f"[RAW-SH17] frame={frame_idx} total={len(raw)} "
+                f"ppe={len(interesting)} details={interesting}"
+            )
+
         result = pose_detector.detect_with_pose(
             frame,
             sector=sector,
@@ -130,7 +178,35 @@ def main() -> None:
             required_ppe=required_ppe,
         )
 
-        detections = result.get("detections", [])
+        # Pose-aware dedektör normalde dict döner; ancak pose modeli kişi bulamazsa
+        # SH17'nin standart list çıktısına geri düşebilir. Her iki formata da uyum sağla.
+        if isinstance(result, list):
+            detections = result
+            people = sum(
+                1
+                for d in detections
+                if str(d.get("class_name", "")).lower() == "person"
+            )
+            compliant = 0
+            compliance_rate = 0.0
+        else:
+            detections = result.get("detections", [])
+            people = result.get("people_detected", 0)
+            compliant = result.get("compliant_people", 0)
+            compliance_rate = float(result.get("compliance_rate", 0.0))
+
+        # İlk kaskın ne zaman bulunduğunu ölç (sadece bir kere logla)
+        if first_helmet_time is None and detections:
+            for det in detections:
+                cname = str(det.get("class_name", "")).lower()
+                if any(k in cname for k in ["helmet", "hard_hat", "hardhat", "baret"]):
+                    first_helmet_time = time.time() - start_time
+                    first_helmet_frame = frame_idx
+                    print(
+                        f"[METRIC] First helmet detected at frame={first_helmet_frame}, "
+                        f"t={first_helmet_time:.2f}s since start"
+                    )
+                    break
 
         # Draw persons and PPE boxes using the same visual style utilities
         annotated = frame.copy()
@@ -153,9 +229,6 @@ def main() -> None:
             )
 
         # Small HUD with summary
-        people = result.get("people_detected", 0)
-        compliant = result.get("compliant_people", 0)
-        compliance_rate = result.get("compliance_rate", 0)
         text = f"People: {people} | Compliant: {compliant} | Compliance: {compliance_rate:.1f}%"
         cv2.putText(
             annotated,
