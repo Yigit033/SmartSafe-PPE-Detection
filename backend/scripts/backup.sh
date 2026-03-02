@@ -48,7 +48,7 @@ echo "📁 Backing up application files..."
 tar -czf "$BACKUP_DIR/files/smartsafe_files_$DATE.tar.gz" \
     -C /app \
     data/models \
-    static/uploads \
+    frontend/output/uploads \
     logs \
     2>/dev/null || true
 
