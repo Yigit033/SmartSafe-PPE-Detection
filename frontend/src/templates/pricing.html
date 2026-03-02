@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Fiyatlandırma - SmartSafe AI</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <style>
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .pricing-card {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px 30px;
+                    margin: 20px 0;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .pricing-card:hover {
+                    transform: translateY(-10px);
+                    box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+                }
+                .pricing-card.featured {
+                    border: 3px solid #667eea;
+                    transform: scale(1.05);
+                }
+                .pricing-card.featured::before {
+                    content: "EN POPÜLER";
+                    position: absolute;
+                    top: 20px;
+                    right: -30px;
+                    background: #667eea;
+                    color: white;
+                    padding: 5px 40px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    transform: rotate(45deg);
+                }
+                .price {
+                    font-size: 3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    margin: 20px 0;
+                }
+                .price-currency {
+                    font-size: 1.5rem;
+                    color: #7f8c8d;
+                }
+                .price-period {
+                    font-size: 1rem;
+                    color: #95a5a6;
+                }
+                .feature-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 30px 0;
+                }
+                .feature-list li {
+                    padding: 10px 0;
+                    border-bottom: 1px solid #ecf0f1;
+                }
+                .feature-list li:last-child {
+                    border-bottom: none;
+                }
+                .feature-check {
+                    color: #27ae60;
+                    margin-right: 10px;
+                }
+                .feature-cross {
+                    color: #e74c3c;
+                    margin-right: 10px;
+                }
+                .btn-pricing {
+                    width: 100%;
+                    padding: 15px;
+                    border-radius: 50px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    transition: all 0.3s ease;
+                }
+                .btn-pricing:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+                }
+                .navbar {
+                    background: rgba(255,255,255,0.95) !important;
+                    backdrop-filter: blur(10px);
+                }
+                .hero-section {
+                    padding: 100px 0 50px;
+                    text-align: center;
+                    color: white;
+                }
+                .comparison-table {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px;
+                    margin: 50px 0;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                }
+            </style>
+        </head>
+        <body>
+            <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+                <div class="container">
+                    <a class="navbar-brand fw-bold" href="/">
+                        <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+                    </a>
+                    <div class="navbar-nav ms-auto">
+                        <a class="nav-link" href="/">Ana Sayfa</a>
+                        <a class="nav-link" href="/pricing">Fiyatlandırma</a>
+                        <a class="nav-link" href="/app">Kayıt Ol</a>
+                    </div>
+                </div>
+            </nav>
+
+            <section class="hero-section">
+                <div class="container">
+                    <h1 class="display-4 fw-bold mb-4">
+                        <i class="fas fa-tags"></i> Fiyatlandırma Planları
+                    </h1>
+                    <p class="lead">İhtiyacınıza uygun planı seçin ve hemen başlayın</p>
+                    <div class="row justify-content-center mt-5">
+                        <div class="col-12">
+                            <div class="alert alert-info d-inline-block">
+                                <i class="fas fa-gift"></i> <strong>Özel Fırsat:</strong> İlk 30 gün ücretsiz!
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="pricing-section">
+                <div class="container">
+                    <div class="row">
+                        <!-- Starter Plan -->
+                        <div class="col-lg-4">
+                            <div class="pricing-card">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary">
+                                        <i class="fas fa-rocket"></i> Starter
+                                    </h3>
+                                    <p class="text-muted">Küçük işletmeler için</p>
+                                    <div class="price">
+                                        <span class="price-currency">₺</span>99
+                                        <span class="price-period">/ay</span>
+                                    </div>
+                                </div>
+                                
+                                <ul class="feature-list">
+                                    <li><i class="fas fa-check feature-check"></i> 5 Kamera Desteği</li>
+                                    <li><i class="fas fa-check feature-check"></i> Temel PPE Tespiti</li>
+                                    <li><i class="fas fa-check feature-check"></i> Email Bildirimleri</li>
+                                    <li><i class="fas fa-check feature-check"></i> Günlük Raporlar</li>
+                                    <li><i class="fas fa-check feature-check"></i> 7 Gün Veri Saklama</li>
+                                    <li><i class="fas fa-times feature-cross"></i> Gelişmiş Analitik</li>
+                                    <li><i class="fas fa-times feature-cross"></i> API Erişimi</li>
+                                    <li><i class="fas fa-times feature-cross"></i> Öncelikli Destek</li>
+                                </ul>
+                                
+                                <a href="/app?plan=starter" class="btn btn-outline-primary btn-pricing">
+                                    <i class="fas fa-arrow-right"></i> Başlayın
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Professional Plan -->
+                        <div class="col-lg-4">
+                            <div class="pricing-card featured">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary">
+                                        <i class="fas fa-star"></i> Professional
+                                    </h3>
+                                    <p class="text-muted">Orta ölçekli şirketler için</p>
+                                    <div class="price">
+                                        <span class="price-currency">₺</span>299
+                                        <span class="price-period">/ay</span>
+                                    </div>
+                                </div>
+                                
+                                <ul class="feature-list">
+                                    <li><i class="fas fa-check feature-check"></i> 15 Kamera Desteği</li>
+                                    <li><i class="fas fa-check feature-check"></i> Gelişmiş PPE Tespiti</li>
+                                    <li><i class="fas fa-check feature-check"></i> Email + SMS Bildirimleri</li>
+                                    <li><i class="fas fa-check feature-check"></i> Detaylı Raporlar</li>
+                                    <li><i class="fas fa-check feature-check"></i> 30 Gün Veri Saklama</li>
+                                    <li><i class="fas fa-check feature-check"></i> Gelişmiş Analitik</li>
+                                    <li><i class="fas fa-check feature-check"></i> API Erişimi</li>
+                                    <li><i class="fas fa-times feature-cross"></i> Öncelikli Destek</li>
+                                </ul>
+                                
+                                <a href="/app?plan=professional" class="btn btn-primary btn-pricing">
+                                    <i class="fas fa-crown"></i> En Popüler
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Enterprise Plan -->
+                        <div class="col-lg-4">
+                            <div class="pricing-card">
+                                <div class="text-center">
+                                    <h3 class="fw-bold text-primary">
+                                        <i class="fas fa-building"></i> Enterprise
+                                    </h3>
+                                    <p class="text-muted">Büyük kuruluşlar için</p>
+                                    <div class="price">
+                                        <span class="price-currency">₺</span>599
+                                        <span class="price-period">/ay</span>
+                                    </div>
+                                </div>
+                                
+                                <ul class="feature-list">
+                                    <li><i class="fas fa-check feature-check"></i> 50 Kamera Desteği</li>
+                                    <li><i class="fas fa-check feature-check"></i> AI Destekli Analiz</li>
+                                    <li><i class="fas fa-check feature-check"></i> Tüm Bildirim Türleri</li>
+                                    <li><i class="fas fa-check feature-check"></i> Özel Raporlar</li>
+                                    <li><i class="fas fa-check feature-check"></i> 90 Gün Veri Saklama</li>
+                                    <li><i class="fas fa-check feature-check"></i> Gelişmiş Analitik</li>
+                                    <li><i class="fas fa-check feature-check"></i> Full API Erişimi</li>
+                                    <li><i class="fas fa-check feature-check"></i> 7/24 Öncelikli Destek</li>
+                                </ul>
+                                
+                                <a href="/app?plan=enterprise" class="btn btn-success btn-pricing">
+                                    <i class="fas fa-rocket"></i> Kurumsal
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        </body>
+        </html>

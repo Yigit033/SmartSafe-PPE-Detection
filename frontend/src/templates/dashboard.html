@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SmartSafe AI - {{ user_data.company_name }}</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .navbar {
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .card {
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    margin-bottom: 20px;
+                    backdrop-filter: blur(10px);
+                    background: rgba(255,255,255,0.95);
+                    border: none;
+                }
+                .stat-card {
+                    background: white;
+                    border-radius: 15px;
+                    padding: 25px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+                    transition: all 0.3s ease;
+                    border: none;
+                }
+                .stat-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+                }
+                .stat-value {
+                    font-size: 2.5rem;
+                    font-weight: 700;
+                    color: #2c3e50;
+                    margin-bottom: 5px;
+                }
+                .stat-value.small-text {
+                    font-size: 1.8rem;
+                }
+                .stat-label {
+                    color: #7f8c8d;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                }
+                .stat-icon {
+                    font-size: 2.5rem;
+                    margin-bottom: 15px;
+                }
+                .chart-container {
+                    position: relative;
+                    height: 300px;
+                    margin: 20px 0;
+                }
+                .status-indicator {
+                    display: inline-block;
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    margin-right: 8px;
+                    animation: pulse 2s infinite;
+                }
+                .status-active { background: #27ae60; }
+                .status-warning { background: #f39c12; }
+                .status-error { background: #e74c3c; }
+                .status-offline { background: #95a5a6; }
+                
+                @keyframes pulse {
+                    0% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7); }
+                    70% { box-shadow: 0 0 0 10px rgba(39, 174, 96, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0); }
+                }
+                
+                .metric-trend {
+                    font-size: 0.8rem;
+                    margin-top: 5px;
+                }
+                .trend-up { color: #27ae60; }
+                .trend-down { color: #e74c3c; }
+                .trend-neutral { color: #95a5a6; }
+                
+                .camera-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 15px;
+                    margin-top: 20px;
+                }
+                .camera-card {
+                    background: white;
+                    border-radius: 10px;
+                    padding: 15px;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                    transition: all 0.3s ease;
+                }
+                .camera-card:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+                }
+                
+                .alert-item {
+                    padding: 15px;
+                    margin-bottom: 10px;
+                    border-radius: 10px;
+                    border-left: 4px solid #e74c3c;
+                    background: #fdf2f2;
+                    transition: all 0.3s ease;
+                }
+                .alert-item:hover {
+                    background: #f8d7da;
+                    transform: translateX(5px);
+                }
+                
+                .compliance-gauge {
+                    position: relative;
+                    width: 150px;
+                    height: 150px;
+                    margin: 0 auto;
+                }
+                
+                .refresh-btn {
+                    position: fixed;
+                    bottom: 30px;
+                    right: 30px;
+                    z-index: 1000;
+                    border-radius: 50%;
+                    width: 60px;
+                    height: 60px;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
+            </style>
+        </head>
+        <body>
+            <nav class="navbar navbar-expand-lg navbar-light bg-white">
+                <div class="container">
+                    <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
+                        <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+                    </a>
+                    <div class="navbar-nav ms-auto">
+                        <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/users">
+                            <i class="fas fa-users"></i> Kullanıcılar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/reports">
+                            <i class="fas fa-chart-line"></i> Raporlar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/settings">
+                            <i class="fas fa-cog"></i> Ayarlar
+                        </a>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-white">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            
+            <div class="container-fluid mt-4">
+                <!-- Header -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="text-white mb-0">
+                                <i class="fas fa-tachometer-alt"></i> 
+                                Dashboard - {{ user_data.company_name }}
+                            </h2>
+                            <div class="text-white">
+                                <span class="status-indicator status-active"></span>
+                                <span id="system-status">Sistem Aktif</span>
+                                <small class="ms-3">Son Güncelleme: <span id="last-update">--:--</span></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ana İstatistikler -->
+                <div class="row mb-4">
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-primary">
+                                <i class="fas fa-video"></i>
+                            </div>
+                            <div class="stat-value" id="active-cameras">--</div>
+                            <div class="stat-label">Aktif Kamera</div>
+                            <div class="metric-trend" id="cameras-trend">
+                                <i class="fas fa-arrow-up trend-up"></i> +2 bu hafta
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-success">
+                                <i class="fas fa-hard-hat"></i>
+                            </div>
+                            <div class="stat-value" id="ppe-compliance">--%</div>
+                            <div class="stat-label">PPE Uyum Oranı</div>
+                            <div class="metric-trend" id="compliance-trend">
+                                <i class="fas fa-arrow-up trend-up"></i> +5% bu hafta
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-value" id="daily-violations">--</div>
+                            <div class="stat-label">Günlük İhlaller</div>
+                            <div class="metric-trend" id="violations-trend">
+                                <i class="fas fa-arrow-down trend-up"></i> -3 dün
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-info">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-value" id="active-workers">--</div>
+                            <div class="stat-label">Aktif Çalışan</div>
+                            <div class="metric-trend" id="workers-trend">
+                                <i class="fas fa-minus trend-neutral"></i> Sabit
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-secondary">
+                                <i class="fas fa-crown"></i>
+                            </div>
+                            <div class="stat-value small-text" id="subscription-plan">{{ subscription_data.subscription_type.upper() if subscription_data.subscription_type else 'BASIC' }}</div>
+                            <div class="stat-label">Abonelik Planı</div>
+                            <div class="metric-trend" id="subscription-trend">
+                                {% if subscription_data.is_active %}
+                                <i class="fas fa-check trend-up"></i> Aktif
+                                {% else %}
+                                    <i class="fas fa-exclamation-triangle trend-down"></i> Süresi Dolmuş
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-6">
+                        <div class="stat-card text-center">
+                            <div class="stat-icon text-dark">
+                                <i class="fas fa-video"></i>
+                            </div>
+                            <div class="stat-value" id="camera-usage">{{ subscription_data.used_cameras }}/{{ subscription_data.max_cameras }}</div>
+                            <div class="stat-label">Kamera Kullanımı</div>
+                            <div class="metric-trend" id="usage-trend">
+                                {% set usage_percentage = subscription_data.usage_percentage or 0 %}
+                                {% if usage_percentage > 80 %}
+                                    <i class="fas fa-exclamation-triangle trend-down"></i> Limit Yakın
+                                {% elif usage_percentage > 60 %}
+                                    <i class="fas fa-info trend-neutral"></i> Orta
+                                {% else %}
+                                    <i class="fas fa-check trend-up"></i> Normal
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Grafikler -->
+                <div class="row mb-4">
+                    <div class="col-xl-8">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chart-line"></i> 
+                                    PPE Uyum Trendi (Son 7 Gün)
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="complianceChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-4">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chart-pie"></i> 
+                                    İhlal Türleri
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="violationsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Canlı Video Feed -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-play-circle"></i> 
+                                    Canlı Tespit Sistemi
+                                </h5>
+                                <div>
+                                    <span id="detection-status" class="badge bg-secondary me-2">Hazır</span>
+                                    <span id="fps-display" class="badge bg-info me-2" style="display: none;">FPS: --</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-lg-8">
+                                        <div id="video-display" class="mb-3" style="height: 400px; background: #f8f9fa; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid #dee2e6;">
+                                            <img id="video-feed" style="display: none; max-width: 100%; max-height: 100%; border-radius: 8px;" alt="Canlı Kamera Görüntüsü">
+                                            <div id="video-placeholder" style="text-align: center;">
+                                                <i class="fas fa-video fa-4x text-muted mb-3"></i>
+                                                <h5 class="text-muted">Canlı Video Feed</h5>
+                                                <p class="text-muted">Tespiti başlatmak için aşağıdaki butonu kullanın</p>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">Kamera Seç:</label>
+                                                                                <select class="form-select" id="camera-select">
+                                    <option value="">Kamera seçin...</option>
+                                    <!-- Kameralar dinamik olarak yüklenecek -->
+                                </select>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">Tespit Modu:</label>
+                                                <select class="form-select" id="detection-mode">
+                                                    <option value="construction">🏗️ İnşaat Modu</option>
+                                                    <option value="manufacturing">🏭 İmalat Modu</option>
+                                                    <option value="chemical">🧪 Kimya Modu</option>
+                                                    <option value="food">🍽️ Gıda Modu</option>
+                                                    <option value="warehouse">📦 Lojistik/Depo Modu</option>
+                                                    <option value="energy">⚡ Enerji Modu</option>
+                                                    <option value="petrochemical">🛢️ Petrokimya Modu</option>
+                                                    <option value="marine">🚢 Denizcilik Modu</option>
+                                                    <option value="aviation">✈️ Havacılık Modu</option>
+                                                    <option value="general">🔍 Genel Tespit</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">Kontroller:</label>
+                                                <div class="d-flex gap-2">
+                                                    <button id="start-btn" class="btn btn-success flex-fill" onclick="startDetection()">
+                                                        <i class="fas fa-play"></i> Başlat
+                                                    </button>
+                                                    <button id="stop-btn" class="btn btn-danger flex-fill" onclick="stopDetection()" disabled>
+                                                        <i class="fas fa-stop"></i> Durdur
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <div class="card bg-light">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">
+                                                    <i class="fas fa-chart-line"></i> Anlık İstatistikler
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <!-- İYİLEŞTİRİLDİ: Real-time Statistics -->
+                                                <div class="row text-center">
+                                                    <div class="col-6 mb-3">
+                                                        <div class="stat-value text-primary" id="live-people-count">0</div>
+                                                        <div class="stat-label">Kişi Sayısı</div>
+                                                        <div class="stat-trend" id="people-trend">
+                                                            <small class="text-muted">↑ +0</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 mb-3">
+                                                        <div class="stat-value text-success" id="live-compliance-rate">0%</div>
+                                                        <div class="stat-label">Uyum Oranı</div>
+                                                        <div class="stat-trend" id="compliance-trend">
+                                                            <small class="text-muted">→ 0%</small>
+                                                    </div>
+                                                </div>
+                                                </div>
+                                                
+                                                <!-- İYİLEŞTİRİLDİ: Enhanced Statistics -->
+                                                <div class="row text-center mt-3">
+                                                    <div class="col-4 mb-2">
+                                                        <div class="stat-value text-info" id="live-fps">0</div>
+                                                        <div class="stat-label">FPS</div>
+                                                    </div>
+                                                    <div class="col-4 mb-2">
+                                                        <div class="stat-value text-warning" id="live-processing-time">0ms</div>
+                                                        <div class="stat-label">İşlem Süresi</div>
+                                                    </div>
+                                                    <div class="col-4 mb-2">
+                                                        <div class="stat-value text-secondary" id="live-detection-count">0</div>
+                                                        <div class="stat-label">Tespit Sayısı</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- İYİLEŞTİRİLDİ: Real-time Violations -->
+                                                <div id="live-violations" class="mt-3">
+                                                    <h6 class="text-danger d-flex justify-content-between align-items-center">
+                                                        <span><i class="fas fa-exclamation-triangle"></i> Aktif İhlaller</span>
+                                                        <span class="badge bg-danger" id="violation-count">0</span>
+                                                    </h6>
+                                                    <div id="live-violations-list">
+                                                        <p class="text-muted small">Henüz ihlal tespit edilmedi</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- İYİLEŞTİRİLDİ: Performance Metrics -->
+                                                <div class="mt-3 p-2 bg-light rounded">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-clock"></i> Son güncelleme: <span id="last-update">-</span>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Kameralar ve Uyarılar -->
+                <div class="row">
+                    <div class="col-xl-8">
+                        <div class="card">
+                            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-video"></i> 
+                                    Kamera Durumu
+                                </h5>
+                                <div class="d-flex gap-1">
+                                    <!-- İYİLEŞTİRİLDİ: Export Buttons -->
+                                    <div class="dropdown">
+                                        <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-download"></i> Dışa Aktar
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="#" onclick="exportData('csv')">
+                                                <i class="fas fa-file-csv"></i> CSV
+                                            </a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="exportData('excel')">
+                                                <i class="fas fa-file-excel"></i> Excel
+                                            </a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="exportData('pdf')">
+                                                <i class="fas fa-file-pdf"></i> PDF
+                                            </a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item" href="#" onclick="exportData('json')">
+                                                <i class="fas fa-file-code"></i> JSON
+                                            </a></li>
+                                        </ul>
+                                    </div>
+                                <a href="/company/{{ company_id }}/cameras" class="btn btn-light btn-sm">
+                                    <i class="fas fa-plus"></i> Yeni Kamera
+                                </a>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="camera-grid" id="cameras-grid">
+                                    <!-- Kameralar buraya yüklenecek -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-4">
+                        <div class="card">
+                            <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-bell"></i> 
+                                    Akıllı Uyarılar
+                                </h5>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-light btn-sm" onclick="clearAlerts()" title="Uyarıları Temizle">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    <button class="btn btn-light btn-sm" onclick="toggleAlerts()" title="Uyarı Sesini Aç/Kapat">
+                                        <i class="fas fa-volume-up" id="alert-sound-icon"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                                <!-- İYİLEŞTİRİLDİ: Enhanced Alerts -->
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <small class="text-muted">Uyarı Filtreleri:</small>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary active" onclick="filterAlerts('all')">Tümü</button>
+                                            <button class="btn btn-outline-danger" onclick="filterAlerts('violations')">İhlaller</button>
+                                            <button class="btn btn-outline-warning" onclick="filterAlerts('system')">Sistem</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="alerts-list">
+                                    <!-- İYİLEŞTİRİLDİ: Smart Alerts -->
+                                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <div>
+                                                <strong>Sistem Hazır</strong>
+                                                <br><small class="text-muted">PPE tespit sistemi aktif ve çalışıyor</small>
+                                </div>
+                            </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    </div>
+                                
+                                <!-- İYİLEŞTİRİLDİ: Alert Statistics -->
+                                <div class="mt-3 p-2 bg-light rounded">
+                                    <div class="row text-center">
+                                        <div class="col-4">
+                                            <small class="text-danger">
+                                                <i class="fas fa-exclamation-triangle"></i><br>
+                                                <span id="critical-alerts">0</span>
+                                            </small>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-warning">
+                                                <i class="fas fa-exclamation-circle"></i><br>
+                                                <span id="warning-alerts">0</span>
+                                            </small>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-info">
+                                                <i class="fas fa-info-circle"></i><br>
+                                                <span id="info-alerts">1</span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- İYİLEŞTİRİLDİ: Mobile-Friendly Controls -->
+            <div class="mobile-controls d-md-none">
+                <div class="fixed-bottom bg-dark p-2">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <button class="btn btn-success btn-sm w-100" onclick="startDetection()">
+                                <i class="fas fa-play"></i><br><small>Başlat</small>
+                            </button>
+                        </div>
+                        <div class="col-4">
+                            <button class="btn btn-danger btn-sm w-100" onclick="stopDetection()">
+                                <i class="fas fa-stop"></i><br><small>Durdur</small>
+                            </button>
+                        </div>
+                        <div class="col-4">
+                            <button class="btn btn-primary btn-sm w-100" onclick="refreshDashboard()">
+                                <i class="fas fa-sync-alt"></i><br><small>Yenile</small>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Desktop Yenileme Butonu -->
+            <button class="btn btn-primary refresh-btn d-none d-md-block" onclick="refreshDashboard()" title="Verileri Yenile">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            
+
+            
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+            <script>
+                const companyId = '{{ company_id }}';
+                let complianceChart, violationsChart;
+                
+                // Ana fonksiyon - Sayfa yüklendiğinde çalışır
+                document.addEventListener('DOMContentLoaded', function() {
+                    initializeDashboard();
+                    
+                    // Otomatik yenileme (30 saniye)
+                    setInterval(refreshDashboard, 30000);
+                });
+                
+                function initializeDashboard() {
+                    loadStats();
+                    loadCameras();
+                    loadAlerts();
+                    initializeCharts();
+                    updateLastUpdate();
+                }
+                
+                function refreshDashboard() {
+                    loadStats();
+                    loadCameras();
+                    loadAlerts();
+                    updateCharts();
+                    updateLastUpdate();
+                    
+                    // Refresh animasyonu
+                    const refreshBtn = document.querySelector('.refresh-btn i');
+                    refreshBtn.style.animation = 'none';
+                    setTimeout(() => {
+                        refreshBtn.style.animation = 'spin 1s linear';
+                    }, 10);
+                }
+                
+                function loadStats() {
+                    fetch(`/api/company/${companyId}/stats`)
+                        .then(response => response.json())
+                        .then(data => {
+                            document.getElementById('active-cameras').textContent = data.active_cameras || 0;
+                            document.getElementById('ppe-compliance').textContent = (data.compliance_rate || 0).toFixed(1) + '%';
+                            document.getElementById('daily-violations').textContent = data.today_violations || 0;
+                            document.getElementById('active-workers').textContent = data.active_workers || 0;
+                            
+                            // Trend göstergeleri
+                            updateTrendIndicators(data);
+                        })
+                        .catch(error => {
+                            console.error('Stats yüklenemedi:', error);
+                        });
+                }
+                
+                function loadCameras() {
+                    fetch(`/api/company/${companyId}/cameras`)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('✅ Unified Camera Data:', data); // Debug log
+                            
+                            const grid = document.getElementById('cameras-grid');
+                            const cameraSelect = document.getElementById('camera-select');
+                            
+                            // Summary bilgilerini güncelle
+                            if (data.summary) {
+                                updateCameraSummary(data.summary);
+                            }
+                            
+                            // Kamera seçim listesini güncelle
+                            cameraSelect.innerHTML = '<option value="">Kamera seçin...</option>';
+                            
+                            if (data.cameras && data.cameras.length > 0) {
+                                // Grid'e kamera kartları ekle
+                                grid.innerHTML = data.cameras.map(camera => `
+                                    <div class="camera-card">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="mb-0">${camera.camera_name}</h6>
+                                            <span class="status-indicator ${getCameraStatusClass(camera.status)}"></span>
+                                        </div>
+                                        <p class="text-muted mb-1">
+                                            <i class="fas fa-map-marker-alt"></i> ${camera.location}
+                                        </p>
+                                        <p class="text-muted mb-2">
+                                            <i class="fas fa-network-wired"></i> ${camera.ip_address || 'N/A'}
+                                        </p>
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-success">
+                                                <i class="fas fa-eye"></i> ${camera.detections_today || 0} tespit
+                                            </small>
+                                            <small class="text-warning">
+                                                <i class="fas fa-exclamation-triangle"></i> ${camera.violations_today || 0} ihlal
+                                            </small>
+                                        </div>
+                                        <div class="mt-2">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewStream('${camera.camera_id}')">
+                                                <i class="fas fa-eye"></i> Görüntüle
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('');
+                                
+                                // Seçim listesine kameraları ekle
+                                data.cameras.forEach(camera => {
+                                    const option = document.createElement('option');
+                                    option.value = camera.camera_id;
+                                    option.textContent = `${camera.camera_name} - ${camera.location}`;
+                                    cameraSelect.appendChild(option);
+                                });
+                                
+                            } else {
+                                grid.innerHTML = `
+                                    <div class="col-12 text-center py-5">
+                                        <i class="fas fa-video fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">Henüz kamera eklenmemiş</p>
+                                        <p class="text-muted">Kamera eklemek için:</p>
+                                        <div class="d-flex gap-2 justify-content-center">
+                                        <a href="/company/${companyId}/cameras" class="btn btn-primary">
+                                                <i class="fas fa-plus"></i> Buradan Ekle
+                                        </a>
+                                            <button class="btn btn-success" onclick="syncCameras()">
+                                                <i class="fas fa-sync"></i> Kamera Keşfet & Sync
+                                        </button>
+                                            <a href="/company/${companyId}/cameras" class="btn btn-outline-primary">
+                                                <i class="fas fa-cog"></i> Kamera Yönetimi
+                                            </a>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Kameralar yüklenemedi:', error);
+                            const grid = document.getElementById('cameras-grid');
+                            grid.innerHTML = `
+                                <div class="col-12">
+                                    <div class="alert alert-danger">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Kameralar yüklenemedi. Lütfen sayfayı yenileyin.
+                                    </div>
+                                </div>
+                            `;
+                        });
+                }
+                
+                function loadAlerts() {
+                    fetch(`/api/company/${companyId}/alerts`)
+                        .then(response => response.json())
+                        .then(data => {
+                            const alertsList = document.getElementById('alerts-list');
+                            if (data.alerts && data.alerts.length > 0) {
+                                alertsList.innerHTML = data.alerts.map(alert => `
+                                    <div class="alert-item">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong>${alert.violation_type}</strong>
+                                                <p class="mb-1">${alert.description}</p>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-clock"></i> ${alert.time}
+                                                    <i class="fas fa-video ms-2"></i> ${alert.camera_name}
+                                                </small>
+                                            </div>
+                                            <span class="badge bg-danger">${alert.severity}</span>
+                                        </div>
+                                    </div>
+                                `).join('');
+                            } else {
+                                alertsList.innerHTML = `
+                                    <div class="text-center py-4">
+                                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                        <p class="text-muted">Yeni uyarı yok</p>
+                                    </div>
+                                `;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Uyarılar yüklenemedi:', error);
+                        });
+                }
+                
+                function initializeCharts() {
+                    // PPE Uyum Trendi Grafiği
+                    const complianceCtx = document.getElementById('complianceChart').getContext('2d');
+                    complianceChart = new Chart(complianceCtx, {
+                        type: 'line',
+                        data: {
+                            labels: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
+                            datasets: [{
+                                label: 'PPE Uyum Oranı (%)',
+                                data: [78, 82, 85, 88, 92, 87, 90],
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+                    
+                    // İhlal Türleri Grafiği
+                    const violationsCtx = document.getElementById('violationsChart').getContext('2d');
+                    violationsChart = new Chart(violationsCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Baret Eksik', 'Yelek Eksik', 'Ayakkabı Eksik', 'Maske Eksik'],
+                            datasets: [{
+                                data: [45, 30, 15, 10],
+                                backgroundColor: [
+                                    '#e74c3c',
+                                    '#f39c12',
+                                    '#3498db',
+                                    '#9b59b6'
+                                ],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        usePointStyle: true,
+                                        padding: 20
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                function updateCharts() {
+                    // Gerçek verilerle grafikleri güncelle
+                    fetch(`/api/company/${companyId}/chart-data`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.compliance_trend) {
+                                complianceChart.data.datasets[0].data = data.compliance_trend;
+                                complianceChart.update();
+                            }
+                            if (data.violation_types) {
+                                violationsChart.data.datasets[0].data = data.violation_types;
+                                violationsChart.update();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Grafik verileri yüklenemedi:', error);
+                        });
+                }
+                
+                function updateTrendIndicators(data) {
+                    // İYİLEŞTİRİLDİ: Trend göstergelerini güncelle - Backward compatibility
+                    const trends = {
+                        'people-trend': data['people-trend'] || data.people_trend || 0,
+                        'compliance-trend': data['compliance-trend'] || data.compliance_trend || 0,
+                        'fps-trend': data['fps-trend'] || data.fps_trend || 0,
+                        'processing-trend': data['processing-trend'] || data.processing_trend || 0,
+                        'cameras-trend': data.cameras_trend || data.cameras_trend || 0,
+                        'violations-trend': data.violations_trend || data.violations_trend || 0,
+                        'workers-trend': data.workers_trend || data.workers_trend || 0
+                    };
+                    
+                    Object.entries(trends).forEach(([id, value]) => {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            const icon = element.querySelector('i');
+                            const smallElement = element.querySelector('small');
+                            if (icon && smallElement) {
+                            if (value > 0) {
+                                icon.className = 'fas fa-arrow-up trend-up';
+                                    smallElement.textContent = `↑ +${value}`;
+                            } else if (value < 0) {
+                                icon.className = 'fas fa-arrow-down trend-down';
+                                    smallElement.textContent = `↓ ${value}`;
+                            } else {
+                                icon.className = 'fas fa-minus trend-neutral';
+                                    smallElement.textContent = `→ 0`;
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                function getCameraStatusClass(status) {
+                    const statusMap = {
+                        'active': 'status-active',
+                        'warning': 'status-warning',
+                        'error': 'status-error',
+                        'offline': 'status-offline'
+                    };
+                    return statusMap[status] || 'status-offline';
+                }
+                
+                function updateLastUpdate() {
+                    const now = new Date();
+                    document.getElementById('last-update').textContent = 
+                        now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                }
+                
+                function testCameraConnection() {
+                    const formData = new FormData(document.getElementById('addCameraForm'));
+                    const data = Object.fromEntries(formData);
+                    
+                    // Gerekli alanları kontrol et
+                    if (!data.ip_address) {
+                        alert('❌ IP adresi gerekli!');
+                        return;
+                    }
+                    
+                    const testButton = document.querySelector('button[onclick="testCameraConnection()"]');
+                    const testResults = document.getElementById('testResults');
+                    
+                    // Test başlatıldığında UI güncelle
+                    testButton.disabled = true;
+                    testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Akıllı Test Ediliyor...';
+                    testResults.style.display = 'block';
+                    testResults.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-brain"></i> Akıllı kamera tespiti ve bağlantı testi yapılıyor...
+                        </div>
+                    `;
+                    
+                    // Önce akıllı tespit dene
+                    fetch(`/api/company/${companyId}/cameras/smart-test`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            ip_address: data.ip_address,
+                            camera_name: data.name || 'Test Camera'
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            // Akıllı tespit başarılı - formu otomatik doldur
+                            if (result.detected_model) {
+                                Object.keys(result.detected_model).forEach(key => {
+                                    const input = document.querySelector(`[name="${key}"]`);
+                                    if (input && result.detected_model[key]) {
+                                        input.value = result.detected_model[key];
+                                    }
+                                });
+                            }
+                            
+                            testResults.innerHTML = `
+                                <div class="alert alert-success">
+                                    <h6><i class="fas fa-check-circle"></i> Akıllı Tespit Başarılı!</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>Tespit Edilen Model:</strong> ${result.detected_model?.name || 'Bilinmiyor'}</li>
+                                        <li><strong>Üretici:</strong> ${result.detected_model?.manufacturer || 'Bilinmiyor'}</li>
+                                        <li><strong>Protokol:</strong> ${result.detected_model?.default_rtsp || result.detected_model?.default_http || 'Bilinmiyor'}</li>
+                                        <li><strong>Port:</strong> ${result.detected_model?.ports?.[0] || 'Bilinmiyor'}</li>
+                                        <li><strong>Bağlantı Süresi:</strong> ${result.connection_time || 0}ms</li>
+                                        <li><strong>Kalite:</strong> ${result.stream_quality || 'İyi'}</li>
+                                    </ul>
+                                    <div class="mt-2">
+                                        <small class="text-success">
+                                            <i class="fas fa-magic"></i> Kamera ayarları otomatik olarak dolduruldu!
+                                        </small>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            // Akıllı tespit başarısız - manuel test dene
+                            return fetch(`/api/company/${companyId}/cameras/test`, {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify(data)
+                            });
+                        }
+                    })
+                    .then(response => {
+                        if (response && !response.ok) {
+                            return response.json();
+                        }
+                        return null;
+                    })
+                    .then(result => {
+                        if (result && !result.success) {
+                            testResults.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <h6><i class="fas fa-exclamation-triangle"></i> Manuel Test Gerekli!</h6>
+                                    <p><strong>Akıllı tespit başarısız:</strong> ${result.error || 'Bilinmeyen hata'}</p>
+                                    <div class="mt-2">
+                                        <small><strong>Öneriler:</strong></small>
+                                        <ul class="mb-0">
+                                            <li>Kamera ayarlarını manuel olarak kontrol edin</li>
+                                            <li>IP adresinin doğru olduğundan emin olun</li>
+                                            <li>Kamera ve bilgisayarın aynı ağda olduğunu kontrol edin</li>
+                                            <li>Kullanıcı adı ve şifrenin doğru olduğunu kontrol edin</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Kamera test hatası:', error);
+                        testResults.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-times-circle"></i> Test Hatası!</h6>
+                                <p>Kamera testi sırasında bir hata oluştu: ${error.message}</p>
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        // Test bittiğinde UI'yi eski haline getir
+                        testButton.disabled = false;
+                        testButton.innerHTML = '<i class="fas fa-brain"></i> Akıllı Test Et';
+                    });
+                }
+                
+                function smartDetectCamera() {
+                    const ipAddress = document.querySelector('input[name="ip_address"]').value;
+                    const cameraName = document.querySelector('input[name="name"]').value || 'Test Camera';
+                    
+                    if (!ipAddress) {
+                        alert('❌ IP adresi gerekli!');
+                        return;
+                    }
+                    
+                    const smartButton = document.querySelector('button[onclick="smartDetectCamera()"]');
+                    const testResults = document.getElementById('testResults');
+                    
+                    // Akıllı tespit başlatıldığında UI güncelle
+                    smartButton.disabled = true;
+                    smartButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tespit Ediliyor...';
+                    testResults.style.display = 'block';
+                    testResults.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-search"></i> Kamera modeli tespit ediliyor...
+                        </div>
+                    `;
+                    
+                    fetch(`/api/company/${companyId}/cameras/smart-discover`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            ip_address: ipAddress,
+                            camera_name: cameraName
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success && result.detected_cameras && result.detected_cameras.length > 0) {
+                            const camera = result.detected_cameras[0];
+                            
+                            // Formu otomatik doldur
+                            if (camera.detected_model) {
+                                Object.keys(camera.detected_model).forEach(key => {
+                                    const input = document.querySelector(`[name="${key}"]`);
+                                    if (input && camera.detected_model[key]) {
+                                        input.value = camera.detected_model[key];
+                                    }
+                                });
+                            }
+                            
+                            testResults.innerHTML = `
+                                <div class="alert alert-success">
+                                    <h6><i class="fas fa-check-circle"></i> Kamera Tespit Edildi!</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>Model:</strong> ${camera.detected_model?.name || 'Bilinmiyor'}</li>
+                                        <li><strong>Üretici:</strong> ${camera.detected_model?.manufacturer || 'Bilinmiyor'}</li>
+                                        <li><strong>IP:</strong> ${camera.ip_address}</li>
+                                        <li><strong>Port:</strong> ${camera.detected_model?.ports?.[0] || 'Bilinmiyor'}</li>
+                                        <li><strong>Güven Skoru:</strong> ${camera.confidence_score || 0}%</li>
+                                    </ul>
+                                    <div class="mt-2">
+                                        <small class="text-success">
+                                            <i class="fas fa-magic"></i> Kamera ayarları otomatik olarak dolduruldu!
+                                        </small>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            testResults.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <h6><i class="fas fa-exclamation-triangle"></i> Kamera Tespit Edilemedi!</h6>
+                                    <p>Kamera otomatik olarak tespit edilemedi. Manuel ayarları kontrol edin.</p>
+                                    <div class="mt-2">
+                                        <small><strong>Öneriler:</strong></small>
+                                        <ul class="mb-0">
+                                            <li>IP adresinin doğru olduğundan emin olun</li>
+                                            <li>Kameranın açık ve erişilebilir olduğunu kontrol edin</li>
+                                            <li>Kamera ve bilgisayarın aynı ağda olduğunu kontrol edin</li>
+                                            <li>Manuel ayarları kullanarak kamera ekleyin</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Akıllı tespit hatası:', error);
+                        testResults.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-times-circle"></i> Tespit Hatası!</h6>
+                                <p>Kamera tespiti sırasında bir hata oluştu: ${error.message}</p>
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        // Tespit bittiğinde UI'yi eski haline getir
+                        smartButton.disabled = false;
+                        smartButton.innerHTML = '<i class="fas fa-brain"></i> Akıllı Tespit';
+                    });
+                }
+                
+
+                
+                // Video Feed Fonksiyonları
+                let detectionActive = false;
+                let currentCameraId = null;
+                let detectionMonitoringInterval = null;
+                
+                function startDetection() {
+                    const camera = document.getElementById('camera-select').value;
+                    const mode = document.getElementById('detection-mode').value;
+                    
+                    if (detectionActive) {
+                        alert('⚠️ Tespit zaten aktif!');
+                        return;
+                    }
+                    
+                    // UI güncelle
+                    document.getElementById('start-btn').disabled = true;
+                    document.getElementById('detection-status').textContent = 'Başlatılıyor...';
+                    document.getElementById('detection-status').className = 'badge bg-warning me-2';
+                    
+                    fetch(`/api/company/${companyId}/start-detection`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({camera_id: camera, detection_mode: mode, confidence: 0.6})
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            detectionActive = true;
+                            currentCameraId = camera;
+                            
+                            // Video feed'i başlat
+                            startVideoFeed(camera);
+                            
+                            // UI güncelle
+                            document.getElementById('start-btn').disabled = true;
+                            document.getElementById('stop-btn').disabled = false;
+                            document.getElementById('detection-status').textContent = 'Aktif';
+                            document.getElementById('detection-status').className = 'badge bg-success me-2';
+                            document.getElementById('fps-display').style.display = 'inline';
+                            
+                            // Detection monitoring başlat
+                            startDetectionMonitoring();
+                            
+                            // Success alert
+                            showAlert('✅ Tespit sistemi başlatıldı!', 'success');
+                        } else {
+                            // Hata durumunda UI'yi resetle
+                            document.getElementById('start-btn').disabled = false;
+                            document.getElementById('detection-status').textContent = 'Hata';
+                            document.getElementById('detection-status').className = 'badge bg-danger me-2';
+                            
+                            showAlert('❌ Hata: ' + data.error, 'danger');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Detection başlatma hatası:', error);
+                        document.getElementById('start-btn').disabled = false;
+                        document.getElementById('detection-status').textContent = 'Hata';
+                        document.getElementById('detection-status').className = 'badge bg-danger me-2';
+                        showAlert('❌ Bağlantı hatası!', 'danger');
+                    });
+                }
+
+                function stopDetection() {
+                    if (!detectionActive) {
+                        return;
+                    }
+                    
+                    // UI güncelle
+                    document.getElementById('stop-btn').disabled = true;
+                    document.getElementById('detection-status').textContent = 'Durduruluyor...';
+                    document.getElementById('detection-status').className = 'badge bg-warning me-2';
+                    
+                    fetch(`/api/company/${companyId}/stop-detection`, {method: 'POST'})
+                        .then(response => response.json())
+                        .then(data => {
+                            if(data.success) {
+                                detectionActive = false;
+                                currentCameraId = null;
+                                
+                                // Video feed'i durdur
+                                stopVideoFeed();
+                                
+                                // Detection monitoring durdur
+                                if (detectionMonitoringInterval) {
+                                    clearInterval(detectionMonitoringInterval);
+                                    detectionMonitoringInterval = null;
+                                }
+                                
+                                // UI güncelle
+                                document.getElementById('start-btn').disabled = false;
+                                document.getElementById('stop-btn').disabled = true;
+                                document.getElementById('detection-status').textContent = 'Durduruldu';
+                                document.getElementById('detection-status').className = 'badge bg-secondary me-2';
+                                document.getElementById('fps-display').style.display = 'none';
+                                
+                                // İstatistikleri sıfırla
+                                document.getElementById('live-people-count').textContent = '0';
+                                document.getElementById('live-compliance-rate').textContent = '0%';
+                                document.getElementById('live-violations-list').innerHTML = '<p class="text-muted small">Henüz ihlal tespit edilmedi</p>';
+                                
+                                showAlert('✅ Tespit sistemi durduruldu!', 'info');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Detection durdurma hatası:', error);
+                            document.getElementById('stop-btn').disabled = false;
+                        });
+                }
+                
+                function startVideoFeed(cameraId) {
+                    const videoElement = document.getElementById('video-feed');
+                    const placeholder = document.getElementById('video-placeholder');
+                    
+                    // Video feed URL'sini ayarla
+                    videoElement.src = `/api/company/${companyId}/video-feed/${cameraId}`;
+                    
+                    // Video yüklendiğinde göster
+                    videoElement.onload = function() {
+                        placeholder.style.display = 'none';
+                        videoElement.style.display = 'block';
+                    };
+                    
+                    // Hata durumunda placeholder'ı geri göster
+                    videoElement.onerror = function() {
+                        videoElement.style.display = 'none';
+                        placeholder.style.display = 'block';
+                        placeholder.innerHTML = '<i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i><h5 class="text-warning">Kamera Bağlantısı Kurulamadı</h5><p class="text-warning">Lütfen kamera ayarlarını kontrol edin</p>';
+                    };
+                }
+                
+                function stopVideoFeed() {
+                    const videoElement = document.getElementById('video-feed');
+                    const placeholder = document.getElementById('video-placeholder');
+                    
+                    // Video feed'i durdur
+                    videoElement.src = '';
+                    videoElement.style.display = 'none';
+                    
+                    // Placeholder'ı geri göster
+                    placeholder.style.display = 'block';
+                    placeholder.innerHTML = '<i class="fas fa-video fa-4x text-muted mb-3"></i><h5 class="text-muted">Canlı Video Feed</h5><p class="text-muted">Tespiti başlatmak için yukarıdaki butonu kullanın</p>';
+                }
+                
+                function startDetectionMonitoring() {
+                    detectionMonitoringInterval = setInterval(() => {
+                        if (detectionActive && currentCameraId) {
+                            // Detection sonuçlarını al
+                            fetch(`/api/company/${companyId}/detection-results/${currentCameraId}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success && data.result) {
+                                        const result = data.result;
+                                        
+                                        // İYİLEŞTİRİLDİ: Tüm dinamik verileri güncelle
+                                        document.getElementById('live-people-count').textContent = result.total_people || 0;
+                                        document.getElementById('live-compliance-rate').textContent = `${(result.compliance_rate || 0).toFixed(1)}%`;
+                                        
+                                        // YENİ: FPS, işlem süresi ve tespit sayısı güncelleme
+                                        const fps = Math.round(1000 / (result.processing_time_ms || 100));
+                                        document.getElementById('fps-display').textContent = `FPS: ${fps}`;
+                                        document.getElementById('live-fps').textContent = fps;
+                                        document.getElementById('live-processing-time').textContent = `${(result.processing_time_ms || 0).toFixed(0)}ms`;
+                                        document.getElementById('live-detection-count').textContent = result.detection_count || 0;
+                                        
+                                        // YENİ: Violation count badge güncelleme
+                                        const violationCount = result.violations ? result.violations.length : 0;
+                                        document.getElementById('violation-count').textContent = violationCount;
+                                        
+                                        // YENİ: Son güncelleme zamanı
+                                        const now = new Date();
+                                        document.getElementById('last-update').textContent = 
+                                            now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                                        
+                                        // YENİ: Trend göstergelerini güncelle
+                                        updateTrendIndicators({
+                                            'people-trend': result.total_people > 0 ? 1 : 0,
+                                            'compliance-trend': result.compliance_rate > 80 ? 1 : (result.compliance_rate > 60 ? 0 : -1),
+                                            'fps-trend': fps > 15 ? 1 : (fps > 5 ? 0 : -1),
+                                            'processing-trend': result.processing_time_ms < 100 ? 1 : (result.processing_time_ms < 200 ? 0 : -1)
+                                        });
+                                        
+                                        // Detection status'u güncelle
+                                        const statusElement = document.getElementById('detection-status');
+                                        statusElement.innerHTML = `Aktif - ${result.total_people || 0} kişi`;
+                                        
+                                        // Compliance rate'e göre renk değiştir
+                                        if (result.compliance_rate >= 80) {
+                                            statusElement.className = 'badge bg-success me-2';
+                                            document.getElementById('live-compliance-rate').className = 'stat-value text-success';
+                                        } else if (result.compliance_rate >= 60) {
+                                            statusElement.className = 'badge bg-warning me-2';
+                                            document.getElementById('live-compliance-rate').className = 'stat-value text-warning';
+                                        } else {
+                                            statusElement.className = 'badge bg-danger me-2';
+                                            document.getElementById('live-compliance-rate').className = 'stat-value text-danger';
+                                        }
+                                        
+                                        // İhlalleri göster
+                                        const violationsList = document.getElementById('live-violations-list');
+                                        console.log('🔍 Detection result:', result);
+                                        console.log('🔍 Violations:', result.violations);
+                                        
+                                        if (result.violations && result.violations.length > 0) {
+                                            violationsList.innerHTML = result.violations.map(violation => 
+                                                `<div class="alert alert-danger alert-sm py-1 px-2 mb-1">
+                                                    <small><strong>${violation.person_id || 'Kişi'}:</strong> ${violation.missing_ppe.join(', ')}</small>
+                                                </div>`
+                                            ).join('');
+                                        } else {
+                                            violationsList.innerHTML = '<p class="text-muted small">Henüz ihlal tespit edilmedi</p>';
+                                        }
+                                    } else {
+                                        document.getElementById('fps-display').textContent = 'FPS: --';
+                                        // İYİLEŞTİRİLDİ: Boş durumda da dinamik verileri sıfırla
+                                        document.getElementById('live-fps').textContent = '0';
+                                        document.getElementById('live-processing-time').textContent = '0ms';
+                                        document.getElementById('live-detection-count').textContent = '0';
+                                        document.getElementById('violation-count').textContent = '0';
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Detection monitoring error:', error);
+                                    document.getElementById('fps-display').textContent = 'FPS: --';
+                                    // İYİLEŞTİRİLDİ: Hata durumunda da dinamik verileri sıfırla
+                                    document.getElementById('live-fps').textContent = '0';
+                                    document.getElementById('live-processing-time').textContent = '0ms';
+                                    document.getElementById('live-detection-count').textContent = '0';
+                                    document.getElementById('violation-count').textContent = '0';
+                                });
+                        }
+                    }, 2000); // Her 2 saniyede bir
+                }
+                
+                function showAlert(message, type) {
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+                    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                    alertDiv.innerHTML = `
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(alertDiv);
+                    
+                    setTimeout(() => {
+                        if (alertDiv.parentNode) {
+                            alertDiv.remove();
+                        }
+                    }, 5000);
+                }
+                
+                function logout() {
+                    fetch('/logout', {method: 'POST'})
+                        .then(() => {
+                            window.location.href = '/';
+                        });
+                }
+                
+                // === UNIFIED CAMERA SYNC FUNCTIONS ===
+                function syncCameras() {
+                    const syncBtn = event.target;
+                    const originalText = syncBtn.innerHTML;
+                    
+                    syncBtn.disabled = true;
+                    syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Senkronize ediliyor...';
+                    
+                    fetch(`/api/company/${companyId}/cameras/sync`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            network_range: '192.168.1.0/24',
+                            force_sync: true
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                        console.log('✅ Sync result:', data);
+                        
+                        if (data.success) {
+                            showAlert(`✅ Kamera senkronizasyonu tamamlandı! ${data.total_cameras} kamera bulundu (${data.mode} mode).`, 'success');
+                            
+                            // Refresh cameras and stats
+                            loadCameras();
+                            loadStats();
+                            } else {
+                            showAlert(`❌ Senkronizasyon hatası: ${data.error}`, 'danger');
+                            }
+                        })
+                        .catch(error => {
+                        console.error('❌ Sync error:', error);
+                        showAlert('❌ Senkronizasyon sırasında bir hata oluştu.', 'danger');
+                    })
+                    .finally(() => {
+                        syncBtn.disabled = false;
+                        syncBtn.innerHTML = originalText;
+                    });
+                }
+                
+                // Update camera summary in dashboard
+                function updateCameraSummary(summary) {
+                    console.log('📊 Updating camera summary:', summary);
+                    
+                    // Update any elements that display camera counts
+                    const totalElements = document.querySelectorAll('.total-cameras-count, [data-camera-total]');
+                    const activeElements = document.querySelectorAll('.active-cameras-count, [data-camera-active]');
+                    
+                    totalElements.forEach(el => {
+                        el.textContent = summary.total_cameras || 0;
+                    });
+                    
+                    activeElements.forEach(el => {
+                        el.textContent = summary.active_cameras || 0;
+                        });
+                }
+                
+                // CSS animasyonu
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
+            </script>
+        </body>
+        </html>

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartSafe AI - Industrial PPE Detection & SaaS System</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet" />
+    <style>
+      :root {
+        --primary: #1e3a8a;
+        --secondary: #0ea5e9;
+        --accent: #22c55e;
+        --warning: #ef4444;
+        --light: #f8fafc;
+        --dark: #0f172a;
+      }
+
+      body {
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        color: var(--dark);
+        overflow-x: hidden;
+      }
+
+      .gradient-bg {
+        background: linear-gradient(
+          135deg,
+          var(--primary) 0%,
+          var(--secondary) 100%
+        );
+      }
+
+      .hero-section {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        background: linear-gradient(
+          135deg,
+          #0f172a 0%,
+          #1e293b 40%,
+          #334155 100%
+        );
+        color: white;
+        position: relative;
+        overflow: hidden;
+        padding-top: 80px;
+      }
+
+      .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 30px;
+        transition: all 0.3s ease;
+      }
+
+      .glass-card:hover {
+        transform: translateY(-10px);
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      .feature-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 25px;
+        font-size: 24px;
+        color: white;
+      }
+
+      .btn-primary-modern {
+        background: linear-gradient(
+          135deg,
+          var(--primary) 0%,
+          var(--secondary) 100%
+        );
+        border: none;
+        padding: 12px 35px;
+        border-radius: 30px;
+        color: white;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+      }
+
+      .btn-primary-modern:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(14, 165, 233, 0.5);
+        color: white;
+      }
+
+      .nav-link {
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.8);
+        margin: 0 15px;
+        transition: color 0.3s ease;
+      }
+
+      .nav-link:hover {
+        color: white;
+      }
+
+      .navbar {
+        padding: 20px 0;
+        transition: all 0.3s ease;
+      }
+
+      .navbar.scrolled {
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: blur(10px);
+        padding: 15px 0;
+      }
+
+      .badge-premium {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+        padding: 8px 15px;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg fixed-top navbar-dark">
+      <div class="container">
+        <a class="navbar-brand fw-bold fs-3" href="#">
+          <i class="fas fa-shield-alt text-info me-2"></i> SmartSafe AI
+        </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto align-items-center">
+            <li class="nav-item">
+              <a class="nav-link" href="#features">Features</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#sectors">Sectors</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#pricing">Pricing</a>
+            </li>
+            <li class="nav-item ms-lg-3">
+              <a href="/register" class="btn btn-primary-modern"
+                >Get Started Free</a
+              >
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-lg-6" data-aos="fade-right">
+            <span class="badge-premium"
+              ><i class="fas fa-microchip me-2"></i> AI-Powered PPE
+              Monitoring</span
+            >
+            <h1 class="display-3 fw-bold mb-4">
+              Protect Your Workforce with Real-Time AI
+            </h1>
+            <p class="lead mb-5 text-white-50">
+              SmartSafe AI automatically detects safety violations, monitors PPE
+              compliance, and prevents workplace accidents 24/7 using your
+              existing cameras.
+            </p>
+            <div class="d-flex gap-3">
+              <a href="/register" class="btn btn-primary-modern btn-lg"
+                >Start 7-Day Free Trial</a
+              >
+              <a
+                href="#video"
+                class="btn btn-outline-light btn-lg rounded-pill px-4"
+                ><i class="fas fa-play me-2"></i> Watch Demo</a
+              >
+            </div>
+          </div>
+          <div class="col-lg-6 mt-5 mt-lg-0" data-aos="fade-left">
+            <div class="position-relative">
+              <img
+                src="https://images.unsplash.com/photo-1581092160562-40aa08e78837?auto=format&fit=crop&q=80&w=1000"
+                class="img-fluid rounded-4 shadow-2xl"
+                alt="AI Detection Mockup"
+              />
+              <div
+                class="glass-card position-absolute bottom-0 start-0 translate-middle-y ms-n4 d-none d-md-block"
+                style="width: 250px"
+              >
+                <div class="d-flex align-items-center">
+                  <div class="bg-success rounded-circle p-2 me-3">
+                    <i class="fas fa-check text-white"></i>
+                  </div>
+                  <div>
+                    <small class="text-white-50 d-block">System Status</small>
+                    <strong class="text-white">Active & Monitoring</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-5 bg-light">
+      <div class="container py-5">
+        <div class="text-center mb-5">
+          <h2 class="fw-bold display-5">Enterprise Safety Features</h2>
+          <p class="text-muted">Built for modern industrial environments</p>
+        </div>
+        <div class="row g-4">
+          <div class="col-md-4" data-aos="fade-up">
+            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+              <div class="feature-icon">
+                <i class="fas fa-video"></i>
+              </div>
+              <h4>Existing Camera Support</h4>
+              <p class="text-muted">
+                Easily connect your current IP cameras, DVRs, or NVRs using
+                standard RTSP/HLS protocols.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+              <div class="feature-icon">
+                <i class="fas fa-bell"></i>
+              </div>
+              <h4>Instant Alerts</h4>
+              <p class="text-muted">
+                Get real-time notifications via Email, WhatsApp, or SMS when a
+                safety violation is detected.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+              <div class="feature-icon">
+                <i class="fas fa-chart-pie"></i>
+              </div>
+              <h4>Compliance Reports</h4>
+              <p class="text-muted">
+                Detailed daily, weekly, and monthly analytics to track safety
+                improvements across your site.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-5">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-md-4 text-center text-md-start">
+            <h4 class="fw-bold">
+              <i class="fas fa-shield-alt text-info me-2"></i> SmartSafe AI
+            </h4>
+            <p class="text-white-50">
+              Empowering workplace safety through artificial intelligence.
+            </p>
+          </div>
+          <div class="col-md-8 text-center text-md-end">
+            <p class="mb-0 text-white-50">
+              &copy; 2026 SmartSafe AI. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+      AOS.init({ duration: 1000, once: true });
+      window.addEventListener("scroll", function () {
+        if (window.scrollY > 50) {
+          document.querySelector(".navbar").classList.add("scrolled");
+        } else {
+          document.querySelector(".navbar").classList.remove("scrolled");
+        }
+      });
+    </script>
+  </body>
+</html>
