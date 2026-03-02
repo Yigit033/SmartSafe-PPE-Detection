@@ -90,8 +90,8 @@ class SmartSafeSaaSAPI:
         try:
             self.app = Flask(
                             __name__,
-                            template_folder=str(BASE_DIR / 'templates'),
-                            static_folder=str(BASE_DIR / 'static')
+                            template_folder=str(BASE_DIR / 'frontend' / 'templates'),
+                            static_folder=str(BASE_DIR / 'frontend' / 'output')
                             )
             _secret = os.getenv('SECRET_KEY')
             if not _secret:
@@ -1979,65 +1979,5 @@ class SmartSafeSaaSAPI:
                 print(f"Frame generation error: {e}")
                 break
     
-    def get_pricing_template(self):
-        """Dış dosyadan yüklenen pricing.html template"""
-        try:
-            with open('frontend/src/templates/pricing.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
 
-    
-    def get_home_template(self):
-        """Dış dosyadan yüklenen home.html template"""
-        try:
-            with open('frontend/src/templates/home.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
-
-    
-    def get_dashboard_template(self):
-        """Dış dosyadan yüklenen dashboard.html template"""
-        try:
-            with open('frontend/src/templates/dashboard.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
-
-    
-    def get_login_template(self, company_id):
-        """Dış dosyadan yüklenen login.html template"""
-        try:
-            with open('frontend/src/templates/login.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
-
-    
-    def get_admin_login_template(self, error=None):
-        """Dış dosyadan yüklenen admin_login.html template"""
-        try:
-            with open('frontend/src/templates/admin_login.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
-
-    
-    def get_admin_template(self):
-        """Dış dosyadan yüklenen admin.html template"""
-        try:
-            with open('frontend/src/templates/admin.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
-
-    
-    def get_company_settings_template(self):
-        """Dış dosyadan yüklenen template"""
-        try:
-            with open('frontend/src/templates/company_settings.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"<h1>Error</h1><p>{e}</p>"
 

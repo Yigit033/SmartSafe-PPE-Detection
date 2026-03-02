@@ -5,9 +5,8 @@
   "main": "src/smartsafe/api/smartsafe_saas_api.py",
   "scripts": {
     "backend": "powershell -Command \"$env:PYTHONPATH='.;backend/src;detection;worker'; cd backend; ./venv/Scripts/python -m src.smartsafe.api.smartsafe_saas_api\"",
-    "frontend": "python -m http.server 8000 --directory frontend",
-    
-    "generate": "powershell -Command \"$env:PYTHONPATH='.;backend/src;detection;worker'; cd backend; ./venv/Scripts/python scripts/setup/generate_frontend_assets.py\"",
+    "frontend": "python -m http.server 8000 --directory frontend/output",
+    "build": "python frontend/generator.py",
     "test": "powershell -Command \"$env:PYTHONPATH='.;backend/src;detection;worker'; cd backend; ./venv/Scripts/python test_sector_integration.py\"",
     "install": "powershell -Command \"cd backend; ./venv/Scripts/python -m pip install -r requirements.txt\""
   },

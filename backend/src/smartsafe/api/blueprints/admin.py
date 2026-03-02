@@ -19,7 +19,7 @@ def create_blueprint(api):
         """Admin panel - Founder şifresi gerekli"""
         if request.method == 'GET':
             # Admin login sayfasını göster
-            return render_template_string(api.get_admin_login_template())
+            return render_template('admin_login.html')
         
         # POST - Admin şifre kontrolü
         try:
@@ -29,18 +29,18 @@ def create_blueprint(api):
             FOUNDER_PASSWORD = os.getenv('FOUNDER_PASSWORD', '')
             if not FOUNDER_PASSWORD:
                 logger.error("FOUNDER_PASSWORD env variable is not set – admin login disabled")
-                return render_template_string(api.get_admin_login_template("Admin girişi yapılandırılmamış. FOUNDER_PASSWORD env variable'ı ayarlayın."))
+                return render_template('admin_login.html', error="Admin girişi yapılandırılmamış. FOUNDER_PASSWORD env variable'ı ayarlayın.")
             
             if password == FOUNDER_PASSWORD:
                 # Admin session'u oluştur
                 session['admin_authenticated'] = True
-                return render_template_string(api.get_admin_template())
+                return render_template('admin.html')
             else:
-                return render_template_string(api.get_admin_login_template("Yanlış şifre!"))
+                return render_template('admin_login.html', error="Yanlış şifre!")
                 
         except Exception as e:
             logger.error(f"Admin login error: {e}")
-            return render_template_string(api.get_admin_login_template("Giriş sırasında bir hata oluştu."))
+            return render_template('admin_login.html', error="Giriş sırasında bir hata oluştu.")
     
     @bp.route('/api/admin/companies', methods=['GET'])
     def admin_get_companies():

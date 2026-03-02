@@ -106,7 +106,7 @@ def create_blueprint(api):
             }
             user_data.update(company_info)
         
-        return render_template_string(api.get_company_settings_template(), 
+        return render_template('company_settings.html', 
                                     company_id=company_id, 
                                     user_data=user_data,
                                     company=company_info)
@@ -302,13 +302,13 @@ def create_blueprint(api):
             
             filename = f"logo_{company_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
             
-            upload_folder = os.path.join(os.getcwd(), 'static', 'uploads', 'logos')
+            upload_folder = os.path.join(os.getcwd(), 'frontend', 'output', 'uploads', 'logos')
             os.makedirs(upload_folder, exist_ok=True)
             
             file_path = os.path.join(upload_folder, filename)
             file.save(file_path)
             
-            logo_url = f'/static/uploads/logos/{filename}'
+            logo_url = f'/uploads/logos/{filename}'
             print(f"🔍 Logo URL oluşturuldu: {logo_url}")
             
             print(f"🔍 Database objesi türü: {type(api.db)}")
@@ -468,7 +468,7 @@ def create_blueprint(api):
         if not user_data or user_data['company_id'] != company_id:
             return redirect(f'/company/{company_id}/login')
         
-        return render_template_string(api.get_users_template(), 
+        return render_template('users.html', 
                                     company_id=company_id, 
                                     user_data=user_data)
 
@@ -604,7 +604,7 @@ def create_blueprint(api):
         if not user_data or user_data['company_id'] != company_id:
             return redirect(f'/company/{company_id}/login')
         
-        return render_template_string(api.get_reports_template(), 
+        return render_template('reports.html', 
                                     company_id=company_id, 
                                     user_data=user_data)
 

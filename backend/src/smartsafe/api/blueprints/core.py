@@ -61,11 +61,11 @@ Mesaj:
     @bp.route('/app', methods=['GET'])
     def app_home():
         """Company registration form"""
-        return render_template_string(api.get_home_template())
+        return render_template('home.html')
 
     @bp.route('/pricing')
     def pricing():
         """Fiyatlandırma ve plan seçimi sayfası"""
-        return render_template_string(api.get_pricing_template())
+        return render_template('pricing.html')
 
     return bp
