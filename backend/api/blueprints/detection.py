@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Lazy import to avoid circular import: smartsafe_saas_api -> blueprints -> detection -> smartsafe_saas_api
 def _get_detection_state():
-    from src.smartsafe.api.smartsafe_saas_api import (
+    from api.smartsafe_saas_api import (
         active_detectors,
         detection_threads,
         camera_captures,
@@ -318,7 +318,7 @@ def create_blueprint(api):
             
             # Aynı process'te worker'ın gördüğü dict'i set et (referans tutarlılığı)
             state['active_detectors'][camera_key] = True
-            import src.smartsafe.api.smartsafe_saas_api as _api_mod
+            import api.smartsafe_saas_api as _api_mod
             _api_mod.active_detectors[camera_key] = True
             logger.info(f"✅ active_detectors[{camera_key}] = True set before thread start")
             # Worker'ın aynı dict referansını görmesi için açıkça geçir (reloader/çift app senaryosu)
@@ -623,7 +623,7 @@ def create_blueprint(api):
             
             limit = request.args.get('limit', 100, type=int)
             
-            from src.smartsafe.database.database_adapter import get_db_adapter
+            from database.database_adapter import get_db_adapter
             db = get_db_adapter()
             results = db.get_camera_detection_results(camera_id, company_id, limit)
             
@@ -670,7 +670,7 @@ def create_blueprint(api):
                     })
             
             try:
-                from src.smartsafe.database.database_adapter import get_db_adapter
+                from database.database_adapter import get_db_adapter
                 db = get_db_adapter()
                 
                 if not api.ensure_database_initialized():
@@ -721,7 +721,7 @@ def create_blueprint(api):
             if not user_data or user_data.get('company_id') != company_id:
                 return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
-            from src.smartsafe.database.database_adapter import get_db_adapter
+            from database.database_adapter import get_db_adapter
             db = get_db_adapter()
             violations = db.get_active_violations(camera_id=camera_id, company_id=company_id)
 
@@ -745,7 +745,7 @@ def create_blueprint(api):
             
             hours = request.args.get('hours', 24, type=int)
             
-            from src.smartsafe.database.database_adapter import get_db_adapter
+            from database.database_adapter import get_db_adapter
             db = get_db_adapter()
             stats = db.get_company_detection_stats(company_id, hours)
             

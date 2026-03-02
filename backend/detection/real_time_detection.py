@@ -49,7 +49,7 @@ from threading import Thread
 
 # Custom utilities
 try:
-    from src.smartsafe.utils.data_utils import PPEDataLoader
+    from utils.data_utils import PPEDataLoader
 except ImportError:
     PPEDataLoader = None
 
@@ -572,7 +572,7 @@ class PPEDetectionSystem:
         """Draw detections and status on frame"""
         try:
             # Draw detections
-            from src.smartsafe.detection.utils.visual_overlay import draw_styled_box
+            from detection.utils.visual_overlay import draw_styled_box
             
             for det in detections:
                 x1, y1, x2, y2 = det.bbox

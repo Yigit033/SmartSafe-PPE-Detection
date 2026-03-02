@@ -11,9 +11,9 @@ PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from src.smartsafe.api.smartsafe_saas_api import SmartSafeSaaSAPI  # type: ignore
-from src.smartsafe.detection.pose_aware_ppe_detector import get_pose_aware_detector  # type: ignore
-from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color  # type: ignore
+from api.smartsafe_saas_api import SmartSafeSaaSAPI  # type: ignore
+from detection.pose_aware_ppe_detector import get_pose_aware_detector  # type: ignore
+from detection.utils.visual_overlay import draw_styled_box, get_class_color  # type: ignore
 
 
 # Varsayılan test videosu (proje köküne göre göreli yol)

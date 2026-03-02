@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Import our custom modules
 try:
-    from src.smartsafe.detection.utils.enhanced_ppe_detector import EnhancedPPEDetector, PPEDetection, ComplianceResult
+    from detection.utils.enhanced_ppe_detector import EnhancedPPEDetector, PPEDetection, ComplianceResult
 except ImportError:
     # Fallback: utils klasöründen dene
     try:

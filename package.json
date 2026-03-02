@@ -2,13 +2,13 @@
   "name": "smart-safe-ai",
   "version": "1.0.0",
   "description": "SmartSafe AI - PPE Detection System",
-  "main": "src/smartsafe/api/smartsafe_saas_api.py",
+  "main": "backend/api/smartsafe_saas_api.py",
   "scripts": {
-    "backend": "powershell -Command \"$env:PYTHONPATH='.;backend/src;detection;worker'; cd backend; ./venv/Scripts/python -m src.smartsafe.api.smartsafe_saas_api\"",
+    "backend": "cd backend && ./venv/Scripts/python -m api.smartsafe_saas_api",
     "frontend": "python -m http.server 8000 --directory frontend/output",
     "build": "python frontend/generator.py",
-    "test": "powershell -Command \"$env:PYTHONPATH='.;backend/src;detection;worker'; cd backend; ./venv/Scripts/python test_sector_integration.py\"",
-    "install": "powershell -Command \"cd backend; ./venv/Scripts/python -m pip install -r requirements.txt\""
+    "test": "cd backend && ./venv/Scripts/python test_sector_integration.py",
+    "install": "cd backend && ./venv/Scripts/python -m pip install -r requirements.txt"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

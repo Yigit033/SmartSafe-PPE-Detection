@@ -35,13 +35,13 @@ except ImportError:
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
-from src.smartsafe.services.multitenant_system import MultiTenantDatabase
-from src.smartsafe.integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
-from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
-from src.smartsafe.database.database_adapter import get_db_adapter
-from src.smartsafe.integrations.cameras.camera_integration_manager import DVRConfig
-from src.smartsafe.detection.snapshot_manager import get_snapshot_manager
-from src.smartsafe.integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
+from services.multitenant_system import MultiTenantDatabase
+from integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
+from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+from database.database_adapter import get_db_adapter
+from integrations.cameras.camera_integration_manager import DVRConfig
+from detection.snapshot_manager import get_snapshot_manager
+from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
 import cv2
 import numpy as np
 import base64
@@ -55,11 +55,11 @@ load_dotenv()
 
 # Resolve project root (for templates/static after src/ restructure)
 try:
-    # __file__ = .../src/smartsafe/api/smartsafe_saas_api.py
-    # parents[3] => project root (one above 'src')
-    BASE_DIR = Path(__file__).resolve().parents[3]
+    # __file__ = .../backend/api/smartsafe_saas_api.py
+    # parents[2] => project root (one above 'backend')
+    BASE_DIR = Path(__file__).resolve().parents[2]
 except Exception:
-    BASE_DIR = Path(__file__).resolve().parent
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Enterprise modülleri import et
 # Lazy loading için enterprise modülleri startup'ta yükleme - Memory optimization
@@ -223,7 +223,7 @@ class SmartSafeSaaSAPI:
         
         # PPE Detection Manager başlat
         try:
-            from src.smartsafe.integrations.cameras.ppe_detection_manager import PPEDetectionManager
+            from integrations.cameras.ppe_detection_manager import PPEDetectionManager
             self.ppe_manager = PPEDetectionManager()
             if not self.ppe_manager.load_models():
                 logger.warning("⚠️ PPE Detection Manager yüklenemedi, fallback kullanılacak")
@@ -502,7 +502,7 @@ class SmartSafeSaaSAPI:
         """Lazy load camera manager"""
         if self.camera_manager is None:
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
+                from integrations.cameras.camera_integration_manager import get_camera_manager
                 self.camera_manager = get_camera_manager()
                 logger.info("✅ Camera Manager lazy loaded")
             except ImportError:
@@ -514,7 +514,7 @@ class SmartSafeSaaSAPI:
         """Lazy load config manager"""
         if self.config_manager is None:
             try:
-                from src.smartsafe.services.professional_config_manager import ProfessionalConfigManager
+                from services.professional_config_manager import ProfessionalConfigManager
                 self.config_manager = ProfessionalConfigManager()
                 logger.info("✅ Config Manager lazy loaded")
             except ImportError:
@@ -526,7 +526,7 @@ class SmartSafeSaaSAPI:
         """Lazy load performance optimizer"""
         if self.performance_optimizer is None:
             try:
-                from src.smartsafe.services.performance_optimizer import PerformanceOptimizer
+                from services.performance_optimizer import PerformanceOptimizer
                 self.performance_optimizer = PerformanceOptimizer()
                 logger.info("✅ Performance Optimizer lazy loaded")
             except ImportError:
@@ -965,7 +965,7 @@ class SmartSafeSaaSAPI:
 
     def setup_routes(self):
         """API rotalarını ayarla - Blueprint modüllerinden yükle"""
-        from src.smartsafe.api.blueprints import register_all_blueprints
+        from api.blueprints import register_all_blueprints
         register_all_blueprints(self)
         logger.info("✅ All API blueprints registered successfully")
 
@@ -1608,7 +1608,7 @@ class SmartSafeSaaSAPI:
 
                             # === NEW: Persist detection to DB for dynamic widgets ===
                             try:
-                                from src.smartsafe.database.database_adapter import get_db_adapter
+                                from database.database_adapter import get_db_adapter
                                 db = get_db_adapter()
                                 # Normalize fields
                                 total_people = detection_data.get('total_people', detection_data.get('people_detected', 0))
@@ -1891,7 +1891,7 @@ class SmartSafeSaaSAPI:
                     confidence = detection.get('confidence', 0)
                     
                     # Sınıfa göre renk belirle
-                    from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
+                    from detection.utils.visual_overlay import draw_styled_box, get_class_color
                     
                     color = get_class_color(class_name, is_missing=False)
                     
@@ -1978,6 +1978,46 @@ class SmartSafeSaaSAPI:
             except Exception as e:
                 print(f"Frame generation error: {e}")
                 break
+
+
+# =============================================================================
+# PRODUCTION APP INSTANCE - Bu obje Gunicorn tarafından kullanılır
+# =============================================================================
+def create_app():
+    """Factory function to create Flask app"""
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        print(f"✅ Flask app created successfully: {app.name}")
+        return app
+    except Exception as e:
+        print(f"❌ Critical error creating Flask app: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+# Create the app instance (used by Gunicorn)
+app = create_app()
+
+# =============================================================================
+# LOCAL DEVELOPMENT ENTRY POINT
+# =============================================================================
+if __name__ == "__main__":
+    env = os.getenv("ENV", "local").lower()
+    port = int(os.getenv("PORT", 5000))
+    host = "0.0.0.0"
+
+    print(f"🚀 Starting SmartSafe SaaS API")
+    print(f"🌐 Host: {host}, Port: {port}")
+    print(f"🔧 Environment: {env}")
+
+    app.run(
+        host=host,
+        port=port,
+        debug=(env == "local"),
+        threaded=True
+    )
+
     
 
 

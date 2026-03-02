@@ -198,7 +198,7 @@ class UltraFastPPEDetector:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
         # Draw detection boxes
-        from src.smartsafe.detection.utils.visual_overlay import draw_styled_box
+        from detection.utils.visual_overlay import draw_styled_box
         
         for det in detections:
             if det['class_name'] == 'person':

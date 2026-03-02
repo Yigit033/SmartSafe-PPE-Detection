@@ -473,7 +473,7 @@ class DVRStreamHandler:
             # 🚀 FAZ 3: POSE-AWARE DETECTION FOR DVR/NVR
             if use_pose:
                 try:
-                    from src.smartsafe.detection.pose_aware_ppe_detector import get_pose_aware_detector
+                    from detection.pose_aware_ppe_detector import get_pose_aware_detector
                     from models.sh17_model_manager import SH17ModelManager
                     
                     sh17_manager = SH17ModelManager()

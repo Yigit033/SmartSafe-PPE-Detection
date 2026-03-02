@@ -80,10 +80,27 @@
             transition: all 0.3s ease;
         }
 
+        .navbar .nav-link, .navbar .navbar-brand {
+            color: rgba(255, 255, 255, 0.9) !important;
+            transition: all 0.3s ease;
+        }
+
+        .navbar .nav-link:hover, .navbar .navbar-brand:hover {
+            color: white !important;
+        }
+
         .navbar.scrolled {
             background: rgba(255, 255, 255, 0.95) !important;
             backdrop-filter: blur(10px);
             box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar.scrolled .nav-link, .navbar.scrolled .navbar-brand {
+            color: var(--dark) !important;
+        }
+
+        .navbar.scrolled .nav-link:hover {
+            color: var(--primary) !important;
         }
 
         .hero-section {

@@ -10,12 +10,12 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import cv2
 import logging
-from src.smartsafe.sector.smartsafe_sector_manager import SmartSafeSectorManager
-from src.smartsafe.integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
+from sector.smartsafe_sector_manager import SmartSafeSectorManager
+from integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
 
 # Hibrit sistem import
 try:
-    from src.smartsafe.sector.utils.hybrid_ppe_system import HybridPPESystem
+    from sector.utils.hybrid_ppe_system import HybridPPESystem
     HYBRID_SYSTEM_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("✅ Hibrit PPE sistemi yüklendi")
@@ -156,7 +156,7 @@ class BaseSectorDetector(ABC):
     def get_company_ppe_config(self, company_id: str) -> Dict:
         """Şirketin PPE konfigürasyonunu al"""
         try:
-            from src.smartsafe.services.multitenant_system import MultiTenantDatabase
+            from services.multitenant_system import MultiTenantDatabase
             db = MultiTenantDatabase()
             
             conn = db.get_connection()

@@ -234,7 +234,7 @@ class OptimizedPPEDetector:
             confidence = det['confidence']
             
             # Color based on class
-            from src.smartsafe.detection.utils.visual_overlay import draw_styled_box, get_class_color
+            from detection.utils.visual_overlay import draw_styled_box, get_class_color
             
             color = get_class_color(class_name, is_missing=False)
             if class_name in ['helmet', 'safety_vest', 'safety_suit']:

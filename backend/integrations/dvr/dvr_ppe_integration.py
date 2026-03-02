@@ -15,10 +15,10 @@ from datetime import datetime
 import numpy as np
 
 # Import existing modules
-from src.smartsafe.integrations.cameras.ppe_detection_manager import PPEDetectionManager
-from src.smartsafe.database.database_adapter import get_db_adapter
-from src.smartsafe.detection.violation_tracker import get_violation_tracker
-from src.smartsafe.detection.snapshot_manager import get_snapshot_manager
+from integrations.cameras.ppe_detection_manager import PPEDetectionManager
+from database.database_adapter import get_db_adapter
+from detection.violation_tracker import get_violation_tracker
+from detection.snapshot_manager import get_snapshot_manager
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +348,7 @@ class DVRStreamProcessor:
             ppe_compliant = 0
             
             # 🎯 PRODUCTION-GRADE: Her kişi için advanced PPE association
-            from src.smartsafe.detection.utils.detection_utils import DetectionUtils
+            from detection.utils.detection_utils import DetectionUtils
             
             for person_idx, person in enumerate(people):
                 person_bbox = person.get('bbox', [])

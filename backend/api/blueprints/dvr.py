@@ -13,9 +13,9 @@ import base64
 import cv2
 import numpy as np
 
-from src.smartsafe.database.database_adapter import get_db_adapter
-from src.smartsafe.integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
-from src.smartsafe.integrations.cameras.camera_integration_manager import DVRConfig
+from database.database_adapter import get_db_adapter
+from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
+from integrations.cameras.camera_integration_manager import DVRConfig
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ def create_blueprint(api):
                 )
             
             # Import stream handler
-            from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
             stream_handler = get_stream_handler()
             
             # Generate stream ID
@@ -288,7 +288,7 @@ def create_blueprint(api):
         
         try:
             # Import stream handler
-            from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
             stream_handler = get_stream_handler()
             
             # Generate stream ID
@@ -321,7 +321,7 @@ def create_blueprint(api):
         
         try:
             # Import stream handler
-            from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
             stream_handler = get_stream_handler()
             
             # Generate stream ID
@@ -427,7 +427,7 @@ def create_blueprint(api):
                 return jsonify({'error': 'DVR system not found'}), 404
 
             # Start stream if needed
-            from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
             stream_handler = get_stream_handler()
             stream_id = f"{dvr_id}_ch{channel_number:02d}"
 
@@ -601,7 +601,7 @@ def create_blueprint(api):
             if not dvr_system:
                 return jsonify({'success': False, 'error': 'DVR system not found'}), 404
 
-            from src.smartsafe.integrations.dvr.dvr_stream_handler import get_stream_handler
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
             stream_handler = get_stream_handler()
 
             # For previews, try first N channels quickly for responsiveness

@@ -115,8 +115,8 @@ def check_violation_tracking_integration():
             content = f.read()
             
             checks = [
-                ('violation_tracker import', 'from src.smartsafe.detection.violation_tracker import'),
-                ('snapshot_manager import', 'from src.smartsafe.detection.snapshot_manager import'),
+                ('violation_tracker import', 'from detection.violation_tracker import'),
+                ('snapshot_manager import', 'from detection.snapshot_manager import'),
                 ('Violation tracker çağrısı', 'violation_tracker = get_violation_tracker()'),
                 ('Snapshot manager çağrısı', 'snapshot_manager = get_snapshot_manager()'),
                 ('Görünürlük kontrolü', 'person_visible'),
@@ -141,8 +141,8 @@ def check_violation_tracking_integration():
             content = f.read()
             
             checks = [
-                ('violation_tracker import', 'from src.smartsafe.detection.violation_tracker import'),
-                ('snapshot_manager import', 'from src.smartsafe.detection.snapshot_manager import'),
+                ('violation_tracker import', 'from detection.violation_tracker import'),
+                ('snapshot_manager import', 'from detection.snapshot_manager import'),
                 ('Violation tracker çağrısı', 'violation_tracker = get_violation_tracker()'),
                 ('Snapshot manager çağrısı', 'snapshot_manager = get_snapshot_manager()'),
                 ('Görünürlük kontrolü', 'person_visible'),

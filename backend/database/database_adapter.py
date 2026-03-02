@@ -22,7 +22,7 @@ def get_secure_db_connector():
     try:
         # Try multiple import paths for flexibility
         try:
-            from src.smartsafe.utils.secure_database_connector import get_secure_db_connector as get_connector
+            from utils.secure_database_connector import get_secure_db_connector as get_connector
             return get_connector()
         except ImportError:
             try:

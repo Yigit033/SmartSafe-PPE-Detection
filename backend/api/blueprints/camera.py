@@ -131,7 +131,7 @@ def create_blueprint(api):
                                     use_hybrid = os.getenv('USE_HYBRID', '').lower() == 'true'
                                     if use_hybrid and sector:
                                         try:
-                                            from src.smartsafe.sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                                            from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
                                             detector = SectorDetectorFactory.get_detector(sector, company_id)
                                             detection_result = detector.detect_ppe(frame, camera_id)
                                         except Exception as _hybrid_err:
@@ -560,7 +560,7 @@ def create_blueprint(api):
             scan_time = '2.0 saniye'
             
             try:
-                from src.smartsafe.integrations.cameras.camera_discovery import IPCameraDiscovery
+                from integrations.cameras.camera_discovery import IPCameraDiscovery
                 discovery = IPCameraDiscovery()
                 result = discovery.scan_network(network_range, timeout=2)
                 discovered_cameras = result['cameras']
@@ -569,7 +569,7 @@ def create_blueprint(api):
                 # Auto sync to database if enabled
                 if auto_sync and discovered_cameras:
                     try:
-                        from src.smartsafe.database.database_adapter import get_camera_discovery_manager
+                        from database.database_adapter import get_camera_discovery_manager
                         discovery_manager = get_camera_discovery_manager()
                         sync_result = discovery_manager.sync_discovered_cameras_to_db(company_id, discovered_cameras)
                         
@@ -634,7 +634,7 @@ def create_blueprint(api):
             # Try enhanced real camera manager first
             test_result = None
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import RealCameraManager, RealCameraConfig
+                from integrations.cameras.camera_integration_manager import RealCameraManager, RealCameraConfig
                 
                 real_camera_manager = RealCameraManager()
                 
@@ -726,7 +726,7 @@ def create_blueprint(api):
             logger.info(f"🧠 Smart camera test for {ip_address}")
             
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import SmartCameraDetector
+                from integrations.cameras.camera_integration_manager import SmartCameraDetector
                 
                 detector = SmartCameraDetector()
                 detection_result = detector.smart_detect_camera(ip_address)
@@ -738,7 +738,7 @@ def create_blueprint(api):
                     path = detection_result.get('path', '/video')
                     
                     # Basic kamera testi
-                    from src.smartsafe.integrations.cameras.camera_integration_manager import CameraSource
+                    from integrations.cameras.camera_integration_manager import CameraSource
                     import time
                     
                     # Connection URL oluştur
@@ -1637,7 +1637,7 @@ def create_blueprint(api):
             logger.info(f"🧠 Smart camera discovery for company {company_id}")
             
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import ProfessionalCameraManager
+                from integrations.cameras.camera_integration_manager import ProfessionalCameraManager
                 
                 camera_manager = ProfessionalCameraManager()
                 discovered_cameras = camera_manager.smart_discover_cameras(network_range)
@@ -1672,7 +1672,7 @@ def create_blueprint(api):
                 return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
             
             try:
-                from src.smartsafe.utils.camera_model_database import get_camera_database
+                from utils.camera_model_database import get_camera_database
                 
                 db = get_camera_database()
                 models = {}
@@ -1759,7 +1759,7 @@ def create_blueprint(api):
             
             # Kamera yöneticisinden kamerayı ayır
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
+                from integrations.cameras.camera_integration_manager import get_camera_manager
                 camera_manager = get_camera_manager()
                 
                 # Kamerayı bağlantıdan ayır
@@ -1820,7 +1820,7 @@ def create_blueprint(api):
                 }), 500
             
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
+                from integrations.cameras.camera_integration_manager import get_camera_manager
                 camera_manager = get_camera_manager()
                 
                 # Kamera konfigürasyonunu güncelle
@@ -1874,7 +1874,7 @@ def create_blueprint(api):
                 return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
             
             try:
-                from src.smartsafe.integrations.cameras.camera_integration_manager import get_camera_manager
+                from integrations.cameras.camera_integration_manager import get_camera_manager
                 camera_manager = get_camera_manager()
                 
                 status = camera_manager.get_camera_status(camera_id)
@@ -2331,14 +2331,14 @@ def create_blueprint(api):
             
             # Step 1: Network discovery
             try:
-                from src.smartsafe.integrations.cameras.camera_discovery import IPCameraDiscovery
+                from integrations.cameras.camera_discovery import IPCameraDiscovery
                 discovery = IPCameraDiscovery()
                 discovery_result = discovery.scan_network(network_range, timeout=2)
                 result['discovery_result'] = discovery_result
                 
                 # Step 2: Sync discovered cameras to database
                 if discovery_result.get('cameras'):
-                    from src.smartsafe.database.database_adapter import get_camera_discovery_manager
+                    from database.database_adapter import get_camera_discovery_manager
                     discovery_manager = get_camera_discovery_manager()
                     db_sync_result = discovery_manager.sync_discovered_cameras_to_db(
                         company_id, 
@@ -2352,7 +2352,7 @@ def create_blueprint(api):
             
             # Step 3: Config file sync
             try:
-                from src.smartsafe.database.database_adapter import get_camera_discovery_manager
+                from database.database_adapter import get_camera_discovery_manager
                 discovery_manager = get_camera_discovery_manager()
                 config_sync_result = discovery_manager.sync_config_cameras_to_db(company_id)
                 result['config_sync_result'] = config_sync_result
