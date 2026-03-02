@@ -29,8 +29,22 @@ class DatabaseConfig:
         self.is_production = os.getenv('FLASK_ENV') == 'production'
         
         # Set SSL certificate path based on environment
+        # Use /var/ssl for Render.com (persistent disk) or local ssl directory
         if self.is_render:
-            self.ssl_cert_path = '/opt/render/project/src/ssl/supabase.crt'
+            # Try multiple paths for Render.com
+            possible_paths = [
+                '/var/ssl/supabase.crt',
+                '/tmp/supabase.crt',
+                os.path.join(os.path.dirname(__file__), 'ssl', 'supabase.crt'),
+                'ssl/supabase.crt'
+            ]
+            self.ssl_cert_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    self.ssl_cert_path = path
+                    break
+            if not self.ssl_cert_path:
+                self.ssl_cert_path = '/var/ssl/supabase.crt'  # Fallback to persistent disk
         else:
             self.ssl_cert_path = os.path.join(os.path.dirname(__file__), 'ssl', 'supabase.crt')
         
@@ -91,14 +105,14 @@ class DatabaseConfig:
             else:
                 connect_args['sslmode'] = 'require'
             
-            # 🚀 PRODUCTION POOL OPTIMIZATION - Render.com optimized
+            # 🚀 PRODUCTION POOL OPTIMIZATION - Render.com optimized (Single Worker)
             return create_engine(
                 connection_string,
-                # Connection pool settings - optimized for Render.com
-                pool_size=5,              # Base connections in pool
-                max_overflow=10,          # Additional connections when needed
-                pool_timeout=30,          # Wait 30s for available connection
-                pool_recycle=1800,        # Recycle connections every 30 minutes
+                # Connection pool settings - optimized for Render.com single worker
+                pool_size=2,              # Minimal connections for single worker
+                max_overflow=3,           # Small overflow for spikes
+                pool_timeout=45,          # Wait 45s for available connection (cold start friendly)
+                pool_recycle=600,         # Recycle connections every 10 minutes (prevent stale connections)
                 pool_pre_ping=True,       # Test connections before using
                 # Connection arguments
                 connect_args=connect_args,

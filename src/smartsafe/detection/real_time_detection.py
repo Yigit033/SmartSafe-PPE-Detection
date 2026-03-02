@@ -16,9 +16,16 @@ from collections import defaultdict, deque
 import sqlite3
 from datetime import datetime
 
-# Deep Learning
-import torch
-from ultralytics import YOLO
+# Deep Learning (lazy-safe imports)
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
 
 # Tracking
 try:
@@ -26,15 +33,25 @@ try:
     DEEPSORT_AVAILABLE = True
 except ImportError:
     DEEPSORT_AVAILABLE = False
-    print("⚠️  DeepSORT not available - using simple tracking")
 
 # Audio alerts
-import pygame
-import playsound
+try:
+    import pygame
+except ImportError:
+    pygame = None
+
+try:
+    import playsound
+except ImportError:
+    playsound = None
+
 from threading import Thread
 
 # Custom utilities
-from src.smartsafe.utils.data_utils import PPEDataLoader
+try:
+    from src.smartsafe.utils.data_utils import PPEDataLoader
+except ImportError:
+    PPEDataLoader = None
 
 # Configure logging
 logging.basicConfig(
@@ -229,6 +246,9 @@ class PPEDetectionSystem:
     
     def setup_audio(self):
         """Setup audio alert system"""
+        if pygame is None:
+            logger.warning("pygame not installed, audio alerts disabled")
+            return
         try:
             pygame.mixer.init()
             self.alert_sound_path = self.config['alerts']['audio']['alert_sound']
@@ -274,22 +294,20 @@ class PPEDetectionSystem:
     
     def load_model(self):
         """Load YOLO model"""
+        if YOLO is None:
+            raise ImportError("ultralytics is required but not installed")
         try:
             model_path = self.config['model']['model_path']
             device = self.config['model']['device']
             
-            # Force CPU if CUDA has issues
-            if device == 'cuda' and not torch.cuda.is_available():
+            if device == 'cuda' and (torch is None or not torch.cuda.is_available()):
                 device = 'cpu'
                 logger.warning("CUDA not available, using CPU")
             
-            # Load SH17 YOLOv9-e model
             model = YOLO(model_path)
             model.to(device)
             
-            logger.info(f"Loaded SH17 YOLOv9-e model: {model_path}")
-            logger.info(f"Model device: {device}")
-            
+            logger.info(f"Loaded model: {model_path} on {device}")
             return model
             
         except Exception as e:

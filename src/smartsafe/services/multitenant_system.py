@@ -360,6 +360,126 @@ class MultiTenantDatabase:
                 except Exception as e2:
                     logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
             
+            # Detections tablosu için migration - compliance_rate, compliant_people, violation_people
+            try:
+                # compliance_rate kolonu kontrolü
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'detections'
+                        AND column_name = 'compliance_rate'
+                    );
+                """)
+                compliance_rate_exists = cursor.fetchone()[0]
+                
+                if not compliance_rate_exists:
+                    logger.info("🔧 Detections tablosuna compliance_rate kolonu ekleniyor...")
+                    cursor.execute('ALTER TABLE detections ADD COLUMN compliance_rate REAL')
+                    conn.commit()
+                    logger.info("✅ compliance_rate kolonu eklendi")
+                else:
+                    logger.info("✅ compliance_rate kolonu zaten mevcut")
+                
+                # compliant_people kolonu kontrolü
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'detections'
+                        AND column_name = 'compliant_people'
+                    );
+                """)
+                compliant_people_exists = cursor.fetchone()[0]
+                
+                if not compliant_people_exists:
+                    logger.info("🔧 Detections tablosuna compliant_people kolonu ekleniyor...")
+                    cursor.execute('ALTER TABLE detections ADD COLUMN compliant_people INTEGER DEFAULT 0')
+                    conn.commit()
+                    logger.info("✅ compliant_people kolonu eklendi")
+                else:
+                    logger.info("✅ compliant_people kolonu zaten mevcut")
+                
+                # violation_people kolonu kontrolü
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'detections'
+                        AND column_name = 'violation_people'
+                    );
+                """)
+                violation_people_exists = cursor.fetchone()[0]
+                
+                if not violation_people_exists:
+                    logger.info("🔧 Detections tablosuna violation_people kolonu ekleniyor...")
+                    cursor.execute('ALTER TABLE detections ADD COLUMN violation_people INTEGER DEFAULT 0')
+                    conn.commit()
+                    logger.info("✅ violation_people kolonu eklendi")
+                else:
+                    logger.info("✅ violation_people kolonu zaten mevcut")
+                
+                # track_id kolonu kontrolü
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'detections'
+                        AND column_name = 'track_id'
+                    );
+                """)
+                track_id_exists = cursor.fetchone()[0]
+                
+                if not track_id_exists:
+                    logger.info("🔧 Detections tablosuna track_id kolonu ekleniyor...")
+                    cursor.execute('ALTER TABLE detections ADD COLUMN track_id TEXT')
+                    conn.commit()
+                    logger.info("✅ track_id kolonu eklendi")
+                else:
+                    logger.info("✅ track_id kolonu zaten mevcut")
+                
+                # Mevcut veriler için compliance_rate hesapla (eğer NULL ise)
+                try:
+                    cursor.execute('''
+                        UPDATE detections 
+                        SET compliance_rate = CASE 
+                            WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0)
+                            ELSE 0 
+                        END
+                        WHERE compliance_rate IS NULL AND people_detected > 0
+                    ''')
+                    conn.commit()
+                    logger.info("✅ Mevcut veriler için compliance_rate hesaplandı")
+                except Exception as e:
+                    logger.info(f"Migration info (compliance_rate calculation): {e}")
+                
+                # Mevcut veriler için compliant_people hesapla (eğer NULL ise)
+                try:
+                    cursor.execute('''
+                        UPDATE detections 
+                        SET compliant_people = ppe_compliant
+                        WHERE compliant_people IS NULL AND ppe_compliant IS NOT NULL
+                    ''')
+                    conn.commit()
+                    logger.info("✅ Mevcut veriler için compliant_people hesaplandı")
+                except Exception as e:
+                    logger.info(f"Migration info (compliant_people calculation): {e}")
+                
+                # Mevcut veriler için violation_people hesapla (eğer NULL ise)
+                try:
+                    cursor.execute('''
+                        UPDATE detections 
+                        SET violation_people = violations_count
+                        WHERE violation_people IS NULL AND violations_count IS NOT NULL
+                    ''')
+                    conn.commit()
+                    logger.info("✅ Mevcut veriler için violation_people hesaplandı")
+                except Exception as e:
+                    logger.info(f"Migration info (violation_people calculation): {e}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Detections tablosu migration hatası: {e}")
+            
             conn.commit()
             conn.close()
             logger.info("✅ PostgreSQL tabloları kontrol edildi")
@@ -488,6 +608,11 @@ class MultiTenantDatabase:
                 pass  # Kolon zaten var
             
             try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN track_id TEXT')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+            
+            try:
                 cursor.execute('ALTER TABLE detections ADD COLUMN confidence REAL DEFAULT 0')
             except sqlite3.OperationalError:
                 pass  # Kolon zaten var
@@ -526,6 +651,52 @@ class MultiTenantDatabase:
                 cursor.execute('ALTER TABLE detections ADD COLUMN compliant_people INTEGER DEFAULT 0')
             except sqlite3.OperationalError:
                 pass  # Kolon zaten var
+            
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN violation_people INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+            
+            try:
+                cursor.execute('ALTER TABLE detections ADD COLUMN compliance_rate REAL')
+            except sqlite3.OperationalError:
+                pass  # Kolon zaten var
+            
+            # Mevcut veriler için compliance_rate hesapla (eğer NULL ise)
+            try:
+                cursor.execute('''
+                    UPDATE detections 
+                    SET compliance_rate = CASE 
+                        WHEN people_detected > 0 THEN (ppe_compliant * 100.0 / people_detected)
+                        ELSE 0 
+                    END
+                    WHERE compliance_rate IS NULL AND people_detected > 0
+                ''')
+                conn.commit()
+            except Exception as e:
+                logger.info(f"Migration info (compliance_rate calculation): {e}")
+            
+            # Mevcut veriler için compliant_people hesapla (eğer NULL ise)
+            try:
+                cursor.execute('''
+                    UPDATE detections 
+                    SET compliant_people = ppe_compliant
+                    WHERE compliant_people IS NULL AND ppe_compliant IS NOT NULL
+                ''')
+                conn.commit()
+            except Exception as e:
+                logger.info(f"Migration info (compliant_people calculation): {e}")
+            
+            # Mevcut veriler için violation_people hesapla (eğer NULL ise)
+            try:
+                cursor.execute('''
+                    UPDATE detections 
+                    SET violation_people = violations_count
+                    WHERE violation_people IS NULL AND violations_count IS NOT NULL
+                ''')
+                conn.commit()
+            except Exception as e:
+                logger.info(f"Migration info (violation_people calculation): {e}")
             
             # İhlaller tablosu (şirket bazlı)
             cursor.execute('''
@@ -1412,25 +1583,66 @@ class MultiTenantDatabase:
             cursor = conn.cursor()
             
             placeholder = self.get_placeholder()
+            # Explicit column selection for better compatibility
             cursor.execute(f'''
-                SELECT * FROM cameras 
+                SELECT camera_id, camera_name, location, ip_address, port, protocol, stream_path,
+                       rtsp_url, username, password, resolution, fps, status, last_detection,
+                       created_at, updated_at
+                FROM cameras 
                 WHERE camera_id = {placeholder} AND company_id = {placeholder} AND status != 'deleted'
             ''', (camera_id, company_id))
             
             camera = cursor.fetchone()
-            conn.close()
             
             if camera:
-                if hasattr(camera, 'keys'):  # PostgreSQL RealDictRow
-                    return dict(camera)
+                if hasattr(camera, 'keys') and hasattr(camera, 'get'):  # PostgreSQL RealDictRow
+                    result = {
+                        'camera_id': camera.get('camera_id'),
+                        'camera_name': camera.get('camera_name'),
+                        'location': camera.get('location'),
+                        'ip_address': camera.get('ip_address'),
+                        'port': camera.get('port', 8080),
+                        'protocol': camera.get('protocol', 'http'),
+                        'stream_path': camera.get('stream_path', '/video'),
+                        'rtsp_url': camera.get('rtsp_url'),
+                        'username': camera.get('username'),
+                        'password': camera.get('password'),
+                        'resolution': camera.get('resolution'),
+                        'fps': camera.get('fps'),
+                        'status': camera.get('status'),
+                        'last_detection': str(camera.get('last_detection')) if camera.get('last_detection') else '',
+                        'created_at': str(camera.get('created_at')) if camera.get('created_at') else '',
+                        'updated_at': str(camera.get('updated_at')) if camera.get('updated_at') else str(camera.get('created_at', ''))
+                    }
                 else:  # SQLite tuple
-                    columns = [desc[0] for desc in cursor.description]
-                    return dict(zip(columns, camera))
+                    result = {
+                        'camera_id': camera[0] if len(camera) > 0 else '',
+                        'camera_name': camera[1] if len(camera) > 1 else '',
+                        'location': camera[2] if len(camera) > 2 else '',
+                        'ip_address': camera[3] if len(camera) > 3 else '',
+                        'port': camera[4] if len(camera) > 4 else 8080,
+                        'protocol': camera[5] if len(camera) > 5 else 'http',
+                        'stream_path': camera[6] if len(camera) > 6 else '/video',
+                        'rtsp_url': camera[7] if len(camera) > 7 else '',
+                        'username': camera[8] if len(camera) > 8 else '',
+                        'password': camera[9] if len(camera) > 9 else '',
+                        'resolution': camera[10] if len(camera) > 10 else '',
+                        'fps': camera[11] if len(camera) > 11 else 25,
+                        'status': camera[12] if len(camera) > 12 else '',
+                        'last_detection': str(camera[13]) if len(camera) > 13 and camera[13] else '',
+                        'created_at': str(camera[14]) if len(camera) > 14 and camera[14] else '',
+                        'updated_at': str(camera[15]) if len(camera) > 15 and camera[15] else (str(camera[14]) if len(camera) > 14 and camera[14] else '')
+                    }
+                conn.close()
+                return result
             
+            conn.close()
             return None
             
         except Exception as e:
             logger.error(f"ERROR: Kamera getirme hatasi: {e}")
+            if 'conn' in locals():
+                conn.close()
             return None
     
     def update_camera(self, camera_id: str, company_id: str, camera_data: Dict) -> bool:
@@ -1742,16 +1954,125 @@ class MultiTenantDatabase:
             placeholder = self.get_placeholder()
             
             try:
-                cursor.execute(f'''
-                    SELECT 
-                        COUNT(*) as total_detections,
-                        COALESCE(SUM(people_detected), SUM(total_people), 0) as total_people,
-                        COALESCE(SUM(ppe_compliant), SUM(compliant_people), 0) as compliant_people,
-                        COALESCE(SUM(violations_count), SUM(violation_people), 0) as violation_people,
-                        AVG(compliance_rate) as avg_compliance_rate
-                    FROM detections
-                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
-                ''', (company_id,))
+                # Önce kolonların varlığını kontrol et ve yoksa ekle
+                try:
+                    if self.db_adapter.db_type == 'postgresql':
+                        cursor.execute("""
+                            SELECT column_name FROM information_schema.columns 
+                            WHERE table_name = 'detections' AND table_schema = 'public'
+                        """)
+                        columns = [row[0] if isinstance(row, (list, tuple)) else (row['column_name'] if hasattr(row, 'get') else str(row)) for row in cursor.fetchall()]
+                    else:
+                        cursor.execute("PRAGMA table_info(detections)")
+                        columns = [row[1] for row in cursor.fetchall()]  # SQLite PRAGMA returns (cid, name, type, notnull, dflt_value, pk)
+                except Exception as e:
+                    logger.warning(f"⚠️ Column check hatası, varsayılan kolonlar kullanılıyor: {e}")
+                    columns = []  # Kolon kontrolü başarısız, güvenli varsayılanlar kullan
+                
+                # Eksik kolonları ekle
+                if 'compliance_rate' not in columns:
+                    try:
+                        if self.db_adapter.db_type == 'postgresql':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN compliance_rate REAL')
+                        else:
+                            cursor.execute('ALTER TABLE detections ADD COLUMN compliance_rate REAL')
+                        conn.commit()
+                        logger.info("✅ compliance_rate kolonu eklendi (runtime migration)")
+                        columns.append('compliance_rate')
+                    except Exception as e:
+                        logger.warning(f"⚠️ compliance_rate kolonu eklenemedi: {e}")
+                
+                if 'compliant_people' not in columns:
+                    try:
+                        if self.db_adapter.db_type == 'postgresql':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN compliant_people INTEGER DEFAULT 0')
+                        else:
+                            cursor.execute('ALTER TABLE detections ADD COLUMN compliant_people INTEGER DEFAULT 0')
+                        conn.commit()
+                        logger.info("✅ compliant_people kolonu eklendi (runtime migration)")
+                        columns.append('compliant_people')
+                    except Exception as e:
+                        logger.warning(f"⚠️ compliant_people kolonu eklenemedi: {e}")
+                
+                if 'violation_people' not in columns:
+                    try:
+                        if self.db_adapter.db_type == 'postgresql':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN violation_people INTEGER DEFAULT 0')
+                        else:
+                            cursor.execute('ALTER TABLE detections ADD COLUMN violation_people INTEGER DEFAULT 0')
+                        conn.commit()
+                        logger.info("✅ violation_people kolonu eklendi (runtime migration)")
+                        columns.append('violation_people')
+                    except Exception as e:
+                        logger.warning(f"⚠️ violation_people kolonu eklenemedi: {e}")
+                
+                # track_id kolonunu kontrol et ve ekle
+                if 'track_id' not in columns:
+                    try:
+                        if self.db_adapter.db_type == 'postgresql':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN track_id TEXT')
+                        else:
+                            cursor.execute('ALTER TABLE detections ADD COLUMN track_id TEXT')
+                        conn.commit()
+                        logger.info("✅ track_id kolonu eklendi (runtime migration)")
+                        columns.append('track_id')
+                    except Exception as e:
+                        logger.warning(f"⚠️ track_id kolonu eklenemedi: {e}")
+                
+                # Kolon durumlarını kontrol et (try bloğu içinde)
+                has_compliance_rate = 'compliance_rate' in columns
+                has_compliant_people = 'compliant_people' in columns
+                has_violation_people = 'violation_people' in columns
+                has_track_id = 'track_id' in columns
+                
+                # SQLite ve PostgreSQL için farklı sorgular
+                if self.db_adapter.db_type == 'postgresql':
+                    if has_compliance_rate:
+                        compliance_calc = f"AVG(COALESCE(compliance_rate, CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END))"
+                    else:
+                        compliance_calc = "CASE WHEN SUM(people_detected) > 0 THEN (SUM(ppe_compliant)::FLOAT / SUM(people_detected)::FLOAT * 100.0) ELSE 0 END"
+                    
+                    compliant_people_col = "COALESCE(SUM(ppe_compliant), SUM(compliant_people), 0)" if has_compliant_people else "SUM(ppe_compliant)"
+                    violation_people_col = "COALESCE(SUM(violations_count), SUM(violation_people), 0)" if has_violation_people else "SUM(violations_count)"
+                    
+                    cursor.execute(f'''
+                        SELECT 
+                            COUNT(*) as total_detections,
+                            COALESCE(SUM(people_detected), SUM(total_people), 0) as total_people,
+                            {compliant_people_col} as compliant_people,
+                            {violation_people_col} as violation_people,
+                            CASE 
+                                WHEN COUNT(*) > 0 AND SUM(people_detected) > 0 
+                                THEN {compliance_calc}
+                                ELSE 0 
+                            END as avg_compliance_rate
+                        FROM detections
+                        WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE
+                    ''', (company_id,))
+                else:
+                    # SQLite için
+                    if has_compliance_rate:
+                        compliance_calc = "AVG(COALESCE(compliance_rate, CASE WHEN people_detected > 0 THEN (ppe_compliant * 100.0 / people_detected) ELSE 0 END))"
+                    else:
+                        compliance_calc = "CASE WHEN SUM(people_detected) > 0 THEN (SUM(ppe_compliant) * 100.0 / SUM(people_detected)) ELSE 0 END"
+                    
+                    compliant_people_col = "COALESCE(SUM(ppe_compliant), SUM(compliant_people), 0)" if has_compliant_people else "SUM(ppe_compliant)"
+                    violation_people_col = "COALESCE(SUM(violations_count), SUM(violation_people), 0)" if has_violation_people else "SUM(violations_count)"
+                    
+                    cursor.execute(f'''
+                        SELECT 
+                            COUNT(*) as total_detections,
+                            COALESCE(SUM(people_detected), SUM(total_people), 0) as total_people,
+                            {compliant_people_col} as compliant_people,
+                            {violation_people_col} as violation_people,
+                            CASE 
+                                WHEN COUNT(*) > 0 AND SUM(people_detected) > 0 
+                                THEN {compliance_calc}
+                                ELSE 0 
+                            END as avg_compliance_rate
+                        FROM detections
+                        WHERE company_id = {placeholder} AND date(timestamp) = date('now')
+                    ''', (company_id,))
                 
                 detection_stats = cursor.fetchone()
             except Exception as e:
@@ -1759,6 +2080,11 @@ class MultiTenantDatabase:
                 detection_stats = None
             
             # PostgreSQL RealDictRow için sözlük erişimi kullan
+            # has_compliance_rate değişkenini try bloğu dışında da kullanabilmek için
+            has_compliance_rate = False
+            has_compliant_people = False
+            has_violation_people = False
+            
             if detection_stats:
                 if hasattr(detection_stats, 'keys') and hasattr(detection_stats, 'get'):  # RealDictRow veya dict
                     total_detections = detection_stats.get('total_detections') or 0
@@ -1767,11 +2093,11 @@ class MultiTenantDatabase:
                     violation_people = detection_stats.get('violation_people') or 0
                     avg_compliance_rate = detection_stats.get('avg_compliance_rate') or 0
                 else:  # Liste formatı (SQLite için)
-                    total_detections = detection_stats[0] or 0
-                    total_people = detection_stats[1] or 0
-                    compliant_people = detection_stats[2] or 0
-                    violation_people = detection_stats[3] or 0
-                    avg_compliance_rate = detection_stats[4] or 0
+                    total_detections = detection_stats[0] or 0 if len(detection_stats) > 0 else 0
+                    total_people = detection_stats[1] or 0 if len(detection_stats) > 1 else 0
+                    compliant_people = detection_stats[2] or 0 if len(detection_stats) > 2 else 0
+                    violation_people = detection_stats[3] or 0 if len(detection_stats) > 3 else 0
+                    avg_compliance_rate = detection_stats[4] or 0 if len(detection_stats) > 4 else 0
             else:
                 total_detections = total_people = compliant_people = violation_people = avg_compliance_rate = 0
             
@@ -1791,7 +2117,7 @@ class MultiTenantDatabase:
             if self.db_adapter.db_type == 'postgresql':
                 cursor.execute(f'''
                     SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
+                    WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE
                 ''', (company_id,))
             else:
                 cursor.execute(f'''
@@ -1809,7 +2135,7 @@ class MultiTenantDatabase:
             if self.db_adapter.db_type == 'postgresql':
                 cursor.execute(f'''
                     SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE - INTERVAL '1 day'
+                    WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE - INTERVAL '1 day'
                 ''', (company_id,))
             else:
                 cursor.execute(f'''
@@ -1842,15 +2168,105 @@ class MultiTenantDatabase:
                 last_week_cameras = last_week_cameras_result[0] if last_week_cameras_result else 0
             
             # Compliance trend (son 7 günün ortalaması)
-            if self.db_adapter.db_type == 'postgresql':
-                cursor.execute(f'''
-                    SELECT AVG(compliance_rate) 
-                    FROM detections 
-                    WHERE company_id = {placeholder} AND date(timestamp) > CURRENT_DATE - INTERVAL '7 days'
-                ''', (company_id,))
-            else:
-                cursor.execute(f'''
-                    SELECT AVG(compliance_rate) 
+            # Kolon kontrolü yaparak güvenli sorgu
+            try:
+                # Önce kolonların varlığını tekrar kontrol et (compliance_rate için)
+                try:
+                    if self.db_adapter.db_type == 'postgresql':
+                        cursor.execute("""
+                            SELECT EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name = 'detections' AND table_schema = 'public'
+                                AND column_name = 'compliance_rate'
+                            )
+                        """)
+                        has_compliance_rate = cursor.fetchone()[0]
+                    else:
+                        cursor.execute("PRAGMA table_info(detections)")
+                        columns_info = cursor.fetchall()
+                        has_compliance_rate = any(row[1] == 'compliance_rate' for row in columns_info)
+                except Exception:
+                    has_compliance_rate = False
+                
+                if self.db_adapter.db_type == 'postgresql':
+                    if has_compliance_rate:
+                        # PostgreSQL: compliance_rate varsa kullan
+                        cursor.execute(f'''
+                            SELECT 
+                                CASE 
+                                    WHEN COUNT(*) > 0 AND SUM(people_detected) > 0 
+                                    THEN AVG(COALESCE(compliance_rate, 
+                                        CASE WHEN people_detected > 0 
+                                        THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) 
+                                        ELSE 0 END))
+                                    ELSE 0 
+                                END as avg_compliance
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND DATE(timestamp) > CURRENT_DATE - INTERVAL '7 days'
+                        ''', (company_id,))
+                    else:
+                        # PostgreSQL: compliance_rate yoksa hesapla
+                        cursor.execute(f'''
+                            SELECT 
+                                CASE 
+                                    WHEN SUM(people_detected) > 0 
+                                    THEN (SUM(ppe_compliant)::FLOAT / NULLIF(SUM(people_detected), 0)::FLOAT * 100.0)
+                                    ELSE 0 
+                                END as avg_compliance
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND DATE(timestamp) > CURRENT_DATE - INTERVAL '7 days'
+                        ''', (company_id,))
+                else:
+                    # SQLite için
+                    if has_compliance_rate:
+                        # SQLite: compliance_rate varsa kullan
+                        cursor.execute(f'''
+                            SELECT 
+                                CASE 
+                                    WHEN COUNT(*) > 0 AND SUM(people_detected) > 0 
+                                    THEN AVG(COALESCE(compliance_rate, 
+                                        CASE WHEN people_detected > 0 
+                                        THEN (ppe_compliant * 100.0 / people_detected) 
+                                        ELSE 0 END))
+                                    ELSE 0 
+                                END as avg_compliance
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-7 days')
+                        ''', (company_id,))
+                    else:
+                        # SQLite: compliance_rate yoksa hesapla
+                        cursor.execute(f'''
+                            SELECT 
+                                CASE 
+                                    WHEN SUM(people_detected) > 0 
+                                    THEN (SUM(ppe_compliant) * 100.0 / NULLIF(SUM(people_detected), 0))
+                                    ELSE 0 
+                                END as avg_compliance
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-7 days')
+                        ''', (company_id,))
+            except Exception as e:
+                # Eğer compliance_rate kolonu yoksa, sadece hesaplama yap
+                logger.warning(f"⚠️ Compliance rate query hatası, basit hesaplama kullanılıyor: {e}")
+                if self.db_adapter.db_type == 'postgresql':
+                    cursor.execute(f'''
+                        SELECT 
+                            CASE 
+                                WHEN SUM(people_detected) > 0 
+                                THEN (SUM(ppe_compliant)::FLOAT / NULLIF(SUM(people_detected), 0)::FLOAT * 100.0)
+                                ELSE 0 
+                            END as avg_compliance
+                        FROM detections 
+                        WHERE company_id = {placeholder} AND DATE(timestamp) > CURRENT_DATE - INTERVAL '7 days'
+                    ''', (company_id,))
+                else:
+                    cursor.execute(f'''
+                        SELECT 
+                            CASE 
+                                WHEN SUM(people_detected) > 0 
+                                THEN (SUM(ppe_compliant) * 100.0 / NULLIF(SUM(people_detected), 0))
+                                ELSE 0 
+                            END as avg_compliance
                     FROM detections 
                     WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-7 days')
                 ''', (company_id,))
@@ -1859,33 +2275,83 @@ class MultiTenantDatabase:
             if hasattr(week_compliance_result, 'keys') and hasattr(week_compliance_result, 'values'):  # RealDictRow
                 week_compliance = list(week_compliance_result.values())[0] if week_compliance_result else 0
             else:  # Liste formatı (SQLite için)
-                week_compliance = week_compliance_result[0] if week_compliance_result else 0
+                week_compliance = week_compliance_result[0] if week_compliance_result and len(week_compliance_result) > 0 else 0
+            
+            # NULL kontrolü
+            if week_compliance is None:
+                week_compliance = 0
             
             # Aktif çalışan sayısı (bugün tespit edilen unique kişi sayısı)
-            if self.db_adapter.db_type == 'postgresql':
-                cursor.execute(f'''
-                    SELECT COUNT(DISTINCT track_id) 
-                    FROM detections 
-                    WHERE company_id = {placeholder} AND date(timestamp) = CURRENT_DATE
-                ''', (company_id,))
-            else:
-                cursor.execute(f'''
-                    SELECT COUNT(DISTINCT track_id) 
-                    FROM detections 
-                    WHERE company_id = {placeholder} AND date(timestamp) = date('now')
-                ''', (company_id,))
-            
-            active_workers_result = cursor.fetchone()
-            if hasattr(active_workers_result, 'keys') and hasattr(active_workers_result, 'values'):  # RealDictRow
-                active_workers = list(active_workers_result.values())[0] if active_workers_result else 0
-            else:  # Liste formatı (SQLite için)
-                active_workers = active_workers_result[0] if active_workers_result else 0
+            # track_id kolonu varsa kullan, yoksa people_detected kullan
+            try:
+                # Önce track_id kolonunun varlığını kontrol et
+                has_track_id = False
+                try:
+                    if self.db_adapter.db_type == 'postgresql':
+                        cursor.execute("""
+                            SELECT EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name = 'detections' AND table_schema = 'public'
+                                AND column_name = 'track_id'
+                            )
+                        """)
+                        has_track_id = cursor.fetchone()[0]
+                    else:
+                        cursor.execute("PRAGMA table_info(detections)")
+                        columns_info = cursor.fetchall()
+                        has_track_id = any(row[1] == 'track_id' for row in columns_info)
+                except Exception:
+                    has_track_id = False
+                
+                if has_track_id:
+                    # track_id kolonu varsa kullan
+                    if self.db_adapter.db_type == 'postgresql':
+                        cursor.execute(f'''
+                            SELECT COUNT(DISTINCT track_id) 
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE
+                            AND track_id IS NOT NULL
+                        ''', (company_id,))
+                    else:
+                        cursor.execute(f'''
+                            SELECT COUNT(DISTINCT track_id) 
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND date(timestamp) = date('now')
+                            AND track_id IS NOT NULL
+                        ''', (company_id,))
+                else:
+                    # track_id kolonu yoksa, people_detected kullan (yaklaşık değer)
+                    if self.db_adapter.db_type == 'postgresql':
+                        cursor.execute(f'''
+                            SELECT COALESCE(SUM(people_detected), 0)
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE
+                        ''', (company_id,))
+                    else:
+                        cursor.execute(f'''
+                            SELECT COALESCE(SUM(people_detected), 0)
+                            FROM detections 
+                            WHERE company_id = {placeholder} AND date(timestamp) = date('now')
+                        ''', (company_id,))
+                
+                active_workers_result = cursor.fetchone()
+                if hasattr(active_workers_result, 'keys') and hasattr(active_workers_result, 'values'):  # RealDictRow
+                    active_workers = list(active_workers_result.values())[0] if active_workers_result else 0
+                else:  # Liste formatı (SQLite için)
+                    active_workers = active_workers_result[0] if active_workers_result and len(active_workers_result) > 0 else 0
+                
+                # NULL kontrolü
+                if active_workers is None:
+                    active_workers = 0
+            except Exception as e:
+                logger.warning(f"⚠️ Active workers query hatası, varsayılan değer kullanılıyor: {e}")
+                active_workers = 0
             
             # Aylık ihlal sayısı
             if self.db_adapter.db_type == 'postgresql':
                 cursor.execute(f'''
                     SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND date(timestamp) > CURRENT_DATE - INTERVAL '30 days'
+                    WHERE company_id = {placeholder} AND DATE(timestamp) > CURRENT_DATE - INTERVAL '30 days'
                 ''', (company_id,))
             else:
                 cursor.execute(f'''
@@ -1897,9 +2363,11 @@ class MultiTenantDatabase:
             if hasattr(monthly_violations_result, 'keys') and hasattr(monthly_violations_result, 'values'):  # RealDictRow
                 monthly_violations = list(monthly_violations_result.values())[0] if monthly_violations_result else 0
             else:  # Liste formatı (SQLite için)
-                monthly_violations = monthly_violations_result[0] if monthly_violations_result else 0
+                monthly_violations = monthly_violations_result[0] if monthly_violations_result and len(monthly_violations_result) > 0 else 0
             
-            conn.close()
+            # NULL kontrolü
+            if monthly_violations is None:
+                monthly_violations = 0
             
             # Trend hesaplamaları - Fix all NoneType issues
             cameras_trend = (active_cameras or 0) - (last_week_cameras or 0)
@@ -1918,8 +2386,11 @@ class MultiTenantDatabase:
             active_cameras = active_cameras or 0
             active_workers = active_workers or 0
             monthly_violations = monthly_violations or 0
+            today_violations = today_violations or 0
+            yesterday_violations = yesterday_violations or 0
+            last_week_cameras = last_week_cameras or 0
             
-            return {
+            result = {
                 'total_detections': total_detections,
                 'total_people': total_people,
                 'compliant_people': compliant_people,
@@ -1937,13 +2408,23 @@ class MultiTenantDatabase:
                 'workers_trend': 0  # Çalışan trendi için daha karmaşık hesaplama gerekir
             }
             
+            conn.close()
+            return result
+            
         except Exception as e:
             logger.error(f"❌ İstatistik getirme hatası: {e}")
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            if 'conn' in locals():
+                try:
+                    conn.close()
+                except:
+                    pass
             return {
                 'total_detections': 0,
                 'total_people': 0,
+                'compliant_people': 0,
+                'violation_people': 0,
                 'compliance_rate': 0,
                 'active_cameras': 0,
                 'today_violations': 0,
@@ -2000,15 +2481,17 @@ class MultiTenantDatabase:
     def get_subscription_info(self, company_id):
         """Şirket abonelik bilgilerini getir"""
         try:
-            cursor = self.db.cursor()
+            conn = self.get_connection()
+            cursor = conn.cursor()
             
+            placeholder = self.get_placeholder()
             # Şirket abonelik bilgilerini al
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT subscription_type, billing_cycle, subscription_start, subscription_end, 
                        max_cameras, created_at, company_name, sector, payment_status, 
                        auto_renewal, next_billing_date
                 FROM companies 
-                WHERE company_id = %s
+                WHERE company_id = {placeholder}
             """, (company_id,))
             
             result = cursor.fetchone()
@@ -2118,15 +2601,22 @@ class MultiTenantDatabase:
                     'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 25)) * 100
                 })
                 
+                conn.close()
                 return {
                     'success': True,
                     'subscription': subscription_info
                 }
             else:
+                conn.close()
                 return {'success': False, 'error': 'Şirket bulunamadı'}
                 
         except Exception as e:
             logger.error(f"❌ Internal abonelik bilgileri getirme hatası: {e}")
+            if 'conn' in locals():
+                try:
+                    conn.close()
+                except:
+                    pass
             return {'success': False, 'error': 'Veri getirme başarısız'}
 
     def update_company_logo_url(self, company_id: str, logo_url: str) -> bool:
@@ -2137,18 +2627,19 @@ class MultiTenantDatabase:
             
             placeholder = self.get_placeholder()
             
-            # Timestamp fonksiyonu
-            if hasattr(self, 'db_adapter') and self.db_adapter.db_type == 'postgresql':
-                timestamp_func = 'CURRENT_TIMESTAMP'
+            # Timestamp fonksiyonu - PostgreSQL ve SQLite uyumlu
+            if self.db_adapter.db_type == 'postgresql':
+                cursor.execute(f"""
+                    UPDATE companies 
+                    SET logo_url = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = {placeholder}
+                """, (logo_url, company_id))
             else:
-                timestamp_func = 'datetime(\'now\')'
-            
-            # logo_url kolonunu güncelle
-            cursor.execute(f"""
-                UPDATE companies 
-                SET logo_url = {placeholder}, updated_at = {timestamp_func}
-                WHERE company_id = {placeholder}
-            """, (logo_url, company_id))
+                cursor.execute(f"""
+                    UPDATE companies 
+                    SET logo_url = {placeholder}, updated_at = datetime('now')
+                    WHERE company_id = {placeholder}
+                """, (logo_url, company_id))
             
             conn.commit()
             conn.close()
@@ -2161,9 +2652,24 @@ class MultiTenantDatabase:
             return False
 
     def get_company_info(self, company_id: str) -> Optional[Dict[str, Any]]:
-        """Şirket bilgilerini getir"""
+        """Şirket bilgilerini getir (cache'lenmiş)"""
+        # Cache kontrolü - her frame'de DB sorgusu yapmamak için
+        if not hasattr(self, '_company_info_cache'):
+            self._company_info_cache = {}
+            self._company_info_cache_time = {}
+        
+        cache_key = company_id
+        cache_ttl = 60  # 60 saniye cache
+        
+        # Cache'den kontrol et
+        if cache_key in self._company_info_cache:
+            cache_time = self._company_info_cache_time.get(cache_key, 0)
+            if (datetime.now().timestamp() - cache_time) < cache_ttl:
+                logger.debug(f"🔍 Company info cache hit: {company_id}")
+                return self._company_info_cache[cache_key]
+        
         try:
-            print(f"🔍 MultiTenantDatabase - get_company_info çağrıldı: {company_id}")
+            logger.debug(f"🔍 MultiTenantDatabase - get_company_info çağrıldı: {company_id}")
             
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -2177,16 +2683,32 @@ class MultiTenantDatabase:
                 WHERE company_id = {placeholder}
             '''
             
-            print(f"🔍 MultiTenantDatabase - Query: {query}")
             cursor.execute(query, (company_id,))
             result = cursor.fetchone()
-            print(f"🔍 MultiTenantDatabase - Query result: {result}")
             
             conn.close()
             
             if result:
-                if hasattr(result, 'keys'):  # PostgreSQL RealDictRow
-                    print(f"🔍 MultiTenantDatabase - PostgreSQL RealDictRow formatı")
+                # SQLite Row vs PostgreSQL RealDictRow tespiti
+                if isinstance(result, sqlite3.Row):
+                    # SQLite Row - dict-like ama tuple gibi de erişilebilir
+                    logger.debug(f"🔍 MultiTenantDatabase - SQLite Row formatı")
+                    company_info = {
+                        'company_name': result['company_name'],
+                        'sector': result['sector'],
+                        'contact_person': result['contact_person'],
+                        'email': result['email'],
+                        'phone': result['phone'],
+                        'address': result['address'],
+                        'subscription_type': result['subscription_type'],
+                        'subscription_start': result['subscription_start'],
+                        'subscription_end': result['subscription_end'],
+                        'max_cameras': result['max_cameras'],
+                        'logo_url': result['logo_url'] if len(result) > 10 else None
+                    }
+                elif hasattr(result, 'keys') and not isinstance(result, (tuple, list)):
+                    # PostgreSQL RealDictRow
+                    logger.debug(f"🔍 MultiTenantDatabase - PostgreSQL RealDictRow formatı")
                     company_info = {
                         'company_name': result['company_name'],
                         'sector': result['sector'],
@@ -2200,11 +2722,8 @@ class MultiTenantDatabase:
                         'max_cameras': result['max_cameras'],
                         'logo_url': result['logo_url']
                     }
-                    print(f"🔍 MultiTenantDatabase - Company info: {company_info}")
-                    return company_info
                 else:  # SQLite tuple
-                    print(f"🔍 MultiTenantDatabase - SQLite tuple formatı")
-                    print(f"🔍 MultiTenantDatabase - Result length: {len(result)}")
+                    logger.debug(f"🔍 MultiTenantDatabase - SQLite tuple formatı")
                     company_info = {
                         'company_name': result[0],
                         'sector': result[1],
@@ -2218,15 +2737,21 @@ class MultiTenantDatabase:
                         'max_cameras': result[9],
                         'logo_url': result[10] if len(result) > 10 else None
                     }
-                    print(f"🔍 MultiTenantDatabase - Company info: {company_info}")
-                    return company_info
+                
+                # Cache'e kaydet
+                self._company_info_cache[cache_key] = company_info
+                self._company_info_cache_time[cache_key] = datetime.now().timestamp()
+                
+                logger.debug(f"🔍 MultiTenantDatabase - Company info cached: {company_id}")
+                return company_info
             else:
-                print(f"🔍 MultiTenantDatabase - Query sonucu bulunamadı")
+                logger.debug(f"🔍 MultiTenantDatabase - Query sonucu bulunamadı")
                 return None
             
         except Exception as e:
-            print(f"❌ MultiTenantDatabase - get_company_info hatası: {e}")
             logger.error(f"❌ Failed to get company info: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     def get_subscription_info_internal(self, company_id):

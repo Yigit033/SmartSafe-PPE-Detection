@@ -7,15 +7,20 @@ SmartSafe AI - PPE Detection Model Training
 import os
 import sys
 import yaml
-import torch
 import subprocess
 from pathlib import Path
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
 from ultralytics import YOLO
 
 class SH17Trainer:
     def __init__(self, config_path='datasets/SH17/configs/SH17.yaml'):
         self.config_path = config_path
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = 'cuda' if (torch is not None and torch.cuda.is_available()) else 'cpu'
         print(f"🎯 Training Device: {self.device}")
         
     def validate_dataset(self):
@@ -132,10 +137,6 @@ class SH17Trainer:
             project=f'training/sh17_{sector}',
             name=f'sh17_{sector}_model',
             exist_ok=True,
-            # Sektör spesifik parametreler
-            classes=config['classes'],
-            overlap_mask=True,
-            mask_ratio=4
         )
         
         print(f"✅ {sector} sektörü fine-tuning tamamlandı!")

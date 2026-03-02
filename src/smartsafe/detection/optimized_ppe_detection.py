@@ -7,11 +7,19 @@ High-performance real-time PPE detection with SH17 model
 import cv2
 import numpy as np
 import time
-import torch
-from ultralytics import YOLO
 import logging
 from collections import deque
 import threading
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +53,9 @@ class OptimizedPPEDetector:
         
     def load_model(self, use_optimized=True):
         """Load optimized model"""
+        if YOLO is None:
+            logger.error("❌ ultralytics not installed, cannot load model")
+            return False
         try:
             if use_optimized:
                 # Try YOLOv8n first for speed
@@ -238,13 +249,13 @@ class OptimizedPPEDetector:
         # Draw compliance status
         y_offset = 30
         for status in compliance_status:
-            person_id = f"Person"
-            ppe_text = f"Helmet: {'✓' if status['has_helmet'] else '✗'} | "
-            ppe_text += f"Vest: {'✓' if status['has_vest'] else '✗'}"
+            detected = status.get('detected_ppe', {})
+            ppe_text = f"Helmet: {'✓' if detected.get('helmet') else '✗'} | "
+            ppe_text += f"Vest: {'✓' if detected.get('vest') else '✗'}"
             
-            color = self.colors['compliant'] if status['compliant'] else self.colors['violation']
+            color = self.colors['compliant'] if status.get('compliant', False) else self.colors['violation']
             
-            cv2.putText(frame, f"{person_id}: {ppe_text}", (10, y_offset), 
+            cv2.putText(frame, f"Person: {ppe_text}", (10, y_offset), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             y_offset += 25
         

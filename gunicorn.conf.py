@@ -14,9 +14,10 @@ backlog = 2048
 # Worker processes - Memory optimized for Render.com
 workers = 1  # Single worker for free tier (512MB limit)
 worker_class = "gthread"
-threads = 4
-worker_connections = 100  # Reduced for memory optimization
+threads = 2  # Reduced from 4 to save memory
+worker_connections = 50  # Reduced for memory optimization
 timeout = 300  # Timeout for requests (5 minutes - allows cold start + initialization)
+worker_int = 30  # Worker interrupt timeout
 keepalive = 5  # Keep connections alive
 max_requests = 100  # Restart worker after 100 requests
 max_requests_jitter = 10  # Add jitter to prevent thundering herd
@@ -46,9 +47,13 @@ limit_request_field_size = 8190
 # Access log format
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
-# Application path
-chdir = "/opt/render/project/src"
-pythonpath = "/opt/render/project/src"
+# Application path - Dynamic for Render.com
+import os
+_project_root = os.path.dirname(os.path.abspath(__file__))
+_src_path = os.path.join(_project_root, 'src')
+
+chdir = _project_root
+pythonpath = _src_path
 
 # SSL (disabled for Render.com)
 keyfile = None

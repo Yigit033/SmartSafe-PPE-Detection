@@ -3197,8 +3197,8 @@
             }
             
             // Şifre validasyonu
-            if (formData.get('demo_password').length < 6) {
-                toastr.error('Şifre en az 6 karakter olmalıdır!');
+            if (formData.get('demo_password').length < 8) {
+                toastr.error('Şifre en az 8 karakter olmalıdır!');
                 return;
             }
             
@@ -3401,7 +3401,11 @@
                     if (data.error && data.error.includes('zaten kullanılıyor')) {
                         toastr.warning('⚠️ ' + data.error);
                     } else {
-                        toastr.error('❌ Hata: ' + data.error);
+                        let message = '❌ Hata: ' + (data.error || 'İstek başarısız oldu');
+                        if (Array.isArray(data.validation_errors) && data.validation_errors.length > 0) {
+                            message += '\n- ' + data.validation_errors.join('\n- ');
+                        }
+                        toastr.error(message);
                     }
                 }
                 

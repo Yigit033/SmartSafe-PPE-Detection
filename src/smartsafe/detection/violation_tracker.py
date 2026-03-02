@@ -5,6 +5,7 @@ Event-based intelligent violation tracking with person identification
 
 import time
 import logging
+import threading
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -31,6 +32,7 @@ class ViolationTracker:
         self.cooldown_period = cooldown_period
         self.iou_threshold = iou_threshold
         self.person_timeout = person_timeout
+        self._lock = threading.Lock()
         
         # Aktif ihlaller: {camera_id: {person_hash: {violation_type: start_time}}}
         self.active_violations: Dict[str, Dict[str, Dict[str, float]]] = defaultdict(lambda: defaultdict(dict))
@@ -198,10 +200,10 @@ class ViolationTracker:
         return f"PERSON_{hash_value}"
     
     def process_detection(
-        self, 
-        camera_id: str, 
+        self,
+        camera_id: str,
         company_id: str,
-        person_bbox: List[float], 
+        person_bbox: List[float],
         violations: List[str],
         frame_snapshot: Optional[bytes] = None
     ) -> Tuple[List[Dict], List[Dict]]:
@@ -219,14 +221,25 @@ class ViolationTracker:
         Returns:
             (new_violations, ended_violations)
         """
+        with self._lock:
+            return self._process_detection_locked(
+                camera_id, company_id, person_bbox, violations, frame_snapshot
+            )
+
+    def _process_detection_locked(
+        self,
+        camera_id: str,
+        company_id: str,
+        person_bbox: List[float],
+        violations: List[str],
+        frame_snapshot: Optional[bytes] = None
+    ) -> Tuple[List[Dict], List[Dict]]:
         current_time = time.time()
         
-        # 🎯 IoU-based person matching - Aynı kişiyi takip et
         try:
             person_id = self.match_person_with_iou(person_bbox, camera_id, current_time)
             logger.debug(f"🎯 Person matched: {person_id} (camera: {camera_id})")
         except Exception as e:
-            # Fallback: Hash-based matching (hata durumunda)
             logger.warning(f"⚠️ IoU matching failed, using hash-based fallback: {e}")
             person_id = self.generate_person_hash(person_bbox, camera_id)
             logger.debug(f"📝 Fallback person ID: {person_id}")
@@ -314,7 +327,7 @@ class ViolationTracker:
         return new_violations, ended_violations
     
     def _cleanup_stale_violations(self):
-        """Uzun süredir güncellenmemiş ihlalleri temizle"""
+        """Uzun süredir güncellenmemiş ihlalleri temizle (lock already held by caller or standalone)"""
         current_time = time.time()
         cleanup_count = 0
         
@@ -446,6 +459,10 @@ class ViolationTracker:
         Returns:
             Aktif ihlal listesi
         """
+        with self._lock:
+            return self._get_active_violations_locked(camera_id)
+
+    def _get_active_violations_locked(self, camera_id: Optional[str] = None) -> List[Dict]:
         active = []
         
         if camera_id:

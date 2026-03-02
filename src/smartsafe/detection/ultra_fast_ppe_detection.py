@@ -8,14 +8,22 @@ Extreme optimization enabled
 import cv2
 import numpy as np
 import time
-import torch
-from ultralytics import YOLO
 import threading
 import queue
 import logging
 from collections import deque
 import os
 import sys
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

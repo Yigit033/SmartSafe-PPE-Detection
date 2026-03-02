@@ -214,58 +214,119 @@ class PoseAwarePPEDetector:
         persons = []
         
         try:
+            # Handle both single result and list of results
+            if not isinstance(pose_results, (list, tuple)):
+                pose_results = [pose_results]
+            
             for result in pose_results:
-                if result.keypoints is None:
+                # Check if result has required attributes
+                if not hasattr(result, 'keypoints') or result.keypoints is None:
+                    logger.debug("⚠️ No keypoints in pose result, skipping")
                     continue
                 
-                # Get bounding boxes and keypoints
-                boxes = result.boxes.xyxy.cpu().numpy() if result.boxes is not None else []
-                keypoints = result.keypoints.xy.cpu().numpy() if result.keypoints is not None else []
-                confidences = result.keypoints.conf.cpu().numpy() if result.keypoints is not None else []
+                # Safely get bounding boxes and keypoints
+                try:
+                    if result.boxes is not None and hasattr(result.boxes, 'xyxy'):
+                        boxes = result.boxes.xyxy.cpu().numpy() if hasattr(result.boxes.xyxy, 'cpu') else []
+                    else:
+                        boxes = []
+                    
+                    if result.keypoints is not None and hasattr(result.keypoints, 'xy'):
+                        keypoints = result.keypoints.xy.cpu().numpy() if hasattr(result.keypoints.xy, 'cpu') else []
+                    else:
+                        keypoints = []
+                    
+                    if result.keypoints is not None and hasattr(result.keypoints, 'conf'):
+                        confidences = result.keypoints.conf.cpu().numpy() if hasattr(result.keypoints.conf, 'cpu') else []
+                    else:
+                        confidences = []
+                    
+                    # Get box confidences safely
+                    box_confidences = []
+                    if result.boxes is not None and hasattr(result.boxes, 'conf'):
+                        try:
+                            box_confidences = result.boxes.conf.cpu().numpy() if hasattr(result.boxes.conf, 'cpu') else []
+                        except Exception:
+                            box_confidences = []
+                    
+                except Exception as attr_error:
+                    logger.warning(f"⚠️ Error accessing pose result attributes: {attr_error}")
+                    continue
                 
-                for i, (box, kpts, kpt_conf) in enumerate(zip(boxes, keypoints, confidences)):
-                    x1, y1, x2, y2 = box
-                    
-                    # 🔧 STRICT BBOX CLIPPING - Ensure person bbox stays within frame
-                    frame_height, frame_width = frame_shape[:2]
-                    x1 = max(0, min(x1, frame_width - 1))
-                    x2 = max(x1 + 1, min(x2, frame_width))
-                    y1 = max(0, min(y1, frame_height - 1))
-                    y2 = max(y1 + 1, min(y2, frame_height))
-                    
-                    # Extract keypoints with confidence
-                    keypoint_data = []
-                    for j, (kpt, conf) in enumerate(zip(kpts, kpt_conf)):
-                        if conf > self.keypoint_confidence_threshold:
-                            keypoint_data.append({
-                                'index': j,
-                                'x': float(kpt[0]),
-                                'y': float(kpt[1]),
-                                'confidence': float(conf)
-                            })
-                    
-                    # 🎯 SMOOTH KEYPOINTS - Reduce jitter across frames
-                    person_id = i  # Use index as person ID for this frame
-                    keypoint_data = self._smooth_keypoints(keypoint_data, person_id)
-                    
-                    # Calculate anatomical regions from keypoints
-                    anatomical_regions = self._calculate_anatomical_regions_from_pose(
-                        keypoint_data, (x1, y1, x2, y2), frame_shape
-                    )
-                    
-                    persons.append({
-                        'bbox': [float(x1), float(y1), float(x2), float(y2)],
-                        'keypoints': keypoint_data,
-                        'anatomical_regions': anatomical_regions,
-                        'class_name': 'person',
-                        'confidence': float(result.boxes.conf[i]) if result.boxes is not None else 0.9
-                    })
+                # Ensure all arrays have same length
+                min_len = min(len(boxes), len(keypoints), len(confidences))
+                if min_len == 0:
+                    logger.debug("⚠️ No valid pose detections found")
+                    continue
+                
+                for i in range(min_len):
+                    try:
+                        box = boxes[i]
+                        kpts = keypoints[i]
+                        kpt_conf = confidences[i] if i < len(confidences) else np.array([])
+                        
+                        x1, y1, x2, y2 = box
+                        
+                        # 🔧 STRICT BBOX CLIPPING - Ensure person bbox stays within frame
+                        frame_height, frame_width = frame_shape[:2]
+                        x1 = max(0, min(x1, frame_width - 1))
+                        x2 = max(x1 + 1, min(x2, frame_width))
+                        y1 = max(0, min(y1, frame_height - 1))
+                        y2 = max(y1 + 1, min(y2, frame_height))
+                        
+                        # Extract keypoints with confidence
+                        keypoint_data = []
+                        if len(kpts) > 0 and len(kpt_conf) > 0:
+                            for j in range(min(len(kpts), len(kpt_conf))):
+                                conf = kpt_conf[j] if j < len(kpt_conf) else 0.0
+                                if conf > self.keypoint_confidence_threshold:
+                                    kpt = kpts[j]
+                                    if len(kpt) >= 2:
+                                        keypoint_data.append({
+                                            'index': j,
+                                            'x': float(kpt[0]),
+                                            'y': float(kpt[1]),
+                                            'confidence': float(conf)
+                                        })
+                        
+                        # 🎯 SMOOTH KEYPOINTS - Reduce jitter across frames
+                        person_id = i  # Use index as person ID for this frame
+                        keypoint_data = self._smooth_keypoints(keypoint_data, person_id)
+                        
+                        # Calculate anatomical regions from keypoints
+                        anatomical_regions = self._calculate_anatomical_regions_from_pose(
+                            keypoint_data, (x1, y1, x2, y2), frame_shape
+                        )
+                        
+                        # Get box confidence safely
+                        box_confidence = 0.9  # default
+                        if i < len(box_confidences):
+                            box_confidence = float(box_confidences[i])
+                        elif result.boxes is not None and hasattr(result.boxes, 'conf'):
+                            try:
+                                if hasattr(result.boxes.conf, '__getitem__'):
+                                    box_confidence = float(result.boxes.conf[i])
+                            except (IndexError, TypeError):
+                                pass
+                        
+                        persons.append({
+                            'bbox': [float(x1), float(y1), float(x2), float(y2)],
+                            'keypoints': keypoint_data,
+                            'anatomical_regions': anatomical_regions,
+                            'class_name': 'person',
+                            'confidence': box_confidence
+                        })
+                    except Exception as person_error:
+                        logger.warning(f"⚠️ Error processing person {i}: {person_error}")
+                        continue
             
             logger.debug(f"📊 Extracted {len(persons)} persons with pose data")
             return persons
             
         except Exception as e:
             logger.error(f"❌ Pose extraction failed: {e}")
+            import traceback
+            logger.debug(f"❌ Pose extraction traceback: {traceback.format_exc()}")
             return []
     
     def _calculate_anatomical_regions_from_pose(self, keypoints: List[Dict], 

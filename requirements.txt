@@ -1,13 +1,12 @@
 # SmartSafe AI PPE Detection - Render.com Memory Optimized
 # Core Computer Vision
-opencv-python-headless==4.8.1.78  # Headless version for server deployment
-numpy==1.24.3
+opencv-python-headless>=4.8.0  # Headless version for server deployment
+numpy>=1.26.0  # Python 3.12 compatible (1.24.x has no wheels for 3.12)
 Pillow>=9.0.0
 
 # Deep Learning Framework (Production Ready - Auto GPU/CPU Detection)
 # Will use GPU if available, CPU as fallback
-torch>=2.0.0
-torchvision>=0.15.0
+# Note: torch/torchvision are installed separately via --index-url for proper CPU/CUDA support
 ultralytics>=8.0.0
 # CUDA support will be automatically detected
 
@@ -22,7 +21,7 @@ Werkzeug>=2.3.7  # Required by Flask
 
 # Database & Networking
 SQLAlchemy>=2.0.0
-psycopg2-binary==2.9.7
+psycopg2-binary>=2.9.7
 redis>=5.0.1
 dnspython>=2.4.0  # DNS resolution for camera detection
 certifi>=2023.7.22  # SSL certificate verification
@@ -30,7 +29,7 @@ certifi>=2023.7.22  # SSL certificate verification
 # Security & Authentication
 PyJWT>=2.8.0
 cryptography>=41.0.7
-bcrypt==4.0.1
+bcrypt>=4.0.1
 pyotp>=2.8.0
 
 # Email & Validation
@@ -61,6 +60,10 @@ APScheduler>=3.10.4
 
 # Development & Progress
 tqdm>=4.64.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
 
 # Export & QR Code
 openpyxl>=3.1.0

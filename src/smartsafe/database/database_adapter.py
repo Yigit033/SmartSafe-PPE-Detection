@@ -136,6 +136,27 @@ class DatabaseAdapter:
             connection_params={'database_path': db_path}
         )
     
+    def close_connection(self, conn):
+        """Close database connection and return to pool if applicable"""
+        try:
+            if conn is None:
+                return
+            
+            if self.db_type == 'sqlite':
+                conn.close()
+            elif self.connection_pool and hasattr(conn, 'close'):
+                # Return connection to pool
+                try:
+                    self.connection_pool.putconn(conn)
+                    logger.debug("✅ Connection returned to pool")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error returning connection to pool: {e}")
+                    conn.close()
+            else:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"⚠️ Error closing connection: {e}")
+    
     def get_connection(self, timeout: int = 30):
         """Get database connection with thread safety and connection pooling"""
         try:
@@ -1834,29 +1855,48 @@ class DatabaseAdapter:
             params = (camera_id, company_id, limit)
             result = self.execute_query(query, params, fetch_all=True)
             
-            if result and isinstance(result, list):
-                # Convert to dict format
+            if result and isinstance(result, list) and len(result) > 0:
+                # execute_query zaten dict döndürüyor, kontrol et
                 detections = []
                 for row in result:
-                    detection = {
-                        'id': row[0] if len(row) > 0 else None,
-                        'camera_id': row[1] if len(row) > 1 else camera_id,
-                        'company_id': row[2] if len(row) > 2 else company_id,
-                        'detection_type': row[3] if len(row) > 3 else 'ppe',
-                        'timestamp': row[4] if len(row) > 4 else None,
-                        'confidence': row[5] if len(row) > 5 else 0.0,
-                        'people_detected': row[6] if len(row) > 6 else 0,
-                        'ppe_compliant': row[7] if len(row) > 7 else 0,
-                        'violations_count': row[8] if len(row) > 8 else 0,
-                        'total_people': row[6] if len(row) > 6 else 0,
-                        'compliant_people': row[7] if len(row) > 7 else 0
-                    }
+                    if isinstance(row, dict):
+                        # Zaten dict formatında
+                        detection = {
+                            'id': row.get('id'),
+                            'camera_id': row.get('camera_id', camera_id),
+                            'company_id': row.get('company_id', company_id),
+                            'detection_type': row.get('detection_type', 'ppe'),
+                            'timestamp': row.get('timestamp'),
+                            'confidence': row.get('confidence', 0.0),
+                            'people_detected': row.get('people_detected', 0),
+                            'ppe_compliant': row.get('ppe_compliant', 0),
+                            'violations_count': row.get('violations_count', 0),
+                            'total_people': row.get('people_detected', 0),
+                            'compliant_people': row.get('ppe_compliant', 0)
+                        }
+                    else:
+                        # Tuple/list formatında (fallback)
+                        detection = {
+                            'id': row[0] if len(row) > 0 else None,
+                            'camera_id': row[1] if len(row) > 1 else camera_id,
+                            'company_id': row[2] if len(row) > 2 else company_id,
+                            'detection_type': row[3] if len(row) > 3 else 'ppe',
+                            'timestamp': row[4] if len(row) > 4 else None,
+                            'confidence': row[5] if len(row) > 5 else 0.0,
+                            'people_detected': row[6] if len(row) > 6 else 0,
+                            'ppe_compliant': row[7] if len(row) > 7 else 0,
+                            'violations_count': row[8] if len(row) > 8 else 0,
+                            'total_people': row[6] if len(row) > 6 else 0,
+                            'compliant_people': row[7] if len(row) > 7 else 0
+                        }
                     detections.append(detection)
                 return detections
             return []
             
         except Exception as e:
             logger.error(f"❌ Get camera detection results error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
     
     def get_latest_camera_detection(self, camera_id: str, company_id: str) -> Optional[Dict[str, Any]]:
@@ -1978,16 +2018,26 @@ class DatabaseAdapter:
             params = (company_id, hours)
             result = self.execute_query(query, params, fetch_all=True)
             
-            if result and len(result) > 0:
+            if result and isinstance(result, list) and len(result) > 0:
                 row = result[0]
-                # Convert row to dict
-                stats = {
-                    'total_detections': row[0] if len(row) > 0 else 0,
-                    'total_people': row[1] if len(row) > 1 else 0,
-                    'total_compliant': row[2] if len(row) > 2 else 0,
-                    'total_violations': row[3] if len(row) > 3 else 0,
-                    'avg_confidence': row[4] if len(row) > 4 else 0.0
-                }
+                # Convert row to dict - execute_query zaten dict döndürüyor
+                if isinstance(row, dict):
+                    stats = {
+                        'total_detections': row.get('total_detections', 0) or 0,
+                        'total_people': row.get('total_people', 0) or 0,
+                        'total_compliant': row.get('total_compliant', 0) or 0,
+                        'total_violations': row.get('total_violations', 0) or 0,
+                        'avg_confidence': float(row.get('avg_confidence', 0.0)) or 0.0
+                    }
+                else:
+                    # Tuple/list formatında (fallback)
+                    stats = {
+                        'total_detections': row[0] if len(row) > 0 else 0,
+                        'total_people': row[1] if len(row) > 1 else 0,
+                        'total_compliant': row[2] if len(row) > 2 else 0,
+                        'total_violations': row[3] if len(row) > 3 else 0,
+                        'avg_confidence': float(row[4]) if len(row) > 4 else 0.0
+                    }
                 return {
                     'total_detections': stats.get('total_detections', 0) or 0,
                     'total_people': stats.get('total_people', 0) or 0,
@@ -2127,26 +2177,49 @@ class DatabaseAdapter:
             
             results = self.execute_query(query, params, fetch_all=True)
             
+            if not results or not isinstance(results, list):
+                return []
+            
             violations = []
             for row in results:
-                violations.append({
-                    'event_id': row[0],
-                    'company_id': row[1],
-                    'camera_id': row[2],
-                    'person_id': row[3],
-                    'violation_type': row[4],
-                    'start_time': row[5],
-                    'end_time': row[6],
-                    'duration_seconds': row[7],
-                    'snapshot_path': row[8],
-                    'severity': row[9],
-                    'status': row[10]
-                })
+                if isinstance(row, dict):
+                    # Zaten dict formatında
+                    violation = {
+                        'event_id': row.get('event_id'),
+                        'company_id': row.get('company_id'),
+                        'camera_id': row.get('camera_id'),
+                        'person_id': row.get('person_id'),
+                        'violation_type': row.get('violation_type'),
+                        'start_time': row.get('start_time'),
+                        'end_time': row.get('end_time'),
+                        'duration_seconds': row.get('duration_seconds'),
+                        'snapshot_path': row.get('snapshot_path'),
+                        'severity': row.get('severity'),
+                        'status': row.get('status')
+                    }
+                else:
+                    # Tuple/list formatında (fallback)
+                    violation = {
+                        'event_id': row[0] if len(row) > 0 else None,
+                        'company_id': row[1] if len(row) > 1 else None,
+                        'camera_id': row[2] if len(row) > 2 else None,
+                        'person_id': row[3] if len(row) > 3 else None,
+                        'violation_type': row[4] if len(row) > 4 else None,
+                        'start_time': row[5] if len(row) > 5 else None,
+                        'end_time': row[6] if len(row) > 6 else None,
+                        'duration_seconds': row[7] if len(row) > 7 else None,
+                        'snapshot_path': row[8] if len(row) > 8 else None,
+                        'severity': row[9] if len(row) > 9 else None,
+                        'status': row[10] if len(row) > 10 else None
+                    }
+                violations.append(violation)
             
             return violations
             
         except Exception as e:
             logger.error(f"❌ Get active violations error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
     
     def get_violation_history(self, camera_id: str, hours: int = 24, limit: int = 100) -> List[Dict]:
@@ -2172,26 +2245,49 @@ class DatabaseAdapter:
             
             results = self.execute_query(query, (camera_id, cutoff_time, limit), fetch_all=True)
             
+            if not results or not isinstance(results, list):
+                return []
+            
             violations = []
             for row in results:
-                violations.append({
-                    'event_id': row[0],
-                    'company_id': row[1],
-                    'camera_id': row[2],
-                    'person_id': row[3],
-                    'violation_type': row[4],
-                    'start_time': row[5],
-                    'end_time': row[6],
-                    'duration_seconds': row[7],
-                    'snapshot_path': row[8],
-                    'severity': row[9],
-                    'status': row[10]
-                })
+                if isinstance(row, dict):
+                    # Zaten dict formatında
+                    violation = {
+                        'event_id': row.get('event_id'),
+                        'company_id': row.get('company_id'),
+                        'camera_id': row.get('camera_id'),
+                        'person_id': row.get('person_id'),
+                        'violation_type': row.get('violation_type'),
+                        'start_time': row.get('start_time'),
+                        'end_time': row.get('end_time'),
+                        'duration_seconds': row.get('duration_seconds'),
+                        'snapshot_path': row.get('snapshot_path'),
+                        'severity': row.get('severity'),
+                        'status': row.get('status')
+                    }
+                else:
+                    # Tuple/list formatında (fallback)
+                    violation = {
+                        'event_id': row[0] if len(row) > 0 else None,
+                        'company_id': row[1] if len(row) > 1 else None,
+                        'camera_id': row[2] if len(row) > 2 else None,
+                        'person_id': row[3] if len(row) > 3 else None,
+                        'violation_type': row[4] if len(row) > 4 else None,
+                        'start_time': row[5] if len(row) > 5 else None,
+                        'end_time': row[6] if len(row) > 6 else None,
+                        'duration_seconds': row[7] if len(row) > 7 else None,
+                        'snapshot_path': row[8] if len(row) > 8 else None,
+                        'severity': row[9] if len(row) > 9 else None,
+                        'status': row[10] if len(row) > 10 else None
+                    }
+                violations.append(violation)
             
             return violations
             
         except Exception as e:
             logger.error(f"❌ Get violation history error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
     
     # ========================================
@@ -2271,24 +2367,45 @@ class DatabaseAdapter:
             
             results = self.execute_query(query, (person_id, company_id, month), fetch_all=True)
             
+            if not results or not isinstance(results, list):
+                return []
+            
             violations = []
             for row in results:
-                violations.append({
-                    'id': row[0],
-                    'person_id': row[1],
-                    'company_id': row[2],
-                    'month': row[3],
-                    'violation_type': row[4],
-                    'violation_count': row[5],
-                    'total_duration_seconds': row[6],
-                    'penalty_amount': row[7],
-                    'last_violation_date': row[8]
-                })
+                if isinstance(row, dict):
+                    # Zaten dict formatında
+                    violation = {
+                        'id': row.get('id'),
+                        'person_id': row.get('person_id'),
+                        'company_id': row.get('company_id'),
+                        'month': row.get('month'),
+                        'violation_type': row.get('violation_type'),
+                        'violation_count': row.get('violation_count'),
+                        'total_duration_seconds': row.get('total_duration_seconds'),
+                        'penalty_amount': row.get('penalty_amount'),
+                        'last_violation_date': row.get('last_violation_date')
+                    }
+                else:
+                    # Tuple/list formatında (fallback)
+                    violation = {
+                        'id': row[0] if len(row) > 0 else None,
+                        'person_id': row[1] if len(row) > 1 else None,
+                        'company_id': row[2] if len(row) > 2 else None,
+                        'month': row[3] if len(row) > 3 else None,
+                        'violation_type': row[4] if len(row) > 4 else None,
+                        'violation_count': row[5] if len(row) > 5 else None,
+                        'total_duration_seconds': row[6] if len(row) > 6 else None,
+                        'penalty_amount': row[7] if len(row) > 7 else None,
+                        'last_violation_date': row[8] if len(row) > 8 else None
+                    }
+                violations.append(violation)
             
             return violations
             
         except Exception as e:
             logger.error(f"❌ Get person monthly violations error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
 

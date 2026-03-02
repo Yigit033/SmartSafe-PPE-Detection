@@ -20,7 +20,11 @@ class ProductionConfig:
     # Flask configuration
     DEBUG = False
     TESTING = False
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'smartsafe-production-key-change-in-production')
+    _sk = os.environ.get('SECRET_KEY')
+    if not _sk:
+        import secrets as _secrets
+        _sk = _secrets.token_hex(32)
+    SECRET_KEY = _sk
     
     # Database configuration
     DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -45,10 +49,10 @@ class ProductionConfig:
         'aviation': 'yolov8n.pt'
     }
     
-    # Model search paths - Production
+    # Model search paths - Production (Render.com optimized)
     MODEL_SEARCH_PATHS = [
-        '/app/data/models',
-        '/opt/render/project/src/data/models',
+        '/var/data/models',
+        './src/data/models',
         'data/models',
         '.'
     ]

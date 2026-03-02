@@ -18,18 +18,20 @@ class SH17ModelDownloader:
         self.models_dir = Path('models')
         self.models_dir.mkdir(exist_ok=True)
         
-        # SH17 model URLs (örnek - gerçek URL'ler ile değiştirilmeli)
+        # SH17 model URLs
+        # These must be populated after training. Run `python training/sh17_training.py`
+        # to generate models locally, then optionally host them for remote download.
         self.model_urls = {
-            'base': 'https://example.com/sh17_base.zip',
-            'construction': 'https://example.com/sh17_construction.zip',
-            'manufacturing': 'https://example.com/sh17_manufacturing.zip',
-            'chemical': 'https://example.com/sh17_chemical.zip',
-            'food_beverage': 'https://example.com/sh17_food_beverage.zip',
-            'warehouse_logistics': 'https://example.com/sh17_warehouse_logistics.zip',
-            'energy': 'https://example.com/sh17_energy.zip',
-            'petrochemical': 'https://example.com/sh17_petrochemical.zip',
-            'marine_shipyard': 'https://example.com/sh17_marine_shipyard.zip',
-            'aviation': 'https://example.com/sh17_aviation.zip'
+            'base': '',
+            'construction': '',
+            'manufacturing': '',
+            'chemical': '',
+            'food_beverage': '',
+            'warehouse_logistics': '',
+            'energy': '',
+            'petrochemical': '',
+            'marine_shipyard': '',
+            'aviation': '',
         }
         
         # Fallback model (yolov8n.pt zaten mevcut)
@@ -114,6 +116,9 @@ class SH17ModelDownloader:
         
         success_count = 0
         for sector, url in self.model_urls.items():
+            if not url:
+                logger.info(f"ℹ️ {sector}: URL not configured, skipping. Train locally with training/sh17_training.py")
+                continue
             if self.download_model(sector, url):
                 success_count += 1
         

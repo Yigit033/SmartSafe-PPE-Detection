@@ -6,12 +6,20 @@ SmartSafe AI - PPE Detection Model Integration
 
 import os
 import yaml
-import torch
 import numpy as np
 from pathlib import Path
-from ultralytics import YOLO
 from typing import Dict, List, Optional, Tuple
 import logging
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +48,6 @@ class SH17ModelManager:
             
         logger.info("🔧 Initializing SH17ModelManager for the first time...")
         self.models_dir = models_dir
-        # CUDA sorunları nedeniyle CPU kullan
         self.device = 'cpu'
         self.models = {}
         self.fallback_model = None
@@ -93,7 +100,10 @@ class SH17ModelManager:
         
     def load_models(self):
         """Tüm SH17 modellerini yükle ve fallback model'i hazırla"""
-        # 🎯 SINGLETON: Modeller zaten yüklendiyse skip et
+        if YOLO is None:
+            logger.error("❌ ultralytics not installed, cannot load models")
+            return False
+        
         if self.models:
             logger.info("✅ SH17 modelleri zaten yüklü, skip ediliyor...")
             return
@@ -135,12 +145,26 @@ class SH17ModelManager:
         
         # SH17 modellerini yükle
         loaded_models = 0
+        self._has_real_sh17 = False
         for sector, path in model_paths.items():
             if os.path.exists(path):
                 try:
-                    self.models[sector] = YOLO(path)
-                    self.models[sector].to(self.device)
-                    logger.info(f"✅ {sector} modeli yüklendi: {path}")
+                    loaded_model = YOLO(path)
+                    loaded_model.to(self.device)
+                    
+                    # Verify this is a real SH17 model by checking class count
+                    model_classes = getattr(loaded_model, 'names', {})
+                    num_classes = len(model_classes)
+                    if num_classes == 17:
+                        self._has_real_sh17 = True
+                        logger.info(f"✅ {sector} SH17 model loaded (17 classes): {path}")
+                    elif num_classes == 80:
+                        logger.warning(f"⚠️ {sector}: COCO model detected at SH17 path (80 classes). "
+                                       f"This is a placeholder, not a trained SH17 model.")
+                    else:
+                        logger.info(f"ℹ️ {sector} model loaded ({num_classes} classes): {path}")
+                    
+                    self.models[sector] = loaded_model
                     loaded_models += 1
                 except Exception as e:
                     logger.warning(f"❌ {sector} modeli yüklenemedi: {e}")
@@ -177,10 +201,15 @@ class SH17ModelManager:
                 self.fallback_model.to(self.device)
                 logger.info("✅ YOLOv8n fallback model başarıyla indirildi ve yüklendi")
             else:
-                # Development'ta direkt indir
-                self.fallback_model = YOLO('yolov8n.pt')
+                # Development: use data/models/yolov8n.pt if present, else auto-download
+                dev_fallback = 'data/models/yolov8n.pt'
+                if os.path.exists(dev_fallback):
+                    self.fallback_model = YOLO(dev_fallback)
+                    logger.info(f"✅ YOLOv8n fallback model yüklendi: {dev_fallback}")
+                else:
+                    self.fallback_model = YOLO('yolov8n.pt')
+                    logger.info("✅ YOLOv8n fallback model yüklendi (auto-download)")
                 self.fallback_model.to(self.device)
-                logger.info("✅ YOLOv8n fallback model yüklendi")
                 
         except Exception as e:
             logger.warning(f"⚠️ Fallback model yükleme hatası: {e}")
@@ -323,15 +352,30 @@ class SH17ModelManager:
                 return []
             
     def _detect_with_sh17(self, image, sector, confidence):
-        """SH17 model ile detection (OPTIMIZED)"""
+        """SH17 model ile detection"""
         try:
-            model = self.get_model(sector)  # Lazy loading ile model al
+            model = self.get_model(sector)
             if model is None:
                 logger.warning(f"⚠️ SH17 {sector} modeli None")
                 return []
             
-            # 🚀 INFERENCE OPTIMIZATION - Daha hızlı detection
-            results = model(image, conf=confidence, device=self.device, verbose=False)  # verbose=False for speed
+            results = model(image, conf=confidence, device=self.device, verbose=False)
+            
+            # Determine model type and class name source
+            model_names = getattr(model, 'names', {})
+            num_classes = len(model_names)
+            is_coco = num_classes == 80
+            is_10class_ppe = num_classes == 10
+            # ahmadmughees SH17 model uses different class order; normalize to our names
+            SH17_MODEL_NAME_TO_OURS = {
+                'ear-mufs': 'earmuffs', 'face-mask': 'face_mask_medical', 'face-guard': 'face_guard',
+                'tool': 'tools', 'medical-suit': 'medical_suit', 'safety-suit': 'safety_suit',
+                'safety-vest': 'safety_vest'
+            }
+            PPE_10_TO_SH17 = {
+                'glove': 'gloves', 'goggles': 'glasses', 'mask': 'face_mask_medical',
+                'helmet': 'helmet', 'shoes': 'shoes'
+            }
         
             detections = []
             for result in results:
@@ -339,7 +383,6 @@ class SH17ModelManager:
                 if boxes is not None and len(boxes) > 0:
                     for box in boxes:
                         try:
-                            # Güvenli index erişimi
                             cls_tensor = box.cls
                             conf_tensor = box.conf
                             xyxy_tensor = box.xyxy
@@ -352,19 +395,37 @@ class SH17ModelManager:
                                 continue
                             
                             class_id = int(cls_tensor[0].item())
-                            confidence = float(conf_tensor[0].item())
+                            det_confidence = float(conf_tensor[0].item())
                             bbox = xyxy_tensor[0].cpu().numpy().tolist()
+                            raw_name = model_names.get(class_id, 'unknown')
                             
-                            # Class name al
-                            class_name = self.sh17_classes.get(class_id, 'unknown')
+                            if is_coco:
+                                # COCO placeholder: only pass 'person' for downstream PPE analysis
+                                if raw_name != 'person':
+                                    continue
+                                class_name = raw_name
+                                model_type = 'Fallback-COCO'
+                            elif is_10class_ppe:
+                                # 10-class PPE model: skip no_* (absence), map names for compliance
+                                if raw_name.startswith('no_'):
+                                    continue
+                                class_name = PPE_10_TO_SH17.get(raw_name, raw_name)
+                                model_type = 'PPE-10'
+                            elif num_classes == 17:
+                                # 17-class SH17 (e.g. ahmadmughees): use model names, normalize
+                                class_name = SH17_MODEL_NAME_TO_OURS.get(raw_name, raw_name.replace('-', '_'))
+                                model_type = 'SH17'
+                            else:
+                                class_name = self.sh17_classes.get(class_id, raw_name)
+                                model_type = 'SH17'
                             
                             detection = {
                                 'class_id': class_id,
                                 'class_name': class_name,
-                                'confidence': confidence,
+                                'confidence': det_confidence,
                                 'bbox': bbox,
                                 'sector': sector,
-                                'model_type': 'SH17'
+                                'model_type': model_type
                             }
                             detections.append(detection)
                         except Exception as box_error:
@@ -378,15 +439,14 @@ class SH17ModelManager:
             return []
     
     def _detect_with_fallback(self, image, sector, confidence):
-        """Fallback model ile detection (OPTIMIZED)"""
+        """Fallback model ile detection - COCO person + PPE mapping"""
         try:
             if self.fallback_model is None:
                 self._ensure_fallback_model()
                 if self.fallback_model is None:
                     return []
             
-            # 🚀 INFERENCE OPTIMIZATION - Daha hızlı detection
-            results = self.fallback_model(image, conf=confidence, device=self.device, verbose=False)  # verbose=False for speed
+            results = self.fallback_model(image, conf=confidence, device=self.device, verbose=False)
             
             detections = []
             for result in results:
@@ -397,15 +457,18 @@ class SH17ModelManager:
                             class_id = int(box.cls[0])
                             class_name = self.fallback_model.names[class_id]
                             
-                            # Sadece person ve PPE ile ilgili sınıfları al
-                            if class_name in ['person', 'helmet', 'safety_vest', 'gloves', 'safety_shoes']:
+                            # COCO model: only 'person' is relevant for PPE pipeline.
+                            # PPE items (helmet, vest, etc.) are NOT in COCO classes.
+                            # We pass person detections so downstream PoseAwarePPEDetector
+                            # can handle anatomical region analysis.
+                            if class_name == 'person':
                                 detection = {
                                     'class_id': class_id,
                                     'class_name': class_name,
                                     'confidence': float(box.conf[0]),
                                     'bbox': box.xyxy[0].cpu().numpy().tolist(),
                                     'sector': sector,
-                                    'model_type': 'Fallback'
+                                    'model_type': 'Fallback-COCO'
                                 }
                                 detections.append(detection)
                         except Exception as box_error:
@@ -489,13 +552,16 @@ class SH17ModelManager:
         """Sistem durumu raporu"""
         sh17_count = len([s for s in self.sector_mapping.keys() if self.is_sh17_available(s)])
         fallback_available = self.fallback_model is not None
+        has_real_sh17 = getattr(self, '_has_real_sh17', False)
         
         return {
             'sh17_models_loaded': sh17_count,
+            'has_trained_sh17_models': has_real_sh17,
             'total_sectors': len(self.sector_mapping),
             'fallback_available': fallback_available,
             'device': self.device,
-            'status': 'Operational' if (sh17_count > 0 or fallback_available) else 'Critical'
+            'status': 'Operational' if (sh17_count > 0 or fallback_available) else 'Critical',
+            'note': 'Using trained SH17 models' if has_real_sh17 else 'Using COCO fallback (PPE training required)'
         }
 
     def clear_cache(self):
@@ -526,7 +592,7 @@ class SH17ModelManager:
             if times:
                 avg_detection_time = sum(times) / len(times)
         
-                return {
+        return {
             'cache_size': cache_size,
             'avg_detection_time': avg_detection_time,
             'throttle_ms': int(self.detection_throttle * 1000),

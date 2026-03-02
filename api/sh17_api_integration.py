@@ -8,10 +8,13 @@ import os
 import sys
 import json
 import base64
+import logging
 import cv2
 import numpy as np
 from flask import Flask, request, jsonify
 from models.sh17_model_manager import SH17ModelManager
+
+logger = logging.getLogger(__name__)
 
 class SH17API:
     def __init__(self):
@@ -32,10 +35,18 @@ class SH17API:
                 sector = data.get('sector', 'base')
                 confidence = data.get('confidence', 0.5)
                 
-                # Base64 image'i decode et
-                image_bytes = base64.b64decode(image_data.split(',')[1])
+                if not image_data:
+                    return jsonify({'success': False, 'error': 'Image data required'}), 400
+                
+                if image_data.startswith('data:image'):
+                    image_data = image_data.split(',')[1]
+                
+                image_bytes = base64.b64decode(image_data)
                 nparr = np.frombuffer(image_bytes, np.uint8)
                 image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                
+                if image is None:
+                    return jsonify({'success': False, 'error': 'Invalid image data'}), 400
                 
                 # PPE tespiti yap
                 detections = self.model_manager.detect_sector_specific(
@@ -50,9 +61,10 @@ class SH17API:
                 })
                 
             except Exception as e:
+                logger.error(f"SH17 detection error: {e}")
                 return jsonify({
                     'success': False,
-                    'error': str(e)
+                    'error': 'Detection failed'
                 }), 500
                 
         @self.app.route('/api/sh17/compliance', methods=['POST'])
@@ -64,17 +76,23 @@ class SH17API:
                 sector = data.get('sector', 'construction')
                 required_ppe = data.get('required_ppe', [])
                 
-                # Base64 image'i decode et
-                image_bytes = base64.b64decode(image_data.split(',')[1])
+                if not image_data:
+                    return jsonify({'success': False, 'error': 'Image data required'}), 400
+                
+                if image_data.startswith('data:image'):
+                    image_data = image_data.split(',')[1]
+                
+                image_bytes = base64.b64decode(image_data)
                 nparr = np.frombuffer(image_bytes, np.uint8)
                 image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 
-                # Tespit yap
+                if image is None:
+                    return jsonify({'success': False, 'error': 'Invalid image data'}), 400
+                
                 detections = self.model_manager.detect_sector_specific(
                     image, sector, 0.5
                 )
                 
-                # Uyumluluk analizi
                 compliance = self.model_manager.analyze_compliance(
                     detections, required_ppe
                 )
@@ -87,9 +105,10 @@ class SH17API:
                 })
                 
             except Exception as e:
+                logger.error(f"Compliance analysis error: {e}")
                 return jsonify({
                     'success': False,
-                    'error': str(e)
+                    'error': 'Compliance analysis failed'
                 }), 500
                 
         @self.app.route('/api/sh17/sectors', methods=['GET'])

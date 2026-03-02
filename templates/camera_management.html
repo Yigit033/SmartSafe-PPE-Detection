@@ -1141,7 +1141,7 @@
                             </h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body p-0" style="background: #f8f9fa;">
+                        <div class="modal-body p-0" style="background: #f8f9fa; overflow-y: auto; max-height: calc(100vh - 120px);">
                             <div class="container-fluid p-4">
                                 <div class="row">
                                     <!-- Sol Panel - Video Stream -->
@@ -1156,9 +1156,9 @@
                                                 </h6>
                                             </div>
                                             <div class="card-body p-0">
-                                                <div id="detectionVideoContainer" style="background: #000; position: relative; min-height: 500px;">
-                                                    <img id="detectionStream" style="width: 100%; height: auto; display: none;" alt="Detection Stream">
-                                                    <div id="detectionLoading" class="text-center p-5">
+                                                <div id="detectionVideoContainer" style="background: #000; position: relative; min-height: 400px; max-height: 70vh; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                                                    <img id="detectionStream" style="width: 100%; height: 100%; object-fit: contain; display: none;" alt="Detection Stream">
+                                                    <div id="detectionLoading" class="text-center p-5" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
                                                         <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                                                             <span class="visually-hidden">Yükleniyor...</span>
                                                         </div>
@@ -1437,6 +1437,11 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+        }
+
         // Kamera modeli bilgileri
         const cameraModels = {
             'hikvision': {
@@ -2007,9 +2012,9 @@
         function showAlert(message, type) {
             const container = document.getElementById('alertContainer');
             const alert = document.createElement('div');
-            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.className = `alert alert-${escapeHtml(type)} alert-dismissible fade show`;
             alert.innerHTML = `
-                ${message}
+                ${escapeHtml(message)}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
             container.appendChild(alert);
@@ -2205,58 +2210,65 @@
                 const statusClass = camera.status === 'active' ? 'status-online' : 'status-offline';
                 const statusText = camera.status === 'active' ? 'Aktif' : 'Pasif';
                 const lastActivity = new Date(camera.updated_at || camera.created_at).toLocaleString('tr-TR');
+                const safeName = escapeHtml(camera.camera_name);
+                const safeIp = escapeHtml(camera.ip_address || 'N/A');
+                const safeLocation = escapeHtml(camera.location || 'N/A');
+                const safeId = escapeHtml(camera.camera_id);
                 
                 return `
-                    <tr data-camera-id="${camera.camera_id}">
+                    <tr data-camera-id="${safeId}">
                         <td>
                             <div class="camera-icon">
                                 <i class="fas fa-video"></i>
                             </div>
                         </td>
                         <td>
-                            <strong>${camera.camera_name}</strong>
+                            <strong>${safeName}</strong>
                         </td>
                         <td>
-                            <code>${camera.ip_address || 'N/A'}</code>
+                            <code>${safeIp}</code>
                         </td>
-                        <td>${camera.location || 'N/A'}</td>
+                        <td>${safeLocation}</td>
                         <td>
                             <div class="d-flex align-items-center">
-                                <span class="camera-status ${statusClass}" id="status-${camera.camera_id}">
+                                <span class="camera-status ${statusClass}" id="status-${safeId}">
                                     <i class="fas fa-circle me-1"></i>${statusText}
                                 </span>
                                 <button class="btn btn-sm ${camera.status === 'active' ? 'btn-warning' : 'btn-success'} ms-3" 
-                                        onclick="toggleCameraStatus('${camera.camera_id}')" 
+                                        onclick="toggleCameraStatus('${safeId}')" 
                                         title="${camera.status === 'active' ? 'Pasif Yap' : 'Aktif Yap'}">
                                     <i class="fas fa-${camera.status === 'active' ? 'pause' : 'play'}"></i>
                                 </button>
                             </div>
                         </td>
                         <td>
-                            <div id="detection-status-${camera.camera_id}">
-                                <span class="badge bg-secondary">
+                            <div id="detection-status-${safeId}">
+                                <button class="btn btn-sm btn-outline-secondary" 
+                                        onclick="toggleDetectionStatus('${safeId}')" 
+                                        id="detection-toggle-${safeId}"
+                                        title="PPE Detection'ı Başlat/Durdur">
                                     <i class="fas fa-pause-circle"></i> Durdu
-                                </span>
+                                </button>
                             </div>
                         </td>
                         <td>
-                            <small class="text-muted">${lastActivity}</small>
+                            <small class="text-muted">${escapeHtml(lastActivity)}</small>
                         </td>
                         <td>
                             <div class="camera-actions">
-                                <button class="btn btn-success btn-sm" onclick="startLiveDetection('${camera.camera_id}', '${camera.camera_name}')" title="Canlı Tespit">
+                                <button class="btn btn-success btn-sm" onclick="startLiveDetection('${safeId}', '${safeName}')" title="Canlı Tespit">
                                     <i class="fas fa-brain"></i>
                                 </button>
-                                <button class="btn btn-primary btn-sm" onclick="testCamera('${camera.camera_id}')" title="Test Et">
+                                <button class="btn btn-primary btn-sm" onclick="testCamera('${safeId}')" title="Test Et">
                                     <i class="fas fa-play"></i>
                                 </button>
-                                <button class="btn btn-info btn-sm" onclick="viewCameraDetails('${camera.camera_id}')" title="Detaylar">
+                                <button class="btn btn-info btn-sm" onclick="viewCameraDetails('${safeId}')" title="Detaylar">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button class="btn btn-warning btn-sm" onclick="editCamera('${camera.camera_id}')" title="Düzenle">
+                                <button class="btn btn-warning btn-sm" onclick="editCamera('${safeId}')" title="Düzenle">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteCamera('${camera.camera_id}')" title="Sil">
+                                <button class="btn btn-danger btn-sm" onclick="deleteCamera('${safeId}')" title="Sil">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -2279,11 +2291,16 @@
             const streamUrl = generateStreamUrl(camera);
             
             if (streamUrl) {
-                streamContainer.innerHTML = `
-                    <img src="${streamUrl}" alt="${camera.camera_name}" 
-                         onload="this.style.display='block'" 
-                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-center text-muted\\'><i class=\\'fas fa-exclamation-triangle fa-2x mb-2\\'></i><p>Görüntü alınamadı</p></div>'">
-                `;
+                const img = document.createElement('img');
+                img.src = streamUrl;
+                img.alt = camera.camera_name || '';
+                img.onload = function() { this.style.display = 'block'; };
+                img.onerror = function() {
+                    this.style.display = 'none';
+                    this.parentElement.innerHTML = '<div class="text-center text-muted"><i class="fas fa-exclamation-triangle fa-2x mb-2"></i><p>Görüntü alınamadı</p></div>';
+                };
+                streamContainer.innerHTML = '';
+                streamContainer.appendChild(img);
             }
         }
         
@@ -2631,6 +2648,21 @@
                     
                     showAlert(`✅ Kamera durumu ${statusText} olarak güncellendi!`, 'success');
                     
+                    // Eğer kamera pasif yapıldıysa, detection'ı da durdur
+                    if (newStatus === 'inactive') {
+                        // Detection durumunu güncelle
+                        setTimeout(() => {
+                            updateCameraDetectionStatus(cameraId);
+                            // Aktif detectionlar dashboard'unu güncelle (kamera pasif olduğu için listeden çıkacak)
+                            updateActiveDetectionsDashboard();
+                        }, 500);
+                    } else {
+                        // Kamera aktif yapıldı, dashboard'u güncelle
+                        setTimeout(() => {
+                            updateActiveDetectionsDashboard();
+                        }, 500);
+                    }
+                    
                     // Add small delay to prevent race conditions
                     setTimeout(() => {
                         toggleButton.disabled = false;
@@ -2659,6 +2691,108 @@
                 toggleButton.disabled = false;
                 
                 showAlert('❌ Kamera durumu güncellenirken hata oluştu', 'danger');
+            });
+        }
+        
+        /**
+         * PPE Detection durumunu toggle et (başlat/durdur)
+         */
+        function toggleDetectionStatus(cameraId) {
+            console.log('🔄 Toggling detection status for camera:', cameraId);
+            
+            const toggleButton = document.getElementById(`detection-toggle-${cameraId}`);
+            if (!toggleButton) {
+                console.error('❌ Detection toggle button not found for camera:', cameraId);
+                return;
+            }
+            
+            // Prevent multiple rapid clicks
+            if (toggleButton.disabled) {
+                console.log('🔄 Toggle already in progress, ignoring click');
+                return;
+            }
+            
+            // Get current status from button
+            const isCurrentlyActive = toggleButton.classList.contains('btn-success');
+            const action = isCurrentlyActive ? 'stop' : 'start';
+            
+            // Show loading state
+            toggleButton.disabled = true;
+            toggleButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+            
+            // API endpoint
+            const endpoint = action === 'start' 
+                ? `/api/company/{{ company_id }}/start-detection`
+                : `/api/company/{{ company_id }}/stop-detection`;
+            
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    camera_id: cameraId
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errData => {
+                        throw new Error(errData.error || `HTTP ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update button state
+                    const newIsActive = action === 'start';
+                    toggleButton.className = `btn btn-sm ${newIsActive ? 'btn-success pulse-animation' : 'btn-outline-secondary'}`;
+                    toggleButton.innerHTML = `<i class="fas ${newIsActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${newIsActive ? 'Aktif' : 'Durdu'}`;
+                    toggleButton.title = newIsActive ? 'PPE Detection\'ı Durdur' : 'PPE Detection\'ı Başlat';
+                    
+                    showAlert(`✅ PPE Detection ${newIsActive ? 'başlatıldı' : 'durduruldu'}!`, 'success');
+                    
+                    // Tespit başlatıldıysa ve canlı modal bu kamera için açıksa stream'i yenile
+                    // (yeni istek bbox'lı akışı alır - generate_saas_frames)
+                    if (newIsActive && currentDetectionCameraId === cameraId) {
+                        startDetectionStream(cameraId);
+                    }
+                    
+                    // Refresh detection status after a short delay
+                    setTimeout(() => {
+                        updateCameraDetectionStatus(cameraId);
+                        // Aktif detectionlar dashboard'unu güncelle
+                        updateActiveDetectionsDashboard();
+                    }, 1000);
+                } else {
+                    const errorMsg = data.error || 'Bilinmeyen hata';
+                    
+                    // Özel mesaj kontrolü - kamera pasifse kullanıcıya bilgi ver
+                    if (errorMsg.includes('pasif') || data.camera_status === 'inactive') {
+                        showAlert(`⚠️ ${errorMsg}. Lütfen önce kamerayı aktif yapın.`, 'warning');
+                    } else {
+                        showAlert(`❌ PPE Detection ${action === 'start' ? 'başlatılamadı' : 'durdurulamadı'}: ${errorMsg}`, 'danger');
+                    }
+                    
+                    // Restore previous state
+                    toggleButton.className = `btn btn-sm ${isCurrentlyActive ? 'btn-success' : 'btn-outline-secondary'}`;
+                    toggleButton.innerHTML = `<i class="fas ${isCurrentlyActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${isCurrentlyActive ? 'Aktif' : 'Durdu'}`;
+                }
+                toggleButton.disabled = false;
+            })
+            .catch(error => {
+                console.error('Toggle detection status error:', error);
+                showAlert('❌ PPE Detection durumu güncellenirken hata oluştu', 'danger');
+                
+                // Restore previous state
+                toggleButton.className = `btn btn-sm ${isCurrentlyActive ? 'btn-success' : 'btn-outline-secondary'}`;
+                toggleButton.innerHTML = `<i class="fas ${isCurrentlyActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${isCurrentlyActive ? 'Aktif' : 'Durdu'}`;
+                toggleButton.disabled = false;
+                
+                // Dashboard'u güncelle (hata durumunda da güncelleme yap)
+                setTimeout(() => {
+                    updateActiveDetectionsDashboard();
+                }, 500);
             });
         }
         
@@ -4669,18 +4803,30 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 const isActive = statusData && statusData.success ? !!statusData.is_active : false;
                 const detection = latestData && latestData.success ? latestData.detection : null;
                 const violationCount = detection ? (detection.violations_count || 0) : 0;
-                const badge = isActive
-                    ? `<span class="badge bg-success pulse-animation"><i class="fas fa-brain"></i> Aktif</span>`
-                    : `<span class="badge bg-secondary"><i class="fas fa-pause-circle"></i> Durdu</span>`;
-
+                
+                // Buton oluştur
+                const buttonClass = isActive ? 'btn-success' : 'btn-outline-secondary';
+                const buttonIcon = isActive ? 'fa-brain' : 'fa-pause-circle';
+                const buttonText = isActive ? 'Aktif' : 'Durdu';
+                const buttonTitle = isActive ? 'PPE Detection\'ı Durdur' : 'PPE Detection\'ı Başlat';
+                
                 let extra = '';
-                if (detection) {
+                if (detection && isActive) {
                     const complianceRate = detection.total_people > 0 
                         ? Math.round((detection.ppe_compliant / detection.total_people) * 100) 
                         : 100;
                     extra = `<br><small class="text-${violationCount > 0 ? 'danger' : 'success'}">${violationCount > 0 ? `${violationCount} İhlal` : `${complianceRate}% Uyum`}</small>`;
                 }
-                statusElement.innerHTML = `${badge}${extra}`;
+                
+                statusElement.innerHTML = `
+                    <button class="btn btn-sm ${buttonClass} ${isActive ? 'pulse-animation' : ''}" 
+                            onclick="toggleDetectionStatus('${cameraId}')" 
+                            id="detection-toggle-${cameraId}"
+                            title="${buttonTitle}">
+                        <i class="fas ${buttonIcon}"></i> ${buttonText}
+                    </button>
+                    ${extra}
+                `;
             } catch (error) {
                 console.error(`Detection status update error for ${cameraId}:`, error);
             }
@@ -4706,6 +4852,7 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
         /**
          * Aktif detectionlar dashboard'unu güncelle
          * Tüm aktif detectionları bir arada gösterir
+         * Sadece aktif durumda VE PPE Detection çalışan kameraları gösterir
          */
         async function updateActiveDetectionsDashboard() {
             try {
@@ -4718,18 +4865,38 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                     const cameraName = row.querySelector('strong')?.textContent || 'Bilinmeyen Kamera';
                     
                     try {
-                        const response = await fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`);
-                        const data = await response.json();
+                        // 1. Kamera durumunu kontrol et (aktif/pasif)
+                        const statusElement = document.getElementById(`status-${cameraId}`);
+                        const isCameraActive = statusElement && statusElement.innerHTML.includes('Aktif');
                         
-                        if (data.success && data.detection) {
+                        if (!isCameraActive) {
+                            // Kamera pasif, bu kamerayı atla
+                            continue;
+                        }
+                        
+                        // 2. PPE Detection durumunu kontrol et
+                        const [statusRes, latestRes] = await Promise.all([
+                            fetch(`/api/company/{{ company_id }}/detection-status/${cameraId}`),
+                            fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`)
+                        ]);
+                        
+                        const statusData = await statusRes.json();
+                        const latestData = await latestRes.json();
+                        
+                        // 3. Sadece hem kamera aktif hem de PPE Detection aktif olan kameraları ekle
+                        const isDetectionActive = statusData && statusData.success ? !!statusData.is_active : false;
+                        const hasDetectionData = latestData && latestData.success && latestData.detection;
+                        
+                        if (isCameraActive && isDetectionActive && hasDetectionData) {
                             activeDetections.push({
                                 cameraId: cameraId,
                                 cameraName: cameraName,
-                                detection: data.detection
+                                detection: latestData.detection
                             });
                         }
                     } catch (error) {
                         // Bu kamera için hata, devam et
+                        console.debug(`⚠️ Error checking camera ${cameraId}:`, error);
                         continue;
                     }
                 }

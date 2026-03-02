@@ -5,10 +5,10 @@ services:
     region: oregon
     plan: starter
     buildCommand: |
-      # Create required directories
-      mkdir -p /opt/render/project/src/ssl /opt/render/project/src/data/models /tmp/Ultralytics
-      chmod 755 /opt/render/project/src/ssl /opt/render/project/src/data
-      chmod 777 /tmp/Ultralytics
+      # Create required directories (use PWD for dynamic path)
+      mkdir -p ./src/ssl ./src/data/models /tmp/Ultralytics
+      chmod 755 ./src/ssl ./src/data 2>/dev/null || true
+      chmod 777 /tmp/Ultralytics 2>/dev/null || true
       
       # Install dependencies with retry
       pip install --upgrade pip
@@ -19,22 +19,18 @@ services:
       python download_models.py || echo "⚠️ Model download failed, will attempt lazy loading at runtime"
       
       # Verify models were downloaded
-      ls -lah /opt/render/project/src/data/models/ || echo "Models directory will be populated at runtime"
+      ls -lah ./src/data/models/ 2>/dev/null || echo "Models directory will be populated at runtime"
       
       # Test network connectivity
       echo "🔍 Testing network connectivity..."
-      ping -c 3 aws-0-us-west-1.pooler.supabase.com || echo "Ping failed but continuing..."
+      ping -c 3 aws-0-us-west-1.pooler.supabase.com 2>/dev/null || echo "Ping failed but continuing..."
       
       # Test DNS resolution
       echo "🔍 Testing DNS resolution..."
-      nslookup aws-0-us-west-1.pooler.supabase.com || echo "DNS lookup failed but continuing..."
-      
-      # Test connection pooling port
-      echo "🔍 Testing connection pooling port..."
-      nc -zv aws-0-us-west-1.pooler.supabase.com 6543 || echo "Connection pooling port test failed but continuing..."
+      nslookup aws-0-us-west-1.pooler.supabase.com 2>/dev/null || echo "DNS lookup failed but continuing..."
       
       echo "✅ Build completed successfully"
-    startCommand: gunicorn --config gunicorn.conf.py --bind 0.0.0.0:10000 --timeout 300 src.smartsafe.api.smartsafe_saas_api:app
+    startCommand: gunicorn --config gunicorn.conf.py --bind 0.0.0.0:10000 --timeout 300 --access-logfile - --error-logfile - src.smartsafe.api.smartsafe_saas_api:app
     healthCheckPath: /health
     envVars:
       - key: RENDER
@@ -46,7 +42,7 @@ services:
       - key: PORT
         value: "10000"
       - key: PYTHONPATH
-        value: /opt/render/project/src
+        value: ./src
       - key: CUDA_VISIBLE_DEVICES
         value: ""
       - key: YOLO_CONFIG_DIR
@@ -69,17 +65,17 @@ services:
         value: "--access-logfile - --error-logfile - --capture-output"
     disks:
       - name: smartsafe-data
-        mountPath: /opt/render/project/src/data
+        mountPath: /var/data
         sizeGB: 1
       - name: smartsafe-ssl
-        mountPath: /opt/render/project/src/ssl
+        mountPath: /var/ssl
         sizeGB: 1
     healthCheck:
       path: /health
       interval: 30s
-      timeout: 10s
-      gracePeriod: 30s
-      startPeriod: 40s
+      timeout: 15s
+      gracePeriod: 60s
+      startPeriod: 120s
     autoDeploy: true
     domains:
       - smartsafe-api.onrender.com

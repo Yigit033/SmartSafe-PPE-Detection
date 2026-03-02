@@ -2469,20 +2469,35 @@ class ProfessionalCameraManager:
                     logger.info(f"🎯 Using POSE-AWARE detection for camera {camera_id}")
                     result = pose_detector.detect_with_pose(frame, sector, confidence=0.25)
                     
+                    # Validate result is a dictionary
+                    if not isinstance(result, dict):
+                        logger.warning(f"⚠️ Pose-aware detection returned non-dict result: {type(result)}, falling back to standard")
+                        raise ValueError(f"Invalid result type: {type(result)}")
+                    
                     # Add camera_id and company_id to result
                     result['camera_id'] = camera_id
                     result['company_id'] = company_id
+                    
+                    # Ensure required keys exist
+                    if 'people_detected' not in result:
+                        result['people_detected'] = 0
+                    if 'compliance_rate' not in result:
+                        result['compliance_rate'] = 0.0
+                    if 'violations_count' not in result:
+                        result['violations_count'] = 0
                     
                     # Cache and save result
                     self.detection_results[camera_id] = result
                     self.save_detection_to_database(camera_id, result, sector)
                     
-                    logger.info(f"✅ Pose-aware detection: People: {result['people_detected']}, "
-                               f"Compliance: {result['compliance_rate']}%, Violations: {result['violations_count']}")
+                    logger.info(f"✅ Pose-aware detection: People: {result.get('people_detected', 0)}, "
+                               f"Compliance: {result.get('compliance_rate', 0.0)}%, Violations: {result.get('violations_count', 0)}")
                     return result
                     
                 except Exception as pose_error:
                     logger.warning(f"⚠️ Pose-aware detection failed, falling back to standard: {pose_error}")
+                    import traceback
+                    logger.debug(f"⚠️ Pose-aware detection traceback: {traceback.format_exc()}")
                     # Fall through to standard detection
             
             # 🎯 FAZ 1-2: STANDARD ANATOMICAL DETECTION (FALLBACK)

@@ -20,6 +20,7 @@ class DVRStreamHandler:
     """Advanced DVR stream handler with multi-brand support"""
     
     def __init__(self):
+        self._lock = threading.Lock()
         self.active_streams: Dict[str, Dict] = {}
         self.frame_buffers: Dict[str, list] = {}
         self.max_buffer_size = 5  # Reduced from 10 to 5 for smoother playback
@@ -403,11 +404,12 @@ class DVRStreamHandler:
     def stop_stream(self, stream_id: str) -> bool:
         """Stop streaming"""
         try:
-            if stream_id in self.active_streams:
-                self.active_streams[stream_id]['status'] = 'stopping'
-                logger.info(f"🛑 Stream stopping: {stream_id}")
-                return True
-            return False
+            with self._lock:
+                if stream_id in self.active_streams:
+                    self.active_streams[stream_id]['status'] = 'stopping'
+                    logger.info(f"🛑 Stream stopping: {stream_id}")
+                    return True
+                return False
         except Exception as e:
             logger.error(f"❌ Stop stream error: {e}")
             return False
@@ -415,18 +417,18 @@ class DVRStreamHandler:
     def get_latest_frame(self, stream_id: str) -> Optional[str]:
         """Get latest frame as base64 encoded JPEG"""
         try:
-            if stream_id in self.frame_buffers and self.frame_buffers[stream_id]:
-                frame_data = self.frame_buffers[stream_id][-1]
-                if frame_data and len(frame_data) > 0:
-                    return frame_data
+            with self._lock:
+                if stream_id in self.frame_buffers and self.frame_buffers[stream_id]:
+                    frame_data = self.frame_buffers[stream_id][-1]
+                    if frame_data and len(frame_data) > 0:
+                        return frame_data
+                    else:
+                        logger.warning(f"⚠️ Empty frame data for {stream_id}")
+                        return None
                 else:
-                    logger.warning(f"⚠️ Empty frame data for {stream_id}")
-                    return None
-            else:
-                logger.warning(f"⚠️ No frame buffer for {stream_id}")
-                # Create buffer lazily to avoid repeated warnings
-                self.frame_buffers[stream_id] = []
-            return None
+                    logger.warning(f"⚠️ No frame buffer for {stream_id}")
+                    self.frame_buffers[stream_id] = []
+                return None
         except Exception as e:
             logger.error(f"❌ Get frame error for {stream_id}: {e}")
             return None
@@ -434,9 +436,10 @@ class DVRStreamHandler:
     def get_stream_status(self, stream_id: str) -> Optional[Dict]:
         """Get stream status"""
         try:
-            if stream_id in self.active_streams:
-                return self.active_streams[stream_id]
-            return None
+            with self._lock:
+                if stream_id in self.active_streams:
+                    return dict(self.active_streams[stream_id])
+                return None
         except Exception as e:
             logger.error(f"❌ Get status error: {e}")
             return None

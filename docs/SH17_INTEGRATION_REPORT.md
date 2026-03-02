@@ -1,120 +1,39 @@
-# 🎯 SH17 ENTEGRASYON RAPORU - PROFESYONEL KALİTE
+# SH17 Integration Report
 
-## ✅ **TAMAMLANAN ENTEGRASYON**
+## Current Status
 
-### 🔧 **1. SH17 Model Manager Entegrasyonu**
-- ✅ **Import**: `from models.sh17_model_manager import SH17ModelManager`
-- ✅ **Global Instance**: `sh17_manager = SH17ModelManager()`
-- ✅ **Model Loading**: `sh17_manager.load_models()`
-- ✅ **CUDA Support**: GPU acceleration aktif
-- ✅ **9 Sektör Desteği**: Tüm sektörler için model yolları tanımlı
+### Architecture (Implemented)
+- **SH17ModelManager**: Singleton pattern, lazy loading, sector-based model routing
+- **PoseAwarePPEDetector**: YOLOv8-Pose keypoint detection with anatomical region mapping
+- **API Endpoints**: 5 SH17-specific endpoints under `/api/company/<id>/sh17/`
+- **9 Sector Support**: construction, manufacturing, chemical, food_beverage, warehouse_logistics, energy, petrochemical, marine_shipyard, aviation
+- **Fallback Pipeline**: Auto-fallback from SH17 to YOLOv8n (COCO person) when needed
 
-### 🌐 **2. API Endpoint Entegrasyonu**
-Aşağıdaki SH17 endpoint'leri ana API'ye başarıyla eklendi:
+### Models (Production)
+- **SH17 weights**: Pre-trained **YOLOv9-e** from [ahmadmughees/SH17dataset](https://github.com/ahmadmughees/SH17dataset) (mAP50 70.9%, 17 PPE classes).
+- **Location**: `models/sh17_base/sh17_base_model/weights/best.pt` and copied to all `models/sh17_<sector>/sh17_<sector>_model/weights/best.pt`.
+- **Fallback**: `data/models/yolov8n.pt` (COCO) for person detection when sector model is unavailable.
+- **Pose**: `data/models/yolov8n-pose.pt` for PoseAwarePPEDetector.
 
-#### **📊 Detection Endpoints**
-- ✅ `/api/company/<company_id>/sh17/detect` (POST)
-  - 17 PPE sınıfı tespiti
-  - Sektör bazlı detection
-  - Confidence threshold ayarlanabilir
+### 17 Classes (SH17)
+person, head, face, glasses, face_mask_medical, face_guard, ear, earmuffs, hands, gloves, foot, shoes, safety_vest, tools, helmet, medical_suit, safety_suit
 
-#### **🔍 Compliance Analysis**
-- ✅ `/api/company/<company_id>/sh17/compliance` (POST)
-  - Sektör bazlı uyumluluk analizi
-  - Required PPE kontrolü
-  - Detaylı compliance raporu
+## What Works Today
+1. **17-class PPE detection** via YOLOv9-e (SH17) on real industrial imagery
+2. Person detection and pose estimation (fallback / PoseAware)
+3. API endpoints (session-validated, company-scoped)
+4. Multi-tenant database and compliance framework
+5. Camera integration and MJPEG streaming
 
-#### **📋 System Management**
-- ✅ `/api/company/<company_id>/sh17/sectors` (GET)
-  - Mevcut sektörler listesi
-  - 9 farklı sektör desteği
+## Replacing or Updating the Model
+- To use another SH17-compatible weight: overwrite `models/sh17_base/.../weights/best.pt` and copy to each sector’s `weights/` folder, or re-run your deployment script.
+- Pre-trained SH17 weights (YOLOv8/v9/v10): [SH17dataset releases](https://github.com/ahmadmughees/SH17dataset/releases).
 
-- ✅ `/api/company/<company_id>/sh17/performance` (GET)
-  - Model performans metrikleri
-  - Accuracy ve FPS bilgileri
-
-- ✅ `/api/company/<company_id>/sh17/health` (GET)
-  - Sistem sağlık kontrolü
-  - GPU durumu
-  - Model yükleme durumu
-
-### 🎯 **3. Sektör Desteği**
-Tüm 9 sektör için tam entegrasyon:
-- ✅ **Construction** (İnşaat)
-- ✅ **Manufacturing** (Üretim)
-- ✅ **Chemical** (Kimyasal)
-- ✅ **Food & Beverage** (Gıda & İçecek)
-- ✅ **Warehouse/Logistics** (Depo/Lojistik)
-- ✅ **Energy** (Enerji)
-- ✅ **Petrochemical** (Petrokimya)
-- ✅ **Marine & Shipyard** (Denizcilik & Tersane)
-- ✅ **Aviation** (Havacılık)
-
-### 🔒 **4. Güvenlik ve Yetkilendirme**
-- ✅ **Session Validation**: Tüm endpoint'ler session kontrolü yapıyor
-- ✅ **Company Isolation**: Şirket bazlı veri ayrımı
-- ✅ **Error Handling**: Kapsamlı hata yönetimi
-- ✅ **Input Validation**: Giriş verisi doğrulaması
-
-### 🚀 **5. Production Ready Features**
-- ✅ **Base64 Image Support**: Web'den görüntü alımı
-- ✅ **Data URL Support**: Canvas'tan görüntü alımı
-- ✅ **Error Logging**: Detaylı log sistemi
-- ✅ **Performance Monitoring**: GPU memory tracking
-- ✅ **Multi-threading**: Thread-safe operations
-
-## 📊 **TECHNICAL SPECIFICATIONS**
-
-### **🖥️ System Requirements**
-- **Python**: 3.12.6 ✅
-- **PyTorch**: 2.5.0+cu118 ✅
-- **OpenCV**: 4.12.0 ✅
-- **Ultralytics**: 8.3.23 ✅
-- **CUDA**: Available ✅
-- **GPU**: NVIDIA GeForce RTX 4060 Laptop GPU ✅
-
-### **🎯 Model Specifications**
-- **Dataset**: SH17 (650 images) ✅
-- **Classes**: 17 PPE sınıfı ✅
-- **Architecture**: YOLOv8 ✅
-- **Training**: Sector-specific fine-tuning ✅
-- **Inference**: Real-time (30+ FPS) ✅
-
-### **🌐 API Specifications**
-- **Framework**: Flask ✅
-- **Authentication**: Session-based ✅
-- **CORS**: Enabled ✅
-- **Rate Limiting**: Enabled ✅
-- **Error Handling**: Comprehensive ✅
-
-## 🎉 **ENTEGRASYON SONUCU**
-
-### **✅ BAŞARILI TAMAMLANAN ADIMLAR:**
-
-1. **✅ SH17 Model Manager**: Tam entegrasyon
-2. **✅ API Endpoints**: 5 yeni endpoint eklendi
-3. **✅ Sektör Desteği**: 9 sektör tam destek
-4. **✅ Güvenlik**: Session validation aktif
-5. **✅ Error Handling**: Kapsamlı hata yönetimi
-6. **✅ Production Ready**: Büyük şirketler için hazır
-
-### **🎯 PROFESYONEL KALİTE GARANTİSİ:**
-
-- **🔒 Güvenlik**: Enterprise-level security
-- **⚡ Performans**: GPU-accelerated inference
-- **🔄 Scalability**: Multi-tenant architecture
-- **📊 Monitoring**: Comprehensive logging
-- **🛡️ Reliability**: Fault-tolerant design
-
-## 🚀 **SONUÇ**
-
-**SH17 entegrasyonu %100 başarıyla tamamlandı!**
-
-Platform artık:
-- ✅ **17 PPE sınıfını** tespit edebiliyor
-- ✅ **9 farklı sektör** için özelleştirilmiş
-- ✅ **Real-time analiz** yapabiliyor
-- ✅ **Enterprise-level** güvenlik sunuyor
-- ✅ **Production-ready** durumda
-
-**Büyük şirketlerin hizmetine sunmaya hazır!** 🎯 
+## API Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/company/<id>/sh17/detect` | POST | PPE detection with sector context |
+| `/api/company/<id>/sh17/compliance` | POST | Compliance analysis against required PPE |
+| `/api/company/<id>/sh17/sectors` | GET | List supported sectors |
+| `/api/company/<id>/sh17/performance` | GET | Model performance metrics |
+| `/api/company/<id>/sh17/health` | GET | System health check |
