@@ -837,144 +837,564 @@
                                             </div>
                                             
                                             <!-- Industry -->
-                                            <div class="col-md-8">
+
+                                            <!-- Industry -->
+                                            <div class="col-md-12">
                                                 <div class="form-group-modern">
                                                     <label class="form-label-modern">
                                                         <i class="fas fa-industry text-primary me-2"></i>
                                                         Industry <span class="required-mark">*</span>
                                                     </label>
                                                     <div class="input-group-modern">
-                                                        <select class="form-control-modern" name="sector" required>
-                                                <option value="">Select your industry</option>
-                                                <option value="construction">🏗️ Construction</option>
-                                                <option value="manufacturing">🏭 Manufacturing</option>
-                                                <option value="chemical">⚗️ Chemical</option>
-                                                <option value="food">🍕 Food & Beverage</option>
-                                                <option value="warehouse">📦 Warehouse/Logistics</option>
-                                                <option value="energy">⚡ Energy</option>
-                                                <option value="petrochemical">🛢️ Petrochemical</option>
-                                                <option value="marine">🚢 Marine & Shipyard</option>
-                                                <option value="aviation">✈️ Aviation</option>
-                                            </select>
+                                                        <select class="form-control-modern" name="sector" id="sectorSelect" required onchange="updatePPEOptions(this.value)">
+                                                            <option value="">Select your industry</option>
+                                                            <option value="construction">🏗️ Construction</option>
+                                                            <option value="manufacturing">🏭 Manufacturing</option>
+                                                            <option value="chemical">⚗️ Chemical</option>
+                                                            <option value="food">🍕 Food & Beverage</option>
+                                                            <option value="warehouse">📦 Warehouse/Logistics</option>
+                                                            <option value="energy">⚡ Energy</option>
+                                                            <option value="petrochemical">🛢️ Petrochemical</option>
+                                                            <option value="marine">🚢 Marine & Shipyard</option>
+                                                            <option value="aviation">✈️ Aviation</option>
+                                                        </select>
                                                         <span class="input-icon">
                                                             <i class="fas fa-industry text-primary"></i>
                                                         </span>
-                                        </div>
-                                        </div>
-                                    </div>
-                                    
-
-                                    </div>
-                                    </div>
-                                    
-    def get_home_template(self):
-        """Ana sayfa template'ini dosyadan yükle"""
-        try:
-            with open('frontend/src/templates/landing.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception:
-            return "<h1>SmartSafe AI</h1><p>Ana sayfa yüklenemedi.</p>"
-
-    def get_register_template(self):
-        """Kayıt sayfası template'ini dosyadan yükle"""
-        try:
-            with open('frontend/src/templates/register.html', 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception:
-            return "<h1>Register</h1><p>Kayıt sayfası yüklenemedi.</p>"
-                                                        <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_glasses" id="aviation-glasses" checked>
-                                                        <label class="form-check-label" for="aviation-glasses">
-                                                            <i class="fas fa-glasses text-info"></i> Güvenlik Gözlüğü
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="ear_protection" id="aviation-ears">
-                                                        <label class="form-check-label" for="aviation-ears">
-                                                            <i class="fas fa-headphones text-info"></i> Kulak Koruyucu
-                                                            <span class="badge bg-success ms-1">Optional</span>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="aviation-gloves">
-                                                        <label class="form-check-label" for="aviation-gloves">
-                                                            <i class="fas fa-hand-paper text-info"></i> İş Eldiveni
-                                                            <span class="badge bg-success ms-1">Optional</span>
-                                                        </label>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        </div>
-                                    
-                                    <div class="mb-4">
-                                        <label class="form-label fw-semibold">
-                                            <i class="fas fa-lock text-primary me-2"></i>Password *
-                                        </label>
-                                        <input type="password" class="form-control form-control-lg" name="password" id="register_password" required
-                                               placeholder="Create a secure password"
-                                               style="border-radius: 15px; border: 2px solid #e2e8f0;"
-                                               oninput="updateRegisterPasswordStrength(this.value)">
-                                        
-                                        <!-- Şifre Gücü Göstergesi -->
-                                        <div class="password-strength mt-2">
-                                            <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
-                                                <div class="strength-fill" id="register-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
-                                            </div>
-                                            <small class="strength-text" id="register-strength-text" style="font-size: 0.8rem; color: #6c757d;">Password strength: Weak</small>
-                                        </div>
-                                        
-                                        <!-- Şifre Gereksinimleri -->
-                                        <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
-                                            <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.9rem;">
-                                                <i class="fas fa-info-circle text-primary me-2"></i>
-                                                Password Requirements
-                                            </h6>
-                                            <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem;">
-                                                <div class="requirement-item" id="register-req-length" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
-                                                    <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>At least 8 characters</span>
-                                                </div>
-                                                <div class="requirement-item" id="register-req-uppercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
-                                                    <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>At least 1 uppercase letter (A-Z)</span>
-                                                </div>
-                                                <div class="requirement-item" id="register-req-lowercase" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
-                                                    <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>At least 1 lowercase letter (a-z)</span>
-                                                </div>
-                                                <div class="requirement-item" id="register-req-number" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
-                                                    <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>At least 1 number (0-9)</span>
-                                                </div>
-                                                <div class="requirement-item" id="register-req-special" style="display: flex; align-items: center; font-size: 0.8rem; color: #6c757d;">
-                                                    <i class="fas fa-times text-danger me-2"></i>
-                                                    <span>At least 1 special character (!@#$%^&*)</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    <div class="d-grid">
+                                            <!-- PPE Seçimi -->
+                                            <div class="col-md-12 mb-5" id="ppe-selection-container" style="display: none;">
+                                                <div class="glass-card p-4" style="background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.1);">
+                                                    <label class="form-label fw-bold fs-5 mb-3">
+                                                        <i class="fas fa-hard-hat text-warning me-2"></i> 
+                                                        Required PPE Selection *
+                                                    </label>
+                                                    <p class="text-muted mb-3">Select the PPE items that should be mandatory in your company:</p>
+                                                    <div class="alert alert-info border-0" style="background: rgba(59, 130, 246, 0.1);">
+                                                        <i class="fas fa-info-circle me-2"></i> 
+                                                        <strong>First select your industry</strong> - Industry-specific PPE options will appear
+                                                    </div>
+                                                
+                                                    <!-- İnşaat Sektörü PPE -->
+                                                    <div id="construction-ppe" class="ppe-options" style="display: none;">
+                                                        <div class="row">
+                                                            <div class="col-md-4 mb-3">
+                                                                <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                    <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="construction-helmet" checked>
+                                                                    <label class="form-check-label fw-semibold" for="construction-helmet">
+                                                                        <i class="fas fa-hard-hat text-primary me-2"></i> Hard Hat/Helmet
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-md-4 mb-3">
+                                                                <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                    <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="construction-vest" checked>
+                                                                    <label class="form-check-label fw-semibold" for="construction-vest">
+                                                                        <i class="fas fa-vest text-warning me-2"></i> Safety Vest
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-md-4 mb-3">
+                                                                <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                    <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="construction-shoes" checked>
+                                                                    <label class="form-check-label fw-semibold" for="construction-shoes">
+                                                                        <i class="fas fa-boot text-success me-2"></i> Safety Shoes
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-md-4 mb-3">
+                                                                <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="construction-gloves">
+                                                                    <label class="form-check-label fw-semibold" for="construction-gloves">
+                                                                        <i class="fas fa-hands text-info me-2"></i> Safety Gloves
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                            <div class="col-md-4 mb-3">
+                                                                <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="glasses" id="construction-glasses">
+                                                                    <label class="form-check-label fw-semibold" for="construction-glasses">
+                                                                        <i class="fas fa-glasses text-info me-2"></i> Safety Glasses
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                            <div class="col-md-4 mb-3">
+                                                                <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                    <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_harness" id="construction-harness" checked>
+                                                                    <label class="form-check-label fw-semibold" for="construction-harness">
+                                                                        <i class="fas fa-user-shield text-danger me-2"></i> Safety Harness
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Gıda Sektörü PPE -->
+                                                <div id="food-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-4 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="hairnet" id="food-hairnet" checked>
+                                                                <label class="form-check-label fw-semibold" for="food-hairnet">
+                                                                    <i class="fas fa-user-nurse text-primary me-2"></i> Hair Net/Cap
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="face_mask" id="food-mask" checked>
+                                                                <label class="form-check-label fw-semibold" for="food-mask">
+                                                                    <i class="fas fa-head-side-mask text-warning me-2"></i> Hygiene Mask
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="apron" id="food-apron" checked>
+                                                                <label class="form-check-label fw-semibold" for="food-apron">
+                                                                    <i class="fas fa-user-tie text-success me-2"></i> Hygiene Apron
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="food-gloves">
+                                                                <label class="form-check-label fw-semibold" for="food-gloves">
+                                                                    <i class="fas fa-hands text-info me-2"></i> Hygiene Gloves
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_shoes" id="food-shoes">
+                                                                <label class="form-check-label fw-semibold" for="food-shoes">
+                                                                    <i class="fas fa-shoe-prints text-info me-2"></i> Non-slip Shoes
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Kimya Sektörü PPE -->
+                                                <div id="chemical-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="gloves" id="chemical-gloves" checked>
+                                                                <label class="form-check-label fw-semibold" for="chemical-gloves">
+                                                                    <i class="fas fa-hands text-primary me-2"></i> Chemical Gloves
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="glasses" id="chemical-glasses" checked>
+                                                                <label class="form-check-label fw-semibold" for="chemical-glasses">
+                                                                    <i class="fas fa-glasses text-warning me-2"></i> Safety Goggles
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="face_mask" id="chemical-mask" checked>
+                                                                <label class="form-check-label fw-semibold" for="chemical-mask">
+                                                                    <i class="fas fa-head-side-mask text-success me-2"></i> Respiratory Mask
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_suit" id="chemical-suit" checked>
+                                                                <label class="form-check-label fw-semibold" for="chemical-suit">
+                                                                    <i class="fas fa-user-shield text-info me-2"></i> Chemical Suit
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- İmalat Sektörü PPE -->
+                                                <div id="manufacturing-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="manufacturing-helmet" checked>
+                                                                <label class="form-check-label fw-semibold" for="manufacturing-helmet">
+                                                                    <i class="fas fa-hard-hat text-primary me-2"></i> Industrial Helmet
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="manufacturing-vest" checked>
+                                                                <label class="form-check-label fw-semibold" for="manufacturing-vest">
+                                                                    <i class="fas fa-vest text-warning me-2"></i> Safety Vest
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="manufacturing-shoes" checked>
+                                                                <label class="form-check-label fw-semibold" for="manufacturing-shoes">
+                                                                    <i class="fas fa-boot text-success me-2"></i> Safety Shoes
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="manufacturing-gloves">
+                                                                <label class="form-check-label fw-semibold" for="manufacturing-gloves">
+                                                                    <i class="fas fa-hands text-info me-2"></i> Work Gloves
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Depo/Lojistik Sektörü PPE -->
+                                                <div id="warehouse-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="warehouse-vest" checked>
+                                                                <label class="form-check-label fw-semibold" for="warehouse-vest">
+                                                                    <i class="fas fa-vest text-warning me-2"></i> High-Visibility Vest
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_shoes" id="warehouse-shoes" checked>
+                                                                <label class="form-check-label fw-semibold" for="warehouse-shoes">
+                                                                    <i class="fas fa-boot text-success me-2"></i> Steel-Toe Shoes
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="helmet" id="warehouse-helmet">
+                                                                <label class="form-check-label fw-semibold" for="warehouse-helmet">
+                                                                    <i class="fas fa-hard-hat text-primary me-2"></i> Safety Helmet
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="warehouse-gloves">
+                                                                <label class="form-check-label fw-semibold" for="warehouse-gloves">
+                                                                    <i class="fas fa-hands text-info me-2"></i> Work Gloves
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Enerji Sektörü PPE -->
+                                                <div id="energy-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="insulated_gloves" id="energy-gloves" checked>
+                                                                <label class="form-check-label fw-semibold" for="energy-gloves">
+                                                                    <i class="fas fa-hands-wash text-primary me-2"></i> İzole Eldiven
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="dielectric_boots" id="energy-boots" checked>
+                                                                <label class="form-check-label fw-semibold" for="energy-boots">
+                                                                    <i class="fas fa-shoe-prints text-warning me-2"></i> Dielektrik Ayakkabı
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="arc_flash_suit" id="energy-suit" checked>
+                                                                <label class="form-check-label fw-semibold" for="energy-suit">
+                                                                    <i class="fas fa-user-shield text-success me-2"></i> Ark Flaş Tulumu
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="energy-helmet" checked>
+                                                                <label class="form-check-label fw-semibold" for="energy-helmet">
+                                                                    <i class="fas fa-hard-hat text-info me-2"></i> Güvenlik Kaskı
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_glasses" id="energy-glasses">
+                                                                <label class="form-check-label fw-semibold" for="energy-glasses">
+                                                                    <i class="fas fa-glasses text-info me-2"></i> Güvenlik Gözlüğü
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="ear_protection" id="energy-ears">
+                                                                <label class="form-check-label fw-semibold" for="energy-ears">
+                                                                    <i class="fas fa-headphones text-info me-2"></i> Kulak Koruyucu
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Petrokimya Sektörü PPE -->
+                                                <div id="petrochemical-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="chemical_suit" id="petrochemical-suit" checked>
+                                                                <label class="form-check-label fw-semibold" for="petrochemical-suit">
+                                                                    <i class="fas fa-biohazard text-primary me-2"></i> Kimyasal Tulum
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="respiratory_protection" id="petrochemical-resp" checked>
+                                                                <label class="form-check-label fw-semibold" for="petrochemical-resp">
+                                                                    <i class="fas fa-lungs text-warning me-2"></i> Solunum Koruyucu
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="special_gloves" id="petrochemical-gloves" checked>
+                                                                <label class="form-check-label fw-semibold" for="petrochemical-gloves">
+                                                                    <i class="fas fa-hands text-success me-2"></i> Özel Eldiven
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="helmet" id="petrochemical-helmet" checked>
+                                                                <label class="form-check-label fw-semibold" for="petrochemical-helmet">
+                                                                    <i class="fas fa-hard-hat text-info me-2"></i> Güvenlik Kaskı
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_glasses" id="petrochemical-glasses">
+                                                                <label class="form-check-label fw-semibold" for="petrochemical-glasses">
+                                                                    <i class="fas fa-glasses text-info me-2"></i> Güvenlik Gözlüğü
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_shoes" id="petrochemical-shoes">
+                                                                <label class="form-check-label fw-semibold" for="petrochemical-shoes">
+                                                                    <i class="fas fa-boot text-info me-2"></i> Güvenlik Ayakkabısı
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Denizcilik Sektörü PPE -->
+                                                <div id="marine-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="life_jacket" id="marine-lifejacket" checked>
+                                                                <label class="form-check-label fw-semibold" for="marine-lifejacket">
+                                                                    <i class="fas fa-life-ring text-primary me-2"></i> Can Yeleği
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="marine_helmet" id="marine-helmet" checked>
+                                                                <label class="form-check-label fw-semibold" for="marine-helmet">
+                                                                    <i class="fas fa-hard-hat text-warning me-2"></i> Denizci Kaskı/Baret
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="waterproof_shoes" id="marine-shoes" checked>
+                                                                <label class="form-check-label fw-semibold" for="marine-shoes">
+                                                                    <i class="fas fa-boot text-success me-2"></i> Su Geçirmez Ayakkabı
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_vest" id="marine-vest" checked>
+                                                                <label class="form-check-label fw-semibold" for="marine-vest">
+                                                                    <i class="fas fa-vest text-info me-2"></i> Güvenlik Yeleği
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="marine-gloves">
+                                                                <label class="form-check-label fw-semibold" for="marine-gloves">
+                                                                    <i class="fas fa-hands text-info me-2"></i> İş Eldiveni
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="safety_glasses" id="marine-glasses">
+                                                                <label class="form-check-label fw-semibold" for="marine-glasses">
+                                                                    <i class="fas fa-glasses text-info me-2"></i> Güvenlik Gözlüğü
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+        
+                                                <!-- Havacılık Sektörü PPE -->
+                                                <div id="aviation-ppe" class="ppe-options" style="display: none;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="aviation_helmet" id="aviation-helmet" checked>
+                                                                <label class="form-check-label fw-semibold" for="aviation-helmet">
+                                                                    <i class="fas fa-headset text-primary me-2"></i> Havacılık Kaskı
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="reflective_vest" id="aviation-vest" checked>
+                                                                <label class="form-check-label fw-semibold" for="aviation-vest">
+                                                                    <i class="fas fa-vest text-warning me-2"></i> Reflektör Yelek
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="aviation_shoes" id="aviation-shoes" checked>
+                                                                <label class="form-check-label fw-semibold" for="aviation-shoes">
+                                                                    <i class="fas fa-boot text-success me-2"></i> Özel Ayakkabı
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="required_ppe" value="safety_glasses" id="aviation-glasses" checked>
+                                                                <label class="form-check-label fw-semibold" for="aviation-glasses">
+                                                                    <i class="fas fa-glasses text-info me-2"></i> Güvenlik Gözlüğü
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="ear_protection" id="aviation-ears">
+                                                                <label class="form-check-label fw-semibold" for="aviation-ears">
+                                                                    <i class="fas fa-headphones text-info me-2"></i> Kulak Koruyucu
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check p-3 border rounded-3" style="background: rgba(34, 197, 94, 0.05); border-color: rgba(34, 197, 94, 0.2) !important;">
+                                                                <input class="form-check-input" type="checkbox" name="optional_ppe" value="gloves" id="aviation-gloves">
+                                                                <label class="form-check-label fw-semibold" for="aviation-gloves">
+                                                                    <i class="fas fa-hands text-info me-2"></i> İş Eldiveni
+                                                                    <span class="badge bg-success ms-1">Optional</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                </div>
+                                            </div>
+
+
+                                            <!-- Password -->
+                                            <div class="col-md-12">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">
+                                                        <i class="fas fa-lock text-primary me-2"></i>Password <span class="required-mark">*</span>
+                                                    </label>
+                                                    <div class="input-group-modern">
+                                                        <input type="password" class="form-control-modern" name="password" id="register_password" required
+                                                               placeholder="Create a secure password"
+                                                               oninput="updateRegisterPasswordStrength(this.value)">
+                                                        <span class="input-icon">
+                                                            <i class="fas fa-lock text-primary"></i>
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <!-- Password Strength Indicators -->
+                                                    <div class="password-strength mt-2">
+                                                        <div class="strength-bar" style="width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                                            <div class="strength-fill" id="register-strength-fill" style="height: 100%; background: #dc3545; width: 0%; transition: all 0.3s ease; border-radius: 4px;"></div>
+                                                        </div>
+                                                        <small class="strength-text" id="register-strength-text" style="font-size: 0.8rem; color: #6c757d;">Password strength: Weak</small>
+                                                    </div>
+                                                    
+                                                    <div class="password-requirements mt-3" style="background: #f8f9fa; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
+                                                        <h6 class="requirements-title mb-2" style="color: #2c3e50; font-weight: 600; font-size: 0.85rem;">
+                                                            <i class="fas fa-info-circle text-primary me-2"></i>Password Requirements
+                                                        </h6>
+                                                        <div class="requirements-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.4rem;">
+                                                            <div class="requirement-item" id="register-req-length" style="display: flex; align-items: center; font-size: 0.75rem; color: #6c757d;">
+                                                                <i class="fas fa-times text-danger me-2"></i><span>At least 8 characters</span>
+                                                            </div>
+                                                            <div class="requirement-item" id="register-req-uppercase" style="display: flex; align-items: center; font-size: 0.75rem; color: #6c757d;">
+                                                                <i class="fas fa-times text-danger me-2"></i><span>At least 1 uppercase (A-Z)</span>
+                                                            </div>
+                                                            <div class="requirement-item" id="register-req-lowercase" style="display: flex; align-items: center; font-size: 0.75rem; color: #6c757d;">
+                                                                <i class="fas fa-times text-danger me-2"></i><span>At least 1 lowercase (a-z)</span>
+                                                            </div>
+                                                            <div class="requirement-item" id="register-req-number" style="display: flex; align-items: center; font-size: 0.75rem; color: #6c757d;">
+                                                                <i class="fas fa-times text-danger me-2"></i><span>At least 1 number (0-9)</span>
+                                                            </div>
+                                                            <div class="requirement-item" id="register-req-special" style="display: flex; align-items: center; font-size: 0.75rem; color: #6c757d;">
+                                                                <i class="fas fa-times text-danger me-2"></i><span>Special char (!@#$%^&*)</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div> <!-- End of row g-4 -->
+                                    </div> <!-- End of business-form-section -->
+
+                                    <div class="d-grid mt-4">
                                         <button type="submit" class="btn btn-primary btn-lg" 
                                                 style="border-radius: 30px; padding: 15px 0; font-weight: 600; font-size: 18px; background: linear-gradient(135deg, #1E3A8A 0%, #0EA5E9 100%); border: none; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);">
-                                                                                            <i class="fas fa-rocket me-2"></i> Register & Get Started
+                                            <i class="fas fa-rocket me-2"></i> Register & Get Started
                                         </button>
+                                    </div>
+
                                     </div>
                                 </form>
                                 
                                 <hr class="my-5" style="border-color: rgba(0,0,0,0.1); border-width: 2px;">
                                 
-                                <div class="glass-card p-4 mt-4" style="background: rgba(248, 250, 252, 0.8); border: 2px solid rgba(30, 58, 138, 0.1);">
+                                 <div class="glass-card p-4 p-md-5 m-5" style="background: rgba(248, 250, 252, 0.8); border: 2px solid rgba(30, 58, 138, 0.1);">
                                     <div class="text-center mb-4">
                                         <div class="feature-icon mx-auto" style="width: 48px; height: 48px; background: linear-gradient(135deg, #64748b 0%, #475569 100%);">
                                             <i class="fas fa-sign-in-alt" style="font-size: 20px;"></i>
                                         </div>
                                         <h5 class="mt-3 mb-2 fw-bold">Registered Company Login</h5>
-                                                                                 <p class="text-muted small">Login with your existing company account</p>
+                                        <p class="text-muted small">Login with your existing company account</p>
                                     </div>
                                     
                                     <form method="POST" action="/api/company-login-redirect">
@@ -991,7 +1411,7 @@
                                                        required>
                                             </div>
                                             <div class="col-md-4 mb-3">
-                                                <label class="form-label small text-transparent">.</label>
+                                                <label class="form-label small text-transparent d-none d-md-block">&nbsp;</label>
                                                 <button type="submit" 
                                                         class="btn btn-outline-primary btn-lg w-100" 
                                                         style="border-radius: 15px; border: 2px solid #1E3A8A; font-weight: 600;">
@@ -999,7 +1419,7 @@
                                                 </button>
                                             </div>
                                         </div>
-                                        <div class="alert alert-info border-0 mt-3" style="background: rgba(59, 130, 246, 0.1); border-radius: 10px;">
+                                        <div class="alert alert-info border-0 mt-3 mb-0" style="background: rgba(59, 130, 246, 0.1); border-radius: 10px;">
                                             <small class="text-muted">
                                                 <i class="fas fa-info-circle me-2"></i>
                                                 <strong>Company ID Formats:</strong><br>
@@ -1298,78 +1718,95 @@
                                                     <div class="col-md-6">
                                                         <ul class="list-unstyled mb-0">
                                                             <li class="mb-2">
-    def get_dashboard_template(self, company_id, user_data, subscription_data, cameras):
-        """Dashboard template'ini dosyadan yükle ve Jinja2 ile render et (Manuel render fallback)"""
-        try:
-            with open('frontend/src/templates/dashboard.html', 'r', encoding='utf-8') as f:
-                template_content = f.read()
-                # Jinja2 render etmek için Flask'ın render_template_string metodunu kullanabiliriz
-                # Şimdilik en basit haliyle dosyayı döndürelim, Flask bunu Flask seviyesinde render edecek.
-                return template_content
-        except Exception as e:
-            logger.error(f"❌ Dashboard template error: {e}")
-            return f"<h1>Dashboard</h1><p>Hata: {e}</p>"
-                        
-                        if (currentSector && currentSector !== '') {
-                            console.log('Current sector exists, showing PPE...');
-                            showPPEForSector(currentSector, ppeContainer);
-                        }
-                        
-                        sectorSelect.addEventListener('change', function() {
-                            var sector = this.value;
-                            console.log('Sector changed:', sector);
-                            showPPEForSector(sector, ppeContainer);
-                        });
-                        
-                        console.log('Event listener added successfully!');
+                                                                <i class="fas fa-check-circle text-success me-2"></i>Emanet hesap gerektirmez
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <ul class="list-unstyled mb-0">
+                                                            <li class="mb-2">
+                                                                <i class="fas fa-check-circle text-success me-2"></i>Anında kurulum ve aktivasyon
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- End of modal-body -->
+                    </div> <!-- End of modal-content -->
+                </div> <!-- End of modal-dialog -->
+            </div> <!-- End of modal -->
+
+            <script>
+                // Abonelik Planlarını Aç/Kapat
+                function toggleSubscriptionPlans() {
+                    const container = document.getElementById('subscriptionPlansContainer');
+                    const icon = document.getElementById('toggleIcon');
+                    const btnText = document.getElementById('toggleBtnText');
+                    
+                    if (container.style.display === 'none') {
+                        container.style.display = 'block';
+                        icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+                        btnText.textContent = 'Plan Seçimini Gizle';
                     } else {
-                        console.log('ERROR: Elements not found!');
-                        console.log('sectorSelect:', sectorSelect);
-                        console.log('ppeContainer:', ppeContainer);
-                    }
-                });
-                
-                function showPPEForSector(sector, ppeContainer) {
-                    console.log('showPPEForSector called, sector:', sector);
-                    
-                    // Hide all PPE options
-                    var options = document.querySelectorAll('.ppe-options');
-                    console.log('Found PPE options count:', options.length);
-                    
-                    for (var i = 0; i < options.length; i++) {
-                        options[i].style.display = 'none';
-                        console.log('Hidden:', options[i].id);
-                    }
-                    
-                    if (sector && sector !== '') {
-                        // Show PPE container
-                        ppeContainer.style.display = 'block';
-                        console.log('PPE container shown');
-                        
-                        // Show selected sector's PPE
-                        var targetPPEId = sector + '-ppe';
-                        var targetPPE = document.getElementById(targetPPEId);
-                        
-                        console.log('Target PPE ID:', targetPPEId);
-                        console.log('Found PPE element:', targetPPE);
-                        
-                        if (targetPPE) {
-                            targetPPE.style.display = 'block';
-                            console.log('PPE options shown!');
-                        } else {
-                            console.log('ERROR: PPE element not found!');
-                            // List all PPE elements
-                            var allPPEs = document.querySelectorAll('[id$="-ppe"]');
-                            console.log('Available PPE elements:');
-                            for (var j = 0; j < allPPEs.length; j++) {
-                                console.log('- ' + allPPEs[j].id);
-                            }
-                        }
-                    } else {
-                        ppeContainer.style.display = 'none';
-                        console.log('PPE container hidden');
+                        container.style.display = 'none';
+                        icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+                        btnText.textContent = 'Abonelik Planını Seç';
                     }
                 }
+
+                // Plan Kartı Seçimi
+                function selectPlanCard(plan) {
+                    // Tüm kartlardan 'selected' class'ını kaldır
+                    document.querySelectorAll('.plan-card-modern').forEach(card => {
+                        card.classList.remove('selected');
+                    });
+                    
+                    // Seçilen kartı işaretle
+                    const selectedCard = document.querySelector(`.plan-card-modern[data-plan="${plan}"]`);
+                    if (selectedCard) {
+                        selectedCard.classList.add('selected');
+                        const radio = document.getElementById(`plan_${plan}`);
+                        if (radio) radio.checked = true;
+                    }
+                }
+
+                // Aylık/Yıllık Değişimi
+                function toggleBilling(plan, cycle) {
+                    const card = document.querySelector(`.plan-card-modern[data-plan="${plan}"]`);
+                    const billingInput = document.getElementById('billing_cycle');
+                    
+                    if (billingInput) billingInput.value = cycle;
+                    
+                    const monthlyPrice = card.querySelector('.monthly-price');
+                    const yearlyPrice = card.querySelector('.yearly-price');
+                    
+                    const buttons = card.querySelectorAll('.billing-toggle button');
+                    buttons.forEach(btn => btn.classList.remove('active'));
+                    
+                    const activeBtn = card.querySelector(`.billing-toggle button[data-cycle="${cycle}"]`);
+                    if (activeBtn) activeBtn.classList.add('active');
+
+                    if (cycle === 'yearly') {
+                        monthlyPrice.style.display = 'none';
+                        yearlyPrice.style.display = 'block';
+                    } else {
+                        monthlyPrice.style.display = 'block';
+                        yearlyPrice.style.display = 'none';
+                    }
+                    
+                    // Event'in yukarı yayılmasını engelle (kart seçilmesin diye)
+                    event.stopPropagation();
+                }
+
+                // Sayfa yüklendiğinde varsayılanları ayarla
+                document.addEventListener('DOMContentLoaded', function() {
+                    selectPlanCard('professional'); // Varsayılan popüler plan
+                });
+
                 
                 // Demo Modal Functions
                 function openDemoModal() {
@@ -1480,6 +1917,28 @@
                     strengthFill.style.background = color;
                     strengthText.textContent = `Password strength: ${strength}`;
                 }
+                function updatePPEOptions(sector) {
+                    const ppeContainer = document.getElementById('ppe-selection-container');
+                    
+                    // Tüm PPE seçeneklerini gizle
+                    const options = document.querySelectorAll('.ppe-options');
+                    options.forEach(opt => opt.style.display = 'none');
+                    
+                    if (sector && sector !== '') {
+                        // PPE konteynırını göster
+                        ppeContainer.style.display = 'block';
+                        
+                        // Seçilen sektöre ait PPE'yi göster
+                        const targetPPE = document.getElementById(sector + '-ppe');
+                        if (targetPPE) {
+                            targetPPE.style.display = 'block';
+                            targetPPE.classList.add('fadeIn');
+                        }
+                    } else {
+                        ppeContainer.style.display = 'none';
+                    }
+                }
             </script>
+
         </body>
         </html>

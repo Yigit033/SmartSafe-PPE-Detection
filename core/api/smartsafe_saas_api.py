@@ -94,6 +94,9 @@ class SmartSafeSaaSAPI:
             static_dir = str(BASE_DIR / 'frontend' / 'output')
             template_dir = str(BASE_DIR / 'frontend' / 'templates')
             
+            # 🎯 CRITICAL: Biz artık generator kullanmıyoruz, ama frontend/output içindeki 
+            # statik dosyaları (images, js) kullanmaya devam edelim.
+            # Template olarak ise doğrudan ham templates klasörünü kullanacağız.
             print(f"📁 Static Directory: {static_dir}")
             print(f"📁 Template Directory: {template_dir}")
             
@@ -142,7 +145,8 @@ class SmartSafeSaaSAPI:
         self.sh17_manager = None
         try:
             from models.sh17_model_manager import SH17ModelManager
-            self.sh17_manager = SH17ModelManager()
+            models_path = str(BASE_DIR / 'core' / 'models')
+            self.sh17_manager = SH17ModelManager(models_dir=models_path)
             # RENDER.COM OPTIMIZATION: Modelleri başlangıçta yükleme, lazy loading kullan
             logger.info("✅ SH17 Model Manager API'ye entegre edildi (Lazy Loading)")
         except Exception as e:
@@ -1963,31 +1967,301 @@ class SmartSafeSaaSAPI:
             print(f"Görüntü çizim hatası: {e}")
             return image  # Hata durumunda orijinal görüntüyü döndür
     
-    def generate_frames(self, camera_key):
-        """Video frame generator"""
-        while True:
+    def saas_detection_worker(self, camera_key, camera_id, company_id, detection_mode, confidence=0.5, active_detectors_ref=None):
+        """SaaS Profesyonel Detection Worker - OPTİMİZE EDİLDİ."""
+        logger.info(f"🚀 SaaS Detection başlatılıyor - Kamera: {camera_id}, Şirket: {company_id}")
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        
+        # Detection sonuçları için queue oluştur
+        detection_results[camera_key] = queue.Queue(maxsize=20)
+        
+        # Kamera başlat
+        self.start_saas_camera(camera_key, camera_id, company_id, active_detectors_ref=ad)
+        
+        # PPE Detection Model
+        pose_detector = None
+        try:
+            self.ensure_database_initialized()
+            if self.db is not None:
+                company_data = self.db.get_company_info(company_id)
+                sector = company_data.get('sector', 'construction') if company_data and isinstance(company_data, dict) else 'construction'
+            else:
+                sector = 'construction'
+                logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
+
+            required_ppe = None
+            if self.db is not None:
+                try:
+                    company_ppe_config = self.db.get_company_ppe_config(company_id)
+                    if isinstance(company_ppe_config, dict) and 'required' in company_ppe_config:
+                        raw_required = company_ppe_config.get('required')
+                        if isinstance(raw_required, list):
+                            normalized = []
+                            for item in raw_required:
+                                if item is None: continue
+                                normalized.append(str(item).strip().lower())
+                            required_ppe = normalized
+                except Exception as cfg_err:
+                    logger.warning(f"⚠️ PPE config okunamadı: {cfg_err}")
+            
+            if self.sh17_manager:
+                logger.info(f"🎯 SH17 PPE Detection - Sektör: {sector}")
+                model_manager = self.sh17_manager
+                use_sh17 = True
+                
+                try:
+                    # Absolute import or relative based on core root
+                    from detection.pose_aware_ppe_detector import get_pose_aware_detector
+                    pose_detector = get_pose_aware_detector(ppe_detector=self.sh17_manager)
+                    logger.info("✅ PoseAwarePPEDetector initialized with SH17 backend")
+                except Exception as pose_err:
+                    logger.warning(f"⚠️ PoseAware init failed: {pose_err}")
+            else:
+                try:
+                    from detection.pose_aware_ppe_detector import get_pose_aware_detector
+                    pose_detector = get_pose_aware_detector(ppe_detector=None)
+                except Exception: pass
+                model_manager = None
+                use_sh17 = False
+            
+        except Exception as e:
+            logger.error(f"❌ Model yükleme hatası: {e}")
+            return
+        
+        frame_count = 0
+        detection_count = 0
+        frame_skip = 6
+        optimized_confidence = max(0.5, confidence)
+        
+        while ad.get(camera_key, False):
             try:
                 if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
-                    # Frame'i JPEG olarak encode et
-                    ret, buffer = cv2.imencode('.jpg', frame_buffers[camera_key])
-                    if ret:
-                        frame_bytes = buffer.tobytes()
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                    else:
-                        # Boş frame gönder
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                    frame = frame_buffers[camera_key].copy()
+                    frame_count += 1
+                    
+                    if frame_count % frame_skip == 0:
+                        start_time = time.time()
+                        people_detected = 0
+                        ppe_violations = []
+                        ppe_compliant = 0
+                        results = []
+                        
+                        try:
+                            if pose_detector is not None:
+                                pose_result = pose_detector.detect_with_pose(frame, sector, optimized_confidence, required_ppe=required_ppe)
+                                if isinstance(pose_result, dict):
+                                    people_detected = pose_result.get('people_detected', 0)
+                                    ppe_compliant = pose_result.get('compliant_people', 0)
+                                    ppe_violations = pose_result.get('ppe_violations', [])
+                                    results = pose_result.get('detections', [])
+                                elif isinstance(pose_result, list):
+                                    results = pose_result
+                                    people_detected = sum(1 for d in results if d.get('class_name') == 'person')
+                            elif use_sh17 and model_manager:
+                                results = model_manager.detect_ppe(frame, sector, optimized_confidence)
+                                people_detected = sum(1 for d in results if d.get('class_name') == 'person')
+                                if people_detected > 0 and required_ppe:
+                                    compliance_result = model_manager.analyze_compliance(results, required_ppe)
+                                    ppe_compliant = compliance_result.get('total_detected', 0)
+                                    missing = compliance_result.get('missing', [])
+                                    ppe_violations = [f"Missing: {item}" for item in missing]
+                                else:
+                                    ppe_compliant = people_detected
+                        except Exception as detection_error:
+                            logger.error(f"❌ Detection hatası: {detection_error}")
+                        
+                        normalized_ppe_violations, simple_ppe_violations = self._normalize_ppe_violations(ppe_violations)
+                        ppe_violations = simple_ppe_violations
+
+                        if people_detected > 0 and len(ppe_violations) == 0 and ppe_compliant == 0:
+                            ppe_compliant = people_detected
+
+                        try:
+                            proc_time = time.time() - start_time
+                            if people_detected > 0 or len(ppe_violations) > 0:
+                                self._save_detection_to_reports(company_id, camera_id, sector, people_detected, ppe_compliant, len(ppe_violations), proc_time, optimized_confidence)
+                                self._generate_live_alerts(company_id, camera_id, people_detected, ppe_compliant, len(ppe_violations), sector)
+                            for violation in normalized_ppe_violations:
+                                self._save_violation_to_reports(company_id, camera_id, violation)
+                        except Exception as result_error:
+                            logger.error(f"❌ Result processing hatası: {result_error}")
+                        
+                        compliance_rate = (ppe_compliant / people_detected * 100) if people_detected > 0 else 0
+                        processing_time = (time.time() - start_time) * 1000
+                        detection_count += 1
+                        
+                        detection_data = {
+                            'camera_id': camera_id, 'company_id': company_id,
+                            'timestamp': datetime.now().isoformat(),
+                            'total_people': int(people_detected),
+                            'ppe_compliant': int(ppe_compliant),
+                            'violations': ppe_violations,
+                            'compliance_rate': float(round(compliance_rate, 1)),
+                            'processing_time': float(round(processing_time / 1000, 3)),
+                            'detections': results if isinstance(results, list) else [],
+                        }
+                        
+                        try:
+                            if not detection_results[camera_key].full():
+                                detection_results[camera_key].put_nowait(detection_data)
+                        except Exception: pass
+                        
+                        if detection_count % 10 == 0:
+                            self.save_detection_to_db(detection_data)
+                    
+                    time.sleep(0.01)
                 else:
-                    # Kamera aktif değilse boş frame gönder
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
-                
-                time.sleep(0.033)  # ~30 FPS
-                
+                    time.sleep(0.1)
             except Exception as e:
-                print(f"Frame generation error: {e}")
-                break
+                logger.error(f"❌ SaaS Detection hatası: {e}")
+                time.sleep(1)
+        
+        logger.info(f"🛑 SaaS Detection durduruldu - Kamera: {camera_id}")
+
+    def start_saas_camera(self, camera_key, camera_id, company_id, active_detectors_ref=None):
+        """SaaS Kamera başlatma"""
+        try:
+            camera_info = self.db.get_camera_by_id(camera_id, company_id)
+            if not camera_info: return
+            
+            ip = camera_info.get('ip_address')
+            port = camera_info.get('port')
+            if ip and port:
+                protocol = camera_info.get('protocol', 'http')
+                stream_path = (camera_info.get('stream_path') or '/video').strip()
+                username = camera_info.get('username', '')
+                password = camera_info.get('password', '')
+                
+                if username and password:
+                    camera_url = f"{protocol}://{username}:{password}@{ip}:{port}{stream_path}"
+                else:
+                    camera_url = f"{protocol}://{ip}:{port}{stream_path}"
+                
+                # Kamera thread'ini başlat
+                camera_thread = threading.Thread(
+                    target=self.saas_camera_worker,
+                    args=(camera_key, camera_url, active_detectors_ref),
+                    daemon=True
+                )
+                camera_thread.start()
+            else:
+                logger.warning(f"⚠️ Kamera IP/Port eksik: {camera_id}")
+        except Exception as e:
+            logger.error(f"❌ SaaS Kamera başlatma hatası: {e}")
+
+    def saas_camera_worker(self, camera_key, camera_url, active_detectors_ref=None):
+        """SaaS Kamera Worker - OpenCV ile frame okur"""
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        cap = cv2.VideoCapture(camera_url)
+        try:
+            while ad.get(camera_key, False):
+                ret, frame = cap.read()
+                if ret:
+                    frame_buffers[camera_key] = frame
+                else:
+                    time.sleep(0.1)
+                    cap.release()
+                    cap = cv2.VideoCapture(camera_url)
+        finally:
+            cap.release()
+            if camera_key in frame_buffers: del frame_buffers[camera_key]
+
+    def generate_saas_frames(self, camera_key, company_id, camera_id, active_detectors_ref=None):
+        """SaaS Frame Generator - Stream için MJPEG üretir"""
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        while ad.get(camera_key, False):
+            try:
+                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
+                    frame = frame_buffers[camera_key].copy()
+                    
+                    # En son detection sonucunu al ve çiz
+                    if camera_key in detection_results and not detection_results[camera_key].empty():
+                        res = detection_results[camera_key].get_nowait()
+                        frame = self.draw_saas_overlay(frame, res)
+                        detection_results[camera_key].put_nowait(res) # Geri koy
+                    
+                    ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    if ret:
+                        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                else:
+                    time.sleep(0.1)
+            except Exception:
+                time.sleep(0.1)
+
+    def draw_saas_overlay(self, frame, detection_data):
+        """Görüntü üzerine tespit kutularını ve istatistikleri çizer"""
+        try:
+            h, w = frame.shape[:2]
+            detections = detection_data.get('detections', [])
+            
+            for det in detections:
+                bbox = det.get('bbox', [])
+                if len(bbox) == 4:
+                    x1, y1, x2, y2 = map(int, bbox)
+                    label = det.get('class_name', 'unknown')
+                    conf = det.get('confidence', 0)
+                    color = (0, 255, 0) if det.get('compliant', True) else (0, 0, 255)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            
+            # Üst bilgi paneli
+            cv2.rectangle(frame, (0, 0), (w, 40), (0, 0, 0), -1)
+            info_text = f"People: {detection_data.get('total_people', 0)} | Compliant: {detection_data.get('ppe_compliant', 0)} | Rate: %{detection_data.get('compliance_rate', 0)}"
+            cv2.putText(frame, info_text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            return frame
+        except Exception: return frame
+
+    def _normalize_ppe_violations(self, ppe_violations):
+        """İhlalleri standart formata çevirir"""
+        normalized, simple = [], []
+        if not ppe_violations: return [], []
+        for v in ppe_violations:
+            if isinstance(v, dict):
+                simple.append(str(v.get('missing_ppe', ['Unknown'])[0]))
+                normalized.append(v)
+            else:
+                simple.append(str(v))
+                normalized.append({'missing_ppe': [str(v)], 'confidence': 0})
+        return normalized, simple
+
+    def _save_detection_to_reports(self, company_id, camera_id, mode, people, compliant, violations, proc_time, conf):
+        """Database'e istatistik kaydı atar"""
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO detections (company_id, camera_id, detection_type, people_detected, ppe_compliant, violations_count, confidence, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                         (company_id, camera_id, mode, people, compliant, violations, conf, datetime.now()))
+            conn.commit()
+            conn.close()
+        except Exception: pass
+
+    def _save_violation_to_reports(self, company_id, camera_id, violation):
+        """Database'e ihlal kaydı atar"""
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            missing = violation.get('missing_ppe', ['Unknown'])[0]
+            cursor.execute("INSERT INTO violations (company_id, camera_id, missing_ppe, confidence, timestamp) VALUES (?, ?, ?, ?, ?)",
+                         (company_id, camera_id, missing, violation.get('confidence', 0), datetime.now()))
+            conn.commit()
+            conn.close()
+        except Exception: pass
+
+    def _generate_live_alerts(self, company_id, camera_id, people, compliant, violations, mode):
+        """Anlık alarmlar üretir"""
+        if violations > 0:
+            try:
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at) VALUES (?, ?, 'ppe_violation', 'warning', 'PPE Ihlali', ?, 'active', ?)",
+                             (company_id, camera_id, f"{violations} adet PPE ihlali tespit edildi.", datetime.now()))
+                conn.commit()
+                conn.close()
+            except Exception: pass
+
+    def save_detection_to_db(self, data):
+        """Genel istatistikleri periyodik kaydeder"""
+        pass # Opsiyonel
 
 
 # =============================================================================

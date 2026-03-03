@@ -265,10 +265,46 @@ def create_blueprint(api):
                 'usage_percentage': 0
             }
         
-        return render_template_string(api.get_dashboard_template(), 
+        # İstatistikleri ve son ihlalleri al
+        try:
+            stats = api.db.get_company_stats(company_id)
+            recent_violations = stats.get('recent_violations', [])
+        except Exception as e:
+            logger.error(f"❌ Dashboard stats error: {e}")
+            stats = {
+                'total_workers': 0,
+                'compliance_rate': 0,
+                'violations_today': 0
+            }
+            recent_violations = []
+        
+        # Şirkete ait kameraları al
+        try:
+            cameras = api.db.get_company_cameras(company_id)
+        except Exception as e:
+            logger.error(f"❌ Dashboard cameras error: {e}")
+            cameras = []
+
+        # İstatistikleri ve son ihlalleri al
+        try:
+            stats = api.db.get_company_stats(company_id)
+            recent_violations = stats.get('recent_violations', [])
+        except Exception as e:
+            logger.error(f"❌ Dashboard stats error: {e}")
+            stats = {
+                'total_workers': 0,
+                'compliance_rate': 0,
+                'violations_today': 0
+            }
+            recent_violations = []
+        
+        return render_template('dashboard.html', 
                                     company_id=company_id, 
                                     user_data=user_data,
-                                    subscription_data=subscription_data)
+                                    subscription_data=subscription_data,
+                                    cameras=cameras,
+                                    stats=stats,
+                                    recent_violations=recent_violations)
 
     # Şirket istatistikleri API (Enhanced)
     @bp.route('/api/company/<company_id>/stats', methods=['GET'])

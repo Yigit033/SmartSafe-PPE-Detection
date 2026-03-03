@@ -764,26 +764,33 @@ def create_blueprint(api):
     def get_detection_stream(company_id, camera_id):
         """Get live detection stream with overlay"""
         try:
+            # Debug log
+            logger.info(f"📥 Received detection stream request for camera: {camera_id}")
+            
             user_data = api.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
+                logger.warning(f"❌ Unauthorized stream request for company: {company_id}")
                 return jsonify({'success': False, 'error': 'Unauthorized'}), 401
             
             camera_key = f"{company_id}_{camera_id}"
             state = _get_detection_state()
-            if state['active_detectors'].get(camera_key):
+            
+            is_active = state['active_detectors'].get(camera_key, False)
+            logger.info(f"🔍 Detection status for {camera_key}: {is_active}")
+            
+            if is_active:
                 return Response(
                     api.generate_saas_frames(camera_key, company_id, camera_id, active_detectors_ref=state['active_detectors']),
                     mimetype='multipart/x-mixed-replace; boundary=frame'
                 )
             
             # Tespit kapalıyken tarayıcıyı doğrudan proxy-stream'e yönlendir.
-            # Böylece sunucu kendine istek atmaz (deadlock/timeout olmaz); Kamera Detayları ile aynı akış kullanılır.
             proxy_stream_path = f"/api/company/{company_id}/cameras/{camera_id}/proxy-stream"
             logger.info(f"🔗 Detection kapalı, proxy-stream'e yönlendiriliyor: {proxy_stream_path}")
             return redirect(proxy_stream_path)
             
         except Exception as e:
-            logger.error(f"❌ Detection stream endpoint error: {e}")
+            logger.error(f"❌ Detection stream endpoint error: {e}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
 
     return bp

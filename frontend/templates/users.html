@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Kullanıcı Yönetimi - SmartSafe AI</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <style>
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .navbar {
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .card {
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    margin-bottom: 20px;
+                    border: none;
+                    backdrop-filter: blur(10px);
+                    background: rgba(255,255,255,0.95);
+                }
+                .user-card {
+                    background: white;
+                    border-radius: 15px;
+                    padding: 20px;
+                    margin-bottom: 15px;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                    transition: all 0.3s ease;
+                }
+                .user-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+                }
+                .role-badge {
+                    padding: 5px 12px;
+                    border-radius: 20px;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                }
+                .role-admin { background: #e74c3c; color: white; }
+                .role-manager { background: #f39c12; color: white; }
+                .role-operator { background: #3498db; color: white; }
+                
+                .status-badge {
+                    padding: 4px 10px;
+                    border-radius: 15px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                }
+                .status-active { background: #27ae60; color: white; }
+                .status-inactive { background: #95a5a6; color: white; }
+                
+                .user-avatar {
+                    width: 50px;
+                    height: 50px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 1.2rem;
+                }
+                
+                .add-user-card {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border-radius: 15px;
+                    padding: 30px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    border: 3px dashed rgba(255,255,255,0.3);
+                }
+                .add-user-card:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                }
+                
+                .permissions-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 15px;
+                    margin-top: 20px;
+                }
+                .permission-item {
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    padding: 15px;
+                    text-align: center;
+                }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
+            </style>
+        </head>
+        <body>
+            <nav class="navbar navbar-expand-lg navbar-light bg-white">
+                <div class="container">
+                    <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
+                        <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+                    </a>
+                    <div class="navbar-nav ms-auto">
+                        <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
+                        </a>
+                        <a class="nav-link active" href="/company/{{ company_id }}/users">
+                            <i class="fas fa-users"></i> Kullanıcılar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/reports">
+                            <i class="fas fa-chart-line"></i> Raporlar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/settings">
+                            <i class="fas fa-cog"></i> Ayarlar
+                        </a>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-white">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            
+            <div class="container mt-4">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h4 class="mb-0">
+                                    <i class="fas fa-users"></i> Şirket Kullanıcıları
+                                </h4>
+                            </div>
+                            <div class="card-body">
+                                <div id="usersContainer">
+                                    <div class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Yükleniyor...</span>
+                                        </div>
+                                        <p class="mt-2 text-muted">Kullanıcılar yükleniyor...</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Add User Card -->
+                                <div class="add-user-card" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                                    <i class="fas fa-user-plus fa-3x mb-3"></i>
+                                    <h5>Yeni Kullanıcı Ekle</h5>
+                                    <p class="mb-0">Şirketinize yeni kullanıcı davet edin</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-shield-alt"></i> Kullanıcı Rolleri
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="permission-item mb-3">
+                                    <div class="role-badge role-admin mb-2">ADMIN</div>
+                                    <small class="text-muted">
+                                        Tüm yetkilere sahip. Kullanıcı yönetimi, ayarlar, raporlar.
+                                    </small>
+                                </div>
+                                
+                                <div class="permission-item mb-3">
+                                    <div class="role-badge role-manager mb-2">MANAGER</div>
+                                    <small class="text-muted">
+                                        Raporlara ve kamera yönetimine erişim. Ayarlara kısıtlı erişim.
+                                    </small>
+                                </div>
+                                
+                                <div class="permission-item">
+                                    <div class="role-badge role-operator mb-2">OPERATOR</div>
+                                    <small class="text-muted">
+                                        Sadece dashboard ve canlı izleme. Sadece okuma yetkisi.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chart-bar"></i> Kullanıcı İstatistikleri
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <h3 class="text-primary" id="totalUsers">-</h3>
+                                        <small class="text-muted">Toplam Kullanıcı</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <h3 class="text-success" id="activeUsers">-</h3>
+                                        <small class="text-muted">Aktif Kullanıcı</small>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <h4 class="text-danger" id="adminCount">-</h4>
+                                        <small class="text-muted">Admin</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h4 class="text-warning" id="managerCount">-</h4>
+                                        <small class="text-muted">Manager</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h4 class="text-info" id="operatorCount">-</h4>
+                                        <small class="text-muted">Operator</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Add User Modal -->
+            <div class="modal fade" id="addUserModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-user-plus"></i> Yeni Kullanıcı Ekle
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="addUserForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Email *</label>
+                                    <input type="text" class="form-control" name="email" required
+                                           placeholder="kullanici@email.com">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Ad Soyad *</label>
+                                    <input type="text" class="form-control" name="contact_person" required
+                                           placeholder="Kullanıcının adı soyadı">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Rol *</label>
+                                    <select class="form-select" name="role" required>
+                                        <option value="">Rol Seçin</option>
+                                        <option value="admin">Admin - Tüm yetkiler</option>
+                                        <option value="manager">Manager - Yönetim yetkileri</option>
+                                        <option value="operator">Operator - Sadece görüntüleme</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>Not:</strong> Kullanıcı eklendikten sonra geçici şifre oluşturulacak ve size gösterilecek.
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                            <button type="button" class="btn btn-primary" onclick="addUser()">
+                                <i class="fas fa-user-plus"></i> Kullanıcı Ekle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- User Details Modal -->
+            <div class="modal fade" id="userDetailsModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-user"></i> Kullanıcı Detayları
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body" id="userDetailsContent">
+                            <!-- User details will be loaded here -->
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                            <button type="button" class="btn btn-danger" id="deleteUserBtn" onclick="deleteSelectedUser()">
+                                <i class="fas fa-trash"></i> Kullanıcıyı Sil
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+            <script>
+                const companyId = '{{ company_id }}';
+                let currentUsers = [];
+                let selectedUserId = null;
+                
+                // Load users on page load
+                document.addEventListener('DOMContentLoaded', function() {
+                    loadUsers();
+                });
+                
+                // Load Users
+                function loadUsers() {
+                    fetch('/api/company/' + companyId + '/users')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            currentUsers = data.users;
+                            displayUsers(data.users);
+                            updateUserStats(data.users);
+                        } else {
+                            console.error('Failed to load users:', data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading users:', error);
+                    });
+                }
+                
+                // Display Users
+                function displayUsers(users) {
+                    const container = document.getElementById('usersContainer');
+                    
+                    if (users.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center py-4">
+                                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Henüz kullanıcı yok</h5>
+                                <p class="text-muted">İlk kullanıcınızı eklemek için yukarıdaki butonu kullanın.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    container.innerHTML = users.map(user => `
+                        <div class="user-card" onclick="showUserDetails('${user.user_id}')">
+                            <div class="row align-items-center">
+                                <div class="col-md-2">
+                                    <div class="user-avatar">
+                                        ${user.contact_person ? user.contact_person.charAt(0).toUpperCase() : 'U'}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="mb-1">${user.contact_person || 'İsimsiz Kullanıcı'}</h6>
+                                    <p class="text-muted mb-1">
+                                        <i class="fas fa-envelope me-1"></i> ${user.email}
+                                    </p>
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar me-1"></i> 
+                                        Kayıt: ${formatDate(user.created_at)}
+                                    </small>
+                                </div>
+                                <div class="col-md-2">
+                                    <span class="role-badge role-${user.role}">
+                                        ${user.role.toUpperCase()}
+                                    </span>
+                                </div>
+                                <div class="col-md-2">
+                                    <span class="status-badge status-${user.status}">
+                                        ${user.status === 'active' ? 'Aktif' : 'Pasif'}
+                                    </span>
+                                    <small class="d-block text-muted mt-1">
+                                        ${user.last_login ? 'Son: ' + formatDate(user.last_login) : 'Hiç giriş yok'}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                // Update User Statistics
+                function updateUserStats(users) {
+                    const totalUsers = users.length;
+                    const activeUsers = users.filter(u => u.status === 'active').length;
+                    const adminCount = users.filter(u => u.role === 'admin').length;
+                    const managerCount = users.filter(u => u.role === 'manager').length;
+                    const operatorCount = users.filter(u => u.role === 'operator').length;
+                    
+                    document.getElementById('totalUsers').textContent = totalUsers;
+                    document.getElementById('activeUsers').textContent = activeUsers;
+                    document.getElementById('adminCount').textContent = adminCount;
+                    document.getElementById('managerCount').textContent = managerCount;
+                    document.getElementById('operatorCount').textContent = operatorCount;
+                }
+                
+                // Show User Details
+                function showUserDetails(userId) {
+                    const user = currentUsers.find(u => u.user_id === userId);
+                    if (!user) return;
+                    
+                    selectedUserId = userId;
+                    
+                    const content = `
+                        <div class="row">
+                            <div class="col-md-4 text-center">
+                                <div class="user-avatar mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2rem;">
+                                    ${user.contact_person ? user.contact_person.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <h5>${user.contact_person || 'İsimsiz Kullanıcı'}</h5>
+                                <span class="role-badge role-${user.role} mb-2 d-inline-block">
+                                    ${user.role.toUpperCase()}
+                                </span>
+                                <br>
+                                <span class="status-badge status-${user.status}">
+                                    ${user.status === 'active' ? 'Aktif' : 'Pasif'}
+                                </span>
+                            </div>
+                            <div class="col-md-8">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td><strong>Kullanıcı ID:</strong></td>
+                                        <td>${user.user_id}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Email:</strong></td>
+                                        <td>${user.email}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Kayıt Tarihi:</strong></td>
+                                        <td>${formatDate(user.created_at)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Son Giriş:</strong></td>
+                                        <td>${user.last_login ? formatDate(user.last_login) : 'Hiç giriş yapmamış'}</td>
+                                    </tr>
+                                </table>
+                                
+                                <h6 class="mt-4">Rol Yetkileri:</h6>
+                                <div class="permissions-grid">
+                                    ${getRolePermissions(user.role)}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('userDetailsContent').innerHTML = content;
+                    new bootstrap.Modal(document.getElementById('userDetailsModal')).show();
+                }
+                
+                // Get Role Permissions
+                function getRolePermissions(role) {
+                    const permissions = {
+                        admin: [
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Kullanıcı Yönetimi</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Sistem Ayarları</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Tüm Raporlar</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Kamera Yönetimi</div>'
+                        ],
+                        manager: [
+                            '<div class="permission-item"><i class="fas fa-times text-danger"></i> Kullanıcı Yönetimi</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Kısıtlı Ayarlar</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Tüm Raporlar</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Kamera Yönetimi</div>'
+                        ],
+                        operator: [
+                            '<div class="permission-item"><i class="fas fa-times text-danger"></i> Kullanıcı Yönetimi</div>',
+                            '<div class="permission-item"><i class="fas fa-times text-danger"></i> Sistem Ayarları</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Sadece Görüntüleme</div>',
+                            '<div class="permission-item"><i class="fas fa-check text-success"></i> Canlı İzleme</div>'
+                        ]
+                    };
+                    
+                    return permissions[role]?.join('') || '';
+                }
+                
+                // Add User
+                function addUser() {
+                    const form = document.getElementById('addUserForm');
+                    const formData = new FormData(form);
+                    const data = {};
+                    formData.forEach((value, key) => {
+                        data[key] = value;
+                    });
+                    
+                    if (!data.email || !data.contact_person || !data.role) {
+                        alert('❌ Please fill all fields!');
+                        return;
+                    }
+                    
+                    fetch('/api/company/' + companyId + '/users', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            alert('✅ Kullanıcı başarıyla eklendi!\\n\\nGeçici Şifre: ' + result.temp_password + '\\n\\nBu şifreyi kullanıcıya güvenli bir şekilde iletin.');
+                            bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+                            form.reset();
+                            loadUsers();
+                        } else {
+                            alert('❌ Hata: ' + result.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error adding user:', error);
+                        alert('❌ Kullanıcı ekleme sırasında bir hata oluştu');
+                    });
+                }
+                
+                // Delete Selected User
+                function deleteSelectedUser() {
+                    if (!selectedUserId) return;
+                    
+                    if (confirm('⚠️ Bu kullanıcıyı silmek istediğinizden emin misiniz?\\n\\nBu işlem geri alınamaz!')) {
+                        fetch('/api/company/' + companyId + '/users/' + selectedUserId, {
+                            method: 'DELETE'
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success) {
+                                alert('✅ Kullanıcı başarıyla silindi!');
+                                bootstrap.Modal.getInstance(document.getElementById('userDetailsModal')).hide();
+                                loadUsers();
+                            } else {
+                                alert('❌ Hata: ' + result.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error deleting user:', error);
+                            alert('❌ Kullanıcı silme sırasında bir hata oluştu');
+                        });
+                    }
+                }
+                
+                // Format Date
+                function formatDate(dateString) {
+                    if (!dateString) return 'N/A';
+                    const date = new Date(dateString);
+                    return date.toLocaleDateString('tr-TR') + ' ' + date.toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'});
+                }
+                
+                // Logout
+                function logout() {
+                    if (confirm('Çıkış yapmak istediğinizden emin misiniz?')) {
+                        fetch('/logout', {
+                            method: 'POST'
+                        })
+                        .then(() => {
+                            window.location.href = '/';
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            window.location.href = '/';
+                        });
+                    }
+                }
+            </script>
+        </body>
+        </html>

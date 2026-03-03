@@ -4,12 +4,10 @@
   "description": "SmartSafe AI - PPE Detection System",
   "main": "core/api/smartsafe_saas_api.py",
   "scripts": {
-    "core": "cd core && venv\\Scripts\\python -m api.smartsafe_saas_api",
+    "core": "cd core && ../venv/Scripts/python -m api.smartsafe_saas_api",
     "frontend": "python -m http.server 8000 --directory frontend/output",
-    "build": "python frontend/generator.py",
-    "test": "cd core && venv\\Scripts\\python test_sector_integration.py",
-    "install": "if not exist core\\venv (python -m venv core\\venv) && cd core && venv\\Scripts\\pip install -r requirements.txt",
-    "generate": "python frontend/generator.py"
+    "test": "cd core && ../venv/Scripts/python test_sector_integration.py",
+    "install": "if not exist venv (python -m venv venv) && venv/Scripts/pip install -r requirements.txt"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

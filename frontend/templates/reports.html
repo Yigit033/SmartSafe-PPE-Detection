@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Raporlar - SmartSafe AI</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .navbar {
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .card {
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    margin-bottom: 20px;
+                    border: none;
+                    backdrop-filter: blur(10px);
+                    background: rgba(255,255,255,0.95);
+                }
+                .stat-card {
+                    background: white;
+                    border-radius: 15px;
+                    padding: 25px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+                    transition: all 0.3s ease;
+                    text-align: center;
+                }
+                .stat-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+                }
+                .stat-value {
+                    font-size: 3rem;
+                    font-weight: 700;
+                    margin-bottom: 10px;
+                }
+                .compliance-good { color: #27ae60; }
+                .compliance-warning { color: #f39c12; }
+                .compliance-danger { color: #e74c3c; }
+                
+                .violation-card {
+                    background: white;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin-bottom: 10px;
+                    border-left: 4px solid #e74c3c;
+                    transition: all 0.3s ease;
+                }
+                .violation-card:hover {
+                    transform: translateX(5px);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }
+                
+                .chart-container {
+                    position: relative;
+                    height: 400px;
+                    margin: 20px 0;
+                }
+                
+                .report-filter {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border-radius: 15px;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                }
+                
+                .export-btn {
+                    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+                    border: none;
+                    border-radius: 25px;
+                    padding: 10px 25px;
+                    color: white;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                }
+                .export-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+                }
+                
+                .nav-tabs .nav-link {
+                    border-radius: 10px 10px 0 0;
+                    margin-right: 5px;
+                    transition: all 0.3s ease;
+                }
+                .nav-tabs .nav-link.active {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border-color: transparent;
+                }
+                
+                .table-hover tbody tr:hover {
+                    background-color: rgba(102, 126, 234, 0.1);
+                }
+                
+                /* Profil Dropdown Stilleri */
+                .profile-dropdown {
+                    min-width: 280px;
+                    border: none;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                    padding: 0;
+                    margin-top: 10px;
+                }
+                
+                .profile-dropdown .dropdown-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 15px 15px 0 0;
+                    border: none;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                .profile-avatar-large {
+                    width: 48px;
+                    height: 48px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 20px;
+                }
+                
+                .profile-name {
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+                
+                .profile-dropdown .dropdown-item {
+                    padding: 12px 20px;
+                    border: none;
+                    transition: all 0.3s ease;
+                }
+                
+                .profile-dropdown .dropdown-item:hover {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    transform: translateX(5px);
+                }
+                
+                .profile-dropdown .dropdown-item i {
+                    width: 20px;
+                    text-align: center;
+                }
+                
+                .profile-dropdown .dropdown-divider {
+                    margin: 0;
+                    border-color: #e9ecef;
+                }
+            </style>
+        </head>
+        <body>
+            <nav class="navbar navbar-expand-lg navbar-light bg-white">
+                <div class="container">
+                    <a class="navbar-brand fw-bold" href="/company/{{ company_id }}/dashboard">
+                        <i class="fas fa-shield-alt text-primary"></i> SmartSafe AI
+                    </a>
+                    <div class="navbar-nav ms-auto">
+                        <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                            <i class="fas fa-video"></i> Kameralar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/users">
+                            <i class="fas fa-users"></i> Kullanıcılar
+                        </a>
+                        <a class="nav-link active" href="/company/{{ company_id }}/reports">
+                            <i class="fas fa-chart-line"></i> Raporlar
+                        </a>
+                        <a class="nav-link" href="/company/{{ company_id }}/settings">
+                            <i class="fas fa-cog"></i> Ayarlar
+                        </a>
+                        
+                        <!-- Profil Dropdown -->
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="profile-avatar me-2">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <span class="profile-name">{{ user_data.company_name }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end profile-dropdown" aria-labelledby="profileDropdown">
+                                <li class="dropdown-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="profile-avatar-large me-3">
+                                            <i class="fas fa-building"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user_data.company_name }}</div>
+                                            <small class="text-white">{{ company_id }}</small>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/profile">
+                                        <i class="fas fa-user me-2"></i> Şirket Profili
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/subscription">
+                                        <i class="fas fa-crown me-2"></i> Abonelik Bilgileri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/company/{{ company_id }}/billing">
+                                        <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" onclick="logout()">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            
+            <div class="container mt-4">
+                <!-- Report Filters -->
+                <div class="report-filter">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <h5 class="mb-2">
+                                <i class="fas fa-filter"></i> Filtreler
+                            </h5>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Tarih Aralığı</label>
+                            <select class="form-select" id="dateRange">
+                                <option value="7">Son 7 Gün</option>
+                                <option value="30" selected>Son 30 Gün</option>
+                                <option value="90">Son 3 Ay</option>
+                                <option value="365">Son 1 Yıl</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Kamera</label>
+                            <select class="form-select" id="cameraFilter">
+                                <option value="">Tüm Kameralar</option>
+                                <option value="CAM_001">Ana Giriş</option>
+                                <option value="CAM_002">İnşaat Alanı</option>
+                                <option value="CAM_003">Depo Girişi</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-grid">
+                                <button class="btn btn-light" onclick="applyFilters()">
+                                    <i class="fas fa-search"></i> Filtrele
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Overall Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value compliance-good" id="overallCompliance">--%</div>
+                            <h6 class="text-muted">Genel Uyumluluk</h6>
+                            <small class="text-muted" id="complianceTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value text-danger" id="totalViolations">--</div>
+                            <h6 class="text-muted">Toplam İhlal</h6>
+                            <small class="text-muted" id="violationsTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                                                            <div class="stat-value text-warning" id="totalPenalties">--</div>
+                                <h6 class="text-muted">Toplam Uyarı</h6>
+                            <small class="text-muted" id="penaltiesTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value text-info" id="detectedPersons">--</div>
+                            <h6 class="text-muted">Tespit Edilen Kişi</h6>
+                            <small class="text-muted" id="personsTrend">
+                                <i class="fas fa-info-circle"></i> Gerçek veriler yükleniyor...
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Report Tabs -->
+                <div class="card">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="reportTabs">
+                            <li class="nav-item">
+                                <a class="nav-link active" id="compliance-tab" data-bs-toggle="tab" href="#compliance">
+                                    <i class="fas fa-check-circle"></i> Uyumluluk Analizi
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="violations-tab" data-bs-toggle="tab" href="#violations">
+                                    <i class="fas fa-exclamation-triangle"></i> İhlal Raporları
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="camera-tab" data-bs-toggle="tab" href="#camera">
+                                    <i class="fas fa-video"></i> Kamera Performansı
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="export-tab" data-bs-toggle="tab" href="#export">
+                                    <i class="fas fa-download"></i> Dışa Aktar
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="reportTabContent">
+                            <!-- Compliance Analysis Tab -->
+                            <div class="tab-pane fade show active" id="compliance">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5>Günlük Uyumluluk Trendi</h5>
+                                        <div class="chart-container">
+                                            <canvas id="complianceChart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h5>PPE Uyumluluk Oranları</h5>
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Baret</span>
+                                                <span class="text-success fw-bold" id="helmetCompliance">--%</span>
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-success" id="helmetProgress" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Güvenlik Yeleği</span>
+                                                <span class="text-warning fw-bold" id="vestCompliance">--%</span>
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-warning" id="vestProgress" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Güvenlik Ayakkabısı</span>
+                                                <span class="text-success fw-bold" id="shoesCompliance">--%</span>
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-success" id="shoesProgress" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-info mt-4">
+                                            <i class="fas fa-lightbulb"></i>
+                                            <strong>Öneri:</strong> Güvenlik yeleği uyumluluğunu artırmak için ek eğitim planlanabilir.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Violations Tab -->
+                            <div class="tab-pane fade" id="violations">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5>Son İhlaller</h5>
+                                        <div id="violationsList">
+                                            <div class="text-center py-4">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Yükleniyor...</span>
+                                                </div>
+                                                <p class="mt-2 text-muted">İhlaller yükleniyor...</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h5>İhlal Türleri</h5>
+                                        <div class="chart-container" style="height: 300px;">
+                                            <canvas id="violationTypesChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Camera Performance Tab -->
+                            <div class="tab-pane fade" id="camera">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <h5>Kamera Performans Analizi</h5>
+                        <div class="table-responsive">
+                                            <table class="table table-hover">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th>Kamera</th>
+                                                        <th>Uyumluluk Oranı</th>
+                                                        <th>Toplam Tespit</th>
+                                                        <th>İhlal Sayısı</th>
+                                                        <th>Ortalama Güven</th>
+                                        <th>Durum</th>
+                                    </tr>
+                                </thead>
+                                                <tbody id="cameraPerformanceTable">
+                                                    <tr id="noDataRow">
+                                                        <td colspan="6" class="text-center text-muted">
+                                                            <i class="fas fa-info-circle"></i> 
+                                                            Live detection başlatıldığında kamera performans verileri burada görünecek
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                            
+                            <!-- Export Tab -->
+                            <div class="tab-pane fade" id="export">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>Rapor Dışa Aktarma</h5>
+                                        <form id="exportForm">
+                                            <div class="mb-3">
+                                                <label class="form-label">Rapor Türü</label>
+                                                <select class="form-select" name="type">
+                                                    <option value="violations">İhlal Raporu</option>
+                                                    <option value="compliance">Uyumluluk Raporu</option>
+                                                    <option value="camera">Kamera Performansı</option>
+                                                    <option value="summary">Özet Rapor</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">Dosya Formatı</label>
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="radio" name="format" value="pdf" checked>
+                                                            <label class="form-check-label">
+                                                                <i class="fas fa-file-pdf text-danger"></i> PDF
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="radio" name="format" value="excel">
+                                                            <label class="form-check-label">
+                                                                <i class="fas fa-file-excel text-success"></i> Excel
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">Email Gönder</label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="sendEmail" name="send_email">
+                                                    <label class="form-check-label" for="sendEmail">
+                                                        Raporu email ile gönder
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            
+                                            <button type="button" class="export-btn" onclick="exportReport()">
+                                                <i class="fas fa-download"></i> Rapor Oluştur
+                                            </button>
+                                        </form>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>Otomatik Raporlar</h5>
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6>Günlük Özet Raporu</h6>
+                                                <p class="text-muted">Her gün 18:00'de otomatik özet raporu</p>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="dailyReport" checked>
+                                                    <label class="form-check-label" for="dailyReport">Aktif</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6>Haftalık Analiz Raporu</h6>
+                                                <p class="text-muted">Her Pazartesi 09:00'da haftalık analiz</p>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="weeklyReport" checked>
+                                                    <label class="form-check-label" for="weeklyReport">Aktif</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6>Aylık Uyumluluk Raporu</h6>
+                                                <p class="text-muted">Her ayın 1'inde detaylı analiz</p>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="monthlyReport">
+                                                    <label class="form-check-label" for="monthlyReport">Aktif</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+            <script>
+                const companyId = '{{ company_id }}';
+                let complianceChart = null;
+                let violationTypesChart = null;
+                
+                // Initialize charts and data
+                console.log('🔍 DOMContentLoaded event listener tanımlanıyor...');
+                console.log('🔍 Company ID (global):', companyId);
+                
+                // Basit test - hemen çalıştır
+                console.log('🔍 Hemen test çalıştırılıyor...');
+                
+                // Hemen çalıştır test
+                setTimeout(function() {
+                    console.log('🔍 setTimeout test çalıştırılıyor...');
+                    console.log('🔍 Company ID (setTimeout):', companyId);
+                }, 100);
+                
+                // Hemen çalıştır test 2
+                console.log('🔍 Hemen test 2 çalıştırılıyor...');
+                console.log('🔍 Company ID (hemen):', companyId);
+                
+                // Hemen çalıştır test 3
+                console.log('🔍 Hemen test 3 çalıştırılıyor...');
+                console.log('🔍 Company ID (hemen 3):', companyId);
+                
+                // Hemen çalıştır test 4
+                console.log('🔍 Hemen test 4 çalıştırılıyor...');
+                console.log('🔍 Company ID (hemen 4):', companyId);
+                console.log('🔍 Hemen test 4 çalıştırılıyor...');
+                console.log('🔍 Company ID (hemen 4):', companyId);
+                
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('🚀 Dashboard yükleniyor...');
+                    console.log('🔍 Company ID (DOM):', companyId);
+                    console.log('🔍 loadSubscriptionInfo function exists:', typeof loadSubscriptionInfo);
+                    console.log('🔍 loadDashboardData function exists:', typeof loadDashboardData);
+                    console.log('🔍 loadViolations function exists:', typeof loadViolations);
+                    console.log('🔍 loadComplianceReport function exists:', typeof loadComplianceReport);
+                    
+                    loadDashboardData();
+                    loadViolations();
+                    loadComplianceReport();
+                    
+                    // Abonelik bilgilerini hemen yükle
+                    console.log('🔄 Abonelik bilgileri hemen yükleniyor...');
+                    console.log('🔍 loadSubscriptionInfo fonksiyonu var mı?', typeof loadSubscriptionInfo);
+                    
+                    if (typeof loadSubscriptionInfo === 'function') {
+                        try {
+                            loadSubscriptionInfo();
+                            console.log('✅ loadSubscriptionInfo çağrıldı');
+                        } catch (error) {
+                            console.error('❌ loadSubscriptionInfo hatası:', error);
+                        }
+                    } else {
+                        console.error('❌ loadSubscriptionInfo fonksiyonu bulunamadı!');
+                    }
+                    
+                    // Abonelik bilgilerini tekrar yükle
+                    setTimeout(() => {
+                        console.log('🔄 Abonelik bilgileri tekrar yükleniyor...');
+                        console.log('🔍 loadSubscriptionInfo fonksiyonu var mı? (setTimeout):', typeof loadSubscriptionInfo);
+                        
+                        if (typeof loadSubscriptionInfo === 'function') {
+                            try {
+                                loadSubscriptionInfo();
+                                console.log('✅ loadSubscriptionInfo tekrar çağrıldı');
+                            } catch (error) {
+                                console.error('❌ loadSubscriptionInfo tekrar hatası:', error);
+                            }
+                        } else {
+                            console.error('❌ loadSubscriptionInfo fonksiyonu bulunamadı! (setTimeout)');
+                        }
+                    }, 1000); // 1 saniye sonra yükle
+                    
+                    // Dinamik güncellemeleri başlat
+                    setTimeout(() => {
+                        startDynamicUpdates();
+                    }, 2000); // 2 saniye sonra başlat
+                });
+                
+                // Load Dashboard Data
+                function loadDashboardData() {
+                    // Load violations report
+                    fetch('/api/company/' + companyId + '/reports/violations')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateViolationsChart(data.data);
+                                updateViolationsStats(data.data);
+                                
+                                // Check if real data exists
+                                if (data.data.status === 'waiting_for_live_data') {
+                                    showWaitingMessage();
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading violations report:', error);
+                            showWaitingMessage();
+                        });
+                    
+                    // Load compliance report
+                    fetch('/api/company/' + companyId + '/reports/compliance')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateComplianceChart(data.data);
+                                updateComplianceStats(data.data);
+                                updateCameraPerformance(data.data);
+                                
+                                // Check if real data exists
+                                if (data.data.status === 'waiting_for_live_data') {
+                                    showWaitingMessage();
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading compliance report:', error);
+                            showWaitingMessage();
+                        });
+                }
+                
+                // Show waiting message for live data
+                function showWaitingMessage() {
+                    const elements = [
+                        'overallCompliance', 'totalViolations', 'totalPenalties', 'detectedPersons',
+                        'complianceTrend', 'violationsTrend', 'penaltiesTrend', 'personsTrend'
+                    ];
+                    
+                    elements.forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            if (id.includes('Trend')) {
+                                element.innerHTML = '<i class="fas fa-info-circle"></i> Live detection başlatın';
+                            } else if (id.includes('Compliance')) {
+                                element.textContent = '--%';
+                            } else if (id.includes('Violations')) {
+                                element.textContent = '--';
+                            } else if (id.includes('Penalties')) {
+                                element.textContent = '--';
+                            } else if (id.includes('Persons')) {
+                                element.textContent = '--';
+                            }
+                        }
+                    });
+                }
+                    
+                    // Load subscription info
+                console.log('🔄 Abonelik bilgileri yükleniyor...');
+                
+                // Session bilgisini dinamik olarak al
+                const sessionId = document.cookie.split('; ').find(row => row.startsWith('session_id='))?.split('=')[1] || '';
+                console.log('🔍 Session ID (dashboard):', sessionId);
+                
+                    fetch(`/api/company/${companyId}/subscription`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-ID': sessionId
+                        },
+                        credentials: 'same-origin'
+                    })
+                        .then(response => response.json())
+                        .then(result => {
+                        console.log('📊 Abonelik yükleme sonucu:', result);
+                            if (result.success) {
+                                // API'den direkt subscription bilgileri geliyor, .subscription key'i yok
+                                const subscription = result;
+                                
+                                // Update subscription display in dashboard
+                                const subscriptionPlanElement = document.getElementById('subscription-plan');
+                                const cameraUsageElement = document.getElementById('camera-usage');
+                            const subscriptionTrend = document.getElementById('subscription-trend');
+                            const usageTrend = document.getElementById('usage-trend');
+                                
+                                if (subscriptionPlanElement) {
+                                    subscriptionPlanElement.textContent = subscription.subscription_type ? subscription.subscription_type.toUpperCase() : 'BASIC';
+                                console.log('✅ Abonelik planı güncellendi:', subscriptionPlanElement.textContent);
+                                }
+                                
+                                if (cameraUsageElement) {
+                                    cameraUsageElement.textContent = (subscription.used_cameras || 0) + '/' + (subscription.max_cameras || 25);
+                                console.log('✅ Kamera kullanımı güncellendi:', cameraUsageElement.textContent);
+                                }
+                                
+                                if (subscriptionTrend) {
+                                    if (subscription.is_active) {
+                                        subscriptionTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Aktif';
+                                        subscriptionTrend.className = 'metric-trend';
+                                    } else {
+                                        subscriptionTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Süresi Dolmuş';
+                                        subscriptionTrend.className = 'metric-trend';
+                                    }
+                                }
+                                
+                                if (usageTrend) {
+                                    const usagePercentage = subscription.usage_percentage || 0;
+                                    if (usagePercentage > 80) {
+                                        usageTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Limit Yakın';
+                                        usageTrend.className = 'metric-trend';
+                                    } else if (usagePercentage > 60) {
+                                        usageTrend.innerHTML = '<i class="fas fa-info trend-neutral"></i> Orta';
+                                        usageTrend.className = 'metric-trend';
+                                    } else {
+                                        usageTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Normal';
+                                        usageTrend.className = 'metric-trend';
+                                    }
+                                }
+                            
+                            // Dinamik güncelleme için interval başlat
+                            startDynamicUpdates();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Abonelik bilgileri yükleme hatası:', error);
+                        });
+                }
+                
+                // Dinamik güncelleme fonksiyonu
+                function startDynamicUpdates() {
+                    // Her 30 saniyede bir abonelik bilgilerini güncelle
+                    setInterval(() => {
+                        updateSubscriptionInfo();
+                    }, 30000);
+                    
+                    // Her 10 saniyede bir kamera kullanımını güncelle
+                    setInterval(() => {
+                        updateCameraUsage();
+                    }, 10000);
+                }
+                
+                // Abonelik bilgilerini güncelle
+                function updateSubscriptionInfo() {
+                    console.log('🔄 Abonelik bilgileri güncelleniyor...');
+                    fetch('/api/company/' + companyId + '/subscription')
+                        .then(response => response.json())
+                        .then(result => {
+                            console.log('📊 Abonelik sonucu:', result);
+                            if (result.success) {
+                                // API'den direkt subscription bilgileri geliyor, .subscription key'i yok
+                                const subscription = result;
+                                const subscriptionPlanElement = document.getElementById('subscription-plan');
+                                const subscriptionTrend = document.getElementById('subscription-trend');
+                                
+                                if (subscriptionPlanElement) {
+                                    subscriptionPlanElement.textContent = subscription.subscription_type ? subscription.subscription_type.toUpperCase() : 'BASIC';
+                                    console.log('✅ Abonelik planı güncellendi:', subscriptionPlanElement.textContent);
+                                }
+                                
+                                if (subscriptionTrend) {
+                                    if (subscription.is_active) {
+                                        subscriptionTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Aktif';
+                                        subscriptionTrend.className = 'metric-trend';
+                                    } else {
+                                        subscriptionTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Süresi Dolmuş';
+                                        subscriptionTrend.className = 'metric-trend';
+                                    }
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('❌ Abonelik güncelleme hatası:', error);
+                        });
+                }
+                
+                // Kamera kullanımını güncelle
+                function updateCameraUsage() {
+                    console.log('🔄 Kamera kullanımı güncelleniyor...');
+                    
+                    // Session bilgisini dinamik olarak al
+                    const sessionId = document.cookie.split('; ').find(row => row.startsWith('session_id='))?.split('=')[1] || '';
+                    console.log('🔍 Session ID (kamera):', sessionId);
+                    
+                    fetch('/api/company/' + companyId + '/cameras', {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-ID': sessionId
+                        },
+                        credentials: 'same-origin'
+                    })
+                        .then(response => response.json())
+                        .then(result => {
+                            console.log('📊 Kamera sonucu:', result);
+                            if (result.success) {
+                                const cameras = result.cameras;
+                                const activeCameras = cameras.filter(cam => cam.status === 'active').length;
+                                console.log('📹 Aktif kamera sayısı:', activeCameras);
+                                
+                                // Abonelik bilgilerini al
+                                fetch(`/api/company/${companyId}/subscription`, {
+                                    method: 'GET',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-Session-ID': sessionId
+                                    },
+                                    credentials: 'same-origin'
+                                })
+                                    .then(response => response.json())
+                                    .then(subResult => {
+                                        console.log('📊 Abonelik sonucu (kamera):', subResult);
+                                        if (subResult.success) {
+                                            // API'den direkt subscription bilgileri geliyor, .subscription key'i yok
+                                            const subscription = subResult;
+                                            const cameraUsageElement = document.getElementById('camera-usage');
+                                            const usageTrend = document.getElementById('usage-trend');
+                                            
+                                            if (cameraUsageElement) {
+                                                cameraUsageElement.textContent = activeCameras + '/' + (subscription.max_cameras || 25);
+                                                console.log('✅ Kamera kullanımı güncellendi:', cameraUsageElement.textContent);
+                                            }
+                                            
+                                            if (usageTrend) {
+                                                const usagePercentage = (activeCameras / (subscription.max_cameras || 25)) * 100;
+                                                if (usagePercentage > 80) {
+                                                    usageTrend.innerHTML = '<i class="fas fa-exclamation-triangle trend-down"></i> Limit Yakın';
+                                                    usageTrend.className = 'metric-trend';
+                                                } else if (usagePercentage > 60) {
+                                                    usageTrend.innerHTML = '<i class="fas fa-info trend-neutral"></i> Orta';
+                                                    usageTrend.className = 'metric-trend';
+                                                } else {
+                                                    usageTrend.innerHTML = '<i class="fas fa-check trend-up"></i> Normal';
+                                                    usageTrend.className = 'metric-trend';
+                                                }
+                                            }
+                                        }
+                                    });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('❌ Kamera kullanım güncelleme hatası:', error);
+                        });
+                }
+                
+                // Update Violations Chart
+                function updateViolationsChart(data) {
+                    const violationCtx = document.getElementById('violationTypesChart').getContext('2d');
+                    
+                    // PPE türlerini grupla
+                    const ppeTypes = {};
+                    data.ppe_violations.forEach(violation => {
+                        const type = violation.ppe_type;
+                        ppeTypes[type] = (ppeTypes[type] || 0) + violation.count;
+                    });
+                    
+                    const labels = Object.keys(ppeTypes);
+                    const values = Object.values(ppeTypes);
+                    const colors = ['#e74c3c', '#f39c12', '#3498db', '#9b59b6', '#1abc9c'];
+                    
+                    if (violationTypesChart) {
+                        violationTypesChart.destroy();
+                    }
+                    
+                    violationTypesChart = new Chart(violationCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: colors.slice(0, labels.length),
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // Update Compliance Chart
+                function updateComplianceChart(data) {
+                    const complianceCtx = document.getElementById('complianceChart').getContext('2d');
+                    
+                    // Son 7 günün verilerini al
+                    const dailyStats = data.daily_stats.slice(0, 7).reverse();
+                    const labels = dailyStats.map(stat => {
+                        const date = new Date(stat.date);
+                        return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+                    });
+                    const values = dailyStats.map(stat => stat.compliance);
+                    
+                    if (complianceChart) {
+                        complianceChart.destroy();
+                    }
+                    
+                    complianceChart = new Chart(complianceCtx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Uyumluluk Oranı (%)',
+                                data: values,
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // Update Compliance Stats
+                function updateComplianceStats(data) {
+                    // Genel uyumluluk
+                    document.getElementById('overallCompliance').textContent = data.overall_compliance + '%';
+                    document.getElementById('overallCompliance').className = 
+                        data.overall_compliance >= 85 ? 'stat-value compliance-good' :
+                        data.overall_compliance >= 70 ? 'stat-value compliance-warning' :
+                        'stat-value compliance-danger';
+                    
+                    // PPE türü bazlı uyumluluk
+                    updatePPECompliance('helmet', data.helmet_compliance);
+                    updatePPECompliance('vest', data.vest_compliance);
+                    updatePPECompliance('shoes', data.shoes_compliance);
+                    
+                    // Toplam tespit ve ihlal sayıları
+                    document.getElementById('totalDetections').textContent = data.total_detections;
+                    document.getElementById('totalViolations').textContent = data.total_violations;
+                }
+                
+                // Update PPE Compliance
+                function updatePPECompliance(type, value) {
+                    const element = document.getElementById(type + 'Compliance');
+                    const progressBar = document.getElementById(type + 'Progress');
+                    
+                    if (element) {
+                        element.textContent = value + '%';
+                        element.className = 
+                            value >= 85 ? 'text-success fw-bold' :
+                            value >= 70 ? 'text-warning fw-bold' :
+                            'text-danger fw-bold';
+                    }
+                    
+                    if (progressBar) {
+                        progressBar.style.width = value + '%';
+                        progressBar.className = 
+                            value >= 85 ? 'progress-bar bg-success' :
+                            value >= 70 ? 'progress-bar bg-warning' :
+                            'progress-bar bg-danger';
+                    }
+                }
+                
+                // Update Camera Performance
+                function updateCameraPerformance(data) {
+                    const tableBody = document.getElementById('cameraPerformanceTable');
+                    if (!tableBody) return;
+                    
+                    tableBody.innerHTML = '';
+                    
+                    data.camera_stats.forEach(camera => {
+                        const row = document.createElement('tr');
+                        const complianceBadge = 
+                            camera.compliance >= 85 ? 'bg-success' :
+                            camera.compliance >= 70 ? 'bg-warning' :
+                            'bg-danger';
+                        
+                        row.innerHTML = `
+                            <td><i class="fas fa-video text-primary"></i> ${camera.camera_name}</td>
+                            <td><span class="badge ${complianceBadge}">${camera.compliance}%</span></td>
+                            <td>${camera.detections}</td>
+                            <td>${camera.violations}</td>
+                            <td>-</td>
+                            <td><span class="badge bg-success">Aktif</span></td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+                
+                // Update Violations Stats
+                function updateViolationsStats(data) {
+                    document.getElementById('totalViolationsCount').textContent = data.total_violations;
+                    document.getElementById('reportPeriod').textContent = data.period;
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // Load Violations - Already implemented in loadDashboardData
+                function loadViolations() {
+                    // This function is called from loadDashboardData
+                    // No need to duplicate API calls
+                }
+                
+                // Load Compliance Report
+                function loadComplianceReport() {
+                    // This function is called from loadDashboardData
+                    // No need to duplicate API calls
+                }
+                
+                // Display Violations
+                function displayViolations(data) {
+                    const container = document.getElementById('violationsList');
+                    
+                    if (!data.camera_violations || data.camera_violations.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center py-4">
+                                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                <h5 class="text-success">Hiç ihlal yok!</h5>
+                                <p class="text-muted">Son 30 gün içinde hiç PPE ihlali tespit edilmedi.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    container.innerHTML = data.camera_violations.slice(0, 10).map(violation => `
+                        <div class="violation-card">
+                            <div class="row align-items-center">
+                                <div class="col-md-3">
+                                    <strong>Kamera ${violation.camera_id}</strong>
+                                    <small class="d-block text-muted">${new Date(violation.last_violation).toLocaleDateString('tr-TR')}</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <span class="text-danger">${violation.count} ihlal tespit edildi</span>
+                                    <small class="d-block text-muted">Son ihlal zamanı</small>
+                                </div>
+                                <div class="col-md-2">
+                                    <span class="badge ${violation.count > 10 ? 'bg-danger' : violation.count > 5 ? 'bg-warning' : 'bg-info'}">
+                                        ${violation.count > 10 ? 'Yüksek' : violation.count > 5 ? 'Orta' : 'Düşük'}
+                                    </span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong class="text-danger">${violation.count} uyarı</strong>
+                                </div>
+                                <div class="col-md-1">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewViolationDetail('${violation.camera_id}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                // Apply Filters
+                function applyFilters() {
+                    const dateRange = document.getElementById('dateRange').value;
+                    const camera = document.getElementById('cameraFilter').value;
+                    
+                    // Reload data with filters
+                    loadViolations();
+                    
+                    // Show loading message
+                    const container = document.getElementById('violationsList');
+                    container.innerHTML = `
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Filtreleniyor...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Veriler filtreleniyor...</p>
+                        </div>
+                    `;
+                    
+                    setTimeout(() => {
+                        loadViolations();
+                    }, 1000);
+                }
+                
+                // Export Report
+                function exportReport() {
+                    const form = document.getElementById('exportForm');
+                    const formData = new FormData(form);
+                    const data = {};
+                    formData.forEach((value, key) => {
+                        data[key] = value;
+                    });
+                    
+                    // Get checked format
+                    const formatRadio = document.querySelector('input[name="format"]:checked');
+                    data.format = formatRadio ? formatRadio.value : 'pdf';
+                    
+                    fetch('/api/company/' + companyId + '/reports/export', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            alert('✅ ' + result.message + '\\n\\nRapor oluşturuldu ve indirmeye hazır.');
+                            // Simulated download
+                            const link = document.createElement('a');
+                            link.href = '#';
+                            link.download = 'report.' + data.format;
+                            link.click();
+                        } else {
+                            alert('❌ Hata: ' + result.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error exporting report:', error);
+                        alert('❌ Rapor oluşturma sırasında bir hata oluştu');
+                    });
+                }
+                
+                // View Violation Detail
+                function viewViolationDetail(cameraId) {
+                                            alert('📹 Kamera ' + cameraId + ' detay görüntüleme\\n\\n(Bu özellik geliştirilme aşamasında)');
+                }
+                
+                // Logout
+                function logout() {
+                    if (confirm('Çıkış yapmak istediğinizden emin misiniz?')) {
+                        fetch('/logout', {
+                            method: 'POST'
+                        })
+                        .then(() => {
+                            window.location.href = '/';
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            window.location.href = '/';
+                        });
+                    }
+                }
+            </script>
+        </body>
+        </html>
