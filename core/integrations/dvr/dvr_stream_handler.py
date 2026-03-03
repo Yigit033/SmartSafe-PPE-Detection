@@ -13,6 +13,7 @@ import socket
 import re
 from typing import Dict, Optional, List, Tuple
 import logging
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -112,17 +113,17 @@ class DVRStreamHandler:
         """Detect DVR brand by testing common URL patterns"""
         try:
             # Test multiple channels for brand detection
-            test_channels = [1, 2, 3]  # Test multiple channels
-            test_urls = []
+            safe_username = urllib.parse.quote(username)
+            safe_password = urllib.parse.quote(password)
             
             for channel in test_channels:
                 test_urls.extend([
-                    f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel}01",
-                    f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel}&subtype=0",
-                    f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel:02d}/main",
-                    f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel:02d}/sub",
+                    f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel}01",
+                    f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel}&subtype=0",
+                    f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel:02d}/main",
+                    f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel:02d}/sub",
                     # XM-style credential-in-query
-                    f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel}&stream=0.sdp",
+                    f"rtsp://{ip_address}:{rtsp_port}/user={safe_username}&password={safe_password}&channel={channel}&stream=0.sdp",
                 ])
             
             for url in test_urls:
@@ -167,24 +168,28 @@ class DVRStreamHandler:
         # Get brand-specific patterns
         patterns = self.dvr_url_patterns.get(brand, self.dvr_url_patterns['generic'])
         
+        # Prepare safe credentials
+        safe_username = urllib.parse.quote(username)
+        safe_password = urllib.parse.quote(password)
+        
         # Generate URLs for this brand
         for pattern in patterns:
             try:
                 # Support patterns that embed {username}/{password} in the path (XM style)
-                path = pattern.format(channel=channel_number, username=username, password=password)
+                path = pattern.format(channel=channel_number, username=safe_username, password=safe_password)
                 if path.startswith('/user=') or 'stream=0.sdp' in path or 'stream=1.sdp' in path:
                     # XM style requires no user:pass@ in authority
                     url = f"rtsp://{ip_address}:{rtsp_port}{path}"
                 else:
-                    url = f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}{path}"
+                    url = f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}{path}"
                 urls.append(url)
             except Exception as e:
                 logger.warning(f"⚠️ Failed to generate URL for pattern {pattern}: {e}")
 
         # Always include the two known-good universal patterns regardless of brand
         try:
-            urls.insert(0, f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel_number}&stream=0.sdp")
-            urls.insert(1, f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0")
+            urls.insert(0, f"rtsp://{ip_address}:{rtsp_port}/user={safe_username}&password={safe_password}&channel={channel_number}&stream=0.sdp")
+            urls.insert(1, f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0")
         except Exception:
             pass
         
@@ -192,35 +197,35 @@ class DVRStreamHandler:
         if channel_number <= 4:
             # For low channel numbers, try more variations
             urls.extend([
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number}/main",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number}/sub",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number}/0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number}/1",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1"
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number}/main",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number}/sub",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number}/0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number}/1",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1"
             ])
         elif channel_number <= 8:
             # For medium channel numbers
             urls.extend([
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/main",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/sub",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/1",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1"
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/main",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/sub",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/1",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1"
             ])
         else:
             # For high channel numbers, try more specific patterns
             urls.extend([
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/main",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/sub",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/1",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/live/ch{channel_number:02d}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/live/channel{channel_number}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/live/camera{channel_number}"
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/main",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/sub",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ch{channel_number:02d}/1",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/live/ch{channel_number:02d}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/live/channel{channel_number}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/live/camera{channel_number}"
             ])
         
         # Add brand-specific variations
@@ -230,28 +235,28 @@ class DVRStreamHandler:
             major = channel_number * 100 + 1
             urls.extend([
                 # Common Hikvision ISAPI variants (case differences across firmwares)
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major+1}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major+2}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major+1}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major+2}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major+1}",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major+2}"
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major+1}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{major+2}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major+1}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/Channels/{major+2}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major+1}",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/streaming/channels/{major+2}"
             ])
         elif brand == 'dahua':
             urls.extend([
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0&stream=0",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1&stream=1",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0&authbasic=1",
-                f"rtsp://{username}:{password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1&authbasic=1"
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0&stream=0",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1&stream=1",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=0&authbasic=1",
+                f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/cam/realmonitor?channel={channel_number}&subtype=1&authbasic=1"
             ])
         elif brand == 'xm':
             # Ensure XM variants are present explicitly
             urls.extend([
-                f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel_number}&stream=0.sdp",
-                f"rtsp://{ip_address}:{rtsp_port}/user={username}&password={password}&channel={channel_number}&stream=1.sdp",
+                f"rtsp://{ip_address}:{rtsp_port}/user={safe_username}&password={safe_password}&channel={channel_number}&stream=0.sdp",
+                f"rtsp://{ip_address}:{rtsp_port}/user={safe_username}&password={safe_password}&channel={channel_number}&stream=1.sdp",
             ])
         
         # Remove duplicates while preserving order

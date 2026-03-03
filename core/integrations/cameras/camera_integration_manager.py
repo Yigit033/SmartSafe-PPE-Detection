@@ -17,7 +17,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import base64
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 import xml.etree.ElementTree as ET
 
 # Violation tracking imports
@@ -54,7 +54,9 @@ class DVRConfig:
     def get_rtsp_base_url(self) -> str:
         """Generate base RTSP URL for DVR"""
         if self.username and self.password:
-            return f"rtsp://{self.username}:{self.password}@{self.ip_address}:{self.rtsp_port}"
+            safe_username = quote(self.username)
+            safe_password = quote(self.password)
+            return f"rtsp://{safe_username}:{safe_password}@{self.ip_address}:{self.rtsp_port}"
         else:
             return f"rtsp://{self.ip_address}:{self.rtsp_port}"
     
@@ -667,14 +669,16 @@ class DVRManager:
                 logger.warning(f"⚠️ Primary RTSP URL failed: {rtsp_url}")
                 
                 # Try alternative URL formats
+                safe_username = quote(dvr_config.username)
+                safe_password = quote(dvr_config.password)
                 alternative_urls = [
                     f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/0",
                     f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/1",
                     f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main/0",
                     f"rtsp://{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main/1",
-                    f"rtsp://{dvr_config.username}:{dvr_config.password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main",
-                    f"rtsp://{dvr_config.username}:{dvr_config.password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/0",
-                    f"rtsp://{dvr_config.username}:{dvr_config.password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/1"
+                    f"rtsp://{safe_username}:{safe_password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/main",
+                    f"rtsp://{safe_username}:{safe_password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/0",
+                    f"rtsp://{safe_username}:{safe_password}@{dvr_config.ip_address}:{dvr_config.rtsp_port}/ch{channel.channel_number:02d}/1"
                 ]
                 
                 for i, alt_url in enumerate(alternative_urls):
@@ -841,7 +845,9 @@ class RealCameraConfig:
         """Generate stream URL based on configuration"""
         if self.protocol == "rtsp":
             if self.username and self.password:
-                return f"rtsp://{self.username}:{self.password}@{self.ip_address}:{self.port}{self.stream_path}"
+                safe_username = quote(self.username)
+                safe_password = quote(self.password)
+                return f"rtsp://{safe_username}:{safe_password}@{self.ip_address}:{self.port}{self.stream_path}"
             else:
                 return f"rtsp://{self.ip_address}:{self.port}{self.stream_path}"
         else:  # HTTP
@@ -1693,10 +1699,12 @@ class ProfessionalCameraManager:
                 
                 # Authentication için URL'yi güncelle
                 if config.username and config.password:
+                    safe_username = quote(config.username)
+                    safe_password = quote(config.password)
                     if 'http://' in video_url:
-                        video_url = video_url.replace('http://', f'http://{config.username}:{config.password}@')
+                        video_url = video_url.replace('http://', f'http://{safe_username}:{safe_password}@')
                     elif 'https://' in video_url:
-                        video_url = video_url.replace('https://', f'https://{config.username}:{config.password}@')
+                        video_url = video_url.replace('https://', f'https://{safe_username}:{safe_password}@')
                 
                 cap = cv2.VideoCapture(video_url)
                 

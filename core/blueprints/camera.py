@@ -15,6 +15,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 from typing import Dict, Any
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,9 @@ def create_blueprint(api):
             
             # Build stream URL
             if username and password:
-                stream_url = f"{protocol}://{username}:{password}@{camera['ip_address']}:{port}{stream_path}"
+                safe_username = urllib.parse.quote(username)
+                safe_password = urllib.parse.quote(password)
+                stream_url = f"{protocol}://{safe_username}:{safe_password}@{camera['ip_address']}:{port}{stream_path}"
                 auth = HTTPBasicAuth(username, password)
             else:
                 stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
@@ -1290,7 +1293,10 @@ def create_blueprint(api):
             
             # URL oluştur - Android IP Webcam için optimize edilmiş
             if username and password:
-                stream_url = f"{protocol}://{username}:{password}@{camera['ip_address']}:{port}{stream_path}"
+                import urllib.parse
+                safe_username = urllib.parse.quote(username)
+                safe_password = urllib.parse.quote(password)
+                stream_url = f"{protocol}://{safe_username}:{safe_password}@{camera['ip_address']}:{port}{stream_path}"
             else:
                 stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
             
@@ -1409,7 +1415,10 @@ def create_blueprint(api):
                                    for s in SNAPSHOT_PATH_SUFFIXES)
             
             if username and password:
-                stream_url = f"http://{username}:{password}@{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
+                import urllib.parse
+                safe_username = urllib.parse.quote(username)
+                safe_password = urllib.parse.quote(password)
+                stream_url = f"http://{safe_username}:{safe_password}@{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
             else:
                 stream_url = f"http://{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
             

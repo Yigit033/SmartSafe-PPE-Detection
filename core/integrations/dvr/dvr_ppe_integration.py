@@ -51,9 +51,13 @@ class DVRStreamProcessor:
             if not dvr_system:
                 raise RuntimeError(f"DVR system not found for company={company_id} dvr_id={dvr_id}")
 
+            import urllib.parse
+            safe_username = urllib.parse.quote(dvr_system['username'])
+            safe_password = urllib.parse.quote(dvr_system['password'])
+
             rtsp_url = (
                 f"rtsp://{dvr_system['ip_address']}:{dvr_system.get('rtsp_port', 554)}"
-                f"/user={dvr_system['username']}&password={dvr_system['password']}"
+                f"/user={safe_username}&password={safe_password}"
                 f"&channel={channel}&stream=0.sdp"
             )
             

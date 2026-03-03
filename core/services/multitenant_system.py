@@ -1287,10 +1287,14 @@ class MultiTenantDatabase:
             
             # RTSP URL formatı
             if username and password:
+                import urllib.parse
+                safe_username = urllib.parse.quote(username)
+                safe_password = urllib.parse.quote(password)
+                
                 if protocol == 'rtsp':
-                    rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{stream_path}"
+                    rtsp_url = f"rtsp://{safe_username}:{safe_password}@{ip_address}:{port}{stream_path}"
                 else:
-                    rtsp_url = f"http://{username}:{password}@{ip_address}:{port}{stream_path}"
+                    rtsp_url = f"http://{safe_username}:{safe_password}@{ip_address}:{port}{stream_path}"
             else:
                 if protocol == 'rtsp':
                     rtsp_url = f"rtsp://{ip_address}:{port}{stream_path}"

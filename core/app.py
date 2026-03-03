@@ -17,6 +17,7 @@ import time
 import requests
 import logging
 import re
+import urllib.parse
 
 # Configure logging - Memory optimized
 import os
@@ -1364,7 +1365,10 @@ class SmartSafeSaaSAPI:
         """RTSP endpoint'i test et"""
         try:
             if username and password:
-                rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{endpoint}"
+                import urllib.parse
+                safe_username = urllib.parse.quote(username)
+                safe_password = urllib.parse.quote(password)
+                rtsp_url = f"rtsp://{safe_username}:{safe_password}@{ip_address}:{port}{endpoint}"
             else:
                 rtsp_url = f"rtsp://{ip_address}:{port}{endpoint}"
             
@@ -2146,7 +2150,9 @@ class SmartSafeSaaSAPI:
                 password = camera_info.get('password', '')
                 
                 if username and password:
-                    camera_url = f"{protocol}://{username}:{password}@{ip}:{port}{stream_path}"
+                    safe_username = urllib.parse.quote(username)
+                    safe_password = urllib.parse.quote(password)
+                    camera_url = f"{protocol}://{safe_username}:{safe_password}@{ip}:{port}{stream_path}"
                 else:
                     camera_url = f"{protocol}://{ip}:{port}{stream_path}"
                 
