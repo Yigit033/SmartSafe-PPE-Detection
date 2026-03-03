@@ -15081,6 +15081,12 @@ smartsafe_requests_total 100
                 username = camera_info.get('username', '')
                 password = camera_info.get('password', '')
                 
+                # 🔐 CRITICAL FIX: URL Encode credentials to prevent "Port missing in uri" errors 
+                # especially when passwords contain special characters like @, :, /
+                import urllib.parse
+                safe_username = urllib.parse.quote(username) if username else ''
+                safe_password = urllib.parse.quote(password) if password else ''
+                
                 # Snapshot-only path'ler: Detection worker /video kullanmasın; canlı görüntü /video'ya tek bağlansın
                 SNAPSHOT_SUFFIXES = ('/shot.jpg', '/photoaf.jpg', '/photo.jpg', '/image.jpg', '/snapshot.jpg', '/snapshot.cgi', '/image.cgi')
                 is_snapshot_path = any(stream_path.endswith(s) or stream_path == s.lstrip('/') for s in SNAPSHOT_SUFFIXES)
@@ -15089,12 +15095,12 @@ smartsafe_requests_total 100
                     # Snapshot polling ile frame doldur - /video sadece tarayıcı canlı görüntü için kalsın
                     base = f"http://{ip}:{port}"
                     if username and password:
-                        base_auth = f"http://{username}:{password}@{ip}:{port}"
+                        base_auth = f"http://{safe_username}:{safe_password}@{ip}:{port}"
                         snapshot_urls = [f"{base_auth}/shot.jpg", f"{base_auth}/photoaf.jpg", f"{base_auth}/photo.jpg",
                                          f"{base_auth}/image.jpg", f"{base_auth}/snapshot.jpg"]
                     else:
                         snapshot_urls = [f"{base}/shot.jpg", f"{base}/photoaf.jpg", f"{base}/photo.jpg",
-                                        f"{base}/image.jpg", f"{base}/snapshot.jpg"]
+                                         f"{base}/image.jpg", f"{base}/snapshot.jpg"]
                     auth = (username, password) if (username and password) else None
                     self.start_saas_camera_snapshot_polling(camera_key, snapshot_urls, auth, active_detectors_ref=active_detectors_ref)
                     logger.info(f"✅ Snapshot polling başlatıldı (canlı görüntü /video için ayrıldı): {camera_key}")
@@ -15103,9 +15109,9 @@ smartsafe_requests_total 100
                 # Ana URL - Authentication ile
                 if username and password:
                     if protocol == 'rtsp':
-                        camera_url = f"rtsp://{username}:{password}@{ip}:{port}{stream_path}"
+                        camera_url = f"rtsp://{safe_username}:{safe_password}@{ip}:{port}{stream_path}"
                     else:
-                        camera_url = f"http://{username}:{password}@{ip}:{port}{stream_path}"
+                        camera_url = f"http://{safe_username}:{safe_password}@{ip}:{port}{stream_path}"
                 else:
                     if protocol == 'rtsp':
                         camera_url = f"rtsp://{ip}:{port}{stream_path}"
@@ -15116,15 +15122,15 @@ smartsafe_requests_total 100
                 # Alternatif URL'ler - Önce snapshot'lar (canlı görüntü /video ile çakışmasın), sonra stream
                 if username and password:
                     alternative_urls = [
-                        f"http://{username}:{password}@{ip}:{port}/shot.jpg",
-                        f"http://{username}:{password}@{ip}:{port}/photoaf.jpg",
-                        f"http://{username}:{password}@{ip}:{port}/photo.jpg",
-                        f"http://{username}:{password}@{ip}:{port}/video",
-                        f"http://{username}:{password}@{ip}:{port}/mjpeg",
-                        f"http://{username}:{password}@{ip}:{port}/stream",
-                        f"http://{username}:{password}@{ip}:{port}/live",
-                        f"http://{username}:{password}@{ip}:{port}/camera",
-                        f"http://{username}:{password}@{ip}:{port}/webcam"
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/shot.jpg",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/photoaf.jpg",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/photo.jpg",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/video",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/mjpeg",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/stream",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/live",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/camera",
+                        f"http://{safe_username}:{safe_password}@{ip}:{port}/webcam"
                     ]
                 else:
                     alternative_urls = [
