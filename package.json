@@ -10,6 +10,7 @@
     "test": ".\\venv\\Scripts\\python test_sector_integration.py",
     "install:python": ".\\venv\\Scripts\\python -m pip install -r requirements.txt",
     "test:offline-video": ".\\venv\\Scripts\\python scripts/offline_video_ppe_test.py",
+    "clean:pycache": "powershell -Command \"Get-ChildItem -Path . -Recurse -Directory -Filter __pycache__ -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force; Get-ChildItem -Path . -Recurse -Directory -Filter .pytest_cache -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force; Write-Host 'Only __pycache__ and .pytest_cache removed.'\"",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\""
   },
   "devDependencies": {

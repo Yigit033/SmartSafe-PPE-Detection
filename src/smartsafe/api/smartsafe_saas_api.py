@@ -13889,7 +13889,7 @@ smartsafe_requests_total 100
             else:
                 sector = 'construction'
                 logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
-
+            
             # Şirket bazlı zorunlu PPE konfigürasyonunu al (varsa)
             # None  => konfig yok / bilinmiyor → eski davranış (helmet+vest zorunlu)
             # []    => kullanıcı "hiçbir PPE zorunlu değil" seçmiş → herkes uyumlu, violation yok
@@ -13928,17 +13928,19 @@ smartsafe_requests_total 100
                     logger.info("✅ PoseAwarePPEDetector initialized with SH17 backend")
                 except Exception as pose_err:
                     logger.warning(f"⚠️ PoseAware init failed, using SH17 directly: {pose_err}")
+                    # SH17 modeli yine de kullanılacak, sadece pose-aware kapalı kalır.
+                    pose_detector = None
             else:
-                # Fallback: PoseAwarePPEDetector with YOLOv8n-Pose
+                # Fallback: PoseAwarePPEDetector with YOLOv8n-Pose (SH17 yoksa)
+                model_manager = None
+                use_sh17 = False
                 try:
                     from src.smartsafe.detection.pose_aware_ppe_detector import get_pose_aware_detector
                     pose_detector = get_pose_aware_detector(ppe_detector=None)
                     logger.info("✅ PoseAwarePPEDetector initialized (standalone fallback)")
                 except Exception as pose_err:
                     logger.warning(f"⚠️ PoseAware fallback failed: {pose_err}")
-                
-                model_manager = None
-                use_sh17 = False
+                    pose_detector = None
             
         except Exception as e:
             logger.error(f"❌ Model yükleme hatası: {e}")
@@ -13975,7 +13977,9 @@ smartsafe_requests_total 100
                             if pose_detector is not None:
                                 # PoseAwarePPEDetector: person pose + PPE region analysis
                                 # required_ppe listesi (settings / şirket konfigürasyonu) burada uyum hesabına iletilir.
-                                pose_result = pose_detector.detect_with_pose(frame, sector, optimized_confidence, required_ppe=required_ppe)
+                                pose_result = pose_detector.detect_with_pose(
+                                    frame, sector, optimized_confidence, required_ppe=required_ppe
+                                )
                                 
                                 if isinstance(pose_result, dict):
                                     people_detected = pose_result.get('people_detected', 0)
@@ -13983,30 +13987,41 @@ smartsafe_requests_total 100
                                     raw_violations = pose_result.get('ppe_violations', [])
                                     ppe_violations = raw_violations if isinstance(raw_violations, list) else []
                                     results = pose_result.get('detections', [])
-                                    logger.debug(f"🎯 PoseAware detection: {people_detected} people, {pose_result.get('compliance_rate', 0)}% compliance")
+                                    logger.debug(
+                                        f"🎯 PoseAware detection: {people_detected} people, "
+                                        f"{pose_result.get('compliance_rate', 0)}% compliance"
+                                    )
                                 elif isinstance(pose_result, list):
                                     results = pose_result
-                                    people_detected = sum(1 for d in results if d.get('class_name') == 'person')
+                                    people_detected = sum(
+                                        1 for d in results if d.get('class_name') == 'person'
+                                    )
                                 else:
                                     results = []
                             elif use_sh17 and model_manager:
+                                # SH17 sadece PPE tespiti için kullanılır
                                 results = model_manager.detect_ppe(frame, sector, optimized_confidence)
-                                people_detected = sum(1 for d in results if d.get('class_name') == 'person')
-
-                                if people_detected > 0 and required_ppe:
-                                    try:
-                                        compliance_result = model_manager.analyze_compliance(results, required_ppe)
-                                        ppe_compliant = compliance_result.get('total_detected', 0)
-                                        missing = compliance_result.get('missing', [])
-                                        ppe_violations = [f"Missing: {item}" for item in missing]
-                                    except Exception as comp_err:
-                                        logger.error(f"❌ SH17 compliance analizi hatası: {comp_err}")
-                                        ppe_compliant = people_detected
-                                else:
-                                    ppe_compliant = people_detected
+                                people_detected = sum(
+                                    1 for d in results if d.get('class_name') == 'person'
+                                )
                             else:
+                                # Ne pose-aware ne de SH17 kullanılabiliyorsa, sonuç boş kabul edilir
                                 results = []
-                                
+                            
+                            # SH17 compliance analizi (sadece SH17 yolu ve required_ppe varsa)
+                            if people_detected > 0 and required_ppe and use_sh17 and model_manager:
+                                try:
+                                    compliance_result = model_manager.analyze_compliance(results, required_ppe)
+                                    ppe_compliant = compliance_result.get('total_detected', 0)
+                                    missing = compliance_result.get('missing', [])
+                                    ppe_violations = [f"Missing: {item}" for item in missing]
+                                except Exception as comp_err:
+                                    logger.error(f"❌ SH17 compliance analizi hatası: {comp_err}")
+                                    # Hata durumunda kimseyi ihlal saymamak yerine herkesi uyumlu kabul ediyoruz
+                                    ppe_compliant = people_detected
+                            elif people_detected > 0 and ppe_compliant == 0:
+                                # Pose-aware tarafı uyumlu saymadıysa ama kişi var; en azından detected sayısını kullan
+                                ppe_compliant = people_detected
                         except Exception as detection_error:
                             logger.error(f"❌ Detection hatası: {detection_error}")
                             results = []
@@ -14028,13 +14043,22 @@ smartsafe_requests_total 100
                             report_processing_time = time.time() - start_time
                             if people_detected > 0 or len(ppe_violations) > 0:
                                 self._save_detection_to_reports(
-                                    company_id, camera_id, detection_mode,
-                                    people_detected, ppe_compliant, len(ppe_violations),
-                                    report_processing_time, confidence
+                                    company_id,
+                                    camera_id,
+                                    detection_mode,
+                                    people_detected,
+                                    ppe_compliant,
+                                    len(ppe_violations),
+                                    report_processing_time,
+                                    confidence,
                                 )
                                 self._generate_live_alerts(
-                                    company_id, camera_id, people_detected,
-                                    ppe_compliant, len(ppe_violations), detection_mode
+                                    company_id,
+                                    camera_id,
+                                    people_detected,
+                                    ppe_compliant,
+                                    len(ppe_violations),
+                                    detection_mode,
                                 )
                             for violation in normalized_ppe_violations:
                                 self._save_violation_to_reports(company_id, camera_id, violation)
@@ -15572,9 +15596,9 @@ smartsafe_requests_total 100
             # PostgreSQL / Supabase tarafı: modern özet şema
             conn = self.db.get_connection()
             cursor = conn.cursor()
-
+            
             placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '%s'
-
+            
             cursor.execute(f'''
                 INSERT INTO detections (
                     company_id, camera_id, timestamp, person_count, 
@@ -15589,7 +15613,7 @@ smartsafe_requests_total 100
                 detection_data.get('compliance_rate', 100),
                 detection_data.get('processing_time_ms', 0)
             ))
-
+            
             conn.commit()
             conn.close()
             logger.debug(f"✅ Detection kaydedildi (summary): {detection_data.get('camera_id', 'unknown')}")
