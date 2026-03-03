@@ -1990,15 +1990,30 @@ class SmartSafeSaaSAPI:
             required_ppe = None
             if self.db is not None:
                 try:
-                    company_ppe_config = self.db.get_company_ppe_config(company_id)
-                    if isinstance(company_ppe_config, dict) and 'required' in company_ppe_config:
-                        raw_required = company_ppe_config.get('required')
-                        if isinstance(raw_required, list):
-                            normalized = []
-                            for item in raw_required:
-                                if item is None: continue
-                                normalized.append(str(item).strip().lower())
-                            required_ppe = normalized
+                    # required_ppe is stored as a JSON string in the companies table
+                    ppe_info = company_data  # already fetched above via get_company_info
+                    if ppe_info and isinstance(ppe_info, dict):
+                        raw_ppe = ppe_info.get('required_ppe')
+                        if raw_ppe is not None:
+                            if isinstance(raw_ppe, str):
+                                try:
+                                    raw_ppe = json.loads(raw_ppe)
+                                except (json.JSONDecodeError, ValueError):
+                                    raw_ppe = None
+                            if isinstance(raw_ppe, list):
+                                normalized = []
+                                for item in raw_ppe:
+                                    if item is None: continue
+                                    normalized.append(str(item).strip().lower())
+                                required_ppe = normalized if normalized else None
+                            elif isinstance(raw_ppe, dict) and 'required' in raw_ppe:
+                                raw_required = raw_ppe.get('required')
+                                if isinstance(raw_required, list):
+                                    normalized = []
+                                    for item in raw_required:
+                                        if item is None: continue
+                                        normalized.append(str(item).strip().lower())
+                                    required_ppe = normalized if normalized else None
                 except Exception as cfg_err:
                     logger.warning(f"⚠️ PPE config okunamadı: {cfg_err}")
             
@@ -2299,7 +2314,3 @@ if __name__ == "__main__":
         debug=(env == "local"),
         threaded=True
     )
-
-    
-
-

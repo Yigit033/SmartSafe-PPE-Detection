@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Lazy import to avoid circular import: smartsafe_saas_api -> blueprints -> detection -> smartsafe_saas_api
 def _get_detection_state():
-    from api.smartsafe_saas_api import (
+    from app import (
         active_detectors,
         detection_threads,
         camera_captures,
@@ -316,10 +316,10 @@ def create_blueprint(api):
             if camera_key in state['active_detectors'] and state['active_detectors'][camera_key]:
                 return jsonify({'success': False, 'error': 'Kamera zaten aktif'})
             
-            # Aynı process'te worker'ın gördüğü dict'i set et (referans tutarlılığı)
-            state['active_detectors'][camera_key] = True
-            import api.smartsafe_saas_api as _api_mod
-            _api_mod.active_detectors[camera_key] = True
+            # state dict zaten _get_detection_state() ile aynı referansı tutuyor
+            # Ek olarak modül seviyesindeki dict'e de yaz (reloader/çift app senaryosu)
+            from app import active_detectors as _module_ad
+            _module_ad[camera_key] = True
             logger.info(f"✅ active_detectors[{camera_key}] = True set before thread start")
             # Worker'ın aynı dict referansını görmesi için açıkça geçir (reloader/çift app senaryosu)
             active_detectors_ref = state['active_detectors']

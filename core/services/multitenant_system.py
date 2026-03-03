@@ -1859,7 +1859,7 @@ class MultiTenantDatabase:
             cursor.execute(f'''
                 SELECT company_id, company_name, sector, contact_person, email, phone, address,
                        max_cameras, subscription_type, subscription_start, subscription_end,
-                       status, created_at, api_key
+                       status, created_at, api_key, required_ppe
                 FROM companies 
                 WHERE company_id = {placeholder}
             ''', (company_id,))
@@ -1883,7 +1883,8 @@ class MultiTenantDatabase:
                         'subscription_end': result['subscription_end'],
                         'status': result['status'],
                         'created_at': result['created_at'],
-                        'api_key': result['api_key']
+                        'api_key': result['api_key'],
+                        'required_ppe': result['required_ppe'],
                     }
                 else:  # SQLite tuple
                     company_info = {
@@ -1900,7 +1901,8 @@ class MultiTenantDatabase:
                         'subscription_end': result[10],
                         'status': result[11],
                         'created_at': result[12],
-                        'api_key': result[13]
+                        'api_key': result[13],
+                        'required_ppe': result[14],
                     }
                 
                 return company_info

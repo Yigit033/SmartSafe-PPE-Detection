@@ -21,10 +21,22 @@ import cv2
 import numpy as np
 import os
 from typing import Dict, List, Optional, Tuple
+from collections import deque
 import logging
 import time
 
 logger = logging.getLogger(__name__)
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    import supervision as sv
+except ImportError:
+    sv = None
+    logger.warning("supervision library is not installed. ByteTrack tracking will be disabled.")
 
 # Kanonik PPE tanımları: model sınıf adları, anatomik bölge ve overlay/ihlal etiketleri
 PPE_CONFIG = {
@@ -110,9 +122,30 @@ class PoseAwarePPEDetector:
         self.pose_confidence_threshold = 0.5
         self.keypoint_confidence_threshold = 0.3
         
-        # 🎯 KEYPOINT SMOOTHING - Stabilize detection across frames
-        self.prev_keypoints = {}  # Store previous frame keypoints per person
+        # Keypoint smoothing - stabilize detection across frames
+        self.prev_keypoints = {}  # Store previous frame keypoints per tracked person
         self.keypoint_smoothing_factor = 0.6  # 60% previous, 40% current
+
+        # Optional ByteTrack-based person tracker (single instance per detector)
+        self.byte_tracker = None
+        if sv is not None:
+            try:
+                # Default parameters are usually sufficient; can be tuned later if needed
+                self.byte_tracker = sv.ByteTrack()
+                logger.info("ByteTrack tracker initialized for pose-aware detector.")
+            except Exception as tracker_error:
+                logger.warning(f"Failed to initialize ByteTrack tracker: {tracker_error}")
+                self.byte_tracker = None
+
+        # Temporal compliance history per tracked person
+        self.compliance_history: Dict[int, deque] = {}
+        self.temporal_window_size: int = 15
+        self.temporal_required_positive: int = 10
+        
+        # SH17 PPE detection cadence (every Nth frame). Default: every frame.
+        self.sh17_every_n: int = 1
+        self._frame_counter: int = 0
+        self._last_ppe_detections: List[Dict] = []
         
         # Load YOLOv8-Pose model
         self._load_pose_model(pose_model_path)
@@ -132,11 +165,25 @@ class PoseAwarePPEDetector:
                 self.pose_model = YOLO('yolov8n-pose.pt')
                 logger.info("✅ Loaded YOLOv8n-Pose (auto-downloaded)")
             
-            # 🔧 FIX: Force CPU inference to avoid CUDA torchvision::nms incompatibility
-            # This is a known issue where torchvision.ops.nms doesn't support CUDA backend
-            # CPU inference works perfectly fine and is still fast with yolov8n-pose
-            self.pose_model.to('cpu')
-            logger.info("🔧 Pose model set to CPU inference (CUDA NMS compatibility fix)")
+            # Prefer GPU if available, but fall back safely to CPU if any CUDA/NMS issue occurs.
+            target_device = 'cpu'
+            if torch is not None and torch.cuda.is_available():
+                try:
+                    self.pose_model.to('cuda')
+                    # Optional lightweight sanity check: run a tiny dummy inference
+                    dummy = np.zeros((64, 64, 3), dtype=np.uint8)
+                    _ = self.pose_model(dummy, conf=0.5, verbose=False, device='cuda')
+                    target_device = 'cuda'
+                    logger.info("🔧 Pose model set to CUDA inference (RTX GPU detected)")
+                except Exception as cuda_error:
+                    logger.warning(f"⚠️ Pose model CUDA path failed, falling back to CPU: {cuda_error}")
+                    self.pose_model.to('cpu')
+                    target_device = 'cpu'
+            else:
+                self.pose_model.to('cpu')
+                target_device = 'cpu'
+
+            logger.info(f"🔧 Pose model device: {target_device}")
                 
         except ImportError:
             logger.warning("⚠️ Ultralytics not installed. Install with: pip install ultralytics")
@@ -174,17 +221,38 @@ class PoseAwarePPEDetector:
             else:
                 frame_for_inference = frame
             
-            # 1️⃣ Detect poses (persons with keypoints) - CPU inference
-            pose_results = self.pose_model(frame_for_inference, conf=self.pose_confidence_threshold, verbose=False, device='cpu')
+            # 1️⃣ Detect poses (persons with keypoints) - use current model device (CPU or CUDA)
+            pose_results = self.pose_model(
+                frame_for_inference,
+                conf=self.pose_confidence_threshold,
+                verbose=False
+            )
             
             # 2️⃣ Detect PPE items (using existing detector)
             ppe_detections = []
             if self.ppe_detector:
-                ppe_result = self.ppe_detector.detect_ppe(frame, sector, confidence)
-                if isinstance(ppe_result, list):
-                    ppe_detections = ppe_result
-                elif isinstance(ppe_result, dict):
-                    ppe_detections = ppe_result.get('detections', [])
+                # Lightweight cadence control: run SH17 every Nth frame, reuse last detections otherwise.
+                self._frame_counter += 1
+                run_new_sh17 = (
+                    self.sh17_every_n <= 1 or
+                    self._frame_counter % self.sh17_every_n == 0 or
+                    not self._last_ppe_detections
+                )
+
+                if run_new_sh17:
+                    ppe_result = self.ppe_detector.detect_ppe(frame, sector, confidence)
+                    if isinstance(ppe_result, list):
+                        ppe_detections = ppe_result
+                    elif isinstance(ppe_result, dict):
+                        ppe_detections = ppe_result.get('detections', [])
+                    else:
+                        ppe_detections = []
+
+                    # Cache for intermediate frames
+                    self._last_ppe_detections = ppe_detections
+                else:
+                    # Reuse cached SH17 detections for this frame; pose/keypoints are still fresh.
+                    ppe_detections = self._last_ppe_detections
             
             # 3️⃣ Extract pose data
             persons_with_pose = self._extract_pose_data(pose_results, frame.shape)
@@ -206,12 +274,53 @@ class PoseAwarePPEDetector:
                 enhanced_detections, sector, required_ppe
             )
             
-            # 🔍 QUALITY CHECK - If compliance is 0% and we have people, might be detection issue
+            # 🔍 QUALITY CHECK - If compliance is 0% and we have people, might be detection/association issue
             if compliance_result['people_detected'] > 0 and compliance_result['compliance_rate'] == 0:
                 logger.warning(f"⚠️ 0% compliance detected for {compliance_result['people_detected']} people - checking quality")
-                # Log for debugging
+                # Log high-level stats
                 logger.debug(f"PPE detections available: {len(ppe_detections)}")
                 logger.debug(f"Persons with pose: {len(persons_with_pose)}")
+
+                # 🧪 Detailed IoU debug for helmet vs head/person bboxes.
+                # Amaç: SH17 'helmet' kutularını gerçekten head bölgesiyle neden eşleştiremediğimizi görmek.
+                try:
+                    helmet_cfg = PPE_CONFIG.get('helmet', {})
+                    helmet_classes = [str(c).lower() for c in helmet_cfg.get('model_classes', [])]
+
+                    helmet_items = []
+                    for det in ppe_detections:
+                        cname = str(det.get('class_name', '')).lower()
+                        if any(cls in cname for cls in helmet_classes):
+                            helmet_items.append(det)
+
+                    if helmet_items:
+                        logger.debug(
+                            f"🧪 Helmet IoU debug: {len(helmet_items)} helmet candidates, "
+                            f"{len(persons_with_pose)} persons"
+                        )
+                        for idx, person in enumerate(persons_with_pose):
+                            regions = person.get('anatomical_regions', {}) or {}
+                            head_region = regions.get('head') or regions.get('full_body') or person.get('bbox')
+                            person_bbox = person.get('bbox')
+
+                            logger.debug(
+                                f"Person {idx}: head_region={head_region}, person_bbox={person_bbox}"
+                            )
+
+                            for h in helmet_items:
+                                hb = h.get('bbox', [])
+                                if not head_region or not person_bbox or len(hb) != 4:
+                                    continue
+
+                                iou_head = self._calculate_iou(hb, head_region)
+                                iou_person = self._calculate_iou(hb, person_bbox)
+                                logger.debug(
+                                    f"  helmet_bbox={hb}, "
+                                    f"IoU_head={iou_head:.3f}, IoU_person={iou_person:.3f}"
+                                )
+                except Exception as debug_err:
+                    # Debug amaçlı; ana akışı asla bozmasın.
+                    logger.debug(f"Helmet IoU debug failed: {debug_err}")
             
             elapsed = time.time() - start_time
             logger.info(f"⚡ Pose-aware detection: {len(persons_with_pose)} persons, "
@@ -313,6 +422,26 @@ class PoseAwarePPEDetector:
                 except Exception as attr_error:
                     logger.warning(f"⚠️ Error accessing pose result attributes: {attr_error}")
                     continue
+
+                # Optional ByteTrack-based tracking to obtain stable person IDs
+                tracker_ids = None
+                if self.byte_tracker is not None and sv is not None:
+                    try:
+                        detections = sv.Detections.from_ultralytics(result)
+                        detections = self.byte_tracker.update_with_detections(detections)
+                        tracker_ids = detections.tracker_id
+
+                        # Sanity check: tracker_ids length should match number of boxes
+                        if tracker_ids is not None and len(tracker_ids) != len(boxes):
+                            logger.debug(
+                                "ByteTrack tracker_ids length mismatch with pose boxes; "
+                                "ignoring tracker_ids for this frame."
+                            )
+                            tracker_ids = None
+                    except Exception as track_error:
+                        logger.warning(f"ByteTrack update failed, disabling tracker: {track_error}")
+                        self.byte_tracker = None
+                        tracker_ids = None
                 
                 # Ensure all arrays have same length
                 min_len = min(len(boxes), len(keypoints), len(confidences))
@@ -350,9 +479,19 @@ class PoseAwarePPEDetector:
                                             'confidence': float(conf)
                                         })
                         
-                        # 🎯 SMOOTH KEYPOINTS - Reduce jitter across frames
-                        person_id = i  # Use index as person ID for this frame
-                        keypoint_data = self._smooth_keypoints(keypoint_data, person_id)
+                        # Determine stable track ID if available from ByteTrack
+                        track_id = None
+                        if tracker_ids is not None and i < len(tracker_ids):
+                            raw_tid = tracker_ids[i]
+                            if raw_tid is not None:
+                                try:
+                                    track_id = int(raw_tid)
+                                except (TypeError, ValueError):
+                                    track_id = None
+
+                        # Use track_id for keypoint smoothing when available, otherwise fallback to index
+                        smoothing_id = track_id if track_id is not None else i
+                        keypoint_data = self._smooth_keypoints(keypoint_data, smoothing_id)
                         
                         # Calculate anatomical regions from keypoints
                         anatomical_regions = self._calculate_anatomical_regions_from_pose(
@@ -370,13 +509,17 @@ class PoseAwarePPEDetector:
                             except (IndexError, TypeError):
                                 pass
                         
-                        persons.append({
+                        person_dict = {
                             'bbox': [float(x1), float(y1), float(x2), float(y2)],
                             'keypoints': keypoint_data,
                             'anatomical_regions': anatomical_regions,
                             'class_name': 'person',
                             'confidence': box_confidence
-                        })
+                        }
+                        if track_id is not None:
+                            person_dict['track_id'] = track_id
+
+                        persons.append(person_dict)
                     except Exception as person_error:
                         logger.warning(f"⚠️ Error processing person {i}: {person_error}")
                         continue
@@ -675,10 +818,12 @@ class PoseAwarePPEDetector:
         """Find best PPE match for anatomical region using IoU with type-specific thresholds."""
         best_match = None
         best_iou = 0.0
+        best_person_iou = 0.0
+        best_center_y: Optional[float] = None
         
         # Type-specific thresholds (shoes need lower threshold due to occlusion)
         iou_threshold = {
-            'helmet': 0.05,
+            'helmet': 0.03,        # slightly more tolerant for helmets
             'safety_vest': 0.05,
             'safety_shoes': 0.02,  # Lower for shoes - often partially visible
             'gloves': 0.05,
@@ -689,7 +834,7 @@ class PoseAwarePPEDetector:
         }.get(ppe_type, 0.05)
         
         person_iou_threshold = {
-            'helmet': 0.1,
+            'helmet': 0.08,        # allow slightly weaker overlap with person
             'safety_vest': 0.1,
             'safety_shoes': 0.05,  # Lower for shoes
             'gloves': 0.1,
@@ -711,9 +856,39 @@ class PoseAwarePPEDetector:
             
             if iou > best_iou and person_iou > person_iou_threshold:  # Must overlap with person
                 best_iou = iou
+                best_person_iou = person_iou
                 best_match = ppe
+                try:
+                    _, py1, _, py2 = person_bbox
+                    _, y1, _, y2 = ppe_bbox
+                    best_center_y = (float(y1) + float(y2)) / 2.0
+                except Exception:
+                    best_center_y = None
         
-        return best_match if best_iou > iou_threshold else None
+        # Standart kural: bölge IoU eşiğinin üzerinde ise kabul et
+        if best_match is not None and best_iou > iou_threshold:
+            return best_match
+        
+        # Ek güvenli fallback: Özellikle kask için, baş bölgesine IoU düşük olsa bile
+        # kask kutusu kişinin üst kısmında ve kişi ile makul IoU'ya sahipse kabul et.
+        if ppe_type == 'helmet' and best_match is not None and best_person_iou > 0:
+            try:
+                px1, py1, px2, py2 = person_bbox
+                person_height = max(float(py2) - float(py1), 1.0)
+                top_fraction = py1 + person_height * 0.45  # üst ~%45'lik dilim "baş" kabul
+                
+                if best_center_y is not None and best_person_iou >= 0.20 and best_center_y <= top_fraction:
+                    logger.debug(
+                        f"✅ Helmet fallback match accepted: best_iou={best_iou:.3f}, "
+                        f"person_iou={best_person_iou:.3f}, center_y={best_center_y:.1f}, "
+                        f"person_top_limit={top_fraction:.1f}"
+                    )
+                    return best_match
+            except Exception:
+                # Fallback teşhis amaçlı; hata durumunda sadece normal kurala geri döneriz.
+                pass
+        
+        return None
     
     def _calculate_iou(self, box1: List[float], box2: List[float]) -> float:
         """Calculate Intersection over Union"""
@@ -823,8 +998,7 @@ class PoseAwarePPEDetector:
                             }
                         )
             
-            # Check compliance
-            # Eğer required_ppe None değilse, konfig'e göre; None ise sadece default_critical PPE'ler.
+            # Instantaneous compliance for this frame/person
             if required_ppe is not None:
                 if not supported_required:
                     # Konfig sadece desteklenmeyen PPE'ler içeriyorsa, pose-aware açısından herkes uyumlu sayılır.
@@ -840,7 +1014,29 @@ class PoseAwarePPEDetector:
                 critical_types = [t for t, cfg in PPE_CONFIG.items() if cfg.get('default_critical', False)]
                 is_compliant = all(compliance.get(t, False) for t in critical_types)
 
-            if is_compliant:
+            # Temporal voting using track_id when available
+            temporal_compliant = is_compliant
+            track_id = person.get('track_id') if isinstance(person, dict) else None
+
+            if track_id is not None:
+                try:
+                    tid = int(track_id)
+                except (TypeError, ValueError):
+                    tid = None
+
+                if tid is not None:
+                    history = self.compliance_history.get(tid)
+                    if history is None:
+                        history = deque(maxlen=self.temporal_window_size)
+                        self.compliance_history[tid] = history
+
+                    history.append(bool(is_compliant))
+
+                    if len(history) >= self.temporal_required_positive:
+                        positive_count = sum(1 for v in history if v)
+                        temporal_compliant = positive_count >= self.temporal_required_positive
+
+            if temporal_compliant:
                 compliant_people += 1
         
         compliance_rate = int((compliant_people / max(total_people, 1)) * 100) if total_people > 0 else 100
