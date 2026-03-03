@@ -55,11 +55,10 @@ load_dotenv()
 
 # Resolve project root (for templates/static after src/ restructure)
 try:
-    # Bu dosya: core/api/smartsafe_saas_api.py
-    # parents[0]: core/api
-    # parents[1]: core
-    # parents[2]: smart-safe (Root)
-    BASE_DIR = Path(__file__).resolve().parents[2]
+    # Bu dosya: core/app.py
+    # parents[0]: core
+    # parents[1]: smart-safe (Root)
+    BASE_DIR = Path(__file__).resolve().parents[1]
     print(f"📍 Project Base Directory: {BASE_DIR}")
 except Exception as e:
     BASE_DIR = Path.cwd().parent if Path.cwd().name == 'backend' else Path.cwd()
@@ -91,12 +90,11 @@ class SmartSafeSaaSAPI:
     
     def __init__(self):
         try:
-            static_dir = str(BASE_DIR / 'frontend' / 'output')
-            template_dir = str(BASE_DIR / 'frontend' / 'templates')
+            static_dir = str(BASE_DIR / 'core' / 'static')
+            template_dir = str(BASE_DIR / 'core' / 'templates')
             
-            # 🎯 CRITICAL: Biz artık generator kullanmıyoruz, ama frontend/output içindeki 
-            # statik dosyaları (images, js) kullanmaya devam edelim.
-            # Template olarak ise doğrudan ham templates klasörünü kullanacağız.
+            # 🎯 CRITICAL: Dosya sistemi güncellendi. 
+            # Statik dosyalar (js, images) ve template'ler artık 'core' klasörü altında.
             print(f"📁 Static Directory: {static_dir}")
             print(f"📁 Template Directory: {template_dir}")
             
@@ -979,7 +977,7 @@ class SmartSafeSaaSAPI:
 
     def setup_routes(self):
         """API rotalarını ayarla - Blueprint modüllerinden yükle"""
-        from api.blueprints import register_all_blueprints
+        from blueprints import register_all_blueprints
         register_all_blueprints(self)
         logger.info("✅ All API blueprints registered successfully")
 
