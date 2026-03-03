@@ -28,11 +28,6 @@ import time
 logger = logging.getLogger(__name__)
 
 try:
-    import torch
-except ImportError:
-    torch = None
-
-try:
     import supervision as sv
 except ImportError:
     sv = None
@@ -142,11 +137,6 @@ class PoseAwarePPEDetector:
         self.temporal_window_size: int = 15
         self.temporal_required_positive: int = 10
         
-        # SH17 PPE detection cadence (every Nth frame). Default: every frame.
-        self.sh17_every_n: int = 1
-        self._frame_counter: int = 0
-        self._last_ppe_detections: List[Dict] = []
-        
         # Load YOLOv8-Pose model
         self._load_pose_model(pose_model_path)
         
@@ -165,25 +155,11 @@ class PoseAwarePPEDetector:
                 self.pose_model = YOLO('yolov8n-pose.pt')
                 logger.info("✅ Loaded YOLOv8n-Pose (auto-downloaded)")
             
-            # Prefer GPU if available, but fall back safely to CPU if any CUDA/NMS issue occurs.
-            target_device = 'cpu'
-            if torch is not None and torch.cuda.is_available():
-                try:
-                    self.pose_model.to('cuda')
-                    # Optional lightweight sanity check: run a tiny dummy inference
-                    dummy = np.zeros((64, 64, 3), dtype=np.uint8)
-                    _ = self.pose_model(dummy, conf=0.5, verbose=False, device='cuda')
-                    target_device = 'cuda'
-                    logger.info("🔧 Pose model set to CUDA inference (RTX GPU detected)")
-                except Exception as cuda_error:
-                    logger.warning(f"⚠️ Pose model CUDA path failed, falling back to CPU: {cuda_error}")
-                    self.pose_model.to('cpu')
-                    target_device = 'cpu'
-            else:
-                self.pose_model.to('cpu')
-                target_device = 'cpu'
-
-            logger.info(f"🔧 Pose model device: {target_device}")
+            # 🔧 FIX: Force CPU inference to avoid CUDA torchvision::nms incompatibility
+            # This is a known issue where torchvision.ops.nms doesn't support CUDA backend
+            # CPU inference works perfectly fine and is still fast with yolov8n-pose
+            self.pose_model.to('cpu')
+            logger.info("🔧 Pose model set to CPU inference (CUDA NMS compatibility fix)")
                 
         except ImportError:
             logger.warning("⚠️ Ultralytics not installed. Install with: pip install ultralytics")
@@ -221,38 +197,17 @@ class PoseAwarePPEDetector:
             else:
                 frame_for_inference = frame
             
-            # 1️⃣ Detect poses (persons with keypoints) - use current model device (CPU or CUDA)
-            pose_results = self.pose_model(
-                frame_for_inference,
-                conf=self.pose_confidence_threshold,
-                verbose=False
-            )
+            # 1️⃣ Detect poses (persons with keypoints) - CPU inference
+            pose_results = self.pose_model(frame_for_inference, conf=self.pose_confidence_threshold, verbose=False, device='cpu')
             
             # 2️⃣ Detect PPE items (using existing detector)
             ppe_detections = []
             if self.ppe_detector:
-                # Lightweight cadence control: run SH17 every Nth frame, reuse last detections otherwise.
-                self._frame_counter += 1
-                run_new_sh17 = (
-                    self.sh17_every_n <= 1 or
-                    self._frame_counter % self.sh17_every_n == 0 or
-                    not self._last_ppe_detections
-                )
-
-                if run_new_sh17:
-                    ppe_result = self.ppe_detector.detect_ppe(frame, sector, confidence)
-                    if isinstance(ppe_result, list):
-                        ppe_detections = ppe_result
-                    elif isinstance(ppe_result, dict):
-                        ppe_detections = ppe_result.get('detections', [])
-                    else:
-                        ppe_detections = []
-
-                    # Cache for intermediate frames
-                    self._last_ppe_detections = ppe_detections
-                else:
-                    # Reuse cached SH17 detections for this frame; pose/keypoints are still fresh.
-                    ppe_detections = self._last_ppe_detections
+                ppe_result = self.ppe_detector.detect_ppe(frame, sector, confidence)
+                if isinstance(ppe_result, list):
+                    ppe_detections = ppe_result
+                elif isinstance(ppe_result, dict):
+                    ppe_detections = ppe_result.get('detections', [])
             
             # 3️⃣ Extract pose data
             persons_with_pose = self._extract_pose_data(pose_results, frame.shape)

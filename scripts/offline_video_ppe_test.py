@@ -144,9 +144,15 @@ def main() -> None:
         if args.skip > 1 and frame_idx % args.skip != 0:
             continue
 
+        # Downscale frame for faster inference; bbox'ları sonra orijinale map edeceğiz.
+        orig_h, orig_w = frame.shape[:2]
+        scale = 0.5
+        small_w, small_h = int(orig_w * scale), int(orig_h * scale)
+        frame_small = cv2.resize(frame, (small_w, small_h))
+
         # Optional: inspect raw SH17 detections for the first few frames
         if args.debug_raw and frame_idx <= args.debug_frames:
-            raw = api.sh17_manager.detect_ppe(frame, sector=sector, confidence=args.raw_conf)
+            raw = api.sh17_manager.detect_ppe(frame_small, sector=sector, confidence=args.raw_conf)
             ppe_classes = [
                 "helmet",
                 "safety_vest",
@@ -160,7 +166,13 @@ def main() -> None:
                 {
                     "cls": d.get("class_name"),
                     "conf": round(float(d.get("confidence", 0.0)), 3),
-                    "bbox": [round(float(v), 1) for v in d.get("bbox", [])],
+                    # Map bbox back to original resolution for easier interpretation
+                    "bbox": [
+                        round(float(d.get("bbox", [])[0]) / scale, 1) if len(d.get("bbox", [])) == 4 else None,
+                        round(float(d.get("bbox", [])[1]) / scale, 1) if len(d.get("bbox", [])) == 4 else None,
+                        round(float(d.get("bbox", [])[2]) / scale, 1) if len(d.get("bbox", [])) == 4 else None,
+                        round(float(d.get("bbox", [])[3]) / scale, 1) if len(d.get("bbox", [])) == 4 else None,
+                    ],
                     "model_type": d.get("model_type"),
                 }
                 for d in raw
@@ -171,8 +183,15 @@ def main() -> None:
                 f"ppe={len(interesting)} details={interesting}"
             )
 
+        # Hafif mod: SH17 her 3 frame'de bir çalışsın, aradaki frame'lerde cache kullansın.
+        try:
+            pose_detector.sh17_every_n = 3
+        except Exception:
+            # Eski versiyonlarla uyum için sessizce geç
+            pass
+
         result = pose_detector.detect_with_pose(
-            frame,
+            frame_small,
             sector=sector,
             confidence=args.confidence,
             required_ppe=required_ppe,
@@ -214,7 +233,12 @@ def main() -> None:
             bbox = det.get("bbox")
             if not bbox or len(bbox) != 4:
                 continue
+            # Bbox'lar küçük çözünürlükte; orijinal frame'e çizmek için tekrar ölçekle
             x1, y1, x2, y2 = bbox
+            x1 = int(x1 / scale)
+            y1 = int(y1 / scale)
+            x2 = int(x2 / scale)
+            y2 = int(y2 / scale)
             class_name = str(det.get("class_name", ""))
             is_missing = bool(det.get("missing", False))
             color = get_class_color(class_name, is_missing=is_missing)

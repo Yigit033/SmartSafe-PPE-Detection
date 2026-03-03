@@ -48,7 +48,11 @@ class SH17ModelManager:
             
         logger.info("🔧 Initializing SH17ModelManager for the first time...")
         self.models_dir = models_dir
-        self.device = 'cpu'
+        # Prefer GPU when available for faster inference; fall back to CPU otherwise.
+        if torch is not None and torch.cuda.is_available():
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
         self.models = {}
         self.fallback_model = None
         
