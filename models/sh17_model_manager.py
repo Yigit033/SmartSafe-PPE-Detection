@@ -47,7 +47,19 @@ class SH17ModelManager:
             return
             
         logger.info("🔧 Initializing SH17ModelManager for the first time...")
-        self.models_dir = models_dir
+        # Normalize models_dir to an absolute path so it does not depend on CWD
+        models_dir_path = Path(models_dir)
+        if not models_dir_path.is_absolute():
+            # Anchor relative paths to the directory containing this file (the project 'models' folder)
+            file_dir = Path(__file__).resolve().parent  # .../models
+            if models_dir_path == Path("models"):
+                # Default case: use this file's parent directory
+                resolved = file_dir
+            else:
+                resolved = file_dir / models_dir_path
+            self.models_dir = str(resolved)
+        else:
+            self.models_dir = str(models_dir_path)
         # Prefer GPU when available for faster inference; fall back to CPU otherwise.
         if torch is not None and torch.cuda.is_available():
             self.device = 'cuda'
