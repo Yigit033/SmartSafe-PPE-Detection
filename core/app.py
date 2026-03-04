@@ -3579,45 +3579,49 @@ smartsafe_requests_total 100
             
             # Authentication ile dene - Daha güvenilir yöntem
             if not cap.isOpened() and '@' in primary_url:
-                logger.info(f"🔐 Authentication ile deneniyor...")
+                logger.info(f"🔐 Güvenli URL ayrıştırma ve authentication deneniyor...")
                 try:
-                    # URL'den kullanıcı adı ve şifreyi çıkar
-                    # rsplit('@', 1) kullanarak sondaki @'den ayırıyoruz (kullanıcı adında @ olsa bile çalışır)
-                    if '@' in primary_url:
-                        parts = primary_url.rsplit('@', 1)
-                        if len(parts) == 2:
-                            base_url = parts[1]
-                            auth_part = parts[0]
-                            if '://' in auth_part:
-                                auth_part = auth_part.split('://', 1)[1]
+                    # Protokolü ayır
+                    protocol = "http"
+                    url_to_parse = primary_url
+                    if "://" in primary_url:
+                        protocol, url_to_parse = primary_url.split("://", 1)
+                    
+                    # Kullanıcı adı ve şifreyi ayrıştır
+                    if "@" in url_to_parse:
+                        auth_part, base_url = url_to_parse.rsplit("@", 1)
+                        
+                        if ":" in auth_part:
+                            username, password = auth_part.split(":", 1)
+                        else:
+                            username, password = auth_part, ""
+                        
+                        # Karakterleri decode et (URL'de %40 gibi yazılmış olabilir)
+                        username = unquote(username)
+                        password = unquote(password)
+                        
+                        # OpenCV authentication set etmeyi dene (base_url ile)
+                        full_base_url = f"{protocol}://{base_url}"
+                        cap = cv2.VideoCapture(full_base_url)
+                        
+                        if cap.isOpened():
+                            cap.set(cv2.CAP_PROP_USERNAME, username)
+                            cap.set(cv2.CAP_PROP_PASSWORD, password)
+                            logger.info(f"✅ OpenCV-native authentication başarılı: {username}")
+                        else:
+                            # Klasik yöntem: Safe URL oluştur (özel karakterleri koru)
+                            safe_user = quote(username)
+                            safe_pass = quote(password, safe='') # safe='' şifredeki / : falan her şeyi quote'lar
+                            safe_url = f"{protocol}://{safe_user}:{safe_pass}@{base_url}"
                             
-                            # Kullanıcı adı ve şifreyi ayır (ilk :'dan ayır)
-                            if ':' in auth_part:
-                                username, password = auth_part.split(':', 1)
-                                # Karakterleri decode et (URL'de %40 gibi yazılmış olabilir)
-                                username = unquote(username)
-                                password = unquote(password)
-                            else:
-                                username = unquote(auth_part)
-                                password = ""
-                            
-                            # OpenCV authentication - Daha güvenli
-                            cap = cv2.VideoCapture(base_url)
+                            cap.release()
+                            cap = cv2.VideoCapture(safe_url)
                             if cap.isOpened():
-                                # Authentication bilgilerini set et
-                                cap.set(cv2.CAP_PROP_USERNAME, username)
-                                cap.set(cv2.CAP_PROP_PASSWORD, password)
-                                logger.info(f"✅ Authentication başarılı: {username}")
+                                logger.info(f"✅ Güvenli URL ile bağlantı başarılı: {username} (protocol: {protocol})")
                             else:
-                                # Alternatif authentication yöntemi - Özel karakterleri quote ile güvenli hale getiriyoruz
-                                safe_user = quote(username)
-                                safe_pass = quote(password)
-                                auth_url = f"http://{safe_user}:{safe_pass}@{base_url}"
-                                cap = cv2.VideoCapture(auth_url)
-                                if cap.isOpened():
-                                    logger.info(f"✅ Alternatif authentication başarılı: {username}")
+                                logger.warning(f"❌ Güvenli URL bağlantısı başarısız: {protocol}://{username}:***@{base_url}")
                 except Exception as auth_error:
-                    logger.warning(f"⚠️ Authentication hatası: {auth_error}")
+                    logger.warning(f"⚠️ Authentication ayrıştırma hatası: {auth_error}")
             
             if not cap.isOpened():
                 logger.warning(f"⚠️ Ana URL başarısız, alternatifler deneniyor...")
