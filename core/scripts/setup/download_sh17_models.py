@@ -15,8 +15,14 @@ logger = logging.getLogger(__name__)
 
 class SH17ModelDownloader:
     def __init__(self):
-        self.models_dir = Path('models')
+        # Resolve project root and models directory
+        self.project_root = Path(__file__).resolve().parents[3]
+        self.models_dir = self.project_root / 'models'
         self.models_dir.mkdir(exist_ok=True)
+        
+        # Log resolution
+        print(f"📍 Downloader: Project Root={self.project_root}")
+        print(f"📁 Downloader: Models Dir={self.models_dir}")
         
         # SH17 model URLs
         # These must be populated after training. Run `python training/sh17_training.py`
@@ -34,7 +40,7 @@ class SH17ModelDownloader:
             'aviation': '',
         }
         
-        # Fallback model (yolov8n.pt zaten mevcut)
+        # Fallback model (yolov8n.pt zaten mevcut olabilir)
         self.fallback_model = 'yolov8n.pt'
         
     def download_model(self, sector, url):
@@ -80,12 +86,14 @@ class SH17ModelDownloader:
                 model_path.mkdir(parents=True, exist_ok=True)
                 
                 # Dummy best.pt dosyası oluştur (yolov8n.pt'den kopyala)
-                if os.path.exists(self.fallback_model):
+                # Kök dizinde veya downloader klasöründe arayabilir
+                fallback_src = self.project_root / self.fallback_model
+                if fallback_src.exists():
                     import shutil
-                    shutil.copy2(self.fallback_model, model_path / 'best.pt')
+                    shutil.copy2(fallback_src, model_path / 'best.pt')
                     logger.info(f"✅ {sector} dummy modeli oluşturuldu")
                 else:
-                    logger.warning(f"⚠️ {sector} için fallback model bulunamadı")
+                    logger.warning(f"⚠️ {sector} için fallback model bulunamadı: {fallback_src}")
                     
             except Exception as e:
                 logger.error(f"❌ {sector} dummy modeli oluşturulamadı: {e}")
@@ -129,9 +137,13 @@ class SH17ModelDownloader:
         """Modellerin doğru yüklendiğini kontrol et"""
         logger.info("🔍 Modeller kontrol ediliyor...")
         
+        import sys
+        if str(self.project_root) not in sys.path:
+            sys.path.append(str(self.project_root))
+            
         from models.sh17_model_manager import SH17ModelManager
         
-        manager = SH17ModelManager()
+        manager = SH17ModelManager(models_dir=str(self.models_dir))
         manager.load_models()
         
         status = manager.get_system_status()

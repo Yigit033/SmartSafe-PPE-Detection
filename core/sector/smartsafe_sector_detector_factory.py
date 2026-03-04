@@ -15,7 +15,7 @@ from integrations.construction.construction_ppe_system import ConstructionPPEDet
 
 # Hibrit sistem import
 try:
-    from sector.utils.hybrid_ppe_system import HybridPPESystem
+    from detection.utils.hybrid_ppe_system import HybridPPESystem
     HYBRID_SYSTEM_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("✅ Hibrit PPE sistemi yüklendi")

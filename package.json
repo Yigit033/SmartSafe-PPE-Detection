@@ -4,11 +4,11 @@
   "description": "SmartSafe AI - PPE Detection System",
   "main": "core/app.py",
   "scripts": {
-    "core": "cd core && venv\\Scripts\\python app.py",
+    "core": "cd core && ..\\venv\\Scripts\\python app.py",
     "frontend": "python -m http.server 8000 --directory core/static",
-    "test": "cd core && venv\\Scripts\\python test_sector_integration.py",
-    "test:offline-video": "cd core && venv\\Scripts\\python scripts/offline_video_ppe_test.py",
-    "install": "cd core && if not exist venv (python -m venv venv) && venv\\Scripts\\pip install -r ../requirements.txt"
+    "test": "cd core && ..\\venv\\Scripts\\python test_sector_integration.py",
+    "test:offline-video": "cd core && ..\\venv\\Scripts\\python scripts/offline_video_ppe_test.py",
+    "install": "cd core && if not exist venv (python -m venv venv) && ..\\venv\\Scripts\\pip install -r ../requirements.txt"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

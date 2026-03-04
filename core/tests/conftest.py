@@ -5,7 +5,6 @@ import pytest
 
 # Ensure project root is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 os.environ.setdefault('ENV', 'local')
 os.environ.setdefault('FLASK_ENV', 'testing')
@@ -16,7 +15,7 @@ os.environ.setdefault('FOUNDER_PASSWORD', 'test-admin-password')
 @pytest.fixture(scope='session')
 def app():
     """Create a Flask app instance for the full test session."""
-    from src.smartsafe.api.smartsafe_saas_api import create_app
+    from app import create_app
     flask_app = create_app()
     flask_app.config['TESTING'] = True
     flask_app.config['WTF_CSRF_ENABLED'] = False

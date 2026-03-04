@@ -1,7 +1,7 @@
 """Tests for ViolationTracker thread safety and core logic."""
 import threading
 import time
-from src.smartsafe.detection.violation_tracker import ViolationTracker
+from detection.violation_tracker import ViolationTracker
 
 
 def test_tracker_init():

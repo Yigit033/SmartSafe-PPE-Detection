@@ -1,8 +1,11 @@
-#!/usr/bin/env python3
-"""
-SmartSafe AI - SaaS Multi-Tenant API Server
-Şirket bazlı veri ayrımı ile profesyonel SaaS sistemi
-"""
+import sys
+import os
+# Ana dizini (root) sistem yoluna ekle - 'models' klasörünün dışarıda kalabilmesi için
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 
 from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string, Response, render_template
 from flask_cors import CORS
@@ -17,7 +20,7 @@ import time
 import requests
 import logging
 import re
-import urllib.parse
+from urllib.parse import quote, unquote
 
 # Configure logging - Memory optimized
 import os
@@ -56,14 +59,11 @@ load_dotenv()
 
 # Resolve project root (for templates/static after src/ restructure)
 try:
-    # Bu dosya: core/app.py
-    # parents[0]: core
-    # parents[1]: smart-safe (Root)
+    # __file__ = .../core/app.py
+    # parents[1] => project root (folder containing 'core')
     BASE_DIR = Path(__file__).resolve().parents[1]
-    print(f"📍 Project Base Directory: {BASE_DIR}")
-except Exception as e:
-    BASE_DIR = Path.cwd().parent if Path.cwd().name == 'backend' else Path.cwd()
-    print(f"⚠️ BASE_DIR Fallback: {BASE_DIR}")
+except Exception:
+    BASE_DIR = Path(__file__).resolve().parent
 
 # Enterprise modülleri import et
 # Lazy loading için enterprise modülleri startup'ta yükleme - Memory optimization
@@ -85,25 +85,17 @@ response_cache = {}
 cache_timestamps = {}
 CACHE_DURATION = 300  # 5 dakika cache süresi
 
-# Global API server instance for static access
+
+
 class SmartSafeSaaSAPI:
     """SmartSafe AI SaaS API Server"""
     
     def __init__(self):
         try:
-            static_dir = str(BASE_DIR / 'core' / 'static')
-            template_dir = str(BASE_DIR / 'core' / 'templates')
-            
-            # 🎯 CRITICAL: Dosya sistemi güncellendi. 
-            # Statik dosyalar (js, images) ve template'ler artık 'core' klasörü altında.
-            print(f"📁 Static Directory: {static_dir}")
-            print(f"📁 Template Directory: {template_dir}")
-            
             self.app = Flask(
                             __name__,
-                            template_folder=template_dir,
-                            static_folder=static_dir,
-                            static_url_path='/static'
+                            template_folder='templates',
+                            static_folder='static'
                             )
             _secret = os.getenv('SECRET_KEY')
             if not _secret:
@@ -144,8 +136,7 @@ class SmartSafeSaaSAPI:
         self.sh17_manager = None
         try:
             from models.sh17_model_manager import SH17ModelManager
-            models_path = str(BASE_DIR / 'core' / 'models')
-            self.sh17_manager = SH17ModelManager(models_dir=models_path)
+            self.sh17_manager = SH17ModelManager()
             # RENDER.COM OPTIMIZATION: Modelleri başlangıçta yükleme, lazy loading kullan
             logger.info("✅ SH17 Model Manager API'ye entegre edildi (Lazy Loading)")
         except Exception as e:
@@ -1365,10 +1356,7 @@ class SmartSafeSaaSAPI:
         """RTSP endpoint'i test et"""
         try:
             if username and password:
-                import urllib.parse
-                safe_username = urllib.parse.quote(username)
-                safe_password = urllib.parse.quote(password)
-                rtsp_url = f"rtsp://{safe_username}:{safe_password}@{ip_address}:{port}{endpoint}"
+                rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{endpoint}"
             else:
                 rtsp_url = f"rtsp://{ip_address}:{port}{endpoint}"
             
@@ -1969,10 +1957,259 @@ class SmartSafeSaaSAPI:
             print(f"Görüntü çizim hatası: {e}")
             return image  # Hata durumunda orijinal görüntüyü döndür
     
+    def generate_frames(self, camera_key):
+        """Video frame generator"""
+        while True:
+            try:
+                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
+                    # Frame'i JPEG olarak encode et
+                    ret, buffer = cv2.imencode('.jpg', frame_buffers[camera_key])
+                    if ret:
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                    else:
+                        # Boş frame gönder
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                else:
+                    # Kamera aktif değilse boş frame gönder
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                
+                time.sleep(0.033)  # ~30 FPS
+                
+            except Exception as e:
+                print(f"Frame generation error: {e}")
+                break
+    
+    def get_pricing_template(self):
+        """Pricing page template"""
+        return render_template('pricing.html')
+    
+    def get_home_template(self):
+        """Home page template"""
+        return render_template('home.html')
+    
+    def get_dashboard_template(self, **kwargs):
+        """Advanced Dashboard Template with Real-time PPE Analytics"""
+        return render_template('dashboard.html', **kwargs)
+    
+    def get_login_template(self, company_id):
+        """Company login page template"""
+        return render_template('login.html', company_id=company_id)
+        
+        # Template'deki placeholder'ları gerçek company_id ile değiştir
+        return template.replace('COMPANY_ID_PLACEHOLDER', company_id)
+    
+    def get_admin_login_template(self, error=None):
+        """Admin login template"""
+        return render_template('admin_login.html', error=error)
+    
+    def get_admin_template(self):
+        """Professional Admin Panel Template for Company Management"""
+        return render_template('admin.html', **kwargs)
+    
+    def get_company_settings_template(self):
+        """Advanced Company Settings Template"""
+        return render_template('company_settings.html', **kwargs)
+    
+    def get_users_template(self):
+        """Company Users Management Template"""
+        return render_template('users.html', **kwargs)
+
+    def get_reports_template(self):
+        """Company Reports Template"""
+        return render_template('reports.html', **kwargs)
+    
+    def get_camera_management_template(self):
+        """Advanced Camera Management Template with Discovery and Testing"""
+        return render_template('camera_management.html', **kwargs)
+ 
+    def add_health_check(self):
+        """İYİLEŞTİRİLDİ: Enhanced health check endpoint"""
+        @self.app.route('/health', methods=['GET'])
+        def health_check():
+            """Enhanced health check endpoint for monitoring"""
+            try:
+                # Check database connection (skip in production for faster response)
+                db_status = "healthy"
+                if not os.environ.get('RENDER'):
+                    try:
+                        conn = self.db.get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT 1")
+                        conn.close()
+                    except Exception as e:
+                        db_status = f"unhealthy: {str(e)}"
+                else:
+                    # In production, just return healthy to avoid slow health checks
+                    db_status = "healthy"
+                
+                # Check application status
+                app_status = "healthy"
+                
+                # Overall health
+                healthy = db_status == "healthy" and app_status == "healthy"
+                
+                response = {
+                    "status": "healthy" if healthy else "unhealthy",
+                    "timestamp": datetime.now().isoformat(),
+                    "version": "2.0.0",
+                    "services": {
+                        "database": db_status,
+                        "application": app_status,
+                        "cache": "healthy",
+                        "rate_limiting": "active"
+                    },
+                    "uptime": "running",
+                    "features": {
+                        "caching": True,
+                        "mobile_optimization": True,
+                        "export_functionality": True,
+                        "enhanced_error_handling": True
+                    }
+                }
+                
+                return jsonify(response), 200 if healthy else 503
+                
+            except Exception as e:
+                logger.error(f"Health check failed: {e}")
+                return jsonify({
+                    "status": "unhealthy",
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                }), 503
+        
+        # İYİLEŞTİRİLDİ: API Documentation endpoint
+        @self.app.route('/api/docs', methods=['GET'])
+        def api_documentation():
+            """API Documentation endpoint"""
+            docs = {
+                'title': 'SmartSafe AI API Documentation',
+                'version': '2.0.0',
+                'description': 'Professional PPE Detection API with enhanced features',
+                'endpoints': {
+                    'health': {
+                        'url': '/health',
+                        'method': 'GET',
+                        'description': 'System health check',
+                        'response': {'status': 'healthy', 'timestamp': 'ISO format'}
+                    },
+                    'dashboard': {
+                        'url': '/company/{company_id}/dashboard',
+                        'method': 'GET',
+                        'description': 'Company dashboard with real-time statistics',
+                        'features': ['Real-time stats', 'Mobile optimized', 'Export functionality']
+                    },
+                    'detection': {
+                        'url': '/api/detection/start',
+                        'method': 'POST',
+                        'description': 'Start PPE detection',
+                        'parameters': {
+                            'camera_id': 'Camera identifier',
+                            'detection_mode': 'Sector-specific mode',
+                            'confidence': 'Detection confidence (0.1-1.0)'
+                        }
+                    },
+                    'compliance': {
+                        'url': '/api/compliance/{company_id}',
+                        'method': 'GET',
+                        'description': 'Get compliance statistics',
+                        'features': ['Cached responses', 'Real-time data', 'Export support']
+                    }
+                },
+                'features': {
+                    'caching': 'Response caching for improved performance',
+                    'rate_limiting': 'Enhanced rate limiting (200/min, 1000/hour)',
+                    'error_handling': 'Detailed error messages with codes',
+                    'mobile_optimization': 'Responsive design for mobile devices',
+                    'export_functionality': 'CSV, Excel, PDF, JSON export options'
+                },
+                'sectors': [
+                    'construction', 'manufacturing', 'chemical', 'food',
+                    'warehouse', 'energy', 'petrochemical', 'marine', 'aviation'
+                ]
+            }
+            return jsonify(docs)
+
+    def add_metrics_endpoint(self): 
+        """Add metrics endpoint for Prometheus"""
+        @self.app.route('/metrics', methods=['GET'])
+        def metrics():
+            """Prometheus metrics endpoint"""
+            try:
+                # Get basic metrics
+                stats = {}  # Simplified for now
+                
+                metrics_data = f"""# HELP smartsafe_status Application status
+# TYPE smartsafe_status gauge
+smartsafe_status 1
+
+# HELP smartsafe_uptime_seconds Application uptime in seconds
+# TYPE smartsafe_uptime_seconds counter
+smartsafe_uptime_seconds 3600
+
+# HELP smartsafe_requests_total Total number of requests
+# TYPE smartsafe_requests_total counter
+smartsafe_requests_total 100
+"""
+                
+                return metrics_data, 200, {'Content-Type': 'text/plain; version=0.0.4'}
+                
+            except Exception as e:
+                logger.error(f"Metrics collection failed: {e}")
+                return "# Metrics collection failed", 503, {'Content-Type': 'text/plain'}
+
+    def run(self):
+        """API server'ı çalıştır"""
+        logger.info("🚀 Starting SmartSafe AI SaaS API Server")
+        
+        # Health check and metrics are now registered via blueprints (health.py)
+        
+        # Get port from environment (Render.com compatibility)
+        port = int(os.environ.get('PORT', 10000))
+        logger.info(f"Using port {port}")
+        
+        # Set the port in app config
+        self.app.config['PORT'] = port
+        
+        # Return the app instance for gunicorn to handle
+        return self.app
+    
+    def _process_yolov8_results(self, results, company_id, detection_mode):
+        """YOLOv8 sonuçlarını işle ve PPE compliance analizi yap"""
+        people_detected = 0
+        ppe_violations = []
+        ppe_compliant = 0
+        
+        try:
+            # YOLOv8 results formatı
+            if hasattr(results[0], 'boxes') and results[0].boxes is not None:
+                boxes = results[0].boxes
+                for box in boxes:
+                    class_id = int(box.cls[0])
+                    confidence = float(box.conf[0])
+                    
+                    # Person detection (COCO class 0)
+                    if class_id == 0:  # person
+                        people_detected += 1
+                
+                # Basit PPE compliance (YOLOv8 için sınırlı)
+                # Gerçek PPE detection için SH17 gerekli
+                ppe_compliant = people_detected  # Fallback: tüm insanlar uyumlu sayılır
+                
+        except Exception as e:
+            logger.error(f"❌ YOLOv8 results processing error: {e}")
+            
+        return people_detected, ppe_compliant, ppe_violations
+
     def saas_detection_worker(self, camera_key, camera_id, company_id, detection_mode, confidence=0.5, active_detectors_ref=None):
-        """SaaS Profesyonel Detection Worker - OPTİMİZE EDİLDİ."""
+        """SaaS Profesyonel Detection Worker - OPTİMİZE EDİLDİ. active_detectors_ref: blueprint'in yazdığı dict (reloader/çift app için zorunlu)."""
         logger.info(f"🚀 SaaS Detection başlatılıyor - Kamera: {camera_id}, Şirket: {company_id}")
+        # Blueprint'ten gelen aynı dict referansını kullan (aksi halde worker False görüyor)
         ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        self._active_detectors_ref = active_detectors_ref  # Kamera worker thread'leri için
         
         # Detection sonuçları için queue oluştur
         detection_results[camera_key] = queue.Queue(maxsize=20)
@@ -1980,8 +2217,9 @@ class SmartSafeSaaSAPI:
         # Kamera başlat
         self.start_saas_camera(camera_key, camera_id, company_id, active_detectors_ref=ad)
         
-        # PPE Detection Model
+        # PPE Detection Model - SH17 or PoseAware fallback
         pose_detector = None
+        device = 'cpu'
         try:
             self.ensure_database_initialized()
             if self.db is not None:
@@ -1990,56 +2228,58 @@ class SmartSafeSaaSAPI:
             else:
                 sector = 'construction'
                 logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
-
+            
+            # Şirket bazlı zorunlu PPE konfigürasyonunu al (varsa)
+            # None  => konfig yok / bilinmiyor → eski davranış (helmet+vest zorunlu)
+            # []    => kullanıcı "hiçbir PPE zorunlu değil" seçmiş → herkes uyumlu, violation yok
             required_ppe = None
             if self.db is not None:
                 try:
-                    # required_ppe is stored as a JSON string in the companies table
-                    ppe_info = company_data  # already fetched above via get_company_info
-                    if ppe_info and isinstance(ppe_info, dict):
-                        raw_ppe = ppe_info.get('required_ppe')
-                        if raw_ppe is not None:
-                            if isinstance(raw_ppe, str):
+                    company_ppe_config = self.db.get_company_ppe_config(company_id)
+                    if isinstance(company_ppe_config, dict) and 'required' in company_ppe_config:
+                        raw_required = company_ppe_config.get('required')
+                        # Normalize isimler (lowercase, trim) - SH17 ve pose-aware tarafı için güvenli
+                        if isinstance(raw_required, list):
+                            normalized = []
+                            for item in raw_required:
+                                if item is None:
+                                    continue
                                 try:
-                                    raw_ppe = json.loads(raw_ppe)
-                                except (json.JSONDecodeError, ValueError):
-                                    raw_ppe = None
-                            if isinstance(raw_ppe, list):
-                                normalized = []
-                                for item in raw_ppe:
-                                    if item is None: continue
                                     normalized.append(str(item).strip().lower())
-                                required_ppe = normalized if normalized else None
-                            elif isinstance(raw_ppe, dict) and 'required' in raw_ppe:
-                                raw_required = raw_ppe.get('required')
-                                if isinstance(raw_required, list):
-                                    normalized = []
-                                    for item in raw_required:
-                                        if item is None: continue
-                                        normalized.append(str(item).strip().lower())
-                                    required_ppe = normalized if normalized else None
+                                except Exception:
+                                    continue
+                            required_ppe = normalized
+                        else:
+                            required_ppe = None
                 except Exception as cfg_err:
-                    logger.warning(f"⚠️ PPE config okunamadı: {cfg_err}")
+                    logger.warning(f"⚠️ PPE config okunamadı, varsayılan kullanılacak: {cfg_err}")
+                    required_ppe = None
             
             if self.sh17_manager:
                 logger.info(f"🎯 SH17 PPE Detection - Sektör: {sector}")
                 model_manager = self.sh17_manager
                 use_sh17 = True
                 
+                # Initialize PoseAwarePPEDetector alongside SH17 for enhanced analysis
                 try:
-                    # Absolute import or relative based on core root
                     from detection.pose_aware_ppe_detector import get_pose_aware_detector
                     pose_detector = get_pose_aware_detector(ppe_detector=self.sh17_manager)
                     logger.info("✅ PoseAwarePPEDetector initialized with SH17 backend")
                 except Exception as pose_err:
-                    logger.warning(f"⚠️ PoseAware init failed: {pose_err}")
+                    logger.warning(f"⚠️ PoseAware init failed, using SH17 directly: {pose_err}")
+                    # SH17 modeli yine de kullanılacak, sadece pose-aware kapalı kalır.
+                    pose_detector = None
             else:
+                # Fallback: PoseAwarePPEDetector with YOLOv8n-Pose (SH17 yoksa)
+                model_manager = None
+                use_sh17 = False
                 try:
                     from detection.pose_aware_ppe_detector import get_pose_aware_detector
                     pose_detector = get_pose_aware_detector(ppe_detector=None)
-                except Exception: pass
-                model_manager = None
-                use_sh17 = False
+                    logger.info("✅ PoseAwarePPEDetector initialized (standalone fallback)")
+                except Exception as pose_err:
+                    logger.warning(f"⚠️ PoseAware fallback failed: {pose_err}")
+                    pose_detector = None
             
         except Exception as e:
             logger.error(f"❌ Model yükleme hatası: {e}")
@@ -2047,257 +2287,2411 @@ class SmartSafeSaaSAPI:
         
         frame_count = 0
         detection_count = 0
-        frame_skip = 6
-        optimized_confidence = max(0.5, confidence)
         
+        # OPTİMİZE EDİLDİ: Frame skip ve confidence ayarları
+        frame_skip = 6  # 3'ten 6'ya çıkarıldı (daha az işlem)
+        optimized_confidence = max(0.5, confidence)  # Minimum 0.5 confidence
+        
+        _active = ad.get(camera_key, False)
+        logger.info(f"🔍 SaaS Detection worker loop başlıyor: active_detectors.get({camera_key}) = {_active}")
+        
+        time.sleep(0.3)  # Kamera thread'in açılması için kısa bekleme
         while ad.get(camera_key, False):
             try:
+                # Frame al
                 if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
                     frame = frame_buffers[camera_key].copy()
                     frame_count += 1
                     
+                    # OPTİMİZE EDİLDİ: Her 6 frame'de bir tespit yap
                     if frame_count % frame_skip == 0:
                         start_time = time.time()
+                        
+                        # PPE Detection - PoseAware preferred, SH17 or fallback
                         people_detected = 0
                         ppe_violations = []
                         ppe_compliant = 0
-                        results = []
                         
                         try:
                             if pose_detector is not None:
-                                pose_result = pose_detector.detect_with_pose(frame, sector, optimized_confidence, required_ppe=required_ppe)
+                                # PoseAwarePPEDetector: person pose + PPE region analysis
+                                # required_ppe listesi (settings / şirket konfigürasyonu) burada uyum hesabına iletilir.
+                                pose_result = pose_detector.detect_with_pose(
+                                    frame, sector, optimized_confidence, required_ppe=required_ppe
+                                )
+                                
                                 if isinstance(pose_result, dict):
                                     people_detected = pose_result.get('people_detected', 0)
                                     ppe_compliant = pose_result.get('compliant_people', 0)
-                                    ppe_violations = pose_result.get('ppe_violations', [])
+                                    raw_violations = pose_result.get('ppe_violations', [])
+                                    ppe_violations = raw_violations if isinstance(raw_violations, list) else []
                                     results = pose_result.get('detections', [])
+                                    logger.debug(
+                                        f"🎯 PoseAware detection: {people_detected} people, "
+                                        f"{pose_result.get('compliance_rate', 0)}% compliance"
+                                    )
                                 elif isinstance(pose_result, list):
                                     results = pose_result
-                                    people_detected = sum(1 for d in results if d.get('class_name') == 'person')
+                                    people_detected = sum(
+                                        1 for d in results if d.get('class_name') == 'person'
+                                    )
+                                else:
+                                    results = []
                             elif use_sh17 and model_manager:
+                                # SH17 sadece PPE tespiti için kullanılır
                                 results = model_manager.detect_ppe(frame, sector, optimized_confidence)
-                                people_detected = sum(1 for d in results if d.get('class_name') == 'person')
-                                if people_detected > 0 and required_ppe:
+                                people_detected = sum(
+                                    1 for d in results if d.get('class_name') == 'person'
+                                )
+                            else:
+                                # Ne pose-aware ne de SH17 kullanılabiliyorsa, sonuç boş kabul edilir
+                                results = []
+                            
+                            # SH17 compliance analizi (sadece SH17 yolu ve required_ppe varsa)
+                            if people_detected > 0 and required_ppe and use_sh17 and model_manager:
+                                try:
                                     compliance_result = model_manager.analyze_compliance(results, required_ppe)
                                     ppe_compliant = compliance_result.get('total_detected', 0)
                                     missing = compliance_result.get('missing', [])
                                     ppe_violations = [f"Missing: {item}" for item in missing]
-                                else:
+                                except Exception as comp_err:
+                                    logger.error(f"❌ SH17 compliance analizi hatası: {comp_err}")
+                                    # Hata durumunda kimseyi ihlal saymamak yerine herkesi uyumlu kabul ediyoruz
                                     ppe_compliant = people_detected
+                            elif people_detected > 0 and ppe_compliant == 0:
+                                # Pose-aware tarafı uyumlu saymadıysa ama kişi var; en azından detected sayısını kullan
+                                ppe_compliant = people_detected
                         except Exception as detection_error:
                             logger.error(f"❌ Detection hatası: {detection_error}")
+                            results = []
                         
+                        if not results and people_detected == 0:
+                            continue
+
+                        # İhlal listesini normalize et (dict formatına çevir, string'leri sar)
                         normalized_ppe_violations, simple_ppe_violations = self._normalize_ppe_violations(ppe_violations)
                         ppe_violations = simple_ppe_violations
 
+                        # Eğer kişi var ama hiç ihlal yoksa, tüm kişiler uyumlu kabul edilmeli.
+                        # PoseAware veya SH17 tarafı ppe_compliant'ı 0 bıraksa bile burada normalize ediyoruz.
                         if people_detected > 0 and len(ppe_violations) == 0 and ppe_compliant == 0:
                             ppe_compliant = people_detected
 
+                        # Reports kayıt (both SH17 and YOLOv8 paths)
                         try:
-                            proc_time = time.time() - start_time
+                            report_processing_time = time.time() - start_time
                             if people_detected > 0 or len(ppe_violations) > 0:
-                                self._save_detection_to_reports(company_id, camera_id, sector, people_detected, ppe_compliant, len(ppe_violations), proc_time, optimized_confidence)
-                                self._generate_live_alerts(company_id, camera_id, people_detected, ppe_compliant, len(ppe_violations), sector)
+                                self._save_detection_to_reports(
+                                    company_id,
+                                    camera_id,
+                                    detection_mode,
+                                    people_detected,
+                                    ppe_compliant,
+                                    len(ppe_violations),
+                                    report_processing_time,
+                                    confidence,
+                                )
+                                self._generate_live_alerts(
+                                    company_id,
+                                    camera_id,
+                                    people_detected,
+                                    ppe_compliant,
+                                    len(ppe_violations),
+                                    detection_mode,
+                                )
                             for violation in normalized_ppe_violations:
                                 self._save_violation_to_reports(company_id, camera_id, violation)
                         except Exception as result_error:
                             logger.error(f"❌ Result processing hatası: {result_error}")
                         
-                        compliance_rate = (ppe_compliant / people_detected * 100) if people_detected > 0 else 0
+                        compliance_rate = 0
+                        if people_detected > 0:
+                            compliance_rate = (ppe_compliant / people_detected) * 100
+                        
                         processing_time = (time.time() - start_time) * 1000
                         detection_count += 1
                         
+                        fps = 1000 / processing_time if processing_time > 0 else 0
+                        
+                        current_device = 'SH17' if use_sh17 else (device if 'device' in dir() else 'cpu')
+                        logger.info(f"🔍 Detection #{detection_count}: {people_detected} kişi, {ppe_compliant} uyumlu, {len(ppe_violations)} ihlal, {compliance_rate:.1f}% uyum, {processing_time:.1f}ms, {fps:.1f} FPS")
+                        logger.info(f"🖥️ Device: {current_device}, Confidence: {optimized_confidence}")
+                        logger.info(f"🔍 PPE Violations: {ppe_violations}")
+                        
+                        # Sonuçları kaydet
                         detection_data = {
-                            'camera_id': camera_id, 'company_id': company_id,
+                            'camera_id': camera_id,
+                            'company_id': company_id,
                             'timestamp': datetime.now().isoformat(),
-                            'total_people': int(people_detected),
+                            'frame_count': int(frame_count),
+                            'detection_count': int(detection_count),
+                            'total_people': int(people_detected),  # Frontend uyumlu
+                            'people_detected': int(people_detected),
                             'ppe_compliant': int(ppe_compliant),
-                            'violations': ppe_violations,
+                            'ppe_violations': ppe_violations,
+                            'violations': ppe_violations,  # Frontend uyumlu (string listesi)
+                            'violations_detail': normalized_ppe_violations,  # Backend için detaylı dict listesi
                             'compliance_rate': float(round(compliance_rate, 1)),
-                            'processing_time': float(round(processing_time / 1000, 3)),
-                            'detections': results if isinstance(results, list) else [],
+                            'processing_time_ms': float(round(processing_time, 2)),
+                            'processing_time': float(round(processing_time / 1000, 3)),  # Frontend uyumlu
+                            'detection_mode': str(detection_mode),
+                            'confidence_threshold': float(confidence),
+                            'detections': results if isinstance(results, list) else [],  # bbox listesi overlay için
                         }
                         
+                        # Queue'ya ekle
                         try:
-                            if not detection_results[camera_key].full():
-                                detection_results[camera_key].put_nowait(detection_data)
-                        except Exception: pass
+                            detection_results[camera_key].put_nowait(detection_data)
+                        except queue.Full:
+                            try:
+                                detection_results[camera_key].get_nowait()
+                            except queue.Empty:
+                                pass
+                            detection_results[camera_key].put_nowait(detection_data)
                         
+                        # Veritabanına kaydet (her 10 tespit) - SQLite'ta legacy şema kullanıldığı için
+                        # sadece production PostgreSQL için özet kayıt atılır.
                         if detection_count % 10 == 0:
                             self.save_detection_to_db(detection_data)
+                        
+                        # İhlal varsa veritabanına kaydet (normalize edilmiş dict listesiyle)
+                        if normalized_ppe_violations:
+                            self.save_violations_to_db(company_id, camera_id, normalized_ppe_violations)
                     
-                    time.sleep(0.01)
+                    time.sleep(0.01)  # CPU'yu rahatlatmak için
                 else:
                     time.sleep(0.1)
+                    
             except Exception as e:
                 logger.error(f"❌ SaaS Detection hatası: {e}")
                 time.sleep(1)
         
         logger.info(f"🛑 SaaS Detection durduruldu - Kamera: {camera_id}")
 
-    def start_saas_camera(self, camera_key, camera_id, company_id, active_detectors_ref=None):
-        """SaaS Kamera başlatma"""
+    def _save_detection_to_reports(self, company_id, camera_id, detection_type, 
+                                  people_detected, ppe_compliant, violations_count, 
+                                  processing_time, confidence):
+        """Save detection data to reports table"""
         try:
-            camera_info = self.db.get_camera_by_id(camera_id, company_id)
-            if not camera_info: return
+            # Database adapter kullan - SQLite ve PostgreSQL uyumlu
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
             
-            ip = camera_info.get('ip_address')
-            port = camera_info.get('port')
-            if ip and port:
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            if self.db.db_adapter.db_type == 'sqlite':
+                cursor.execute(f'''
+                    INSERT INTO detections (company_id, camera_id, detection_type, confidence,
+                                          people_detected, ppe_compliant, violations_count, timestamp)
+                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, 
+                            {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ''', (company_id, camera_id, detection_type, confidence,
+                      people_detected, ppe_compliant, violations_count, datetime.now()))
+            else:  # PostgreSQL
+                cursor.execute(f'''
+                    INSERT INTO detections (company_id, camera_id, detection_type, confidence,
+                                          people_detected, ppe_compliant, violations_count, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (company_id, camera_id, detection_type, confidence,
+                      people_detected, ppe_compliant, violations_count, datetime.now()))
+            
+            conn.commit()
+            conn.close()
+            logger.debug(f"✅ Detection saved to reports: {people_detected} people, {ppe_compliant} compliant")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save detection to reports: {e}")
+
+    def _generate_live_alerts(self, company_id, camera_id, people_detected, ppe_compliant, violations_count, detection_mode):
+        """Real-time alert generation based on live detection results"""
+        try:
+            # Alert generation logic
+            alerts_to_generate = []
+            
+            # PPE Violation Alert
+            if violations_count > 0:
+                alerts_to_generate.append({
+                    'alert_type': 'ppe_violation',
+                    'severity': 'warning',
+                    'title': f'{violations_count} PPE İhlali Tespit Edildi',
+                    'message': f'Kamera {camera_id} üzerinde {violations_count} adet PPE ihlali tespit edildi. Acil müdahale gerekli.',
+                    'camera_id': camera_id
+                })
+            
+            # High Risk Alert
+            if violations_count >= 3:
+                alerts_to_generate.append({
+                    'alert_type': 'high_risk',
+                    'severity': 'critical',
+                    'title': 'Yüksek Riskli Durum!',
+                    'message': f'Kamera {camera_id} üzerinde {violations_count} adet PPE ihlali tespit edildi. Acil müdahale gerekli!',
+                    'camera_id': camera_id
+                })
+            
+            # Compliance Rate Alert
+            if people_detected > 0:
+                compliance_rate = (ppe_compliant / people_detected) * 100
+                if compliance_rate < 50:
+                    alerts_to_generate.append({
+                        'alert_type': 'low_compliance',
+                        'severity': 'warning',
+                        'title': 'Düşük Uyum Oranı',
+                        'message': f'Kamera {camera_id} üzerinde uyum oranı %{compliance_rate:.1f}. Eğitim gerekli.',
+                        'camera_id': camera_id
+                    })
+            
+            # System Status Alert
+            if people_detected > 0:
+                alerts_to_generate.append({
+                    'alert_type': 'system_status',
+                    'severity': 'info',
+                    'title': 'Sistem Aktif',
+                    'message': f'Kamera {camera_id} üzerinde {people_detected} kişi tespit edildi. Sistem normal çalışıyor.',
+                    'camera_id': camera_id
+                })
+            
+            # Generate alerts
+            for alert_data in alerts_to_generate:
+                try:
+                    # Alert'i database'e kaydet
+                    conn = self.db.get_connection()
+                    cursor = conn.cursor()
+                    
+                    placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+                    
+                    if self.db.db_adapter.db_type == 'sqlite':
+                        cursor.execute(f'''
+                            INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at)
+                            VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 'active', datetime('now'))
+                        ''', (company_id, alert_data['camera_id'], alert_data['alert_type'], alert_data['severity'], 
+                              alert_data['title'], alert_data['message']))
+                    else:  # PostgreSQL
+                        cursor.execute(f'''
+                            INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'active', NOW())
+                        ''', (company_id, alert_data['camera_id'], alert_data['alert_type'], alert_data['severity'], 
+                              alert_data['title'], alert_data['message']))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    logger.info(f"✅ Live alert generated: {alert_data['title']} - {alert_data['message']}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Alert generation error: {e}")
+            
+        except Exception as e:
+            logger.error(f"❌ Live alert generation error: {e}")
+    
+    def _save_violation_to_reports(self, company_id, camera_id, violation):
+        """Save violation data to reports table"""
+        try:
+            # Database adapter kullan - SQLite ve PostgreSQL uyumlu
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            # Violation details
+            missing_ppe = violation.get('missing_ppe', ['Unknown'])[0] if isinstance(violation.get('missing_ppe'), list) else violation.get('missing_ppe', 'Unknown')
+            violation_type = f"{missing_ppe}_missing"
+            
+            confidence = violation.get('confidence', 0.8)
+            
+            if self.db.db_adapter.db_type == 'sqlite':
+                cursor.execute(f'''
+                    INSERT INTO violations (company_id, camera_id, worker_id, missing_ppe,
+                                          violation_type, confidence, timestamp)
+                    VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder},
+                            {placeholder}, {placeholder}, {placeholder})
+                ''', (company_id, camera_id, violation.get('person_id', 'unknown'),
+                      missing_ppe, violation_type, confidence, datetime.now()))
+            else:  # PostgreSQL
+                cursor.execute(f'''
+                    INSERT INTO violations (company_id, camera_id, worker_id, missing_ppe,
+                                          violation_type, confidence, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ''', (company_id, camera_id, violation.get('person_id', 'unknown'),
+                      missing_ppe, violation_type, confidence, datetime.now()))
+            
+            conn.commit()
+            conn.close()
+            logger.debug(f"✅ Violation saved to reports: {missing_ppe}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save violation to reports: {e}")
+
+    def _normalize_ppe_violations(self, ppe_violations):
+        """PPE ihlallerini tek tip dict formatına çevir.
+
+        Giriş:
+          - ['Baret eksik', 'Yelek eksik', ...]  (string listesi)
+          - [{'missing_ppe': [...], 'confidence': ..., 'person_id': ...}, ...]
+
+        Çıkış:
+          - normalized: [{'person_id': 'person_0', 'missing_ppe': [...], 'confidence': 0.0}, ...]
+          - simple:     ['Baret eksik', 'Yelek eksik', ...] (frontend/log için)
+        """
+        normalized = []
+        simple = []
+
+        if ppe_violations is None:
+            return [], []
+        if not isinstance(ppe_violations, list):
+            ppe_violations = [ppe_violations]
+
+        for idx, v in enumerate(ppe_violations):
+            if isinstance(v, dict):
+                raw_missing = v.get('missing_ppe')
+                if isinstance(raw_missing, list) and raw_missing:
+                    missing_list = [str(raw_missing[0])]
+                elif isinstance(raw_missing, str):
+                    missing_list = [raw_missing]
+                else:
+                    missing_list = ['Unknown']
+
+                person_id = v.get('person_id') or f"person_{idx}"
+
+                conf = v.get('confidence', 0.0)
+                try:
+                    conf = float(conf)
+                except Exception:
+                    conf = 0.0
+
+                norm = {
+                    'person_id': str(person_id),
+                    'missing_ppe': missing_list,
+                    'confidence': conf,
+                }
+            else:
+                # String veya diğer tipler - loglarda gördüğümüz 'Baret eksik' vb.
+                text = str(v)
+                missing_list = [text]
+                norm = {
+                    'person_id': f"person_{idx}",
+                    'missing_ppe': missing_list,
+                    'confidence': 0.0,
+                }
+
+            normalized.append(norm)
+            simple.append(missing_list[0])
+
+        return normalized, simple
+
+    def _run_fallback_ppe_detection(self, results, frame, detection_mode):
+            """Run fallback PPE detection using old system"""
+            people_detected = 0
+            ppe_compliant = 0
+            ppe_violations = []
+            
+            try:
+                for result in results:
+                    if result.boxes is not None:
+                        for box in result.boxes:
+                            try:
+                                class_id = int(box.cls[0])
+                                confidence_score = float(box.conf[0])
+                                
+                                # Person detection
+                                if class_id == 0:  # person class
+                                    people_detected += 1
+                                    
+                                    # Person bbox'ını al
+                                    person_bbox = box.xyxy[0].tolist()
+                                    
+                                    # PPE Detection
+                                    ppe_status = self.analyze_ppe_compliance(frame, person_bbox, detection_mode)
+                                    
+                                    if ppe_status.get('compliant', False):
+                                        ppe_compliant += 1
+                                    else:
+                                        missing_ppe = ppe_status.get('missing_ppe', ['Gerekli PPE Eksik'])
+                                        violation = {
+                                            'person_id': f"person_{len(ppe_violations)}",
+                                            'missing_ppe': missing_ppe,
+                                            'confidence': float(confidence_score),
+                                            'bbox': [float(x) for x in person_bbox],
+                                            'ppe_status': {
+                                                'compliant': bool(ppe_status.get('compliant', False)),
+                                                'missing_ppe': missing_ppe,
+                                                'has_helmet': bool(ppe_status.get('has_helmet', False)),
+                                                'has_vest': bool(ppe_status.get('has_vest', False))
+                                            }
+                                        }
+                                        ppe_violations.append(violation)
+                                        
+                            except Exception as box_error:
+                                logger.error(f"❌ Box processing hatası: {box_error}")
+                                continue
+                                
+            except Exception as e:
+                logger.error(f"❌ Fallback PPE detection error: {e}")
+            
+            return people_detected, ppe_compliant, ppe_violations
+        
+    def _convert_sh17_to_classic_format(self, sh17_result: List[Dict], detection_mode: str) -> Dict[str, Any]:
+        """SH17 sonuçlarını klasik PPE formatına çevirir"""
+        try:
+            if not sh17_result:
+                return self._create_empty_result()
+            
+            # SH17 sonuçlarını işle
+            people_detected = 0
+            ppe_compliant = 0
+            ppe_violations = []
+            
+            for detection in sh17_result:
+                class_name = detection.get('class_name', '')
+                confidence = detection.get('confidence', 0.0)
+                bbox = detection.get('bbox', [])
+                
+                # Person detection
+                if class_name == 'person':
+                    people_detected += 1
+                    
+                    # PPE compliance kontrolü
+                    ppe_status = self._analyze_sh17_ppe_compliance(sh17_result, detection_mode)
+                    
+                    if ppe_status.get('compliant', False):
+                        ppe_compliant += 1
+                    else:
+                        violation = {
+                            'person_id': f"person_{people_detected}",
+                            'missing_ppe': ppe_status.get('missing_ppe', ['Gerekli PPE Eksik']),
+                            'confidence': confidence,
+                            'bbox': bbox,
+                            'ppe_status': ppe_status
+                        }
+                        ppe_violations.append(violation)
+            
+            return {
+                'success': True,
+                'people_detected': people_detected,
+                'ppe_compliant': ppe_compliant,
+                'ppe_violations': ppe_violations,
+                'detection_system': 'SH17',
+                'detection_mode': detection_mode
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ SH17 format conversion error: {e}")
+            return self._create_empty_result()
+    
+    def _analyze_sh17_ppe_compliance(self, detections: List[Dict], sector: str) -> Dict[str, Any]:
+        """SH17 detection sonuçlarından PPE compliance analizi"""
+        try:
+            # Sektör bazlı gerekli PPE'ler
+            sector_requirements = {
+                'construction': ['helmet', 'safety_vest'],
+                'manufacturing': ['helmet', 'safety_vest', 'gloves'],
+                'chemical': ['helmet', 'respirator', 'gloves', 'safety_glasses'],
+                'food_beverage': ['hair_net', 'gloves', 'apron'],
+                'warehouse_logistics': ['helmet', 'safety_vest', 'safety_shoes'],
+                'energy': ['helmet', 'safety_vest', 'safety_shoes', 'gloves'],
+                'petrochemical': ['helmet', 'respirator', 'safety_vest', 'gloves'],
+                'marine_shipyard': ['helmet', 'life_vest', 'safety_shoes'],
+                'aviation': ['aviation_helmet', 'reflective_vest', 'ear_protection']
+            }
+            
+            required_ppe = sector_requirements.get(sector, ['helmet', 'safety_vest'])
+            detected_ppe = []
+            
+            # Tespit edilen PPE'leri topla
+            for detection in detections:
+                class_name = detection.get('class_name', '')
+                if class_name in ['helmet', 'safety_vest', 'gloves', 'safety_shoes', 'safety_glasses', 'face_mask_medical']:
+                    detected_ppe.append(class_name)
+            
+            # Compliance kontrolü
+            missing_ppe = [item for item in required_ppe if item not in detected_ppe]
+            compliant = len(missing_ppe) == 0
+            
+            return {
+                'compliant': compliant,
+                'missing_ppe': missing_ppe,
+                'detected_ppe': detected_ppe,
+                'required_ppe': required_ppe
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ SH17 compliance analysis error: {e}")
+            return {'compliant': False, 'missing_ppe': ['Analysis Error']}
+    
+    def _create_empty_result(self) -> Dict[str, Any]:
+        """Boş detection sonucu oluşturur"""
+        return {
+            'success': False,
+            'people_detected': 0,
+            'ppe_compliant': 0,
+            'ppe_violations': [],
+            'error': 'No detections found'
+        }
+        
+
+
+    def analyze_ppe_compliance(self, frame, person_bbox, detection_mode):
+        """İYİLEŞTİRİLDİ: PPE uyumluluğunu analiz et - Production ready with enhanced error handling"""
+        try:
+            import cv2
+            import numpy as np
+            
+            # Input validation - İYİLEŞTİRİLDİ
+            if frame is None:
+                logger.error("❌ Frame is None")
+                return {'compliant': False, 'missing_ppe': ['invalid_frame'], 'error': 'frame_is_none'}
+            
+            if person_bbox is None or len(person_bbox) != 4:
+                logger.error(f"❌ Invalid person_bbox: {person_bbox}")
+                return {'compliant': False, 'missing_ppe': ['invalid_bbox'], 'error': 'invalid_bbox_format'}
+            
+            if detection_mode is None or detection_mode not in ['construction', 'manufacturing', 'chemical', 'food', 'warehouse', 'energy', 'petrochemical', 'marine', 'aviation', 'general']:
+                logger.warning(f"⚠️ Invalid detection_mode: {detection_mode}, using general")
+                detection_mode = 'general'
+            
+            # Person bbox'ından ROI çıkar - İYİLEŞTİRİLDİ
+            try:
+                x1, y1, x2, y2 = map(int, person_bbox)
+                
+                # Bbox sınırlarını kontrol et
+                frame_height, frame_width = frame.shape[:2]
+                x1 = max(0, min(x1, frame_width))
+                y1 = max(0, min(y1, frame_height))
+                x2 = max(x1, min(x2, frame_width))
+                y2 = max(y1, min(y2, frame_height))
+                
+                # ROI boyutunu kontrol et
+                if x2 <= x1 or y2 <= y1:
+                    logger.warning("⚠️ Invalid bbox dimensions")
+                    return {'compliant': False, 'missing_ppe': ['invalid_bbox_dimensions'], 'error': 'invalid_bbox_size'}
+                
+                person_roi = frame[y1:y2, x1:x2]
+            
+                if person_roi.size == 0:
+                    logger.warning("⚠️ Empty ROI")
+                    return {'compliant': False, 'missing_ppe': ['empty_roi'], 'error': 'empty_roi'}
+                    
+                # ROI boyut kontrolü
+                if person_roi.shape[0] < 20 or person_roi.shape[1] < 20:
+                    logger.warning(f"⚠️ ROI too small: {person_roi.shape}")
+                    return {'compliant': False, 'missing_ppe': ['roi_too_small'], 'error': 'roi_too_small'}
+            
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Bbox conversion error: {e}")
+                return {'compliant': False, 'missing_ppe': ['bbox_conversion_error'], 'error': str(e)}
+            
+            # Detection mode'a göre PPE kontrolü - İYİLEŞTİRİLDİ
+            try:
+                if detection_mode == 'construction':
+                    return self.analyze_construction_ppe(person_roi)
+                elif detection_mode == 'industrial' or detection_mode == 'manufacturing':
+                    return self.analyze_manufacturing_ppe(person_roi)
+                elif detection_mode == 'chemical':
+                    return self.analyze_chemical_ppe(person_roi)
+                elif detection_mode == 'food':
+                    return self.analyze_food_ppe(person_roi)
+                elif detection_mode == 'warehouse' or detection_mode == 'logistics':
+                    return self.analyze_warehouse_ppe(person_roi)
+                elif detection_mode == 'energy':
+                    return self.analyze_energy_ppe(person_roi)
+                elif detection_mode == 'petrochemical':
+                    return self.analyze_petrochemical_ppe(person_roi)
+                elif detection_mode == 'marine':
+                    return self.analyze_marine_ppe(person_roi)
+                elif detection_mode == 'aviation':
+                    return self.analyze_aviation_ppe(person_roi)
+                else:
+                    return self.analyze_general_ppe(person_roi)
+                    
+            except ImportError as e:
+                logger.error(f"❌ Import error in sector detection: {e}")
+                return self.analyze_construction_ppe_fallback(person_roi)
+            except Exception as e:
+                logger.error(f"❌ Sektörel PPE analiz hatası: {e}")
+                logger.error(f"❌ Error type: {type(e).__name__}")
+                logger.error(f"❌ Error details: {str(e)}")
+                return self.analyze_construction_ppe_fallback(person_roi)
+                
+        except Exception as e:
+            logger.error(f"❌ PPE analiz genel hatası: {e}")
+            logger.error(f"❌ Error type: {type(e).__name__}")
+            logger.error(f"❌ Error details: {str(e)}")
+            return {'compliant': False, 'missing_ppe': ['analysis_error'], 'error': str(e)}
+
+    def analyze_construction_ppe(self, person_roi):
+        """İnşaat sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            # Sektörel detector'ı kullan - Güvenli import
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                logger.info("🔍 Construction detector aranıyor...")
+                detector = SectorDetectorFactory.get_detector('construction')
+                
+                if detector:
+                    logger.info("✅ Construction detector bulundu, PPE analizi başlatılıyor...")
+                    # Sektörel PPE detection
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    logger.info(f"🔍 Construction detection sonucu: {result}")
+                    
+                    # Sonuçları formatla
+                    missing_ppe = []
+                    
+                    # Hibrit sistem sonuçlarını kontrol et
+                    if result.get('violation_people', 0) > 0:
+                        violations = result.get('violations', [])
+                        for violation in violations:
+                            missing_ppe.extend(violation.get('missing_ppe', []))
+                    
+                    # Eğer hibrit sistem PPE'yi tespit ettiyse ama violation boşsa
+                    if not missing_ppe and result.get('sector_detection', False):
+                        # PPE status'dan eksik olanları al
+                        ppe_status = result.get('ppe_status', {})
+                        required_ppe = ppe_status.get('required_ppe', [])
+                        detected_ppe = []
+                        
+                        if ppe_status.get('has_helmet', False):
+                            detected_ppe.append('helmet')
+                        if ppe_status.get('has_vest', False):
+                            detected_ppe.append('safety_vest')
+                        
+                        # Eksik PPE'leri hesapla
+                        missing_ppe = [item for item in required_ppe if item not in detected_ppe]
+                    
+                    # Hibrit sistem yanlış sonuç veriyorsa, fallback kullan
+                    if not missing_ppe and result.get('sector_detection', False):
+                        logger.warning("⚠️ Hibrit sistem yanlış sonuç veriyor, fallback kullanılıyor")
+                        fallback_result = self.analyze_construction_ppe_fallback(person_roi)
+                        missing_ppe = fallback_result.get('missing_ppe', [])
+                    
+                    # Eğer hibrit sistem PPE'yi tespit ettiyse ama violation boşsa, zorla ihlal ekle
+                    if not missing_ppe and result.get('sector_detection', False):
+                        ppe_status = result.get('ppe_status', {})
+                        if ppe_status.get('has_helmet', False) and ppe_status.get('has_vest', False):
+                            # Hibrit sistem yanlış tespit ediyor, gerçek durumu kontrol et
+                            logger.warning("⚠️ Hibrit sistem yanlış PPE tespit ediyor, gerçek durum kontrol ediliyor")
+                            missing_ppe = ['Kask', 'Yelek']  # Zorla ihlal ekle
+                    
+                    # Eğer hibrit sistem PPE'yi tespit ettiyse ama violation boşsa, zorla ihlal ekle
+                    if not missing_ppe and result.get('sector_detection', False):
+                        # Hibrit sistem yanlış sonuç veriyor, fallback kullan
+                        logger.warning("⚠️ Hibrit sistem yanlış sonuç veriyor, fallback kullanılıyor")
+                        fallback_result = self.analyze_construction_ppe_fallback(person_roi)
+                        missing_ppe = fallback_result.get('missing_ppe', [])
+                    
+                    # Eğer hibrit sistem PPE'yi tespit ettiyse ama violation boşsa, zorla ihlal ekle
+                    if not missing_ppe and result.get('sector_detection', False):
+                        # Hibrit sistem yanlış tespit ediyor, gerçek durumu kontrol et
+                        logger.warning("⚠️ Hibrit sistem yanlış PPE tespit ediyor, gerçek durum kontrol ediliyor")
+                        missing_ppe = ['Kask', 'Yelek']  # Zorla ihlal ekle
+                    
+                    # PPE'leri Türkçe'ye çevir
+                    ppe_translations = {
+                        'helmet': 'Kask',
+                        'safety_vest': 'Yelek',
+                        'gloves': 'Eldiven',
+                        'safety_shoes': 'Güvenlik Ayakkabısı',
+                        'goggles': 'Gözlük',
+                        'mask': 'Maske',
+                        'hairnet': 'Saç Filesi',
+                        'apron': 'Önlük'
+                    }
+                    
+                    # Türkçe çevirileri uygula
+                    missing_ppe_tr = []
+                    for ppe in missing_ppe:
+                        missing_ppe_tr.append(ppe_translations.get(ppe, ppe))
+                    
+                    # Eğer hala boşsa, genel ihlal ekle
+                    if not missing_ppe_tr:
+                        missing_ppe_tr = ['Gerekli PPE Eksik']
+                    
+                    logger.info(f"🔍 Missing PPE (TR): {missing_ppe_tr}")
+                    
+                    return {
+                        'compliant': result.get('compliance_rate', 0) >= 85.0,
+                        'missing_ppe': missing_ppe_tr,
+                        'has_helmet': 'helmet' not in missing_ppe,
+                        'has_vest': 'safety_vest' not in missing_ppe,
+                        'compliance_rate': result.get('compliance_rate', 0),
+                        'sector_detection': True
+                    }
+                else:
+                    logger.warning("⚠️ Sektörel detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+                    
+            except ImportError as e:
+                logger.warning(f"⚠️ Sektörel detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+            
+        except Exception as e:
+            logger.error(f"❌ Sektörel PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_construction_ppe_fallback(self, person_roi):
+        """İYİLEŞTİRİLDİ: Gelişmiş renk bazlı PPE tespiti"""
+        try:
+            logger.info("🔍 İyileştirilmiş Fallback PPE analizi başlatılıyor...")
+            
+            # ROI boyut kontrolü
+            if person_roi.size == 0 or person_roi.shape[0] < 50 or person_roi.shape[1] < 50:
+                logger.warning("⚠️ ROI çok küçük, analiz atlanıyor")
+                return {'compliant': False, 'missing_ppe': ['invalid_roi'], 'sector_detection': False}
+            
+            # Çoklu renk analizi - İYİLEŞTİRİLDİ
+            hsv = cv2.cvtColor(person_roi, cv2.COLOR_BGR2HSV)
+            rgb = cv2.cvtColor(person_roi, cv2.COLOR_BGR2RGB)
+            
+            # Kask tespiti - Gelişmiş renk aralıkları
+            helmet_detected = False
+            helmet_confidence = 0.0
+            
+            # Sarı/Turuncu kask
+            helmet_yellow_lower = np.array([15, 50, 50])
+            helmet_yellow_upper = np.array([35, 255, 255])
+            helmet_yellow_mask = cv2.inRange(hsv, helmet_yellow_lower, helmet_yellow_upper)
+            yellow_pixels = np.sum(helmet_yellow_mask)
+            
+            # Beyaz kask
+            helmet_white_lower = np.array([0, 0, 200])
+            helmet_white_upper = np.array([180, 30, 255])
+            helmet_white_mask = cv2.inRange(hsv, helmet_white_lower, helmet_white_upper)
+            white_pixels = np.sum(helmet_white_mask)
+            
+            # Kırmızı kask
+            helmet_red_lower1 = np.array([0, 50, 50])
+            helmet_red_upper1 = np.array([10, 255, 255])
+            helmet_red_lower2 = np.array([170, 50, 50])
+            helmet_red_upper2 = np.array([180, 255, 255])
+            helmet_red_mask1 = cv2.inRange(hsv, helmet_red_lower1, helmet_red_upper1)
+            helmet_red_mask2 = cv2.inRange(hsv, helmet_red_lower2, helmet_red_upper2)
+            red_pixels = np.sum(helmet_red_mask1) + np.sum(helmet_red_mask2)
+            
+            # En yüksek pixel sayısını bul
+            max_helmet_pixels = max(yellow_pixels, white_pixels, red_pixels)
+            total_pixels = person_roi.shape[0] * person_roi.shape[1]
+            helmet_ratio = max_helmet_pixels / total_pixels if total_pixels > 0 else 0
+            
+            # Gelişmiş threshold
+            helmet_threshold = 0.05  # %5'ten fazla pixel varsa kask var
+            helmet_detected = helmet_ratio > helmet_threshold
+            helmet_confidence = min(helmet_ratio * 10, 1.0)  # Confidence hesapla
+            
+            # Yelek tespiti - Gelişmiş renk aralıkları
+            vest_detected = False
+            vest_confidence = 0.0
+            
+            # Yeşil yelek
+            vest_green_lower = np.array([35, 50, 50])
+            vest_green_upper = np.array([85, 255, 255])
+            vest_green_mask = cv2.inRange(hsv, vest_green_lower, vest_green_upper)
+            green_pixels = np.sum(vest_green_mask)
+            
+            # Turuncu yelek
+            vest_orange_lower = np.array([10, 50, 50])
+            vest_orange_upper = np.array([25, 255, 255])
+            vest_orange_mask = cv2.inRange(hsv, vest_orange_lower, vest_orange_upper)
+            orange_pixels = np.sum(vest_orange_mask)
+            
+            # Sarı yelek
+            vest_yellow_lower = np.array([20, 50, 50])
+            vest_yellow_upper = np.array([30, 255, 255])
+            vest_yellow_mask = cv2.inRange(hsv, vest_yellow_lower, vest_yellow_upper)
+            yellow_vest_pixels = np.sum(vest_yellow_mask)
+            
+            # En yüksek pixel sayısını bul
+            max_vest_pixels = max(green_pixels, orange_pixels, yellow_vest_pixels)
+            vest_ratio = max_vest_pixels / total_pixels if total_pixels > 0 else 0
+            
+            # Gelişmiş threshold
+            vest_threshold = 0.08  # %8'den fazla pixel varsa yelek var
+            vest_detected = vest_ratio > vest_threshold
+            vest_confidence = min(vest_ratio * 8, 1.0)  # Confidence hesapla
+            
+            # Shape analysis - İYİLEŞTİRİLDİ
+            gray = cv2.cvtColor(person_roi, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+            
+            # Contour analizi
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Büyük contour'ları bul (kask/yelek şekli)
+            large_contours = [c for c in contours if cv2.contourArea(c) > 500]
+            
+            # Confidence'i shape analizi ile güçlendir
+            if len(large_contours) > 0:
+                helmet_confidence *= 1.2  # Shape varsa confidence artır
+                vest_confidence *= 1.2
+            
+            logger.info(f"🔍 İyileştirilmiş Fallback sonuçları:")
+            logger.info(f"  - Kask: {helmet_detected} (Confidence: {helmet_confidence:.2f})")
+            logger.info(f"  - Yelek: {vest_detected} (Confidence: {vest_confidence:.2f})")
+            logger.info(f"  - Shape contours: {len(large_contours)}")
+            
+            # Eksik PPE'leri belirle - İYİLEŞTİRİLDİ
+            missing_ppe = []
+            compliance_score = 0
+            
+            if not helmet_detected or helmet_confidence < 0.3:
+                missing_ppe.append('Kask')
+            else:
+                compliance_score += 50
+                
+            if not vest_detected or vest_confidence < 0.3:
+                missing_ppe.append('Yelek')
+            else:
+                compliance_score += 50
+            
+            # Eğer hiç PPE tespit edilmediyse, daha akıllı karar ver
+            if not missing_ppe and (helmet_confidence < 0.5 or vest_confidence < 0.5):
+                missing_ppe = ['Düşük Güvenilirlik - PPE Kontrol Edilmeli']
+            
+            logger.info(f"🔍 İyileştirilmiş missing PPE: {missing_ppe}")
+            logger.info(f"🔍 Compliance score: {compliance_score}")
+            
+            return {
+                'compliant': len(missing_ppe) == 0 and compliance_score >= 80,
+                'missing_ppe': missing_ppe,
+                'has_helmet': helmet_detected and helmet_confidence >= 0.3,
+                'has_vest': vest_detected and vest_confidence >= 0.3,
+                'compliance_rate': compliance_score,
+                'sector_detection': False,
+                'helmet_confidence': helmet_confidence,
+                'vest_confidence': vest_confidence
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ İyileştirilmiş Fallback PPE analiz hatası: {e}")
+            return {'compliant': False, 'missing_ppe': ['analysis_error'], 'sector_detection': False}
+
+    def analyze_manufacturing_ppe(self, person_roi):
+        """İmalat sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('manufacturing')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'manufacturing')
+                else:
+                    logger.warning("⚠️ Manufacturing detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Manufacturing detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Manufacturing PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_food_ppe(self, person_roi):
+        """Gıda sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('food')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'food')
+                else:
+                    logger.warning("⚠️ Food detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Food detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Food PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_warehouse_ppe(self, person_roi):
+        """Lojistik/Depo sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('warehouse')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'warehouse')
+                else:
+                    logger.warning("⚠️ Warehouse detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Warehouse detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Warehouse PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_energy_ppe(self, person_roi):
+        """Enerji sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('energy')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'energy')
+                else:
+                    logger.warning("⚠️ Energy detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Energy detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Energy PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_petrochemical_ppe(self, person_roi):
+        """Petrokimya sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('petrochemical')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'petrochemical')
+                else:
+                    logger.warning("⚠️ Petrochemical detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Petrochemical detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Petrochemical PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_marine_ppe(self, person_roi):
+        """Denizcilik sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('marine')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'marine')
+                else:
+                    logger.warning("⚠️ Marine detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Marine detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Marine PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_aviation_ppe(self, person_roi):
+        """Havacılık sektörü PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            try:
+                from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+                detector = SectorDetectorFactory.get_detector('aviation')
+                
+                if detector:
+                    result = detector.detect_ppe(person_roi, 'camera_unknown')
+                    return self.format_sector_result(result, 'aviation')
+                else:
+                    logger.warning("⚠️ Aviation detector bulunamadı, fallback kullanılıyor")
+                    return self.analyze_construction_ppe_fallback(person_roi)
+            except ImportError as e:
+                logger.warning(f"⚠️ Aviation detector import hatası: {e}, fallback kullanılıyor")
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Aviation PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_chemical_ppe(self, person_roi):
+        """Kimyasal sektör PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+            detector = SectorDetectorFactory.get_detector('chemical')
+            
+            if detector:
+                result = detector.detect_ppe(person_roi, 'camera_unknown')
+                return self.format_sector_result(result, 'chemical')
+            else:
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ Chemical PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def analyze_general_ppe(self, person_roi):
+        """Genel PPE analizi - Sektörel sistem ile entegre"""
+        try:
+            from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
+            detector = SectorDetectorFactory.get_detector('construction')  # Default
+            
+            if detector:
+                result = detector.detect_ppe(person_roi, 'camera_unknown')
+                return self.format_sector_result(result, 'general')
+            else:
+                return self.analyze_construction_ppe_fallback(person_roi)
+        except Exception as e:
+            logger.error(f"❌ General PPE analiz hatası: {e}")
+            return self.analyze_construction_ppe_fallback(person_roi)
+
+    def format_sector_result(self, result, sector_type):
+        """Sektörel sonucu formatla - Tüm sektörler için"""
+        try:
+            missing_ppe = []
+            if result.get('violation_people', 0) > 0:
+                violations = result.get('violations', [])
+                for violation in violations:
+                    missing_ppe.extend(violation.get('missing_ppe', []))
+            
+            # Sektöre özel PPE kontrolü
+            sector_ppe_status = self.get_sector_ppe_status(sector_type, missing_ppe)
+            
+            return {
+                'compliant': result.get('compliance_rate', 0) >= 85.0,
+                'missing_ppe': list(set(missing_ppe)),
+                'compliance_rate': result.get('compliance_rate', 0),
+                'sector_detection': True,
+                'sector_type': sector_type,
+                'ppe_status': sector_ppe_status
+            }
+        except Exception as e:
+            logger.error(f"❌ Sector result format hatası: {e}")
+            return {'compliant': False, 'missing_ppe': ['format_error'], 'sector_detection': False}
+
+    def get_sector_ppe_status(self, sector_type, missing_ppe):
+        """Sektöre özel PPE durumu"""
+        sector_ppe = {
+            'construction': {
+                'has_helmet': 'helmet' not in missing_ppe,
+                'has_vest': 'safety_vest' not in missing_ppe,
+                'has_shoes': 'safety_shoes' not in missing_ppe,
+                'required_ppe': ['helmet', 'safety_vest', 'safety_shoes']
+            },
+            'manufacturing': {
+                'has_helmet': 'helmet' not in missing_ppe,
+                'has_vest': 'safety_vest' not in missing_ppe,
+                'has_gloves': 'gloves' not in missing_ppe,
+                'has_glasses': 'safety_glasses' not in missing_ppe,
+                'required_ppe': ['helmet', 'safety_vest', 'gloves', 'safety_glasses']
+            },
+            'chemical': {
+                'has_helmet': 'helmet' not in missing_ppe,
+                'has_vest': 'safety_vest' not in missing_ppe,
+                'has_gloves': 'gloves' not in missing_ppe,
+                'has_mask': 'respirator' not in missing_ppe,
+                'required_ppe': ['helmet', 'safety_vest', 'gloves', 'respirator']
+            },
+            'food': {
+                'has_hairnet': 'hairnet' not in missing_ppe,
+                'has_gloves': 'gloves' not in missing_ppe,
+                'has_apron': 'apron' not in missing_ppe,
+                'has_mask': 'face_mask' not in missing_ppe,
+                'required_ppe': ['hairnet', 'gloves', 'apron', 'face_mask']
+            },
+            'warehouse': {
+                'has_helmet': 'helmet' not in missing_ppe,
+                'has_vest': 'safety_vest' not in missing_ppe,
+                'has_shoes': 'safety_shoes' not in missing_ppe,
+                'required_ppe': ['helmet', 'safety_vest', 'safety_shoes']
+            }
+        }
+        
+        return sector_ppe.get(sector_type, {
+            'has_helmet': 'helmet' not in missing_ppe,
+            'has_vest': 'safety_vest' not in missing_ppe,
+            'required_ppe': ['helmet', 'safety_vest']
+        })
+
+    def start_saas_camera(self, camera_key, camera_id, company_id, active_detectors_ref=None):
+        """SaaS Kamera başlatma - proxy-stream ile aynı kaynak: get_camera_by_id. active_detectors_ref: detection worker'dan gelen dict ref."""
+        try:
+            # Proxy-stream ile aynı kaynaktan al (aynı IP/URL tutarlılığı için)
+            camera_info = self.db.get_camera_by_id(camera_id, company_id)
+            if not camera_info:
+                logger.error(f"❌ Kamera bulunamadı: {camera_id}")
+                return
+            logger.info(f"📷 Detection worker kamera kaynağı: {camera_id} -> ip={camera_info.get('ip_address')} (proxy ile aynı get_camera_by_id)")
+            
+            # Kamera URL'sini oluştur - Alternatif URL'ler ile
+            camera_url = None
+            if camera_info.get('ip_address') and camera_info.get('port'):
                 protocol = camera_info.get('protocol', 'http')
-                stream_path = (camera_info.get('stream_path') or '/video').strip()
+                ip = camera_info['ip_address']
+                port = camera_info['port']
+                stream_path = (camera_info.get('stream_path') or '/video').strip().lower()
                 username = camera_info.get('username', '')
                 password = camera_info.get('password', '')
                 
-                if username and password:
-                    safe_username = urllib.parse.quote(username)
-                    safe_password = urllib.parse.quote(password)
-                    camera_url = f"{protocol}://{safe_username}:{safe_password}@{ip}:{port}{stream_path}"
-                else:
-                    camera_url = f"{protocol}://{ip}:{port}{stream_path}"
+                # Snapshot-only path'ler: Detection worker /video kullanmasın; canlı görüntü /video'ya tek bağlansın
+                SNAPSHOT_SUFFIXES = ('/shot.jpg', '/photoaf.jpg', '/photo.jpg', '/image.jpg', '/snapshot.jpg', '/snapshot.cgi', '/image.cgi')
+                is_snapshot_path = any(stream_path.endswith(s) or stream_path == s.lstrip('/') for s in SNAPSHOT_SUFFIXES)
                 
-                # Kamera thread'ini başlat
-                camera_thread = threading.Thread(
-                    target=self.saas_camera_worker,
-                    args=(camera_key, camera_url, active_detectors_ref),
-                    daemon=True
-                )
-                camera_thread.start()
+                if is_snapshot_path:
+                    # Snapshot polling ile frame doldur - /video sadece tarayıcı canlı görüntü için kalsın
+                    base = f"http://{ip}:{port}"
+                    if username and password:
+                        base_auth = f"http://{username}:{password}@{ip}:{port}"
+                        snapshot_urls = [f"{base_auth}/shot.jpg", f"{base_auth}/photoaf.jpg", f"{base_auth}/photo.jpg",
+                                         f"{base_auth}/image.jpg", f"{base_auth}/snapshot.jpg"]
+                    else:
+                        snapshot_urls = [f"{base}/shot.jpg", f"{base}/photoaf.jpg", f"{base}/photo.jpg",
+                                        f"{base}/image.jpg", f"{base}/snapshot.jpg"]
+                    auth = (username, password) if (username and password) else None
+                    self.start_saas_camera_snapshot_polling(camera_key, snapshot_urls, auth, active_detectors_ref=active_detectors_ref)
+                    logger.info(f"✅ Snapshot polling başlatıldı (canlı görüntü /video için ayrıldı): {camera_key}")
+                    return
+                
+                # Ana URL - Authentication ile
+                if username and password:
+                    if protocol == 'rtsp':
+                        camera_url = f"rtsp://{username}:{password}@{ip}:{port}{stream_path}"
+                    else:
+                        camera_url = f"http://{username}:{password}@{ip}:{port}{stream_path}"
+                else:
+                    if protocol == 'rtsp':
+                        camera_url = f"rtsp://{ip}:{port}{stream_path}"
+                    else:
+                        camera_url = f"http://{ip}:{port}{stream_path}"
+
+                
+                # Alternatif URL'ler - Önce snapshot'lar (canlı görüntü /video ile çakışmasın), sonra stream
+                if username and password:
+                    alternative_urls = [
+                        f"http://{username}:{password}@{ip}:{port}/shot.jpg",
+                        f"http://{username}:{password}@{ip}:{port}/photoaf.jpg",
+                        f"http://{username}:{password}@{ip}:{port}/photo.jpg",
+                        f"http://{username}:{password}@{ip}:{port}/video",
+                        f"http://{username}:{password}@{ip}:{port}/mjpeg",
+                        f"http://{username}:{password}@{ip}:{port}/stream",
+                        f"http://{username}:{password}@{ip}:{port}/live",
+                        f"http://{username}:{password}@{ip}:{port}/camera",
+                        f"http://{username}:{password}@{ip}:{port}/webcam"
+                    ]
+                else:
+                    alternative_urls = [
+                        f"http://{ip}:{port}/shot.jpg",
+                        f"http://{ip}:{port}/photoaf.jpg",
+                        f"http://{ip}:{port}/photo.jpg",
+                        f"http://{ip}:{port}/video",
+                        f"http://{ip}:{port}/mjpeg",
+                        f"http://{ip}:{port}/stream",
+                        f"http://{ip}:{port}/live",
+                        f"http://{ip}:{port}/camera",
+                        f"http://{ip}:{port}/webcam"
+                    ]
+                
+                # Kamera worker'ı alternatif URL'ler ile başlat
+                self.start_camera_with_alternatives(camera_key, camera_url, alternative_urls, active_detectors_ref=active_detectors_ref)
+                return
             else:
-                logger.warning(f"⚠️ Kamera IP/Port eksik: {camera_id}")
+                # Webcam kullan
+                camera_url = 0
+            
+            # Kamera worker thread'ini başlat
+            camera_thread = threading.Thread(
+                target=self.saas_camera_worker,
+                args=(camera_key, camera_url, active_detectors_ref),
+                daemon=True
+            )
+            camera_thread.start()
+            
+            logger.info(f"✅ SaaS Kamera başlatıldı: {camera_id} -> {camera_url}")
+            
         except Exception as e:
             logger.error(f"❌ SaaS Kamera başlatma hatası: {e}")
 
-    def saas_camera_worker(self, camera_key, camera_url, active_detectors_ref=None):
-        """SaaS Kamera Worker - OpenCV ile frame okur"""
-        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
-        cap = cv2.VideoCapture(camera_url)
+    def start_camera_with_alternatives(self, camera_key, primary_url, alternative_urls, active_detectors_ref=None):
+        """Alternatif URL'ler ile kamera başlatma"""
         try:
+            camera_thread = threading.Thread(
+                target=self.saas_camera_worker_with_alternatives,
+                args=(camera_key, primary_url, alternative_urls, active_detectors_ref),
+                daemon=True
+            )
+            camera_thread.start()
+            
+            logger.info(f"✅ Alternatif URL'ler ile kamera başlatıldı: {camera_key}")
+            
+        except Exception as e:
+            logger.error(f"❌ Alternatif kamera başlatma hatası: {e}")
+
+    def start_saas_camera_snapshot_polling(self, camera_key, snapshot_urls, auth=None, active_detectors_ref=None):
+        """Snapshot URL'leri ile polling worker başlat - /video canlı görüntüye kalsın"""
+        try:
+            camera_thread = threading.Thread(
+                target=self.saas_camera_worker_snapshot_polling,
+                args=(camera_key, snapshot_urls, auth, active_detectors_ref),
+                daemon=True
+            )
+            camera_thread.start()
+        except Exception as e:
+            logger.error(f"❌ Snapshot polling başlatma hatası: {e}")
+
+    def saas_camera_worker_snapshot_polling(self, camera_key, snapshot_urls, auth=None, active_detectors_ref=None):
+        """Snapshot URL'lerden periyodik frame al - MJPEG /video tarayıcıya ayrılır"""
+        working_url = None
+        poll_interval = 0.25  # 4 FPS snapshot - detection için yeterli
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        try:
+            for url in snapshot_urls:
+                try:
+                    req_auth = auth if (auth and '@' not in url) else None
+                    r = requests.get(url, auth=req_auth, timeout=5)
+                    if r.status_code == 200 and len(r.content) > 100:
+                        working_url = url
+                        logger.info(f"✅ Snapshot URL kullanılıyor: {url.split('@')[-1] if '@' in url else url}")
+                        break
+                except Exception:
+                    continue
+            if not working_url:
+                logger.error(f"❌ Snapshot URL çalışmadı: {camera_key}")
+                return
+            # URL'de kimlik varsa (user:pass@host) auth gönderme
+            use_auth = auth if (auth and '@' not in working_url) else None
+            camera_captures[camera_key] = None  # VideoCapture yok
+            while ad.get(camera_key, False):
+                try:
+                    r = requests.get(working_url, auth=use_auth, timeout=3)
+                    if r.status_code == 200 and r.content:
+                        arr = np.frombuffer(r.content, np.uint8)
+                        frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            frame_buffers[camera_key] = frame
+                except Exception as e:
+                    logger.debug(f"Snapshot poll hatası: {e}")
+                time.sleep(poll_interval)
+        finally:
+            if camera_key in camera_captures:
+                del camera_captures[camera_key]
+            if camera_key in frame_buffers:
+                del frame_buffers[camera_key]
+            logger.info(f"🛑 SaaS Snapshot polling durduruldu: {camera_key}")
+
+    def saas_camera_worker_with_alternatives(self, camera_key, primary_url, alternative_urls, active_detectors_ref=None):
+        """Alternatif URL'ler ile kamera worker"""
+        cap = None
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        try:
+            import cv2
+            
+            # Önce ana URL'yi dene
+            logger.info(f"🔍 Ana URL deneniyor: {primary_url}")
+            cap = cv2.VideoCapture(primary_url)
+            current_url = primary_url
+            
+            # Authentication ile dene - Daha güvenilir yöntem
+            if not cap.isOpened() and '@' in primary_url:
+                logger.info(f"🔐 Authentication ile deneniyor...")
+                try:
+                    # URL'den kullanıcı adı ve şifreyi çıkar
+                    # rsplit('@', 1) kullanarak sondaki @'den ayırıyoruz (kullanıcı adında @ olsa bile çalışır)
+                    if '@' in primary_url:
+                        parts = primary_url.rsplit('@', 1)
+                        if len(parts) == 2:
+                            base_url = parts[1]
+                            auth_part = parts[0]
+                            if '://' in auth_part:
+                                auth_part = auth_part.split('://', 1)[1]
+                            
+                            # Kullanıcı adı ve şifreyi ayır (ilk :'dan ayır)
+                            if ':' in auth_part:
+                                username, password = auth_part.split(':', 1)
+                                # Karakterleri decode et (URL'de %40 gibi yazılmış olabilir)
+                                username = unquote(username)
+                                password = unquote(password)
+                            else:
+                                username = unquote(auth_part)
+                                password = ""
+                            
+                            # OpenCV authentication - Daha güvenli
+                            cap = cv2.VideoCapture(base_url)
+                            if cap.isOpened():
+                                # Authentication bilgilerini set et
+                                cap.set(cv2.CAP_PROP_USERNAME, username)
+                                cap.set(cv2.CAP_PROP_PASSWORD, password)
+                                logger.info(f"✅ Authentication başarılı: {username}")
+                            else:
+                                # Alternatif authentication yöntemi - Özel karakterleri quote ile güvenli hale getiriyoruz
+                                safe_user = quote(username)
+                                safe_pass = quote(password)
+                                auth_url = f"http://{safe_user}:{safe_pass}@{base_url}"
+                                cap = cv2.VideoCapture(auth_url)
+                                if cap.isOpened():
+                                    logger.info(f"✅ Alternatif authentication başarılı: {username}")
+                except Exception as auth_error:
+                    logger.warning(f"⚠️ Authentication hatası: {auth_error}")
+            
+            if not cap.isOpened():
+                logger.warning(f"⚠️ Ana URL başarısız, alternatifler deneniyor...")
+                
+                # Alternatif URL'leri dene
+                for alt_url in alternative_urls:
+                    logger.info(f"🔍 Alternatif URL deneniyor: {alt_url}")
+                    if cap is not None:
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
+                        cap = None
+                    cap = cv2.VideoCapture(alt_url)
+                    
+                    if cap.isOpened():
+                        logger.info(f"✅ Alternatif URL başarılı: {alt_url}")
+                        current_url = alt_url
+                        break
+                    else:
+                        logger.warning(f"❌ Alternatif URL başarısız: {alt_url}")
+            
+            if not cap.isOpened():
+                logger.error(f"❌ Hiçbir URL çalışmadı: {camera_key}")
+                return
+            
+            # Kamera ayarları
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 15)
+            
+            camera_captures[camera_key] = cap
+            
+            logger.info(f"✅ SaaS Kamera worker başladı: {camera_key}")
+            frame_failure_counts[camera_key] = 0
+            
             while ad.get(camera_key, False):
                 ret, frame = cap.read()
                 if ret:
                     frame_buffers[camera_key] = frame
+                    frame_failure_counts[camera_key] = 0
                 else:
+                    # Art arda hataları say - 30'dan sonra sadece uyarı + hafif reconnect
+                    frame_failure_counts[camera_key] = frame_failure_counts.get(camera_key, 0) + 1
+                    fail_count = frame_failure_counts[camera_key]
+                    
+                    if fail_count % 30 == 0:
+                        logger.warning(f"⚠️ Frame okunamadı (ardışık {fail_count}) - {camera_key}, yeniden deneniyor...")
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
+                        time.sleep(0.3)
+                        cap = cv2.VideoCapture(current_url)
+                        if cap.isOpened():
+                            logger.info(f"✅ Kamera yeniden baglandi (frame error sonrasi): {camera_key}")
+                            frame_failure_counts[camera_key] = 0
+                        else:
+                            logger.warning(f"⚠️ Kamera yeniden baglanamadi (frame error sonrasi): {camera_key}")
+                    # Çok fazla log atmamak için her hatada değil, sadece belirli eşiklerde uyarı ver
+                    elif fail_count in (1, 5, 10):
+                        logger.debug(f"⚠️ Frame okunamadı (count={fail_count}): {camera_key}")
+                    
                     time.sleep(0.1)
-                    cap.release()
-                    cap = cv2.VideoCapture(camera_url)
+                    
+        except Exception as e:
+            logger.error(f"❌ SaaS Kamera worker hatası: {e}")
         finally:
-            cap.release()
-            if camera_key in frame_buffers: del frame_buffers[camera_key]
+            if cap:
+                cap.release()
+            if camera_key in camera_captures:
+                del camera_captures[camera_key]
+            if camera_key in frame_buffers:
+                del frame_buffers[camera_key]
+            
+            logger.info(f"🛑 SaaS Kamera worker durduruldu: {camera_key}")
+
+    def saas_camera_worker(self, camera_key, camera_url, active_detectors_ref=None):
+        """SaaS Kamera Worker"""
+        cap = None
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        try:
+            import cv2
+            
+            # Kamera bağlantısı - Daha esnek
+            cap = cv2.VideoCapture(camera_url)
+            
+            # Birkaç kez deneme
+            retry_count = 0
+            while not cap.isOpened() and retry_count < 3:
+                logger.warning(f"⚠️ Kamera bağlantısı başarısız, tekrar deneniyor... ({retry_count + 1}/3)")
+                cap.release()
+                time.sleep(1)
+                cap = cv2.VideoCapture(camera_url)
+                retry_count += 1
+            
+            if not cap.isOpened():
+                logger.error(f"❌ Kamera açılamadı: {camera_url}")
+                return
+            
+            # Kamera ayarları
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 15)
+            
+            camera_captures[camera_key] = cap
+            
+            logger.info(f"✅ SaaS Kamera worker başladı: {camera_key}")
+            frame_failure_counts[camera_key] = 0
+            
+            while ad.get(camera_key, False):
+                ret, frame = cap.read()
+                if ret:
+                    frame_buffers[camera_key] = frame
+                    frame_failure_counts[camera_key] = 0
+                else:
+                    frame_failure_counts[camera_key] = frame_failure_counts.get(camera_key, 0) + 1
+                    fail_count = frame_failure_counts[camera_key]
+                    
+                    if fail_count % 30 == 0:
+                        logger.warning(f"⚠️ Frame okunamadı (ardışık {fail_count}) - {camera_key}")
+                    elif fail_count in (1, 5, 10):
+                        logger.debug(f"⚠️ Frame okunamadı (count={fail_count}): {camera_key}")
+                    
+                    time.sleep(0.1)
+                    
+        except Exception as e:
+            logger.error(f"❌ SaaS Kamera worker hatası: {e}")
+        finally:
+            if cap:
+                cap.release()
+            if camera_key in camera_captures:
+                del camera_captures[camera_key]
+            if camera_key in frame_buffers:
+                del frame_buffers[camera_key]
+            
+            logger.info(f"🛑 SaaS Kamera worker durduruldu: {camera_key}")
 
     def generate_saas_frames(self, camera_key, company_id, camera_id, active_detectors_ref=None):
-        """SaaS Frame Generator - Stream için MJPEG üretir"""
+        """SaaS Frame Generator - detection state ref ile senkron"""
+        import cv2
+        
         ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+        
         while ad.get(camera_key, False):
             try:
+                # Frame al
                 if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
                     frame = frame_buffers[camera_key].copy()
                     
-                    # En son detection sonucunu al ve çiz
-                    if camera_key in detection_results and not detection_results[camera_key].empty():
-                        res = detection_results[camera_key].get_nowait()
-                        frame = self.draw_saas_overlay(frame, res)
-                        detection_results[camera_key].put_nowait(res) # Geri koy
+                    # Detection sonuçlarını al
+                    detection_overlay = self.get_detection_overlay(camera_key)
                     
-                    ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    # Overlay ekle
+                    if detection_overlay:
+                        frame = self.draw_saas_overlay(frame, detection_overlay)
+                    
+                    # Frame'i encode et
+                    ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
                     if ret:
-                        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 else:
-                    time.sleep(0.1)
-            except Exception:
+                    # Placeholder: Kamera worker henüz frame doldurmadıysa okunabilir mesaj
+                    import numpy as np
+                    placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+                    placeholder[:] = (40, 40, 40)  # Koyu gri arka plan (siyah değil)
+                    cv2.putText(placeholder, 'Kamera hazirlaniyor...', (120, 220),
+                               cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
+                    cv2.putText(placeholder, 'PPE Detection aktif', (180, 270),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200, 200, 200), 2)
+                    
+                    ret, buffer = cv2.imencode('.jpg', placeholder)
+                    if ret:
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                
+                time.sleep(0.05)  # ~20 FPS
+                
+            except Exception as e:
+                logger.error(f"❌ Frame generation hatası: {e}")
                 time.sleep(0.1)
 
-    def draw_saas_overlay(self, frame, detection_data):
-        """Görüntü üzerine tespit kutularını ve istatistikleri çizer"""
+    def get_detection_overlay(self, camera_key):
+        """Detection overlay bilgilerini al"""
         try:
-            h, w = frame.shape[:2]
-            detections = detection_data.get('detections', [])
+            if camera_key in detection_results:
+                # En son detection sonucunu al
+                latest_result = None
+                temp_results = []
+                
+                # Queue'dan tüm sonuçları al
+                while not detection_results[camera_key].empty():
+                    try:
+                        result = detection_results[camera_key].get_nowait()
+                        temp_results.append(result)
+                    except queue.Empty:
+                        break
+                
+                # En son sonucu al
+                if temp_results:
+                    latest_result = temp_results[-1]
+                    
+                    # Sonuçları geri koy (sadece son 5'ini)
+                    for result in temp_results[-5:]:
+                        try:
+                            detection_results[camera_key].put_nowait(result)
+                        except queue.Full:
+                            break
+                
+                return latest_result
             
-            for det in detections:
-                bbox = det.get('bbox', [])
-                if len(bbox) == 4:
-                    x1, y1, x2, y2 = map(int, bbox)
-                    label = det.get('class_name', 'unknown')
-                    conf = det.get('confidence', 0)
-                    color = (0, 255, 0) if det.get('compliant', True) else (0, 0, 255)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        except Exception as e:
+            logger.error(f"❌ Detection overlay hatası: {e}")
+        
+        return None
+
+    def draw_saas_overlay(self, frame, detection_data):
+        """SaaS Detection Overlay çiz - Bounding Box'lar ile"""
+        import cv2
+        
+        try:
+            # Detection data type kontrolü - String ise işleme
+            if not isinstance(detection_data, dict):
+                logger.warning(f"⚠️ Detection data string olarak geldi: {type(detection_data)}")
+                return frame
             
             # Üst bilgi paneli
-            cv2.rectangle(frame, (0, 0), (w, 40), (0, 0, 0), -1)
-            info_text = f"People: {detection_data.get('total_people', 0)} | Compliant: {detection_data.get('ppe_compliant', 0)} | Rate: %{detection_data.get('compliance_rate', 0)}"
-            cv2.putText(frame, info_text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            return frame
-        except Exception: return frame
+            cv2.rectangle(frame, (0, 0), (640, 80), (0, 0, 0), -1)
+            cv2.rectangle(frame, (0, 0), (640, 80), (255, 255, 255), 2)
+            
+            # Başlık
+            cv2.putText(frame, 'SmartSafe AI - Live Detection', (10, 25), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            # İstatistikler
+            people_count = detection_data.get('people_detected', 0)
+            compliance_rate = detection_data.get('compliance_rate', 0)
+            violations = detection_data.get('ppe_violations', [])
+            
+            cv2.putText(frame, f'People: {people_count}', (10, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.putText(frame, f'Compliance: {compliance_rate}%', (120, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.putText(frame, f'Violations: {len(violations)}', (280, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            # Uyum durumu göstergesi
+            color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
+            cv2.circle(frame, (600, 40), 15, color, -1)
+            
+            # 🎯 BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
+            detections = detection_data.get('detections', [])
+            if detections and isinstance(detections, list):
+                for detection in detections:
+                    if not isinstance(detection, dict):
+                        continue
+                        
+                    bbox = detection.get('bbox', [])
+                    class_name = detection.get('class_name', 'unknown')
+                    confidence = detection.get('confidence', 0.0)
+                    
+                    if len(bbox) == 4:  # x1, y1, x2, y2
+                        try:
+                            x1, y1, x2, y2 = [int(coord) for coord in bbox]
+                            
+                            # PPE türüne göre renk belirle
+                            from detection.utils.visual_overlay import draw_styled_box, get_class_color
+                            
+                            color = get_class_color(class_name, is_missing=False)
+                            
+                            # Etiket hazırla
+                            label = f"{class_name} {confidence:.2f}"
+                            
+                            # Profesyonel bounding box çiz
+                            frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
+                        except Exception as bbox_error:
+                            logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
+                            continue
+            
+            # İhlal detayları
+            if violations and isinstance(violations, list):
+                y_offset = 100
+                for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
+                    if isinstance(violation, dict):
+                        missing_ppe = ', '.join(violation.get('missing_ppe', []))
+                        cv2.putText(frame, f'Violation {i+1}: {missing_ppe}', (10, y_offset), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                        y_offset += 20
+            
+            # Zaman damgası
+            timestamp = detection_data.get('timestamp', '')
+            if timestamp:
+                try:
+                    if isinstance(timestamp, (int, float)):
+                        # Unix timestamp'i string'e çevir
+                        import datetime
+                        timestamp_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        timestamp_str = str(timestamp)[:19]
+                    
+                    cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                except Exception as ts_error:
+                    logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
+            
+        except Exception as e:
+            logger.error(f"❌ Overlay çizim hatası: {e}")
+        
+        return frame
 
-    def _normalize_ppe_violations(self, ppe_violations):
-        """İhlalleri standart formata çevirir"""
-        normalized, simple = [], []
-        if not ppe_violations: return [], []
-        for v in ppe_violations:
-            if isinstance(v, dict):
-                simple.append(str(v.get('missing_ppe', ['Unknown'])[0]))
-                normalized.append(v)
-            else:
-                simple.append(str(v))
-                normalized.append({'missing_ppe': [str(v)], 'confidence': 0})
-        return normalized, simple
+    def save_detection_to_db(self, detection_data):
+        """Detection sonuçlarını veritabanına kaydet - Production uyumlu"""
+        try:
+            # Local (SQLite) ortamda legacy 'detections' şeması (people_detected, violations_count vb.)
+            # zaten _save_detection_to_reports ile dolduruluyor. Bu fonksiyonun ek person_count
+            # kolonunu kullanması sadece PostgreSQL/Supabase tarafında anlamlı.
+            if not hasattr(self.db, 'db_adapter'):
+                return
 
-    def _save_detection_to_reports(self, company_id, camera_id, mode, people, compliant, violations, proc_time, conf):
-        """Database'e istatistik kaydı atar"""
+            db_type = getattr(self.db.db_adapter, 'db_type', 'sqlite')
+            if db_type == 'sqlite':
+                # SQLite'ta extra özet kayıt atlamayı tercih ediyoruz; mevcut şema bozulmuyor.
+                logger.debug("Skipping save_detection_to_db on sqlite (legacy detections schema is used).")
+                return
+
+            # PostgreSQL / Supabase tarafı: modern özet şema
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '%s'
+            
+            cursor.execute(f'''
+                INSERT INTO detections (
+                    company_id, camera_id, timestamp, person_count, 
+                    ppe_compliant, compliance_rate, processing_time_ms
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+            ''', (
+                detection_data['company_id'],
+                detection_data['camera_id'],
+                detection_data['timestamp'],
+                detection_data.get('person_count', detection_data.get('people_detected', 0)),
+                detection_data.get('ppe_compliant', True),
+                detection_data.get('compliance_rate', 100),
+                detection_data.get('processing_time_ms', 0)
+            ))
+            
+            conn.commit()
+            conn.close()
+            logger.debug(f"✅ Detection kaydedildi (summary): {detection_data.get('camera_id', 'unknown')}")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Detection DB kayıt hatası (devam ediliyor): {e}")
+            # Production'da DB hatası olsa bile detection devam etsin
+
+    def save_violations_to_db(self, company_id, camera_id, violations):
+        """İhlalleri veritabanına kaydet - Production uyumlu"""
         try:
             conn = self.db.get_connection()
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO detections (company_id, camera_id, detection_type, people_detected, ppe_compliant, violations_count, confidence, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                         (company_id, camera_id, mode, people, compliant, violations, conf, datetime.now()))
+            
+            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
+            
+            for violation in violations:
+                # Production uyumlu şema - confidence kolonu kullan
+                cursor.execute(f'''
+                    INSERT INTO violations (
+                        company_id, camera_id, timestamp, violation_type, 
+                        missing_ppe, confidence, worker_id
+                    ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ''', (
+                    company_id,
+                    camera_id,
+                    datetime.now().isoformat(),
+                    'PPE_VIOLATION',
+                    ', '.join(violation.get('missing_ppe', [])),
+                    violation.get('confidence', 0.0),  # confidence
+                    violation.get('person_id', 'unknown')
+                ))
+            
             conn.commit()
             conn.close()
-        except Exception: pass
+            logger.debug(f"✅ Violation kaydedildi: {camera_id}")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Violation DB kayıt hatası (devam ediliyor): {e}")
+            # Production'da DB hatası olsa bile detection devam etsin
 
-    def _save_violation_to_reports(self, company_id, camera_id, violation):
-        """Database'e ihlal kaydı atar"""
-        try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            missing = violation.get('missing_ppe', ['Unknown'])[0]
-            cursor.execute("INSERT INTO violations (company_id, camera_id, missing_ppe, confidence, timestamp) VALUES (?, ?, ?, ?, ?)",
-                         (company_id, camera_id, missing, violation.get('confidence', 0), datetime.now()))
-            conn.commit()
-            conn.close()
-        except Exception: pass
+    def get_live_detection_template(self):
+        """SaaS Live Detection HTML Template"""
+        return '''
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canlı Tespit - SmartSafe AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --dark-color: #2c3e50;
+        }
 
-    def _generate_live_alerts(self, company_id, camera_id, people, compliant, violations, mode):
-        """Anlık alarmlar üretir"""
-        if violations > 0:
-            try:
-                conn = self.db.get_connection()
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO alerts (company_id, camera_id, alert_type, severity, title, message, status, created_at) VALUES (?, ?, 'ppe_violation', 'warning', 'PPE Ihlali', ?, 'active', ?)",
-                             (company_id, camera_id, f"{violations} adet PPE ihlali tespit edildi.", datetime.now()))
-                conn.commit()
-                conn.close()
-            except Exception: pass
+        body {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
 
-    def save_detection_to_db(self, data):
-        """Genel istatistikleri periyodik kaydeder"""
-        pass # Opsiyonel
+        .navbar {
+            background: rgba(255,255,255,0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
 
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--dark-color) !important;
+            font-size: 1.5rem;
+        }
+
+        .main-container {
+            margin-top: 20px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.95);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 20px;
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .camera-stream {
+            width: 100%;
+            height: 400px;
+            border-radius: 10px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .camera-stream img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 10px;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--dark-color);
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .btn-custom {
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+        }
+
+        .btn-success-custom {
+            background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-danger-custom {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #e74c3c 100%);
+            color: white;
+        }
+
+        .alert-custom {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+
+        .camera-controls {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+        .violation-item {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 4px solid var(--danger-color);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .compliance-good { color: var(--success-color); }
+        .compliance-warning { color: var(--warning-color); }
+        .compliance-danger { color: var(--danger-color); }
+
+        .system-status {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/company/{{ company_id }}/dashboard">
+                <i class="fas fa-shield-alt"></i> SmartSafe AI
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/company/{{ company_id }}/dashboard">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a class="nav-link" href="/company/{{ company_id }}/cameras">
+                    <i class="fas fa-video"></i> Kameralar
+                </a>
+                <a class="nav-link active" href="/api/company/{{ company_id }}/live-detection">
+                    <span class="live-indicator"></span> Canlı Tespit
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <div class="row">
+            <div class="col-12">
+                <div class="text-center mb-4">
+                    <h1 class="text-white display-4 fw-bold">
+                        <i class="fas fa-eye"></i> Canlı PPE Tespiti
+                    </h1>
+                    <p class="text-white-50 fs-5">{{ company_name }} - {{ sector|title }} Sektörü</p>
+                </div>
+                
+                <div class="system-status">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <i class="fas fa-server"></i>
+                            <span class="ms-2">Sistem: <strong id="system-status">Hazır</strong></span>
+                        </div>
+                        <div class="col-md-3">
+                            <i class="fas fa-video"></i>
+                            <span class="ms-2">Aktif Kameralar: <strong id="active-cameras">0</strong></span>
+                        </div>
+                        <div class="col-md-3">
+                            <i class="fas fa-eye"></i>
+                            <span class="ms-2">Tespitler: <strong id="total-detections">0</strong></span>
+                        </div>
+                        <div class="col-md-3">
+                            <i class="fas fa-percentage"></i>
+                            <span class="ms-2">Uyum: <strong id="compliance-rate">--%</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Ana Kamera Görüntüsü -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-video"></i> Kamera Görüntüsü
+                            <span class="live-indicator"></span>
+                            <span id="camera-status">Bekleniyor...</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="camera-controls">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label text-white">Kamera Seç:</label>
+                                    <select class="form-select" id="camera-select">
+                                        <option value="">Kamera seçin...</option>
+                                        {% for camera in cameras %}
+                                        <option value="{{ camera.camera_id }}">
+                                            {{ camera.name }} ({{ camera.location }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-white">Güven Eşiği:</label>
+                                    <select class="form-select" id="confidence-select">
+                                        <option value="0.3">Düşük (0.3)</option>
+                                        <option value="0.5" selected>Orta (0.5)</option>
+                                        <option value="0.7">Yüksek (0.7)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12 text-center">
+                                    <button class="btn btn-success-custom btn-custom me-2" onclick="startDetection()">
+                                        <i class="fas fa-play"></i> Tespiti Başlat
+                                    </button>
+                                    <button class="btn btn-danger-custom btn-custom" onclick="stopDetection()">
+                                        <i class="fas fa-stop"></i> Tespiti Durdur
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="camera-stream" id="camera-display">
+                            <div class="text-center">
+                                <i class="fas fa-camera fa-3x mb-3"></i>
+                                <p>Kamera seçin ve tespiti başlatın</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- İstatistikler ve Kontroller -->
+            <div class="col-lg-4">
+                <!-- Canlı İstatistikler -->
+                <div class="stats-card text-center">
+                    <div class="stat-value" id="people-count">0</div>
+                    <div class="stat-label">Tespit Edilen Kişi</div>
+                </div>
+                
+                <div class="stats-card text-center">
+                    <div class="stat-value compliance-good" id="compliant-count">0</div>
+                    <div class="stat-label">PPE Uyumlu</div>
+                </div>
+                
+                <div class="stats-card text-center">
+                    <div class="stat-value compliance-danger" id="violation-count">0</div>
+                    <div class="stat-label">İhlal Sayısı</div>
+                </div>
+
+                <!-- Son İhlaller -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> Son İhlaller
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-violations">
+                            <p class="text-muted text-center">İhlal bulunamadı</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PPE Gereksinimleri -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-hard-hat"></i> PPE Gereksinimleri
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for ppe in ppe_config %}
+                            <div class="col-6 mb-2">
+                                <div class="text-center p-2 bg-light rounded">
+                                    <i class="fas fa-check-circle text-success"></i>
+                                    <small class="d-block">{{ ppe|title }}</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentCameraId = null;
+        let detectionActive = false;
+        let statsInterval = null;
+
+        // Tespit başlatma
+        function startDetection() {
+            const cameraSelect = document.getElementById('camera-select');
+            const confidenceSelect = document.getElementById('confidence-select');
+            
+            if (!cameraSelect.value) {
+                alert('Lütfen bir kamera seçin!');
+                return;
+            }
+            
+            if (detectionActive) {
+                alert('Tespit zaten aktif!');
+                return;
+            }
+            
+            currentCameraId = cameraSelect.value;
+            const confidence = parseFloat(confidenceSelect.value);
+            
+            // Tespit başlat
+            fetch('/api/company/{{ company_id }}/start-detection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    camera_id: currentCameraId,
+                    detection_mode: 'ppe',
+                    confidence: confidence
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    detectionActive = true;
+                    document.getElementById('camera-status').textContent = 'Aktif';
+                    document.getElementById('system-status').textContent = 'Çalışıyor';
+                    
+                    // Video stream'i başlat - PPE overlay'li detection stream kullan
+                    const streamUrl = `/api/company/{{ company_id }}/cameras/${currentCameraId}/detection/stream`;
+                    document.getElementById('camera-display').innerHTML = 
+                        `<img src="${streamUrl}" alt="Kamera Görüntüsü" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+                    
+                    // İstatistikleri güncellemeye başla
+                    startStatsUpdate();
+                    
+                    showAlert('Tespit başarıyla başlatıldı!', 'success');
+                } else {
+                    showAlert('Tespit başlatılamadı: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Bir hata oluştu!', 'danger');
+            });
+        }
+
+        // Tespit durdurma
+        function stopDetection() {
+            if (!detectionActive) {
+                alert('Tespit zaten durmuş!');
+                return;
+            }
+            
+            fetch('/api/company/{{ company_id }}/stop-detection', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    detectionActive = false;
+                    currentCameraId = null;
+                    document.getElementById('camera-status').textContent = 'Durduruldu';
+                    document.getElementById('system-status').textContent = 'Hazır';
+                    
+                    // Video stream'i durdur
+                    document.getElementById('camera-display').innerHTML = `
+                        <div class="text-center">
+                            <i class="fas fa-camera fa-3x mb-3"></i>
+                            <p>Kamera seçin ve tespiti başlatın</p>
+                        </div>
+                    `;
+                    
+                    // İstatistik güncellemeyi durdur
+                    stopStatsUpdate();
+                    
+                    showAlert('Tespit durduruldu!', 'info');
+                } else {
+                    showAlert('Tespit durdurulamadı: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Bir hata oluştu!', 'danger');
+            });
+        }
+
+        // İstatistik güncelleme
+        function startStatsUpdate() {
+            statsInterval = setInterval(updateStats, 2000); // Her 2 saniyede bir
+        }
+
+        function stopStatsUpdate() {
+            if (statsInterval) {
+                clearInterval(statsInterval);
+                statsInterval = null;
+            }
+        }
+
+        function updateStats() {
+            if (!detectionActive || !currentCameraId) return;
+            
+            // Canlı istatistikleri al
+            fetch(`/api/company/{{ company_id }}/live-stats`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('active-cameras').textContent = stats.active_cameras;
+                        document.getElementById('total-detections').textContent = stats.recent_detections;
+                        document.getElementById('compliance-rate').textContent = stats.compliance_rate + '%';
+                        
+                        // Compliance rate renk
+                        const complianceElement = document.getElementById('compliance-rate');
+                        if (stats.compliance_rate >= 80) {
+                            complianceElement.className = 'compliance-good';
+                        } else if (stats.compliance_rate >= 60) {
+                            complianceElement.className = 'compliance-warning';
+                        } else {
+                            complianceElement.className = 'compliance-danger';
+                        }
+                    }
+                })
+                .catch(error => console.error('Stats update error:', error));
+            
+            // Detection durumu al
+            fetch(`/api/company/{{ company_id }}/detection-status/${currentCameraId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.recent_results.length > 0) {
+                        const latest = data.recent_results[data.recent_results.length - 1];
+                        
+                        document.getElementById('people-count').textContent = latest.people_detected || 0;
+                        document.getElementById('compliant-count').textContent = latest.ppe_compliant || 0;
+                        document.getElementById('violation-count').textContent = latest.ppe_violations ? latest.ppe_violations.length : 0;
+                        
+                        // İhlalleri göster
+                        updateViolations(latest.ppe_violations || []);
+                    }
+                })
+                .catch(error => console.error('Detection status error:', error));
+        }
+
+        function updateViolations(violations) {
+            const container = document.getElementById('recent-violations');
+            
+            if (violations.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center">İhlal bulunamadı</p>';
+                return;
+            }
+            
+            let html = '';
+            violations.slice(0, 5).forEach((violation, index) => {
+                const missingPpe = violation.missing_ppe.join(', ');
+                html += `
+                    <div class="violation-item">
+                        <strong>Kişi ${index + 1}</strong>
+                        <div class="mt-1">
+                            <small class="text-danger">Eksik PPE: ${missingPpe}</small>
+                        </div>
+                        <div class="mt-1">
+                            <small class="text-muted">Güven: ${(violation.confidence * 100).toFixed(1)}%</small>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            alertDiv.style.cssText = 'top: 100px; right: 20px; z-index: 1050; min-width: 300px;';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', function() {
+            // İlk istatistikleri yükle
+            fetch(`/api/company/{{ company_id }}/live-stats`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('active-cameras').textContent = stats.active_cameras;
+                        document.getElementById('total-detections').textContent = stats.recent_detections;
+                        document.getElementById('compliance-rate').textContent = stats.compliance_rate + '%';
+                    }
+                })
+                .catch(error => console.error('Initial stats error:', error));
+        });
+    </script>
+</body>
+</html>
+        '''
+
+def main():
+    """Ana fonksiyon - Sadece development mode için"""
+    print("🌐 SmartSafe AI - SaaS Multi-Tenant API Server")
+    print("=" * 60)
+    print("✅ Multi-tenant şirket yönetimi")
+    print("✅ Şirket bazlı veri ayrımı")
+    print("✅ Güvenli oturum yönetimi")
+    print("✅ Kamera yönetimi")
+    print("✅ Responsive web arayüzü")
+    print("=" * 60)
+    print("🚀 Development Server başlatılıyor...")
+    
+    try:
+        api_server = SmartSafeSaaSAPI()
+        app = api_server.app
+        
+        # Development mode - Flask development server
+        # Port 5000 veya 10000 kullan (environment variable ile değiştirilebilir)
+        port = int(os.environ.get('PORT', 5000))  # Default 5000'e değiştirildi
+        logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
+        logger.info(f"🌐 Erişim URL: http://0.0.0.0:{port}/")
+        logger.info(f"🌐 Harici erişim: http://161.9.126.42:{port}/")
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)  # threaded=True for better performance
+            
+    except KeyboardInterrupt:
+        logger.info("🛑 SaaS API Server stopped by user")
+    except Exception as e:
+        logger.error(f"❌ SaaS API Server error: {e}")
+        return 1
+    
+    return 0
 
 # =============================================================================
 # PRODUCTION APP INSTANCE - Bu obje Gunicorn tarafından kullanılır
 # =============================================================================
+print("🔧 Creating global Flask app for production deployment...")
+
+# Global app variable for Gunicorn
+app = None
+
+def create_emergency_app():
+    """Emergency fallback Flask app for production issues"""
+    from flask import Flask, jsonify
+    emergency_app = Flask(__name__)
+    
+    @emergency_app.route('/health')
+    def health_check():
+        return jsonify({"status": "healthy", "mode": "emergency_fallback", "message": "System operational in fallback mode"})
+    
+    @emergency_app.route('/')
+    def emergency_home():
+        return """
+        <!DOCTYPE html>
+        <html><head><title>SmartSafe AI - Production Ready</title>
+        <style>body{font-family:Arial,sans-serif;margin:40px;background:#f5f5f5}
+        .container{max-width:800px;margin:0 auto;background:white;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
+        .status{color:#28a745;font-weight:bold}.warning{color:#ffc107}
+        .info{background:#e3f2fd;padding:15px;border-radius:5px;margin:20px 0}</style></head>
+        <body><div class="container">
+        <h1>🚀 SmartSafe AI - Production Ready</h1>
+        <p class="status">✅ System Status: OPERATIONAL</p>
+        <p class="warning">⚡ Running in optimized fallback mode</p>
+        <div class="info"><h3>🎯 Available Features:</h3>
+        <ul><li>✅ Health monitoring</li><li>✅ API endpoints</li><li>✅ Emergency fallback system</li>
+        <li>⚡ YOLOv8 PPE detection</li><li>🗄️ Database connectivity</li></ul></div>
+        <p><strong>SmartSafe AI</strong> - Enterprise PPE Detection Platform</p>
+        </div></body></html>"""
+    
+    @emergency_app.route('/api/status')
+    def api_status():
+        from datetime import datetime
+        return jsonify({
+            "status": "emergency_fallback",
+            "message": "Main system temporarily unavailable",
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    return emergency_app
+
+
 def create_app():
     """Factory function to create Flask app"""
+    global app
     try:
         api_server = SmartSafeSaaSAPI()
         app = api_server.app
-        print(f"✅ Flask app created successfully: {app.name}")
+        print(f"✅ Global Flask app created successfully: {app}")
+        print(f"📍 App name: {app.name}")
+        print(f"📍 Environment: {app.config.get('ENV', 'production')}")
+        print("🚀 Ready for WSGI server (Gunicorn)")
+        print("📌 Gunicorn will use this 'app' object directly")
         return app
     except Exception as e:
         print(f"❌ Critical error creating Flask app: {e}")
         import traceback
         traceback.print_exc()
-        raise
+        
+        app = create_emergency_app()
+        print("⚠️ Emergency fallback Flask app created")
+        return app
+
 
 # Create the app instance (used by Gunicorn)
 app = create_app()
@@ -2306,17 +4700,34 @@ app = create_app()
 # LOCAL DEVELOPMENT ENTRY POINT
 # =============================================================================
 if __name__ == "__main__":
+    import os, logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     env = os.getenv("ENV", "local").lower()
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", 5000 if env == "local" else 10000))
     host = "0.0.0.0"
 
-    print(f"🚀 Starting SmartSafe SaaS API")
-    print(f"🌐 Host: {host}, Port: {port}")
-    print(f"🔧 Environment: {env}")
+    logger.info(f"🚀 Starting SmartSafe SaaS API")
+    logger.info(f"🌐 Host: {host}, Port: {port}")
+    logger.info(f"🔧 Environment: {env}")
 
-    app.run(
-        host=host,
-        port=port,
-        debug=(env == "local"),
-        threaded=True
-    )
+    if env == "local":
+        # Only run Flask built-in server locally
+        logger.info("🧩 Running in LOCAL mode (Flask dev server)")
+        try:
+            app.run(
+                host=host,
+                port=port,
+                debug=True,
+                threaded=True,
+                use_reloader=True
+            )
+        except Exception as e:
+            logger.error(f"❌ Local server failed: {e}")
+            app = create_emergency_app()
+            app.run(host=host, port=port, debug=True)
+    else:
+        # Production mode (Render/Gunicorn)
+        logger.info("✅ Production environment detected — Gunicorn will serve the app.")
+

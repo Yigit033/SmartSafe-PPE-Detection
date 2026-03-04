@@ -46,8 +46,8 @@ class SH17ModelManager:
             logger.info("✅ SH17ModelManager already initialized, skipping...")
             return
             
-        logger.info("🔧 Initializing SH17ModelManager for the first time...")
-        self.models_dir = models_dir
+        # Modellerin bulunduğu klasörü (script'in kendi dizini) baz al
+        self.models_dir = os.path.dirname(os.path.abspath(__file__))
         self.device = 'cpu'
         self.models = {}
         self.fallback_model = None

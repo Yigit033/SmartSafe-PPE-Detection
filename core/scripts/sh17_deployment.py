@@ -13,7 +13,9 @@ from pathlib import Path
 
 class SH17Deployment:
     def __init__(self):
-        self.project_root = Path.cwd()
+        # Resolve project root correctly whether run from root or core/scripts
+        self.project_root = Path(__file__).resolve().parents[2]
+        print(f"📍 Project Root Resolved: {self.project_root}")
         self.test_results = {}
         
     def check_requirements(self):
@@ -130,7 +132,8 @@ class SH17Deployment:
             cv2.imwrite(str(test_image_path), test_image)
             
             # Model manager'ı test et
-            sys.path.append(str(self.project_root))
+            if str(self.project_root) not in sys.path:
+                sys.path.append(str(self.project_root))
             from models.sh17_model_manager import SH17ModelManager
             
             manager = SH17ModelManager()
