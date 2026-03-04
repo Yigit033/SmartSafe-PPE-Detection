@@ -45,6 +45,7 @@ from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
 from database.database_adapter import get_db_adapter
 from integrations.cameras.camera_integration_manager import DVRConfig
 from detection.snapshot_manager import get_snapshot_manager
+from detection.violation_tracker import get_violation_tracker
 from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
 import cv2
 import numpy as np
@@ -2290,9 +2291,18 @@ smartsafe_requests_total 100
         detection_count = 0
         
         # OPTİMİZE EDİLDİ: Frame skip ve confidence ayarları
-        frame_skip = 3  # Akıcılık için 3'e düşürüldü
+        # Kamera config'den al — her kamera için farklı hız ayarlanabilir
+        _camera_cfg = self.db.get_camera_by_id(camera_id, company_id) if camera_id else {}
+        frame_skip = int(_camera_cfg.get('frame_skip', 0) or os.environ.get('FRAME_SKIP', 3))
+        if frame_skip < 1:
+            frame_skip = 3  # sentinel: 0 veya negatif → varsayılan
         optimized_confidence = max(0.5, confidence)  # Minimum 0.5 confidence
-        
+
+
+        # Event-based ihlal takibi için ViolationTracker başlat
+        violation_tracker = get_violation_tracker()
+        logger.info("✅ ViolationTracker başlatıldı (event-based)")
+
         _active = ad.get(camera_key, False)
         logger.info(f"🔍 SaaS Detection worker loop başlıyor: active_detectors.get({camera_key}) = {_active}")
         
@@ -2357,11 +2367,7 @@ smartsafe_requests_total 100
                                     ppe_violations = [f"Missing: {item}" for item in missing]
                                 except Exception as comp_err:
                                     logger.error(f"❌ SH17 compliance analizi hatası: {comp_err}")
-                                    # Hata durumunda kimseyi ihlal saymamak yerine herkesi uyumlu kabul ediyoruz
-                                    ppe_compliant = people_detected
-                            elif people_detected > 0 and ppe_compliant == 0:
-                                # Pose-aware tarafı uyumlu saymadıysa ama kişi var; en azından detected sayısını kullan
-                                ppe_compliant = people_detected
+                                    # SH17 analiz hatası: uyumluluk bilinemez; 0 bırak (güvensiz varsayım yapma)
                         except Exception as detection_error:
                             logger.error(f"❌ Detection hatası: {detection_error}")
                             results = []
@@ -2374,9 +2380,49 @@ smartsafe_requests_total 100
                         ppe_violations = simple_ppe_violations
 
                         # Eğer kişi var ama hiç ihlal yoksa, tüm kişiler uyumlu kabul edilmeli.
-                        # PoseAware veya SH17 tarafı ppe_compliant'ı 0 bıraksa bile burada normalize ediyoruz.
+                        # Bu yalnızca pose-aware uyumluluk hesabi 0 bırakmışsa (PPE konfig yok) çalışır.
                         if people_detected > 0 and len(ppe_violations) == 0 and ppe_compliant == 0:
                             ppe_compliant = people_detected
+
+                        # ── EVENT-BASED ViolationTracker entegrasyonu ─────────────────────────
+                        # Kişi bazlı ihlal event'leri üret; her ihlal sadece başladığında DB'ye
+                        # yazılır (her frame'de spam yerine).
+                        tracker_new_violations: list = []
+                        if people_detected > 0 and ppe_violations:
+                            try:
+                                # results listesinden person bbox'larını çıkar
+                                persons_from_result = [
+                                    d for d in (results if isinstance(results, list) else [])
+                                    if isinstance(d, dict) and d.get('class_name') == 'person'
+                                ]
+                                if persons_from_result:
+                                    for p_idx, person_det in enumerate(persons_from_result):
+                                        p_bbox = person_det.get('bbox', [0, 0, 10, 10])
+                                        new_v, ended_v = violation_tracker.process_detection(
+                                            camera_id=camera_id,
+                                            company_id=company_id,
+                                            person_bbox=p_bbox,
+                                            violations=list(ppe_violations),
+                                        )
+                                        tracker_new_violations.extend(new_v)
+                                        if ended_v:
+                                            for ev in ended_v:
+                                                logger.info(
+                                                    f"✅ İhlal ÇÖZÜLDÜ: {ev.get('violation_type')} "
+                                                    f"| Kişi: {ev.get('person_id')} "
+                                                    f"| Süre: {ev.get('duration_seconds', 0)}s"
+                                                )
+                                else:
+                                    # Kişi bbox yok; dummy bbox ile tek kayıt
+                                    new_v, ended_v = violation_tracker.process_detection(
+                                        camera_id=camera_id,
+                                        company_id=company_id,
+                                        person_bbox=[0, 0, 10, 10],
+                                        violations=list(ppe_violations),
+                                    )
+                                    tracker_new_violations.extend(new_v)
+                            except Exception as vt_err:
+                                logger.warning(f"⚠️ ViolationTracker güncelleme hatası: {vt_err}")
 
                         # Reports kayıt (both SH17 and YOLOv8 paths)
                         try:
@@ -2400,8 +2446,27 @@ smartsafe_requests_total 100
                                     len(ppe_violations),
                                     detection_mode,
                                 )
-                            for violation in normalized_ppe_violations:
-                                self._save_violation_to_reports(company_id, camera_id, violation)
+                            # Yeni ihlalleri DB'ye yaz (sadece event başlangıcında — her frame'de spam yok)
+                            if tracker_new_violations:
+                                for new_ev in tracker_new_violations:
+                                    logger.info(
+                                        f"🚨 YENİ İHLAL: {new_ev.get('violation_type')} "
+                                        f"| Kişi: {new_ev.get('person_id')} "
+                                        f"| Kamera: {camera_id}"
+                                    )
+                                tracker_normalized = [
+                                    {
+                                        'person_id': ev.get('person_id', 'unknown'),
+                                        'missing_ppe': [ev.get('violation_type', 'unknown')],
+                                        'confidence': 0.9,
+                                    }
+                                    for ev in tracker_new_violations
+                                ]
+                                self.save_violations_to_db(company_id, camera_id, tracker_normalized)
+                            elif normalized_ppe_violations:
+                                # Tracker'dan event gelmedi (cooldown vs.); ilk frame fallback
+                                for violation in normalized_ppe_violations:
+                                    self._save_violation_to_reports(company_id, camera_id, violation)
                         except Exception as result_error:
                             logger.error(f"❌ Result processing hatası: {result_error}")
                         

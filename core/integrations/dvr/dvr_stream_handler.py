@@ -27,7 +27,13 @@ class DVRStreamHandler:
         self.max_buffer_size = 5  # Reduced from 10 to 5 for smoother playback
         self.connection_timeout = 3000  # Reduced from 5000 to 3000 ms for faster connection
         self.read_timeout = 2000  # Reduced from 3000 to 2000 ms for faster frame reading
-        
+
+        # Singleton model instance'ları — her detection çağrısında yeniden oluşturulmaz
+        # Bu, çok kanallı DVR'da RAM/GPU patlamasnı önler.
+        self._sh17_manager = None   # Lazy init at first use
+        self._pose_detector = None  # Lazy init at first use
+
+
         # DVR brand-specific URL patterns
         self.dvr_url_patterns = {
             'hikvision': [
@@ -329,10 +335,11 @@ class DVRStreamHandler:
             logger.error(f"❌ Network connectivity test failed: {e}")
             return False
     
-    def start_stream(self, stream_id: str, rtsp_url: str, 
-                    ip_address: str = None, username: str = None, 
-                    password: str = None, rtsp_port: int = None, 
-                    channel_number: int = None) -> bool:
+    def start_stream(self, stream_id: str, rtsp_url: str,
+                    ip_address: str = None, username: str = None,
+                    password: str = None, rtsp_port: int = None,
+                    channel_number: int = None,
+                    sector: Optional[str] = None) -> bool:
         """Start streaming with enhanced URL handling"""
         try:
             if stream_id in self.active_streams:
@@ -356,7 +363,8 @@ class DVRStreamHandler:
                         'username': username,
                         'password': password,
                         'rtsp_port': rtsp_port,
-                        'channel_number': channel_number
+                        'channel_number': channel_number,
+                        'sector': sector or self.active_streams[stream_id].get('sector'),
                     })
                     if stream_id not in self.frame_buffers:
                         self.frame_buffers[stream_id] = []
@@ -380,6 +388,7 @@ class DVRStreamHandler:
                 'password': password,
                 'rtsp_port': rtsp_port,
                 'channel_number': channel_number,
+                'sector': sector or 'construction',
                 'detection_result': {
                     'detections': [],
                     'people_detected': 0,
@@ -449,89 +458,74 @@ class DVRStreamHandler:
             logger.error(f"❌ Get status error: {e}")
             return None
     
-    def _perform_ppe_detection(self, frame, stream_id: str, use_pose: bool = True) -> Dict:
-        """Perform PPE detection on a frame with optional pose-aware detection"""
+    def _perform_ppe_detection(self, frame, stream_id: str, use_pose: bool = True,
+                               sector: Optional[str] = None) -> Dict:
+        """Perform PPE detection on a frame. sector eksikse stream metadata'dan al."""
         try:
-            # Stream info'dan sector bilgisini al (varsayılan: construction)
-            sector = 'construction'  # Varsayılan sektör
-            if stream_id in self.active_streams:
-                # Stream ID'den sector çıkar (örn: DVR_192_168_1_114_1 -> construction)
-                if 'construction' in stream_id.lower():
-                    sector = 'construction'
-                elif 'manufacturing' in stream_id.lower():
-                    sector = 'manufacturing'
-                elif 'chemical' in stream_id.lower():
-                    sector = 'chemical'
-                elif 'food' in stream_id.lower():
-                    sector = 'food_beverage'
-                elif 'warehouse' in stream_id.lower():
-                    sector = 'warehouse_logistics'
-                elif 'energy' in stream_id.lower():
-                    sector = 'energy'
-                elif 'petrochemical' in stream_id.lower():
-                    sector = 'petrochemical'
-                elif 'marine' in stream_id.lower():
-                    sector = 'marine_shipyard'
-                elif 'aviation' in stream_id.lower():
-                    sector = 'aviation'
-            
-            # 🚀 FAZ 3: POSE-AWARE DETECTION FOR DVR/NVR
+            # Sektör önceŏli olarak dışarıdan alınır; yoksa stream metadata'ya bak.
+            if not sector and stream_id in self.active_streams:
+                sector = self.active_streams[stream_id].get('sector')
+
+            # Sektör hala bilinemiyorsa varsayılan kullan.
+            if not sector:
+                sector = 'construction'
+                logger.debug(f"⚠️ Stream {stream_id}: sector belirlenemedi, varsayılan 'construction' kullanılıyor")
+
+            # 🚀 FAZ 3: POSE-AWARE DETECTION FOR DVR/NVR — Singleton model
             if use_pose:
                 try:
                     from detection.pose_aware_ppe_detector import get_pose_aware_detector
                     from models.sh17_model_manager import SH17ModelManager
-                    
-                    sh17_manager = SH17ModelManager()
-                    pose_detector = get_pose_aware_detector(ppe_detector=sh17_manager)
-                    
-                    logger.info(f"🎯 Using POSE-AWARE detection for DVR stream {stream_id}")
-                    result = pose_detector.detect_with_pose(frame, sector, confidence=0.25)
-                    
+
+                    # Lazy singleton: ilk çağrıda oluştur, sonra yeniden kullan.
+                    if self._sh17_manager is None:
+                        self._sh17_manager = SH17ModelManager()
+                        logger.info("✅ DVRStreamHandler: SH17ModelManager singleton oluşturuldu")
+                    if self._pose_detector is None:
+                        self._pose_detector = get_pose_aware_detector(ppe_detector=self._sh17_manager)
+                        logger.info("✅ DVRStreamHandler: PoseAwarePPEDetector singleton oluşturuldu")
+
+                    logger.debug(f"🎯 Pose-aware detection: stream={stream_id}, sector={sector}")
+                    result = self._pose_detector.detect_with_pose(frame, sector, confidence=0.25)
                     return result
-                    
+
                 except Exception as pose_error:
                     logger.warning(f"⚠️ DVR Pose-aware detection failed, falling back to standard: {pose_error}")
                     # Fall through to standard detection
-            
+
             # 🎯 FAZ 1-2: STANDARD DETECTION (FALLBACK)
             from models.sh17_model_manager import SH17ModelManager
-            sh17_manager = SH17ModelManager()
-            
-            # 🎯 PPE detection yap - PRODUCTION-GRADE (lowered confidence threshold)
-            detections = sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
-            
-            # Detection result'ı hazırla - String değil Dict olarak döndür
+            if self._sh17_manager is None:
+                self._sh17_manager = SH17ModelManager()
+                logger.info("✅ DVRStreamHandler: SH17ModelManager singleton oluşturuldu (fallback)")
+
+            detections = self._sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
             people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
-            
-            # Compliance analizi
-            required_ppe = sh17_manager.get_sector_requirements(sector)
-            compliance_analysis = sh17_manager.analyze_compliance(detections, required_ppe)
-            
-            detection_result = {
+            required_ppe = self._sh17_manager.get_sector_requirements(sector)
+            compliance_analysis = self._sh17_manager.analyze_compliance(detections, required_ppe)
+
+            return {
                 'detections': detections if isinstance(detections, list) else [],
                 'people_detected': people_detected,
                 'compliance_rate': int(compliance_analysis.get('score', 0) * 100) if isinstance(compliance_analysis, dict) else 100,
                 'ppe_violations': compliance_analysis.get('missing', []) if isinstance(compliance_analysis, dict) else [],
                 'timestamp': time.time(),
                 'sector': sector,
-                'model_type': 'SH17' if sh17_manager.is_sh17_available(sector) else 'Fallback'
+                'model_type': 'SH17' if self._sh17_manager.is_sh17_available(sector) else 'Fallback'
             }
-            
-            return detection_result
-            
+
         except Exception as e:
             logger.error(f"❌ PPE Detection error: {e}")
-            # Hata durumunda boş result döndür
             return {
                 'detections': [],
                 'people_detected': 0,
                 'compliance_rate': 100,
                 'ppe_violations': [],
                 'timestamp': time.time(),
-                'sector': 'unknown',
+                'sector': sector or 'unknown',
                 'model_type': 'Error'
             }
-    
+
     def get_latest_detection_result(self, stream_id: str) -> Optional[Dict]:
         """Get latest detection result for a stream - Bounding Box Overlay için"""
         try:
@@ -808,18 +802,15 @@ class DVRStreamHandler:
                         detection_frequency = self.active_streams[stream_id].get('detection_frequency', 15)
                         if frame_count % detection_frequency == 0:
                             try:
-                                # SH17 Model Manager'ı import et
-                                from models.sh17_model_manager import SH17ModelManager
-                                
-                                # Detection yap
-                                detection_result = self._perform_ppe_detection(frame, stream_id)
-                                
+                                # Singleton modeli kullanan _perform_ppe_detection çağrısı
+                                detection_result = self._perform_ppe_detection(
+                                    frame, stream_id,
+                                    sector=self.active_streams[stream_id].get('sector')
+                                )
                                 # Stream info'ya detection result'ı ekle
                                 if stream_id in self.active_streams:
                                     self.active_streams[stream_id]['detection_result'] = detection_result
-                                    
-                                logger.info(f"🎯 {stream_id}: Detection completed - People: {detection_result.get('people_detected', 0)}, PPE: {len(detection_result.get('detections', []))}")
-                                
+                                logger.debug(f"🎯 {stream_id}: Detection completed - People: {detection_result.get('people_detected', 0)}, PPE: {len(detection_result.get('detections', []))}")
                             except Exception as e:
                                 logger.warning(f"⚠️ Detection error for {stream_id}: {e}")
                         
@@ -941,10 +932,7 @@ class DVRStreamHandler:
 # Global stream handler instance
 stream_handler = DVRStreamHandler()
 
-def get_stream_handler() -> DVRStreamHandler:
-    """Get global stream handler instance"""
-    return stream_handler
 
 def get_stream_handler() -> DVRStreamHandler:
     """Get global stream handler instance"""
-    return stream_handler 
+    return stream_handler

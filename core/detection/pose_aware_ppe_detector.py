@@ -1034,7 +1034,13 @@ class PoseAwarePPEDetector:
 
                     if len(history) >= self.temporal_required_positive:
                         positive_count = sum(1 for v in history if v)
-                        temporal_compliant = positive_count >= self.temporal_required_positive
+                        # Orantısal eşik: pencere dolduğunda required/window_size oranı uygulanır.
+                        # Örn: 10/15 → %66 frame'de uyumluysa compliant say.
+                        proportional_threshold = max(
+                            1,
+                            round(self.temporal_required_positive * len(history) / self.temporal_window_size)
+                        )
+                        temporal_compliant = positive_count >= proportional_threshold
 
             if temporal_compliant:
                 compliant_people += 1

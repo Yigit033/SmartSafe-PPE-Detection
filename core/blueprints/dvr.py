@@ -235,6 +235,10 @@ def create_blueprint(api):
             # Generate stream ID
             stream_id = f"{dvr_id}_ch{channel_number:02d}"
             
+            # Şirket sektörünü DB'den al (DVR detection için doğru PPE kuralları)
+            company_info = api.db.get_company_info(company_id)
+            company_sector = company_info.get('sector', 'construction') if company_info else 'construction'
+
             # Ensure stream is running and wait until active
             success = stream_handler.start_stream(
                 stream_id=stream_id,
@@ -243,7 +247,8 @@ def create_blueprint(api):
                 username=dvr_system['username'],
                 password=dvr_system['password'],
                 rtsp_port=dvr_system['rtsp_port'],
-                channel_number=channel_number
+                channel_number=channel_number,
+                sector=company_sector,
             )
             if not success:
                 return jsonify({'success': False, 'error': 'Failed to start stream'}), 404
@@ -438,6 +443,9 @@ def create_blueprint(api):
                     f"/user={dvr_system['username']}&password={dvr_system['password']}"
                     f"&channel={channel_number}&stream=0.sdp"
                 )
+                # Şirket sektörünü al
+                company_info_mjpeg = api.db.get_company_info(company_id)
+                company_sector_mjpeg = company_info_mjpeg.get('sector', 'construction') if company_info_mjpeg else 'construction'
                 stream_handler.start_stream(
                     stream_id=stream_id,
                     rtsp_url=seed_rtsp,
@@ -445,7 +453,8 @@ def create_blueprint(api):
                     username=dvr_system['username'],
                     password=dvr_system['password'],
                     rtsp_port=dvr_system['rtsp_port'],
-                    channel_number=channel_number
+                    channel_number=channel_number,
+                    sector=company_sector_mjpeg,
                 )
 
             boundary = 'frame'

@@ -480,31 +480,32 @@ def create_blueprint(api):
             
             conn = api.db.get_connection()
             cursor = conn.cursor()
-            
+
             placeholder = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
-            
+            one_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+
             cursor.execute(f'''
-                SELECT COUNT(*) FROM detections 
-                WHERE company_id = {placeholder} 
-                AND timestamp >= datetime('now', '-1 hour')
-            ''', (company_id,))
-            
+                SELECT COUNT(*) FROM detections
+                WHERE company_id = {placeholder}
+                AND timestamp >= {placeholder}
+            ''', (company_id, one_hour_ago))
+
             recent_detections = cursor.fetchone()
             recent_detections = recent_detections[0] if recent_detections else 0
-            
+
             cursor.execute(f'''
-                SELECT COUNT(*) FROM violations 
-                WHERE company_id = {placeholder} 
-                AND timestamp >= datetime('now', '-1 hour')
-            ''', (company_id,))
-            
+                SELECT COUNT(*) FROM violations
+                WHERE company_id = {placeholder}
+                AND timestamp >= {placeholder}
+            ''', (company_id, one_hour_ago))
+
             recent_violations = cursor.fetchone()
             recent_violations = recent_violations[0] if recent_violations else 0
-            
+
             compliance_rate = 0
             if recent_detections > 0:
                 compliance_rate = max(0, (recent_detections - recent_violations) / recent_detections * 100)
-            
+
             conn.close()
             
             return jsonify({
