@@ -53,6 +53,7 @@ import queue
 from io import BytesIO
 import bcrypt
 from pathlib import Path
+from detection.utils.visual_overlay import draw_styled_box, get_class_color
 
 # Load environment variables
 load_dotenv()
@@ -2289,7 +2290,7 @@ smartsafe_requests_total 100
         detection_count = 0
         
         # OPTİMİZE EDİLDİ: Frame skip ve confidence ayarları
-        frame_skip = 6  # 3'ten 6'ya çıkarıldı (daha az işlem)
+        frame_skip = 3  # Akıcılık için 3'e düşürüldü
         optimized_confidence = max(0.5, confidence)  # Minimum 0.5 confidence
         
         _active = ad.get(camera_key, False)
@@ -3762,7 +3763,6 @@ smartsafe_requests_total 100
 
     def generate_saas_frames(self, camera_key, company_id, camera_id, active_detectors_ref=None):
         """SaaS Frame Generator - detection state ref ile senkron"""
-        import cv2
         
         ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
         
@@ -3801,7 +3801,7 @@ smartsafe_requests_total 100
                         yield (b'--frame\r\n'
                                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 
-                time.sleep(0.05)  # ~20 FPS
+                time.sleep(0.033)  # ~30 FPS (0.05'ten 0.033'e düşürüldü)
                 
             except Exception as e:
                 logger.error(f"❌ Frame generation hatası: {e}")
@@ -3843,7 +3843,6 @@ smartsafe_requests_total 100
 
     def draw_saas_overlay(self, frame, detection_data):
         """SaaS Detection Overlay çiz - Bounding Box'lar ile"""
-        import cv2
         
         try:
             # Detection data type kontrolü - String ise işleme
@@ -3893,8 +3892,6 @@ smartsafe_requests_total 100
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
                             # PPE türüne göre renk belirle
-                            from detection.utils.visual_overlay import draw_styled_box, get_class_color
-                            
                             color = get_class_color(class_name, is_missing=False)
                             
                             # Etiket hazırla
@@ -3922,8 +3919,8 @@ smartsafe_requests_total 100
                 try:
                     if isinstance(timestamp, (int, float)):
                         # Unix timestamp'i string'e çevir
-                        import datetime
-                        timestamp_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                        from datetime import datetime as dt
+                        timestamp_str = dt.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
                     else:
                         timestamp_str = str(timestamp)[:19]
                     
