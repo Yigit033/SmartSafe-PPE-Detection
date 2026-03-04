@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Lazy import to avoid circular import: smartsafe_saas_api -> blueprints -> detection -> smartsafe_saas_api
 def _get_detection_state():
-    from app import (
+    from core.app import (
         active_detectors,
         detection_threads,
         camera_captures,
@@ -316,10 +316,10 @@ def create_blueprint(api):
             if camera_key in state['active_detectors'] and state['active_detectors'][camera_key]:
                 return jsonify({'success': False, 'error': 'Kamera zaten aktif'})
             
-            # state dict zaten _get_detection_state() ile aynı referansı tutuyor
-            # Ek olarak modül seviyesindeki dict'e de yaz (reloader/çift app senaryosu)
-            from app import active_detectors as _module_ad
-            _module_ad[camera_key] = True
+            # Aynı process'te worker'ın gördüğü dict'i set et (referans tutarlılığı)
+            state['active_detectors'][camera_key] = True
+            import core.app as _api_mod
+            _api_mod.active_detectors[camera_key] = True
             logger.info(f"✅ active_detectors[{camera_key}] = True set before thread start")
             # Worker'ın aynı dict referansını görmesi için açıkça geçir (reloader/çift app senaryosu)
             active_detectors_ref = state['active_detectors']
@@ -623,7 +623,7 @@ def create_blueprint(api):
             
             limit = request.args.get('limit', 100, type=int)
             
-            from database.database_adapter import get_db_adapter
+            from core.database.database_adapter import get_db_adapter
             db = get_db_adapter()
             results = db.get_camera_detection_results(camera_id, company_id, limit)
             
@@ -670,7 +670,7 @@ def create_blueprint(api):
                     })
             
             try:
-                from database.database_adapter import get_db_adapter
+                from core.database.database_adapter import get_db_adapter
                 db = get_db_adapter()
                 
                 if not api.ensure_database_initialized():
@@ -721,7 +721,7 @@ def create_blueprint(api):
             if not user_data or user_data.get('company_id') != company_id:
                 return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
-            from database.database_adapter import get_db_adapter
+            from core.database.database_adapter import get_db_adapter
             db = get_db_adapter()
             violations = db.get_active_violations(camera_id=camera_id, company_id=company_id)
 
@@ -745,7 +745,7 @@ def create_blueprint(api):
             
             hours = request.args.get('hours', 24, type=int)
             
-            from database.database_adapter import get_db_adapter
+            from core.database.database_adapter import get_db_adapter
             db = get_db_adapter()
             stats = db.get_company_detection_stats(company_id, hours)
             
@@ -764,33 +764,26 @@ def create_blueprint(api):
     def get_detection_stream(company_id, camera_id):
         """Get live detection stream with overlay"""
         try:
-            # Debug log
-            logger.info(f"📥 Received detection stream request for camera: {camera_id}")
-            
             user_data = api.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
-                logger.warning(f"❌ Unauthorized stream request for company: {company_id}")
                 return jsonify({'success': False, 'error': 'Unauthorized'}), 401
             
             camera_key = f"{company_id}_{camera_id}"
             state = _get_detection_state()
-            
-            is_active = state['active_detectors'].get(camera_key, False)
-            logger.info(f"🔍 Detection status for {camera_key}: {is_active}")
-            
-            if is_active:
+            if state['active_detectors'].get(camera_key):
                 return Response(
                     api.generate_saas_frames(camera_key, company_id, camera_id, active_detectors_ref=state['active_detectors']),
                     mimetype='multipart/x-mixed-replace; boundary=frame'
                 )
             
             # Tespit kapalıyken tarayıcıyı doğrudan proxy-stream'e yönlendir.
+            # Böylece sunucu kendine istek atmaz (deadlock/timeout olmaz); Kamera Detayları ile aynı akış kullanılır.
             proxy_stream_path = f"/api/company/{company_id}/cameras/{camera_id}/proxy-stream"
             logger.info(f"🔗 Detection kapalı, proxy-stream'e yönlendiriliyor: {proxy_stream_path}")
             return redirect(proxy_stream_path)
             
         except Exception as e:
-            logger.error(f"❌ Detection stream endpoint error: {e}", exc_info=True)
+            logger.error(f"❌ Detection stream endpoint error: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     return bp

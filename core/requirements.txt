@@ -8,6 +8,7 @@ Pillow>=9.0.0
 # Will use GPU if available, CPU as fallback
 # Note: torch/torchvision are installed separately via --index-url for proper CPU/CUDA support
 ultralytics>=8.0.0
+supervision>=0.18.0
 # CUDA support will be automatically detected
 
 # Web Framework
