@@ -114,258 +114,161 @@ class SH17ModelManager:
         SH17ModelManager._initialized = True
         logger.info("✅ SH17ModelManager initialization complete (Singleton)")
         
+    # ─── Canonical SH17 class-name normalisation ───────────────────────────────
+    # Model output names  →  our internal names used in sector_mapping & PPE_CONFIG
+    _SH17_NAME_MAP = {
+        'ear-mufs':     'earmuffs',
+        'face-mask':    'face_mask_medical',
+        'face-guard':   'face_guard',
+        'tool':         'tools',
+        'medical-suit': 'medical_suit',
+        'safety-suit':  'safety_suit',
+        'safety-vest':  'safety_vest',
+        'glove':        'gloves',
+        'goggles':      'glasses',
+        'mask':         'face_mask_medical',
+        'hard_hat':     'helmet',
+        'hardhat':      'helmet',
+        'baret':        'helmet',
+    }
+
+    @classmethod
+    def _normalize_class_name(cls, raw: str) -> str:
+        """Model sınıf adını kanonik iç adına dönüştür."""
+        return cls._SH17_NAME_MAP.get(raw, raw.replace('-', '_'))
+
     def load_models(self):
-        """Tüm SH17 modellerini yükle ve fallback model'i hazırla"""
+        """
+        Tek SH17 modeli yükle (yolo9e.pt) ve tüm sektörlere paylaştır.
+
+        NEDEN TEK MODEL:
+          Tüm sektör-özel best.pt dosyaları aynı yolo9e.pt ağırlıklarıdır
+          (MD5 doğrulandı). 10 kopyayı ayrı ayrı yüklemek 10× bellek harcar.
+          Sektör farklılığı PPE gereksinimleri (sector_mapping) üzerinden yapılır.
+        """
         if YOLO is None:
             logger.error("❌ ultralytics not installed, cannot load models")
             return False
-        
+
         if self.models:
-            logger.info("✅ SH17 modelleri zaten yüklü, skip ediliyor...")
-            return
-            
-        logger.info("📦 SH17 modelleri yükleniyor...")
-        
-        # Production ortamında model dosyaları yoksa YOLOv8 modelleri kullan
-        is_production = os.environ.get('RENDER') is not None
-        
-        if is_production:
-            logger.info("🌐 Production ortamında - YOLOv8 sektör modelleri kullanılacak")
-            # Production'da her sektör için YOLOv8 variants kullan
-            model_paths = {
-                'base': 'yolov8n.pt',
-                'construction': 'yolov8s.pt', 
-                'manufacturing': 'yolov8m.pt',
-                'chemical': 'yolov8n.pt',
-                'food_beverage': 'yolov8n.pt',
-                'warehouse_logistics': 'yolov8s.pt',
-                'energy': 'yolov8n.pt',
-                'petrochemical': 'yolov8n.pt',
-                'marine_shipyard': 'yolov8n.pt',
-                'aviation': 'yolov8n.pt'
-            }
-        else:
-            # Development ortamında custom SH17 modelleri
-            model_paths = {
-                'base': f'{self.models_dir}/sh17_base/sh17_base_model/weights/best.pt',
-                'construction': f'{self.models_dir}/sh17_construction/sh17_construction_model/weights/best.pt',
-                'manufacturing': f'{self.models_dir}/sh17_manufacturing/sh17_manufacturing_model/weights/best.pt',
-                'chemical': f'{self.models_dir}/sh17_chemical/sh17_chemical_model/weights/best.pt',
-                'food_beverage': f'{self.models_dir}/sh17_food_beverage/sh17_food_beverage_model/weights/best.pt',
-                'warehouse_logistics': f'{self.models_dir}/sh17_warehouse_logistics/sh17_warehouse_logistics_model/weights/best.pt',
-                'energy': f'{self.models_dir}/sh17_energy/sh17_energy_model/weights/best.pt',
-                'petrochemical': f'{self.models_dir}/sh17_petrochemical/sh17_petrochemical_model/weights/best.pt',
-                'marine_shipyard': f'{self.models_dir}/sh17_marine_shipyard/sh17_marine_shipyard_model/weights/best.pt',
-                'aviation': f'{self.models_dir}/sh17_aviation/sh17_aviation_model/weights/best.pt'
-            }
-        
-        # SH17 modellerini yükle
-        loaded_models = 0
+            logger.info("✅ SH17 modeli zaten yüklü, skip ediliyor...")
+            return True
+
+        logger.info("📦 SH17 yolo9e.pt modeli yükleniyor...")
+
+        # Öncelik sırası: yolo9e.pt → sektör klasörlerinden biri → yolov8n (fallback)
+        candidate_paths = [
+            str(Path(self.models_dir) / 'yolo9e.pt'),
+            str(Path(self.models_dir) / 'sh17_base' / 'sh17_base_model' / 'weights' / 'best.pt'),
+            str(Path(self.models_dir) / 'sh17_construction' / 'sh17_construction_model' / 'weights' / 'best.pt'),
+        ]
+
         self._has_real_sh17 = False
-        for sector, path in model_paths.items():
-            if os.path.exists(path):
-                try:
-                    loaded_model = YOLO(path)
-                    loaded_model.to(self.device)
-                    
-                    # Verify this is a real SH17 model by checking class count
-                    model_classes = getattr(loaded_model, 'names', {})
-                    num_classes = len(model_classes)
-                    if num_classes == 17:
-                        self._has_real_sh17 = True
-                        logger.info(f"✅ {sector} SH17 model loaded (17 classes): {path}")
-                    elif num_classes == 80:
-                        logger.warning(f"⚠️ {sector}: COCO model detected at SH17 path (80 classes). "
-                                       f"This is a placeholder, not a trained SH17 model.")
-                    else:
-                        logger.info(f"ℹ️ {sector} model loaded ({num_classes} classes): {path}")
-                    
-                    self.models[sector] = loaded_model
-                    loaded_models += 1
-                except Exception as e:
-                    logger.warning(f"❌ {sector} modeli yüklenemedi: {e}")
-            else:
-                logger.debug(f"ℹ️ {sector} modeli bulunamadı: {path}")
-        
-        # Production-ready fallback model yükle - ENHANCED PATH RESOLUTION
-        try:
-            # Production ortamında pre-downloaded model'i kontrol et
-            if is_production:
-                # Docker'da indirilen modelleri kontrol et
-                docker_model_paths = [
-                    '/app/data/models/yolov8n.pt',
-                    '/app/data/models/yolov8s.pt',
-                    '/app/data/models/yolov8m.pt',
-                    'data/models/yolov8n.pt',
-                    'yolov8n.pt'
-                ]
-                
-                for model_path in docker_model_paths:
-                    if os.path.exists(model_path):
-                        try:
-                            self.fallback_model = YOLO(model_path)
-                            self.fallback_model.to(self.device)
-                            logger.info(f"✅ Fallback model yüklendi (pre-downloaded): {model_path}")
-                            return loaded_models > 0
-                        except Exception as e:
-                            logger.warning(f"⚠️ Pre-downloaded model yükleme hatası {model_path}: {e}")
-                            continue
-                
-                # Pre-downloaded model bulunamadıysa, otomatik indir
-                logger.info("🔄 Pre-downloaded model bulunamadı, YOLOv8n otomatik indiriliyor...")
-                self.fallback_model = YOLO('yolov8n.pt')  # Otomatik indir
-                self.fallback_model.to(self.device)
-                logger.info("✅ YOLOv8n fallback model başarıyla indirildi ve yüklendi")
-            else:
-                # Development: use data/models/yolov8n.pt if present, else auto-download
-                dev_fallback = 'data/models/yolov8n.pt'
-                if os.path.exists(dev_fallback):
-                    self.fallback_model = YOLO(dev_fallback)
-                    logger.info(f"✅ YOLOv8n fallback model yüklendi: {dev_fallback}")
+        primary_model = None
+
+        for path in candidate_paths:
+            if not os.path.exists(path):
+                continue
+            try:
+                m = YOLO(path)
+                m.to(self.device)
+                nc = len(getattr(m, 'names', {}))
+                if nc == 17:
+                    self._has_real_sh17 = True
+                    primary_model = m
+                    logger.info(f"✅ SH17 model yüklendi (17 sınıf): {path}")
+                    break
                 else:
-                    self.fallback_model = YOLO('yolov8n.pt')
-                    logger.info("✅ YOLOv8n fallback model yüklendi (auto-download)")
-                self.fallback_model.to(self.device)
-                
-        except Exception as e:
-            logger.warning(f"⚠️ Fallback model yükleme hatası: {e}")
-            # Manuel fallback yolları dene - ENHANCED
-            fallback_paths = [
-                '/app/data/models/yolov8n.pt',
-                '/app/data/models/yolov8s.pt',
-                'data/models/yolov8n.pt',
-                'data/models/yolov8s.pt',
-                'yolov8n.pt',
-                'yolov8s.pt'
-            ]
-            
-            for fallback_path in fallback_paths:
-                if os.path.exists(fallback_path):
-                    try:
-                        self.fallback_model = YOLO(fallback_path)
-                        self.fallback_model.to(self.device)
-                        logger.info(f"✅ Fallback model yüklendi: {fallback_path}")
-                        return loaded_models > 0
-                    except Exception as load_error:
-                        logger.warning(f"⚠️ Fallback model yükleme hatası {fallback_path}: {load_error}")
-                        continue
-            
-            logger.error("❌ Hiç fallback model bulunamadı, sistem limited mode'de çalışacak")
-            self.fallback_model = None
-                
-        logger.info(f"📊 Toplam {loaded_models} SH17 model yüklendi")
-        
-        # Eğer hiç SH17 model yüklenmediyse, fallback'i zorunlu kıl
-        if loaded_models == 0:
-            logger.warning("⚠️ Hiç SH17 model yüklenemedi, fallback sistemi aktif")
+                    logger.warning(f"⚠️ {path}: {nc} sınıf — SH17 değil, atlandı")
+            except Exception as e:
+                logger.warning(f"⚠️ Model yüklenemedi {path}: {e}")
+
+        if primary_model is not None:
+            # Tek model tüm sektörlere paylaştırılır — sektör ayrımı requirements'tan gelir
+            sectors = list(self.sector_mapping.keys()) + ['base']
+            for s in sectors:
+                self.models[s] = primary_model
+            logger.info(f"🔀 Tek SH17 model {len(self.models)} sektöre paylaştırıldı (shared reference, bellek: 1×)")
+        else:
+            logger.warning("⚠️ Hiç SH17 model bulunamadı — fallback yüklenecek")
+
+        # Fallback (COCO yolov8n) — sadece SH17 yoksa devreye girer
+        if not self._has_real_sh17:
             self._ensure_fallback_model()
-        
-        return loaded_models > 0
-    
+
+        loaded = len(self.models)
+        logger.info(f"📊 SH17 sektör coverage: {loaded} sektör, real_sh17={self._has_real_sh17}")
+        return loaded > 0
+
     def _ensure_fallback_model(self):
         """Fallback model'in yüklü olduğundan emin ol"""
-        if self.fallback_model is None:
-            try:
-                fallback_path = 'yolov8n.pt'
-                if os.path.exists(fallback_path):
-                    self.fallback_model = YOLO(fallback_path)
+        if self.fallback_model is not None:
+            return
+        fallback_candidates = [
+            str(Path(self.models_dir).parent / 'core' / 'yolov8n.pt'),
+            'yolov8n.pt',
+        ]
+        for path in fallback_candidates:
+            if os.path.exists(path):
+                try:
+                    self.fallback_model = YOLO(path)
                     self.fallback_model.to(self.device)
-                    logger.info(f"✅ Fallback model zorunlu yüklendi: {fallback_path}")
-                else:
-                    logger.error("❌ Fallback model bulunamadı!")
-            except Exception as e:
-                logger.error(f"❌ Fallback model yüklenemedi: {e}")
-    
+                    logger.info(f"✅ Fallback model yüklendi: {path}")
+                    return
+                except Exception as e:
+                    logger.warning(f"⚠️ Fallback yüklenemedi {path}: {e}")
+        # Son çare: auto-download
+        try:
+            self.fallback_model = YOLO('yolov8n.pt')
+            self.fallback_model.to(self.device)
+            logger.info("✅ YOLOv8n fallback auto-downloaded")
+        except Exception as e:
+            logger.error(f"❌ Fallback model tamamen başarısız: {e}")
+            self.fallback_model = None
+
     def get_model(self, sector='base'):
-        """Model al - lazy loading ile (RENDER.COM OPTIMIZATION)"""
-        # Eğer model zaten yüklüyse, onu döndür
+        """Model al — tüm sektörler için shared SH17 modeli döndür"""
+        # Eğer model yüklüyse hepsine aynı shared instance döner
         if sector in self.models:
             return self.models[sector]
-        
-        # Lazy loading aktifse ve model henüz yüklenmemişse, şimdi yükle
-        if self.lazy_loading:
-            logger.info(f"🔄 Lazy loading: {sector} modeli yükleniyor...")
-            
-            # Production ortamında sadece yolov8n kullan (memory optimization)
-            model_path = 'yolov8n.pt'
-            
-            try:
-                model = YOLO(model_path)
-                model.to(self.device)
-                self.models[sector] = model
-                logger.info(f"✅ {sector} modeli lazy loading ile yüklendi: {model_path}")
-                return model
-            except Exception as e:
-                logger.error(f"❌ {sector} modeli lazy loading hatası: {e}")
-                # Fallback model döndür
-                self._ensure_fallback_model()
-                return self.fallback_model
-        
-        # Fallback model döndür
+        # Lazy: yüklemediyse yükle
+        if not self.models:
+            self.load_models()
+        if sector in self.models:
+            return self.models[sector]
+        # Base veya fallback
+        if self.models:
+            return next(iter(self.models.values()))
         self._ensure_fallback_model()
         return self.fallback_model
-        
+
     def detect_ppe(self, image, sector='base', confidence=0.5):
-        """PPE tespiti yap - SH17 veya fallback ile (OPTIMIZED)"""
-        import time
-        current_time = time.time()
-        
+        """PPE tespiti yap - SH17 veya fallback ile"""
         try:
-            # 🚀 DETECTION THROTTLING - Çok sık detection'ı engelle
-            cache_key = f"{sector}_{confidence}"
-            if cache_key in self.last_detection_time:
-                time_since_last = current_time - self.last_detection_time[cache_key]
-                if time_since_last < self.detection_throttle:
-                    # Cache'den son sonucu döndür
-                    if cache_key in self.model_cache:
-                        logger.debug(f"🚀 Cache'den detection sonucu döndürüldü: {sector}")
-                        return self.model_cache[cache_key]
-            
             # Önce SH17 model'i dene
             if sector in self.models and self.models[sector] is not None:
-                logger.info(f"🎯 SH17 {sector} modeli ile detection")
+                logger.debug(f"🎯 SH17 {sector} modeli ile detection")
                 result = self._detect_with_sh17(image, sector, confidence)
-                # String değil list döndür
-                final_result = result if isinstance(result, list) else []
-                
-                # Cache'e kaydet
-                self.model_cache[cache_key] = final_result
-                self.last_detection_time[cache_key] = current_time
-                
-                return final_result
-            
+                return result if isinstance(result, list) else []
+
             # SH17 yoksa fallback kullan
             elif self.fallback_model is not None:
-                logger.info(f"🔄 Fallback model ile detection (sector: {sector})")
+                logger.debug(f"🔄 Fallback model ile detection (sector: {sector})")
                 result = self._detect_with_fallback(image, sector, confidence)
-                # String değil list döndür
-                final_result = result if isinstance(result, list) else []
-                
-                # Cache'e kaydet
-                self.model_cache[cache_key] = final_result
-                self.last_detection_time[cache_key] = current_time
-                
-                return final_result
-            
+                return result if isinstance(result, list) else []
+
             else:
                 logger.error("❌ Hiçbir model yüklü değil!")
                 return []
-                
+
         except Exception as e:
             logger.error(f"❌ Detection hatası: {e}")
-            # Hata durumunda fallback'e geç
             try:
                 result = self._detect_with_fallback(image, sector, confidence)
-                final_result = result if isinstance(result, list) else []
-                
-                # Cache'e kaydet
-                cache_key = f"{sector}_{confidence}"
-                self.model_cache[cache_key] = final_result
-                self.last_detection_time[cache_key] = current_time
-                
-                return final_result
-            except:
+                return result if isinstance(result, list) else []
+            except Exception:
                 return []
+
             
     def _detect_with_sh17(self, image, sector, confidence):
         """SH17 model ile detection"""
@@ -374,85 +277,66 @@ class SH17ModelManager:
             if model is None:
                 logger.warning(f"⚠️ SH17 {sector} modeli None")
                 return []
-            
+
             results = model(image, conf=confidence, device=self.device, verbose=False)
-            
-            # Determine model type and class name source
+
             model_names = getattr(model, 'names', {})
             num_classes = len(model_names)
             is_coco = num_classes == 80
             is_10class_ppe = num_classes == 10
-            # ahmadmughees SH17 model uses different class order; normalize to our names
-            SH17_MODEL_NAME_TO_OURS = {
-                'ear-mufs': 'earmuffs', 'face-mask': 'face_mask_medical', 'face-guard': 'face_guard',
-                'tool': 'tools', 'medical-suit': 'medical_suit', 'safety-suit': 'safety_suit',
-                'safety-vest': 'safety_vest'
-            }
-            PPE_10_TO_SH17 = {
-                'glove': 'gloves', 'goggles': 'glasses', 'mask': 'face_mask_medical',
-                'helmet': 'helmet', 'shoes': 'shoes'
-            }
-        
+
             detections = []
             for result in results:
                 boxes = result.boxes
-                if boxes is not None and len(boxes) > 0:
-                    for box in boxes:
-                        try:
-                            cls_tensor = box.cls
-                            conf_tensor = box.conf
-                            xyxy_tensor = box.xyxy
-                            
-                            if cls_tensor is None or len(cls_tensor) == 0:
-                                continue
-                            if conf_tensor is None or len(conf_tensor) == 0:
-                                continue
-                            if xyxy_tensor is None or len(xyxy_tensor) == 0:
-                                continue
-                            
-                            class_id = int(cls_tensor[0].item())
-                            det_confidence = float(conf_tensor[0].item())
-                            bbox = xyxy_tensor[0].cpu().numpy().tolist()
-                            raw_name = model_names.get(class_id, 'unknown')
-                            
-                            if is_coco:
-                                # COCO placeholder: only pass 'person' for downstream PPE analysis
-                                if raw_name != 'person':
-                                    continue
-                                class_name = raw_name
-                                model_type = 'Fallback-COCO'
-                            elif is_10class_ppe:
-                                # 10-class PPE model: skip no_* (absence), map names for compliance
-                                if raw_name.startswith('no_'):
-                                    continue
-                                class_name = PPE_10_TO_SH17.get(raw_name, raw_name)
-                                model_type = 'PPE-10'
-                            elif num_classes == 17:
-                                # 17-class SH17 (e.g. ahmadmughees): use model names, normalize
-                                class_name = SH17_MODEL_NAME_TO_OURS.get(raw_name, raw_name.replace('-', '_'))
-                                model_type = 'SH17'
-                            else:
-                                class_name = self.sh17_classes.get(class_id, raw_name)
-                                model_type = 'SH17'
-                            
-                            detection = {
-                                'class_id': class_id,
-                                'class_name': class_name,
-                                'confidence': det_confidence,
-                                'bbox': bbox,
-                                'sector': sector,
-                                'model_type': model_type
-                            }
-                            detections.append(detection)
-                        except Exception as box_error:
-                            logger.warning(f"⚠️ Box processing hatası: {box_error}")
+                if boxes is None or len(boxes) == 0:
+                    continue
+                for box in boxes:
+                    try:
+                        cls_tensor = box.cls
+                        conf_tensor = box.conf
+                        xyxy_tensor = box.xyxy
+                        if not len(cls_tensor) or not len(conf_tensor) or not len(xyxy_tensor):
                             continue
-                        
+
+                        class_id = int(cls_tensor[0].item())
+                        det_confidence = float(conf_tensor[0].item())
+                        bbox = xyxy_tensor[0].cpu().numpy().tolist()
+                        raw_name = model_names.get(class_id, 'unknown')
+
+                        if is_coco:
+                            # COCO: sadece 'person' ile PPE analizi yapılabilir
+                            if raw_name != 'person':
+                                continue
+                            class_name = raw_name
+                            model_type = 'Fallback-COCO'
+                        elif is_10class_ppe:
+                            if raw_name.startswith('no_'):
+                                continue
+                            class_name = self._normalize_class_name(raw_name)
+                            model_type = 'PPE-10'
+                        else:
+                            # 17-class SH17 veya diğer: canonical normalize
+                            class_name = self._normalize_class_name(raw_name)
+                            model_type = 'SH17'
+
+                        detections.append({
+                            'class_id': class_id,
+                            'class_name': class_name,
+                            'confidence': det_confidence,
+                            'bbox': bbox,
+                            'sector': sector,
+                            'model_type': model_type
+                        })
+                    except Exception as box_error:
+                        logger.warning(f"⚠️ Box processing hatası: {box_error}")
+                        continue
+
             return detections
-            
+
         except Exception as e:
             logger.error(f"❌ SH17 detection hatası: {e}")
             return []
+
     
     def _detect_with_fallback(self, image, sector, confidence):
         """Fallback model ile detection - COCO person + PPE mapping"""

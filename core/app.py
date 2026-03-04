@@ -73,11 +73,51 @@ ENTERPRISE_MODULES_AVAILABLE = True
 logger.info("✅ Enterprise modülleri lazy loading için hazır - Memory optimized")
 
 # Global değişkenler - kamera sistemi için
+import threading as _threading
+
+# ── Thread-safe frame buffer ────────────────────────────────────────────────
+# 16 kamera aynı anda frame yazarken race condition'u önler
+class _ThreadSafeDict(dict):
+    """dict + RLock ile atomik read/write — multi-camera güvenliği"""
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._lock = _threading.RLock()
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        with self._lock:
+            return super().__getitem__(key)
+
+    def __delitem__(self, key):
+        with self._lock:
+            super().__delitem__(key)
+
+    def get(self, key, default=None):
+        with self._lock:
+            return super().get(key, default)
+
+    def __contains__(self, key):
+        with self._lock:
+            return super().__contains__(key)
+
+    def copy_frame(self, key):
+        """Frame'i kopyalayarak güvenli döndür (numpy array için)"""
+        import numpy as _np
+        with self._lock:
+            val = super().get(key)
+            if val is None:
+                return None
+            return val.copy() if isinstance(val, _np.ndarray) else val
+
+
 active_detectors = {}
 detection_threads = {}
-camera_captures = {}  # Kamera yakalama nesneleri
-frame_buffers = {}    # Frame buffer'ları
-detection_results = {} # Tespit sonuçları
+camera_captures = {}       # Kamera yakalama nesneleri
+frame_buffers = _ThreadSafeDict()  # Frame buffer'ları — thread-safe
+detection_results = {}     # Tespit sonuçları (Queue — zaten thread-safe)
 live_violation_state = {}  # SaaS canlı tespit için ihlal durumu (start/resolution)
 # Kamera okuma hataları için sayaç (noise azaltma + gerektiğinde yeniden bağlanma)
 frame_failure_counts = {}
@@ -1543,8 +1583,11 @@ class SmartSafeSaaSAPI:
             while active_detectors.get(camera_key, False):
                 try:
                     # Frame buffer'dan frame al
-                    if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
-                        frame = frame_buffers[camera_key].copy()
+                    if camera_key in frame_buffers:
+                        frame = frame_buffers.copy_frame(camera_key)
+                        if frame is None:
+                            time.sleep(0.01)
+                            continue
                         frame_count += 1
                         
                         # Her 5 frame'de bir tespit yap (performans için)
@@ -3834,8 +3877,11 @@ smartsafe_requests_total 100
         while ad.get(camera_key, False):
             try:
                 # Frame al
-                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
-                    frame = frame_buffers[camera_key].copy()
+                if camera_key in frame_buffers:
+                    frame = frame_buffers.copy_frame(camera_key)
+                    if frame is None:
+                        time.sleep(0.01)
+                        continue
                     
                     # Detection sonuçlarını al
                     detection_overlay = self.get_detection_overlay(camera_key)
