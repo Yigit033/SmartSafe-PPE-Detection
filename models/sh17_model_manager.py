@@ -46,9 +46,13 @@ class SH17ModelManager:
             logger.info("✅ SH17ModelManager already initialized, skipping...")
             return
             
-        # Modellerin bulunduğu klasörü (script'in kendi dizini) baz al
-        self.models_dir = os.path.dirname(os.path.abspath(__file__))
-        self.device = 'cpu'
+        logger.info("🔧 Initializing SH17ModelManager for the first time...")
+        self.models_dir = models_dir
+        # Prefer GPU when available for faster inference; fall back to CPU otherwise.
+        if torch is not None and torch.cuda.is_available():
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
         self.models = {}
         self.fallback_model = None
         
