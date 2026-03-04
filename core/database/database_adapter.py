@@ -13,6 +13,7 @@ import logging
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 import uuid
 import secrets
 import bcrypt
@@ -128,8 +129,13 @@ class DatabaseAdapter:
             return self._get_sqlite_config()
     
     def _get_sqlite_config(self) -> DatabaseConfig:
-        """Get SQLite configuration"""
-        db_path = os.getenv('SQLITE_DB_PATH', 'smartsafe_saas.db')
+        """Get SQLite configuration - Pointing to project root"""
+        # Get the root directory (parent of core)
+        # __file__ is core/database/database_adapter.py
+        root_dir = Path(__file__).resolve().parents[2]
+        default_db_path = str(root_dir / 'smartsafe_saas.db')
+        
+        db_path = os.getenv('SQLITE_DB_PATH', default_db_path)
         return DatabaseConfig(
             database_url=db_path,
             database_type='sqlite',
