@@ -322,7 +322,7 @@ def create_blueprint(api):
             active_count = sum(1 for v in state['active_detectors'].values() if v)
 
             # Şirket kaydından plan bazlı max_cameras oku
-            company_info = api.db.get_company(company_id) if hasattr(api, 'db') else None
+            company_info = api.db.get_company_info(company_id) if hasattr(api, 'db') and hasattr(api.db, 'get_company_info') else None
             if company_info:
                 # Önce şirketin kendi max_cameras değeri
                 plan_max = int(company_info.get('max_cameras') or 25)

@@ -83,7 +83,7 @@ class DVRStreamProcessor:
             # Resolve sector/detection_mode from company configuration when not provided
             if not detection_mode:
                 try:
-                    company = self.db_adapter.get_company(company_id) if hasattr(self.db_adapter, 'get_company') else None
+                    company = self.db_adapter.get_company_info(company_id) if hasattr(self.db_adapter, 'get_company_info') else None
                     if company:
                         if isinstance(company, dict):
                             detection_mode = company.get('sector') or detection_mode

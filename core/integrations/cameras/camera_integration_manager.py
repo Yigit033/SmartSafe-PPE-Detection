@@ -2523,7 +2523,7 @@ class ProfessionalCameraManager:
                     if company_id:
                         from database.database_adapter import get_db_adapter
                         db_local = get_db_adapter()
-                        company = db_local.get_company(company_id) if hasattr(db_local, 'get_company') else None
+                        company = db_local.get_company_info(company_id) if hasattr(db_local, 'get_company_info') else None
                         if company:
                             if isinstance(company, dict):
                                 sector = company.get('sector') or sector
@@ -3023,7 +3023,7 @@ class ProfessionalCameraManager:
                 try:
                     from database.database_adapter import get_db_adapter
                     db_local = get_db_adapter()
-                    company = db_local.get_company(company_id) if company_id else None
+                    company = db_local.get_company_info(company_id) if company_id and hasattr(db_local, 'get_company_info') else None
                     if company:
                         import json
                         rp = None
