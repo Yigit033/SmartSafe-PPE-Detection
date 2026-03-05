@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-primary-50: #0ea5e9;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-400: #94a3b8;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+}
+
+:root {
+  --background: #020617;
+  --foreground: #f8fafc;
+  --sidebar-width: 280px;
+  --glass-bg: rgba(15, 23, 42, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.05);
+}
+
+* {
+  border-color: var(--glass-border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.glass-effect {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.sidebar-bg {
+  background-color: #010409;
+  border-right: 1px solid var(--glass-border);
+}
+
+.card-bg {
+  background: #0d1117;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.card-bg:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 10px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}

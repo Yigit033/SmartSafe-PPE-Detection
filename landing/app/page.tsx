@@ -394,7 +394,7 @@ export default function LandingPage() {
               <li className="nav-item">
                 <a
                   className="btn btn-primary ms-lg-3 px-4 py-2 rounded-pill shadow-sm"
-                  href="/app"
+                  href="http://localhost:5000/app"
                 >
                   Giriş Yap
                 </a>
@@ -510,7 +510,10 @@ export default function LandingPage() {
                 >
                   <i className="fas fa-play me-2"></i> Demo Talep Et
                 </button>
-                <a href="/app" className="btn btn-outline-light btn-lg px-4">
+                <a
+                  href="http://localhost:5000/app"
+                  className="btn btn-outline-light btn-lg px-4"
+                >
                   <i className="fas fa-rocket me-2"></i> Hemen Başla
                 </a>
               </div>
