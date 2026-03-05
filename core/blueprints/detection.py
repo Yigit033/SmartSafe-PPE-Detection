@@ -315,7 +315,46 @@ def create_blueprint(api):
             state = _get_detection_state()
             if camera_key in state['active_detectors'] and state['active_detectors'][camera_key]:
                 return jsonify({'success': False, 'error': 'Kamera zaten aktif'})
-            
+
+            # ── Plan bazlı kamera limiti ─────────────────────────────────────
+            # Şirketin aktif planından gerçek sınırı al (SaaS davranışı)
+            import core.app as _api_mod
+            active_count = sum(1 for v in state['active_detectors'].values() if v)
+
+            # Şirket kaydından plan bazlı max_cameras oku
+            company_info = api.db.get_company(company_id) if hasattr(api, 'db') else None
+            if company_info:
+                # Önce şirketin kendi max_cameras değeri
+                plan_max = int(company_info.get('max_cameras') or 25)
+                # Demo hesapsa demo_limits'i kontrol et
+                if company_info.get('account_type') == 'demo':
+                    try:
+                        demo_limits = company_info.get('demo_limits')
+                        if isinstance(demo_limits, str):
+                            import json as _json
+                            demo_limits = _json.loads(demo_limits) if demo_limits else {}
+                        plan_max = int((demo_limits or {}).get('max_cameras', 2))
+                    except Exception:
+                        plan_max = 2  # Demo default: 2 kamera
+            else:
+                plan_max = getattr(_api_mod, 'MAX_CONCURRENT_CAMERAS', 25)
+
+            # Şirkete özgün aktif sayısı (diğer şirket kamerleri sayılmaz)
+            company_active = sum(
+                1 for k, v in state['active_detectors'].items()
+                if v and k.startswith(f"{company_id}_")
+            )
+            if company_active >= plan_max:
+                logger.warning(f"⚠️ {company_id} kamera planı dolu: {company_active}/{plan_max}")
+                return jsonify({
+                    'success': False,
+                    'error': f'Planınızdaki maksimum kamera sayısına ({plan_max}) ulaştınız. '
+                             f'Planınızı yükseltin veya aktif bir kamerayı durdurun.',
+                    'active_cameras': company_active,
+                    'max_cameras': plan_max,
+                    'plan': (company_info or {}).get('subscription_type', 'starter')
+                }), 429
+
             # Aynı process'te worker'ın gördüğü dict'i set et (referans tutarlılığı)
             state['active_detectors'][camera_key] = True
             import core.app as _api_mod

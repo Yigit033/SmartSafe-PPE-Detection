@@ -81,18 +81,38 @@ class SH17ModelManager:
         self.enable_model_cache = self.is_production
         logger.info(f"🎯 Production mode: {self.is_production}, Lazy loading: {self.lazy_loading}, Model cache: {self.enable_model_cache}")
         
+        # ── Sektör bazlı zorunlu PPE gereksinimleri ───────────────────────
+        # ÖNEMLI: Bu listeler SH17 model sinif adlarıyla eşleşmeli.
+        # SH17 sinifları: person, head, face, glasses, face_mask_medical, face_guard,
+        #                  ear, earmuffs, hands, gloves, foot, shoes, safety_vest,
+        #                  tools, helmet, medical_suit, safety_suit
         self.sector_mapping = {
-            'construction': ['helmet', 'safety_vest', 'safety_shoes', 'gloves'],
-            'manufacturing': ['helmet', 'safety_vest', 'gloves', 'safety_glasses'],
-            'chemical': ['helmet', 'respirator', 'gloves', 'safety_glasses', 'medical_suit'],
-            'food_beverage': ['helmet', 'safety_vest', 'gloves', 'safety_glasses', 'face_mask_medical'],
-            'warehouse_logistics': ['helmet', 'safety_vest', 'gloves', 'safety_shoes'],
-            'energy': ['helmet', 'safety_vest', 'safety_shoes', 'gloves', 'safety_suit'],
-            'petrochemical': ['helmet', 'respirator', 'safety_vest', 'gloves', 'safety_suit', 'safety_glasses'],
-            'marine_shipyard': ['helmet', 'safety_vest', 'gloves', 'safety_shoes', 'safety_glasses'],
-            'aviation': ['helmet', 'safety_vest', 'gloves', 'safety_glasses', 'face_mask_medical']
+            # İnşaat: kask zorunlu, yansıtıcı yelek, eldiven, ayakkabı
+            'construction':        ['helmet', 'safety_vest', 'gloves', 'shoes'],
+            # İmalat: kask, yelek, eldiven, gözlük
+            'manufacturing':       ['helmet', 'safety_vest', 'gloves', 'glasses'],
+            # Kimya: kask, maske/respiratör, eldiven, gözlük, tulum
+            'chemical':            ['helmet', 'face_mask_medical', 'gloves', 'glasses', 'safety_suit'],
+            # Gida/Içecek: bone→head, hijyen maskesi→face_mask_medical, eldiven, önlük→medical_suit
+            # NOT: SH17 bonnet/hair_net görmez ama 'head' tespiti (saç/baş bölgesi) surrogate olarak kullanılır.
+            # Gerçek bone tespiti için ek model ('food_ppe') gerekir — model_manager bunu yönetir.
+            'food_beverage':       ['head', 'face_mask_medical', 'gloves', 'medical_suit'],
+            # Depo/Lojistik: kask, yelek, eldiven, ayakkabı
+            'warehouse_logistics': ['helmet', 'safety_vest', 'gloves', 'shoes'],
+            # Enerji: kask, yelek, ayakkabı, eldiven, tulum
+            'energy':              ['helmet', 'safety_vest', 'shoes', 'gloves', 'safety_suit'],
+            # Petrokimya: kask, maske, yelek, eldiven, tulum, gözlük
+            'petrochemical':       ['helmet', 'face_mask_medical', 'safety_vest', 'gloves', 'safety_suit', 'glasses'],
+            # Denizcilik/Tersane: kask, yelek, eldiven, ayakkabı, gözlük
+            'marine_shipyard':     ['helmet', 'safety_vest', 'gloves', 'shoes', 'glasses'],
+            # Havacılık: kask, yelek, eldiven, gözlük, maske
+            'aviation':            ['helmet', 'safety_vest', 'gloves', 'glasses', 'face_mask_medical'],
+            # food (alias — landing page food sektörü için)
+            'food':                ['head', 'face_mask_medical', 'gloves', 'medical_suit'],
+            # warehouse (alias)
+            'warehouse':           ['helmet', 'safety_vest', 'gloves', 'shoes'],
         }
-        
+
         # SH17 class mapping - DICT olmalı!
         self.sh17_classes = {
             0: 'person', 1: 'head', 2: 'face', 3: 'glasses', 4: 'face_mask_medical',
@@ -116,20 +136,41 @@ class SH17ModelManager:
         
     # ─── Canonical SH17 class-name normalisation ───────────────────────────────
     # Model output names  →  our internal names used in sector_mapping & PPE_CONFIG
+    #
+    # IMPORTANT: SH17 yolo9e.pt sinıfları GERÇEK PPE'lere 1:1 map edilmiyor;
+    # bazı sektörler için alias kullanılıyor (örn. food→head surrogate for bonnet).
+    # Gerçek resolution: sektöre özel ek model (gelecek) veya fine-tuned checkpoint.
     _SH17_NAME_MAP = {
-        'ear-mufs':     'earmuffs',
-        'face-mask':    'face_mask_medical',
-        'face-guard':   'face_guard',
-        'tool':         'tools',
-        'medical-suit': 'medical_suit',
-        'safety-suit':  'safety_suit',
-        'safety-vest':  'safety_vest',
-        'glove':        'gloves',
-        'goggles':      'glasses',
-        'mask':         'face_mask_medical',
-        'hard_hat':     'helmet',
-        'hardhat':      'helmet',
-        'baret':        'helmet',
+        # Model raw names → canonical internal names
+        'ear-mufs':      'earmuffs',
+        'ear_mufs':      'earmuffs',
+        'face-mask':     'face_mask_medical',
+        'face_mask':     'face_mask_medical',
+        'face-guard':    'face_guard',
+        'tool':          'tools',
+        'medical-suit':  'medical_suit',
+        'safety-suit':   'safety_suit',
+        'safety-vest':   'safety_vest',
+        'glove':         'gloves',
+        'goggles':       'glasses',
+        'safety_glasses':'glasses',
+        'mask':          'face_mask_medical',
+        'respirator':    'face_mask_medical',  # SH17 respiratörü face_mask ile yakın
+        'hard_hat':      'helmet',
+        'hardhat':       'helmet',
+        'baret':         'helmet',
+        # Gıda sektörü alias: SH17 bonnet/hair_net görmez → head surrogate
+        'bonnet':        'head',
+        'hair_net':      'head',
+        'hair_cap':      'head',
+        'hygienic_cap':  'head',
+        # Güvenlik koşum takımı: SH17'de yok → safety_suit surrogate
+        'safety_harness':'safety_suit',
+        'harness':       'safety_suit',
+        # Ayakkabı
+        'boot':          'shoes',
+        'safety_boot':   'shoes',
+        'safety_shoes':  'shoes',
     }
 
     @classmethod
@@ -242,30 +283,112 @@ class SH17ModelManager:
         self._ensure_fallback_model()
         return self.fallback_model
 
-    def detect_ppe(self, image, sector='base', confidence=0.5):
-        """PPE tespiti yap - SH17 veya fallback ile"""
+    def _load_food_ppe_model(self):
+        """Gıda sektörü için local food_ppe modelini yükle (lazy, bir kez)."""
+        if hasattr(self, '_food_ppe_model'):
+            return self._food_ppe_model  # Zaten yüklü
+
+        local_path = os.environ.get(
+            'FOOD_PPE_LOCAL_MODEL',
+            os.path.join(self.models_dir, 'sh17_food_beverage',
+                         'sh17_food_beverage_model', 'weights', 'best.pt')
+        )
+        if os.path.exists(local_path):
+            try:
+                model = YOLO(local_path)
+                model.to(self.device)
+                self._food_ppe_model = model
+                logger.info(f"✅ Food PPE local model yüklendi: {local_path}")
+                return model
+            except Exception as e:
+                logger.warning(f"⚠️ Food PPE local model yüklenemedi: {e}")
+        self._food_ppe_model = None
+        return None
+
+    # Food PPE sınıf adı → canonical iç isim
+    _FOOD_PPE_NAME_MAP = {
+        'Apron':    'medical_suit',   # Önlük → medical_suit surrogate
+        'apron':    'medical_suit',
+        'Haircap':  'head',           # Saç filesi/bone → head surrogate
+        'haircap':  'head',
+        'Mask':     'face_mask_medical',
+        'mask':     'face_mask_medical',
+        'Googles':  'glasses',        # Roboflow typo: Googles = Goggles
+        'googles':  'glasses',
+        'Goggles':  'glasses',
+        'gloves':   'gloves',
+        'Gloves':   'gloves',
+    }
+
+    def _detect_with_food_model(self, image, confidence):
+        """Local food PPE model ile detection — SH17'ye ek sınıfları döndürür."""
+        model = self._load_food_ppe_model()
+        if model is None:
+            return []
         try:
-            # Önce SH17 model'i dene
+            results = model(image, conf=confidence, device=self.device, verbose=False)
+            detections = []
+            model_names = getattr(model, 'names', {})
+            for result in results:
+                if result.boxes is None:
+                    continue
+                for box in result.boxes:
+                    try:
+                        raw_name = model_names.get(int(box.cls[0].item()), 'unknown')
+                        canonical = self._FOOD_PPE_NAME_MAP.get(raw_name, raw_name.lower())
+                        detections.append({
+                            'class_id': int(box.cls[0].item()),
+                            'class_name': canonical,
+                            'confidence': float(box.conf[0].item()),
+                            'bbox': box.xyxy[0].cpu().numpy().tolist(),
+                            'sector': 'food',
+                            'model_type': 'FoodPPE-Local',
+                            'raw_name': raw_name,
+                        })
+                    except Exception:
+                        continue
+            logger.debug(f"🍽️ Food PPE local: {len(detections)} tespit")
+            return detections
+        except Exception as e:
+            logger.warning(f"⚠️ Food PPE detection hatası: {e}")
+            return []
+
+    def detect_ppe(self, image, sector='base', confidence=0.5):
+        """PPE tespiti — SH17 + food sektörü için dual-model desteği."""
+        is_food = sector in ('food', 'food_beverage')
+        try:
+            # ── Adım 1: SH17 (genel PPE) ──────────────────────────────────
             if sector in self.models and self.models[sector] is not None:
                 logger.debug(f"🎯 SH17 {sector} modeli ile detection")
-                result = self._detect_with_sh17(image, sector, confidence)
-                return result if isinstance(result, list) else []
-
-            # SH17 yoksa fallback kullan
+                sh17_results = self._detect_with_sh17(image, sector, confidence)
+            elif self.models:
+                sh17_results = self._detect_with_sh17(image, sector, confidence)
             elif self.fallback_model is not None:
                 logger.debug(f"🔄 Fallback model ile detection (sector: {sector})")
-                result = self._detect_with_fallback(image, sector, confidence)
-                return result if isinstance(result, list) else []
-
+                sh17_results = self._detect_with_fallback(image, sector, confidence)
             else:
                 logger.error("❌ Hiçbir model yüklü değil!")
-                return []
+                sh17_results = []
+
+            sh17_results = sh17_results if isinstance(sh17_results, list) else []
+
+            # ── Adım 2: Gıda sektörü → food PPE local model ekle ──────────
+            if is_food:
+                food_results = self._detect_with_food_model(image, confidence)
+                if food_results:
+                    # Merge: food sonuçları ekle (duplicate class_name'leri SH17 öncelikli)
+                    existing_classes = {d['class_name'] for d in sh17_results}
+                    for det in food_results:
+                        if det['class_name'] not in existing_classes:
+                            sh17_results.append(det)
+                    logger.debug(f"🍽️ Food merge: toplam {len(sh17_results)} tespit")
+
+            return sh17_results
 
         except Exception as e:
             logger.error(f"❌ Detection hatası: {e}")
             try:
-                result = self._detect_with_fallback(image, sector, confidence)
-                return result if isinstance(result, list) else []
+                return self._detect_with_fallback(image, sector, confidence) or []
             except Exception:
                 return []
 

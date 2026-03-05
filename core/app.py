@@ -119,14 +119,47 @@ camera_captures = {}       # Kamera yakalama nesneleri
 frame_buffers = _ThreadSafeDict()  # Frame buffer'ları — thread-safe
 detection_results = {}     # Tespit sonuçları (Queue — zaten thread-safe)
 live_violation_state = {}  # SaaS canlı tespit için ihlal durumu (start/resolution)
-# Kamera okuma hataları için sayaç (noise azaltma + gerektiğinde yeniden bağlanma)
-frame_failure_counts = {}
+frame_failure_counts = {}  # Kamera okuma hataları sayacı
 
 # İYİLEŞTİRİLDİ: Response Caching
 response_cache = {}
 cache_timestamps = {}
 CACHE_DURATION = 300  # 5 dakika cache süresi
 
+# ── Multi-Camera Production Resource Management ─────────────────────────────
+# 20-30 kamera eşzamanlı çalışırken kaynak tüketimini sınırla
+import os as _os
+import multiprocessing as _mp
+
+# Kaç kamera aynı anda inference yapabilir — CUDA varsa GPU paralelliği + 2, yoksa CPU çekirdeği
+try:
+    import torch as _torch_check
+    _has_gpu = _torch_check.cuda.is_available()
+except ImportError:
+    _has_gpu = False
+
+_cpu_cores = _mp.cpu_count()
+
+# Eşzamanlı YOLO inference sayısı: GPU varsa 4 (CUDA serialize anyway), CPU'da çekirdek/2
+_MAX_INFERENCE_WORKERS = int(_os.environ.get(
+    'MAX_INFERENCE_WORKERS',
+    4 if _has_gpu else max(2, _cpu_cores // 2)
+))
+
+# Maksimum eşzamanlı aktif kamera (lisans/kaynak sınırı)
+MAX_CONCURRENT_CAMERAS = int(_os.environ.get('MAX_CONCURRENT_CAMERAS', 32))
+
+# Inference semaphore: aynı anda en fazla _MAX_INFERENCE_WORKERS thread YOLO inference yapabilir
+_inference_semaphore = _threading.Semaphore(_MAX_INFERENCE_WORKERS)
+
+# Kamera slot semaphore: toplam aktif kamera sayısını sınırla
+_camera_slot_semaphore = _threading.Semaphore(MAX_CONCURRENT_CAMERAS)
+
+import logging as _log_tmp
+_log_tmp.getLogger(__name__).info(
+    f"🎛️ Resource Manager: MAX_CAMERAS={MAX_CONCURRENT_CAMERAS}, "
+    f"INFERENCE_WORKERS={_MAX_INFERENCE_WORKERS}, GPU={_has_gpu}"
+)
 
 
 class SmartSafeSaaSAPI:
@@ -2240,9 +2273,10 @@ smartsafe_requests_total 100
                     if class_id == 0:  # person
                         people_detected += 1
                 
-                # Basit PPE compliance (YOLOv8 için sınırlı)
-                # Gerçek PPE detection için SH17 gerekli
-                ppe_compliant = people_detected  # Fallback: tüm insanlar uyumlu sayılır
+                # YOLOv8/COCO modelinde PPE sınıfları yok — gerçek PPE tespiti SH17 gerektirir.
+                # 'Herkes uyumlu' varsayımı yapma: ppe_compliant=0, ihlaller raporlanmaz.
+                # Bu kod yolu yalnızca SH17 load başarısız olduğunda çalışır.
+                ppe_compliant = 0  # Bilinmiyor ile uyumlu aynı şey değil
                 
         except Exception as e:
             logger.error(f"❌ YOLOv8 results processing error: {e}")
@@ -2353,8 +2387,12 @@ smartsafe_requests_total 100
         while ad.get(camera_key, False):
             try:
                 # Frame al
-                if camera_key in frame_buffers and frame_buffers[camera_key] is not None:
-                    frame = frame_buffers[camera_key].copy()
+                # Frame al — thread-safe
+                if camera_key in frame_buffers:
+                    frame = frame_buffers.copy_frame(camera_key)
+                    if frame is None:
+                        time.sleep(0.01)
+                        continue
                     frame_count += 1
                     
                     # OPTİMİZE EDİLDİ: Her 6 frame'de bir tespit yap
@@ -2367,39 +2405,39 @@ smartsafe_requests_total 100
                         ppe_compliant = 0
                         
                         try:
-                            if pose_detector is not None:
-                                # PoseAwarePPEDetector: person pose + PPE region analysis
-                                # required_ppe listesi (settings / şirket konfigürasyonu) burada uyum hesabına iletilir.
-                                pose_result = pose_detector.detect_with_pose(
-                                    frame, sector, optimized_confidence, required_ppe=required_ppe
-                                )
-                                
-                                if isinstance(pose_result, dict):
-                                    people_detected = pose_result.get('people_detected', 0)
-                                    ppe_compliant = pose_result.get('compliant_people', 0)
-                                    raw_violations = pose_result.get('ppe_violations', [])
-                                    ppe_violations = raw_violations if isinstance(raw_violations, list) else []
-                                    results = pose_result.get('detections', [])
-                                    logger.debug(
-                                        f"🎯 PoseAware detection: {people_detected} people, "
-                                        f"{pose_result.get('compliance_rate', 0)}% compliance"
+                            with _inference_semaphore:  # Max N thread aynı anda inference
+                                if pose_detector is not None:
+                                    # PoseAwarePPEDetector: person pose + PPE region analysis
+                                    pose_result = pose_detector.detect_with_pose(
+                                        frame, sector, optimized_confidence, required_ppe=required_ppe
                                     )
-                                elif isinstance(pose_result, list):
-                                    results = pose_result
+
+                                    if isinstance(pose_result, dict):
+                                        people_detected = pose_result.get('people_detected', 0)
+                                        ppe_compliant = pose_result.get('compliant_people', 0)
+                                        raw_violations = pose_result.get('ppe_violations', [])
+                                        ppe_violations = raw_violations if isinstance(raw_violations, list) else []
+                                        results = pose_result.get('detections', [])
+                                        logger.debug(
+                                            f"🎯 PoseAware: {people_detected} kişi, "
+                                            f"{pose_result.get('compliance_rate', 0)}% uyum"
+                                        )
+                                    elif isinstance(pose_result, list):
+                                        results = pose_result
+                                        people_detected = sum(
+                                            1 for d in results if d.get('class_name') == 'person'
+                                        )
+                                    else:
+                                        results = []
+
+                                elif use_sh17 and model_manager:
+                                    # SH17 direkt PPE tespiti
+                                    results = model_manager.detect_ppe(frame, sector, optimized_confidence)
                                     people_detected = sum(
                                         1 for d in results if d.get('class_name') == 'person'
                                     )
                                 else:
                                     results = []
-                            elif use_sh17 and model_manager:
-                                # SH17 sadece PPE tespiti için kullanılır
-                                results = model_manager.detect_ppe(frame, sector, optimized_confidence)
-                                people_detected = sum(
-                                    1 for d in results if d.get('class_name') == 'person'
-                                )
-                            else:
-                                # Ne pose-aware ne de SH17 kullanılabiliyorsa, sonuç boş kabul edilir
-                                results = []
                             
                             # SH17 compliance analizi (sadece SH17 yolu ve required_ppe varsa)
                             if people_detected > 0 and required_ppe and use_sh17 and model_manager:

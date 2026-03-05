@@ -1,13 +1,19 @@
 """
 Admin Blueprint - Admin panel routes extracted from SmartSafe SaaS API.
 """
-from flask import Blueprint, request, jsonify, session, redirect, url_for, render_template, render_template_string, Response
+from flask import Blueprint, request, jsonify, session, redirect, url_for, render_template, Response
 import logging
 import os
-from datetime import datetime, timedelta
+import uuid
+import json
+from datetime import datetime
 import re
 
 logger = logging.getLogger(__name__)
+
+
+def _admin_required(session_obj):
+    return session_obj.get('admin_authenticated', False)
 
 
 def create_blueprint(api):
@@ -18,121 +24,213 @@ def create_blueprint(api):
     def admin_panel():
         """Admin panel - Founder şifresi gerekli"""
         if request.method == 'GET':
-            # Admin login sayfasını göster
+            if session.get('admin_authenticated'):
+                return render_template('admin.html')
             return render_template('admin_login.html')
-        
+
         # POST - Admin şifre kontrolü
         try:
-            data = request.form
-            password = data.get('password')
-            
+            password = request.form.get('password', '')
             FOUNDER_PASSWORD = os.getenv('FOUNDER_PASSWORD', '')
             if not FOUNDER_PASSWORD:
-                logger.error("FOUNDER_PASSWORD env variable is not set – admin login disabled")
-                return render_template('admin_login.html', error="Admin girişi yapılandırılmamış. FOUNDER_PASSWORD env variable'ı ayarlayın.")
-            
+                return render_template('admin_login.html',
+                    error="FOUNDER_PASSWORD env variable ayarlanmamış.")
             if password == FOUNDER_PASSWORD:
-                # Admin session'u oluştur
                 session['admin_authenticated'] = True
                 return render_template('admin.html')
-            else:
-                return render_template('admin_login.html', error="Yanlış şifre!")
-                
+            return render_template('admin_login.html', error="Yanlış şifre!")
         except Exception as e:
             logger.error(f"Admin login error: {e}")
             return render_template('admin_login.html', error="Giriş sırasında bir hata oluştu.")
-    
+
+    @bp.route('/admin/logout')
+    def admin_logout():
+        session.pop('admin_authenticated', None)
+        return redirect('/admin')
+
+    # ── GET ALL COMPANIES ──────────────────────────────────────────────
     @bp.route('/api/admin/companies', methods=['GET'])
     def admin_get_companies():
-        """Admin - Tüm şirketleri getir"""
-        # Admin authentication kontrolü
-        if not session.get('admin_authenticated'):
+        if not _admin_required(session):
             return jsonify({'error': 'Yetkisiz erişim'}), 401
-        
         try:
-            # Database adapter kullan (PostgreSQL/SQLite otomatik seçim)
             conn = api.db.get_connection()
             cursor = conn.cursor()
-            
             cursor.execute('''
-                SELECT company_id, company_name, email, sector, max_cameras, 
-                       created_at, status, contact_person, phone
-                FROM companies 
+                SELECT company_id, company_name, email, sector, max_cameras,
+                       created_at, status, contact_person, phone, address,
+                       subscription_type, account_type, api_key, ppe_requirements
+                FROM companies
                 ORDER BY created_at DESC
             ''')
-            companies = cursor.fetchall()
-            
-            companies_list = []
-            for comp in companies:
-                # PostgreSQL RealDictRow için sözlük erişimi kullan
-                if hasattr(comp, 'keys'):  # RealDictRow veya dict
-                    companies_list.append({
-                        'company_id': comp.get('company_id'),
-                        'company_name': comp.get('company_name'),
-                        'email': comp.get('email'),
-                        'sector': comp.get('sector'),
-                        'max_cameras': comp.get('max_cameras'),
-                        'created_at': str(comp.get('created_at')) if comp.get('created_at') else '',
-                        'status': comp.get('status'),
-                        'contact_person': comp.get('contact_person'),
-                        'phone': comp.get('phone')
-                    })
-                else:  # Liste formatı (SQLite için)
-                    companies_list.append({
-                        'company_id': comp[0],
-                        'company_name': comp[1],
-                        'email': comp[2],
-                        'sector': comp[3],
-                        'max_cameras': comp[4],
-                        'created_at': str(comp[5]) if comp[5] else '',
-                        'status': comp[6],
-                        'contact_person': comp[7],
-                        'phone': comp[8]
-                    })
-            
-            conn.close()
-            return jsonify({'companies': companies_list})
-            
+            rows = cursor.fetchall()
+            keys = ['company_id','company_name','email','sector','max_cameras',
+                    'created_at','status','contact_person','phone','address',
+                    'subscription_type','account_type','api_key','ppe_requirements']
+            companies = []
+            for row in rows:
+                if hasattr(row, 'keys'):
+                    d = dict(row)
+                else:
+                    d = dict(zip(keys, row))
+                d['created_at'] = str(d.get('created_at') or '')
+                companies.append(d)
+            api.db.close_connection(conn)
+            return jsonify({'companies': companies, 'total': len(companies)})
         except Exception as e:
+            logger.error(f"admin_get_companies error: {e}")
             return jsonify({'error': str(e)}), 500
-    
-    @bp.route('/api/admin/companies/<company_id>', methods=['DELETE'])
-    def admin_delete_company(company_id):
-        """Admin - Şirket sil"""
-        # Admin authentication kontrolü
-        if not session.get('admin_authenticated'):
+
+    # ── CREATE COMPANY ─────────────────────────────────────────────────
+    @bp.route('/api/admin/companies', methods=['POST'])
+    def admin_create_company():
+        if not _admin_required(session):
             return jsonify({'error': 'Yetkisiz erişim'}), 401
-        
         try:
+            data = request.get_json(force=True)
+            required = ['company_name', 'sector', 'contact_person', 'email', 'password']
+            for f in required:
+                if not data.get(f):
+                    return jsonify({'success': False, 'error': f'{f} zorunlu'}), 400
+
+            # Şifre hash
+            try:
+                import bcrypt
+                pw_hash = bcrypt.hashpw(
+                    data['password'].encode(), bcrypt.gensalt(12)
+                ).decode()
+            except ImportError:
+                import hashlib
+                pw_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+
+            company_id = str(uuid.uuid4())
+            api_key    = str(uuid.uuid4()).replace('-', '')
+            ph = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
+
+            conn   = api.db.get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(f'''
+                INSERT INTO companies
+                (company_id, company_name, sector, contact_person, email, phone, address,
+                 subscription_type, max_cameras, account_type, status, api_key, created_at, updated_at)
+                VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+            ''', (
+                company_id,
+                data['company_name'].strip(),
+                data['sector'],
+                data['contact_person'].strip(),
+                data['email'].strip().lower(),
+                data.get('phone', ''),
+                data.get('address', ''),
+                data.get('subscription_type', 'professional'),
+                int(data.get('max_cameras', 25)),
+                data.get('account_type', 'full'),
+                'active',
+                api_key,
+            ))
+
+            # Default admin user oluştur
+            user_id = str(uuid.uuid4())
+            username = data['email'].split('@')[0]
+            cursor.execute(f'''
+                INSERT INTO users (user_id, company_id, username, email, password_hash, role, status, created_at)
+                VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},CURRENT_TIMESTAMP)
+            ''', (user_id, company_id, username, data['email'].strip().lower(),
+                  pw_hash, 'admin', 'active'))
+
+            conn.commit()
+            api.db.close_connection(conn)
+            logger.info(f"✅ Yeni şirket oluşturuldu: {data['company_name']} ({company_id})")
+            return jsonify({
+                'success': True,
+                'company_id': company_id,
+                'api_key': api_key,
+                'message': f"{data['company_name']} başarıyla oluşturuldu"
+            })
+        except Exception as e:
+            logger.error(f"admin_create_company error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── UPDATE COMPANY ─────────────────────────────────────────────────
+    @bp.route('/api/admin/companies/<company_id>', methods=['PUT'])
+    def admin_update_company(company_id):
+        if not _admin_required(session):
+            return jsonify({'error': 'Yetkisiz erişim'}), 401
+        try:
+            data = request.get_json(force=True)
+            ph   = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
             conn = api.db.get_connection()
             cursor = conn.cursor()
-            
-            # Şirket var mı kontrol et
-            placeholder = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
-            cursor.execute(f'SELECT company_name FROM companies WHERE company_id = {placeholder}', (company_id,))
-            company = cursor.fetchone()
-            
-            if not company:
+
+            cursor.execute(f'SELECT company_id FROM companies WHERE company_id = {ph}', (company_id,))
+            if not cursor.fetchone():
+                api.db.close_connection(conn)
                 return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
-            
-            # PostgreSQL RealDictRow için sözlük erişimi kullan
-            if hasattr(company, 'keys'):  # RealDictRow veya dict
-                company_name = company.get('company_name')
-            else:  # Liste formatı (SQLite için)
-                company_name = company[0]
-            
-            # İlgili verileri sil (CASCADE mantığı)
-            tables_to_clean = ['detections', 'violations', 'cameras', 'users', 'sessions', 'companies']
-            
-            for table in tables_to_clean:
-                cursor.execute(f'DELETE FROM {table} WHERE company_id = {placeholder}', (company_id,))
-            
+
+            updates, vals = [], []
+            allowed = ['company_name','sector','contact_person','email','phone',
+                       'address','subscription_type','max_cameras','account_type','status']
+            for field in allowed:
+                if field in data:
+                    updates.append(f'{field} = {ph}')
+                    vals.append(int(data[field]) if field == 'max_cameras' else data[field])
+
+            if not updates:
+                api.db.close_connection(conn)
+                return jsonify({'success': False, 'error': 'Güncellenecek alan yok'}), 400
+
+            updates.append(f'updated_at = CURRENT_TIMESTAMP')
+            vals.append(company_id)
+            cursor.execute(f"UPDATE companies SET {', '.join(updates)} WHERE company_id = {ph}", vals)
+
+            # Şifre güncelle (opsiyonel)
+            if data.get('password'):
+                try:
+                    import bcrypt
+                    pw_hash = bcrypt.hashpw(data['password'].encode(), bcrypt.gensalt(12)).decode()
+                except ImportError:
+                    import hashlib
+                    pw_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+                cursor.execute(
+                    f'UPDATE users SET password_hash = {ph} WHERE company_id = {ph} AND role = {ph}',
+                    (pw_hash, company_id, 'admin')
+                )
+
             conn.commit()
-            conn.close()
-            
-            return jsonify({'success': True, 'message': f'Şirket {company_name} silindi'})
-            
+            api.db.close_connection(conn)
+            logger.info(f"✅ Şirket güncellendi: {company_id}")
+            return jsonify({'success': True, 'message': 'Şirket güncellendi'})
         except Exception as e:
+            logger.error(f"admin_update_company error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── DELETE COMPANY ─────────────────────────────────────────────────
+    @bp.route('/api/admin/companies/<company_id>', methods=['DELETE'])
+    def admin_delete_company(company_id):
+        if not _admin_required(session):
+            return jsonify({'error': 'Yetkisiz erişim'}), 401
+        try:
+            ph   = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
+            conn = api.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(f'SELECT company_name FROM companies WHERE company_id = {ph}', (company_id,))
+            row = cursor.fetchone()
+            if not row:
+                api.db.close_connection(conn)
+                return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
+            name = row['company_name'] if hasattr(row, 'keys') else row[0]
+            for table in ['detections', 'violations', 'cameras', 'users', 'sessions', 'companies']:
+                try:
+                    cursor.execute(f'DELETE FROM {table} WHERE company_id = {ph}', (company_id,))
+                except Exception:
+                    pass
+            conn.commit()
+            api.db.close_connection(conn)
+            logger.info(f"🗑️ Şirket silindi: {name} ({company_id})")
+            return jsonify({'success': True, 'message': f'{name} silindi'})
+        except Exception as e:
+            logger.error(f"admin_delete_company error: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     return bp
