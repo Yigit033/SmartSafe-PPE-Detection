@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate": "encore gen client --output=lib/client --lang=typescript"
   },
   "dependencies": {
     "next": "16.1.6",
