@@ -44,6 +44,20 @@ const cameras = [
 
 export default function CamerasPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [formData, setFormData] = useState({
+    name: "deneme",
+    ip_address: "161.9.103.100",
+    location: "med",
+    port: 8080,
+    protocol: "HTTP",
+    stream_path: "/video",
+    username: "dilsadselim@gmail.com",
+    password: "",
+    model: "Otomatik Tespit",
+  });
+
+  const [testResult, setTestResult] = useState<any>(null);
+  const [isTesting, setIsTesting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("smart");
   const [mounted, setMounted] = useState(false);
@@ -51,6 +65,30 @@ export default function CamerasPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const response = await fetch(
+        "http://localhost:4000/cameras/manual-test",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        },
+      );
+      const data = await response.json();
+      setTestResult(data);
+    } catch (error) {
+      setTestResult({
+        success: false,
+        message: "Bağlantı hatası: Backend'e ulaşılamadı.",
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const ModalPortal = () => {
     if (!mounted) return null;
@@ -61,7 +99,7 @@ export default function CamerasPage() {
           className="absolute inset-0 bg-black/90 backdrop-blur-md"
           onClick={() => setIsModalOpen(false)}
         ></div>
-        <div className="relative w-full max-w-2xl rounded-[32px] border border-slate-800 bg-slate-950 p-8 shadow-2xl animate-fade-in card-glow overflow-y-auto max-h-[90vh]">
+        <div className="relative w-full max-w-3xl rounded-[32px] border border-slate-800 bg-slate-950 p-8 shadow-2xl animate-fade-in card-glow overflow-y-auto max-h-[90vh]">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xl font-bold text-white uppercase tracking-tighter italic">
               Yeni Kamera Kaydı
@@ -101,73 +139,165 @@ export default function CamerasPage() {
             </button>
           </div>
 
-          {activeTab === "smart" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Form Side */}
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    IP Adresi
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="192.168.1.100"
-                    className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
-                  />
+              {activeTab === "smart" ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                        IP Aralığı (CIDR)
+                      </label>
+                      <input
+                        type="text"
+                        defaultValue="192.168.1.0/24"
+                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
+                      />
+                    </div>
+                    <button className="w-full rounded-xl bg-primary-600/10 border border-primary-500/20 py-4 text-[10px] font-black text-primary-400 hover:bg-primary-600/20 transition-all uppercase tracking-widest">
+                      Ağı Tara
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    Kamera Adı
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Yeni Kamera"
-                    className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
-                  />
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { label: "Kamera Adı *", key: "name" },
+                      { label: "IP Adresi *", key: "ip_address" },
+                      { label: "Konum *", key: "location" },
+                      { label: "Port", key: "port", type: "number" },
+                      { label: "Protokol", key: "protocol" },
+                      { label: "Stream Path", key: "stream_path" },
+                      { label: "Kullanıcı Adı", key: "username" },
+                      { label: "Parola", key: "password", type: "password" },
+                      { label: "Model", key: "model" },
+                    ].map((f) => (
+                      <div key={f.key} className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                          {f.label}
+                        </label>
+                        <input
+                          type={f.type || "text"}
+                          value={(formData as any)[f.key]}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              [f.key]:
+                                e.target.type === "number"
+                                  ? parseInt(e.target.value)
+                                  : e.target.value,
+                            })
+                          }
+                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-4 pt-4 border-t border-slate-900">
+                    <button
+                      onClick={handleTestConnection}
+                      disabled={isTesting}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-2xl bg-amber-500/5 border border-amber-500/20 py-4 text-[10px] font-black text-amber-500 hover:bg-amber-500/10 transition-all uppercase tracking-[0.2em] ${isTesting ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      {isTesting ? "BAĞLANILIYOR..." : "Bağlantıyı Test Et"}
+                    </button>
+                    <button className="flex-1 rounded-2xl bg-primary-600 py-4 text-[10px] font-black text-white shadow-xl shadow-primary-500/20 uppercase tracking-[0.2em] hover:bg-primary-500 transition-all">
+                      Kamera Kaydet
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-3">
-                <button className="flex-1 rounded-2xl bg-slate-900 border border-slate-800 py-4 text-[10px] font-black text-white hover:border-primary-500/50 transition-all uppercase tracking-widest">
-                  Akıllı Tespit Başlat
-                </button>
-                <button className="flex-1 rounded-2xl bg-primary-600/10 border border-primary-500/20 py-4 text-[10px] font-black text-primary-400 hover:bg-primary-600/20 transition-all uppercase tracking-widest">
-                  Hızlı Test (2sn)
-                </button>
-              </div>
+              )}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[
-                { label: "Kamera Adı *", p: "Giriş" },
-                { label: "IP Adresi *", p: "192.168.1.xxx" },
-                { label: "Konum *", p: "Örn: Hangar" },
-                { label: "Port", p: "8080" },
-                { label: "Protokol", p: "HTTP" },
-                { label: "Stream Path", p: "/video" },
-                { label: "Kullanıcı Adı", p: "admin" },
-                { label: "Parola", p: "••••••••", t: "password" },
-                { label: "Model", p: "Auto Detect" },
-              ].map((f) => (
-                <div key={f.label} className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    {f.label}
-                  </label>
-                  <input
-                    type={f.t || "text"}
-                    placeholder={f.p}
-                    className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
+
+            {/* Preview Side */}
+            <div className="flex flex-col gap-4">
+              <div className="flex-1 min-h-[300px] rounded-3xl border border-slate-800 bg-slate-950 overflow-hidden relative flex items-center justify-center group card-glow">
+                {testResult?.image_base64 ? (
+                  <img
+                    src={`data:image/jpeg;base64,${testResult.image_base64}`}
+                    alt="Kamera Önizleme"
+                    className="w-full h-full object-cover"
                   />
-                </div>
-              ))}
-              <div className="col-span-full flex gap-4 mt-4">
-                <button className="flex-1 rounded-2xl bg-amber-500/5 border border-amber-500/20 py-4 text-[10px] font-black text-amber-500 hover:bg-amber-500/10 transition-all uppercase tracking-[0.2em]">
-                  Bağlantıyı Test Et
-                </button>
-                <button className="flex-1 rounded-2xl bg-primary-600 py-4 text-[10px] font-black text-white shadow-xl shadow-primary-500/20 uppercase tracking-[0.2em]">
-                  Kamera Kaydet
-                </button>
+                ) : (
+                  <div className="text-center space-y-4 p-8">
+                    <div className="w-16 h-16 rounded-full bg-slate-900/50 border border-slate-800 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-500">
+                      <svg
+                        className={`h-8 w-8 ${isTesting ? "text-amber-500 animate-pulse" : "text-slate-700"}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">
+                      {isTesting ? "GÖRÜNTÜ ALINIYOR..." : "TEST BAŞLATILMADI"}
+                    </p>
+                  </div>
+                )}
+
+                {/* Overlay for status */}
+                {testResult && (
+                  <div
+                    className={`absolute top-4 left-4 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest backdrop-blur-md shadow-2xl ${testResult.success ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" : "bg-red-500/20 border-red-500/40 text-red-400"}`}
+                  >
+                    {testResult.success ? "BAĞLANTI TAMAM" : "HATA"}
+                  </div>
+                )}
               </div>
+
+              {/* Test Log Details */}
+              {testResult && (
+                <div className="rounded-2xl bg-slate-900/30 border border-slate-800/50 p-4 font-mono text-[9px] text-slate-500 overflow-y-auto max-h-[200px] shadow-inner">
+                  <div className="flex justify-between mb-2 pb-1 border-b border-white/5">
+                    <span className="text-white font-black italic tracking-widest">
+                      SİSTEM GÜNLÜĞÜ
+                    </span>
+                    <span className="text-primary-500 font-bold tracking-tighter uppercase">
+                      status: {testResult.success ? "ok" : "err"}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 border-t border-slate-900 pt-3">
+                    {testResult.message && (
+                      <div className="text-white/80 italic tracking-tight">
+                        {">"} {testResult.message}
+                      </div>
+                    )}
+                    {testResult.test_results &&
+                      Object.entries(testResult.test_results).map(
+                        ([k, v]: any) => (
+                          <div
+                            key={k}
+                            className="flex justify-between items-center group/log"
+                          >
+                            <span className="group-hover/log:text-white transition-colors uppercase tracking-tighter">
+                              {k.replace("_", " ")}
+                            </span>
+                            <span
+                              className={`font-bold ${v.status === "success" ? "text-emerald-500" : "text-red-500"}`}
+                            >
+                              {v.status
+                                ? v.status.toUpperCase()
+                                : typeof v === "object"
+                                  ? "..."
+                                  : String(v).toUpperCase()}
+                            </span>
+                          </div>
+                        ),
+                      )}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>,
       document.body,
