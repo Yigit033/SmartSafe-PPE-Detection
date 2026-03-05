@@ -5,6 +5,7 @@ import Script from "next/script";
 
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState("performance");
+  const [activeBenefitTab, setActiveBenefitTab] = useState("financial");
   const [activeSectorDot, setActiveSectorDot] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -115,6 +116,82 @@ export default function LandingPage() {
       features: ["Bone Kontrolü", "Hijyen Eldiveni", "Önlük Tespiti"],
     },
   ];
+
+  const benefitsData: any = {
+    financial: {
+      icon: "coins",
+      title: "Finansal Avantajlar",
+      desc: "İş güvenliği yatırımınızın hızlı geri dönüşü ve uzun vadeli finansal faydaları",
+      items: [
+        "İş kazası maliyetlerinin minimize edilmesi",
+        "Sigorta primi indirimi",
+        "Uyum maliyetlerinin azaltılması",
+        "Verimlilik artışı",
+        "Operasyonel verimlilik",
+        "Kaynak optimizasyonu",
+      ],
+    },
+    operational: {
+      icon: "cogs",
+      title: "Operasyonel Faydalar",
+      desc: "Süreçlerinizi optimize eden ve verimliliği artıran akıllı çözümler",
+      items: [
+        "Gerçek zamanlı izleme ve uyarı sistemi",
+        "Otomatik raporlama ve dokümantasyon",
+        "Çalışan güvenliğinin artırılması",
+        "Denetim süreçlerinin kolaylaştırılması",
+        "Sektöre özel optimize edilmiş çözümler",
+        "7/24 kesintisiz izleme",
+        "Mobil uygulama ile uzaktan erişim",
+        "Akıllı iş akışı otomasyonu",
+      ],
+    },
+    safety: {
+      icon: "user-shield",
+      title: "İş Güvenliği Avantajları",
+      desc: "Kapsamlı iş güvenliği avantajları",
+      items: [
+        "Proaktif risk yönetimi",
+        "Anlık ihlal tespiti ve müdahale",
+        "Çalışan güvenlik bilincinin artırılması",
+        "Kaza önleme oranında artış",
+        "Uyum yönetimi",
+        "Güvenlik kültürünün geliştirilmesi",
+        "Gelişmiş risk analizi",
+        "Hızlı acil durum müdahalesi",
+      ],
+    },
+    technical: {
+      icon: "microchip",
+      title: "Teknolojik Üstünlükler",
+      desc: "En son yapay zeka teknolojileri ile donatılmış gelecek odaklı çözümler",
+      items: [
+        "Yapay zeka destekli hassas tespit",
+        "Sürekli öğrenen ve gelişen sistem",
+        "Kolay entegrasyon ve ölçeklenebilirlik",
+        "Özelleştirilebilir uyarı mekanizmaları",
+        "Gerçek zamanlı AI analizi",
+        "Bulut entegrasyonu",
+        "API desteği",
+        "Mobil uyumluluk",
+      ],
+    },
+    legal: {
+      icon: "balance-scale",
+      title: "Yasal Uyumluluk",
+      desc: "Mevzuata tam uyumluluk ve yasal süreçlerde kolaylık sağlayan çözümler",
+      items: [
+        "İSG mevzuatına tam uyumluluk",
+        "Otomatik denetim raporları",
+        "Yasal dokümantasyon desteği",
+        "Sertifikasyon süreçlerinde kolaylık",
+        "KVKK uyumlu veri işleme",
+        "Denetim hazırlık desteği",
+        "Yasal raporlama otomasyonu",
+        "Uyumluluk takip sistemi",
+      ],
+    },
+  };
 
   // Features Data from original landing.html
   const featuresData: any = {
@@ -602,7 +679,7 @@ export default function LandingPage() {
         <div className="container" data-aos="fade-up">
           <div className="row mb-5">
             <div className="col-lg-6 mx-auto text-center">
-              <h2 className="display-5 fw-bold mb-3 lang=tr">
+              <h2 className="display-5 fw-bold mb-3" lang="tr">
                 Sektörel Çözümler
               </h2>
               <p className="lead text-muted">
@@ -624,12 +701,12 @@ export default function LandingPage() {
                       <i className={`fas fa-${sector.icon}`}></i>
                     </div>
                     <div className="sector-content">
-                      <h4 className="lang=tr">{sector.title}</h4>
+                      <h4 lang="tr">{sector.title}</h4>
                       <ul className="sector-features">
                         {sector.features.map((feature, fIndex) => (
                           <li key={fIndex}>
                             <i className="fas fa-check"></i>
-                            <span className="lang=tr">{feature}</span>
+                            <span lang="tr">{feature}</span>
                           </li>
                         ))}
                       </ul>
@@ -656,17 +733,337 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Benefits Section */}
+      <section id="benefits" className="benefits-section section">
+        <div className="container" data-aos="fade-up">
+          <div className="row mb-5">
+            <div className="col-lg-6 mx-auto text-center">
+              <h2 className="display-5 fw-bold mb-3" lang="tr">
+                Avantajlar
+              </h2>
+              <p className="lead text-muted">
+                SmartSafe AI ile elde edeceğiniz kazanımlar
+              </p>
+            </div>
+          </div>
+
+          <div className="benefits-tabs mb-4">
+            <div className="d-flex justify-content-center overflow-auto pb-3 mb-5">
+              <div
+                className="nav nav-pills gap-2 flex-nowrap"
+                id="benefitsTab"
+                role="tablist"
+              >
+                {[
+                  { id: "financial", icon: "coins", label: "Finansal" },
+                  { id: "operational", icon: "cogs", label: "Operasyonel" },
+                  { id: "safety", icon: "user-shield", label: "İş Güvenliği" },
+                  { id: "technical", icon: "microchip", label: "Teknolojik" },
+                  { id: "legal", icon: "balance-scale", label: "Yasal" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    className={`nav-link px-4 py-2 border-0 rounded-pill transition-all ${
+                      activeBenefitTab === tab.id ? "active" : ""
+                    }`}
+                    onClick={() => setActiveBenefitTab(tab.id)}
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    <i className={`fas fa-${tab.icon} me-2`}></i>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="tab-content" id="benefitsTabContent">
+              <div className="row justify-content-center">
+                <div className="col-lg-10">
+                  <div className="benefit-card glass-card p-5 position-relative overflow-hidden">
+                    <div className="benefit-header text-center mb-4">
+                      <div className="benefit-icon gradient-bg mb-3">
+                        <i
+                          className={`fas fa-${benefitsData[activeBenefitTab].icon}`}
+                        ></i>
+                      </div>
+                      <h3 className="mb-3" lang="tr">
+                        {benefitsData[activeBenefitTab].title}
+                      </h3>
+                      <p className="text-muted mb-4">
+                        {benefitsData[activeBenefitTab].desc}
+                      </p>
+                    </div>
+                    <div className="row g-4">
+                      <div className="col-md-6">
+                        <ul className="benefit-list list-unstyled">
+                          {benefitsData[activeBenefitTab].items
+                            .slice(
+                              0,
+                              Math.ceil(
+                                benefitsData[activeBenefitTab].items.length / 2,
+                              ),
+                            )
+                            .map((item: string, i: number) => (
+                              <li key={i} className="benefit-item mb-3">
+                                <i className="fas fa-check-circle me-2"></i>
+                                <span lang="tr">{item}</span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                      <div className="col-md-6">
+                        <ul className="benefit-list list-unstyled">
+                          {benefitsData[activeBenefitTab].items
+                            .slice(
+                              Math.ceil(
+                                benefitsData[activeBenefitTab].items.length / 2,
+                              ),
+                            )
+                            .map((item: string, i: number) => (
+                              <li key={i} className="benefit-item mb-3">
+                                <i className="fas fa-check-circle me-2"></i>
+                                <span lang="tr">{item}</span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className="contact-section py-5">
+        <div className="container py-5" data-aos="fade-up">
+          <div className="row justify-content-center align-items-center g-5">
+            <div className="col-lg-5">
+              <div className="contact-info-card glass-card p-5 h-100">
+                <div className="contact-icon mb-4">
+                  <i className="fas fa-envelope-open-text"></i>
+                </div>
+                <h2 className="fw-bold mb-3" lang="tr">
+                  İletişime Geçin
+                </h2>
+                <p className="text-muted mb-4">
+                  Her türlü soru, teklif veya iş birliği için bize
+                  ulaşabilirsiniz. Size en kısa sürede dönüş yapacağız.
+                </p>
+                <div className="contact-details">
+                  <div className="d-flex align-items-center mb-3">
+                    <div className="contact-info-icon">
+                      <i className="fas fa-envelope"></i>
+                    </div>
+                    <span className="ms-3">yigittilaver2000@gmail.com</span>
+                  </div>
+                  <div className="d-flex align-items-center mb-3">
+                    <div className="contact-info-icon">
+                      <i className="fas fa-phone"></i>
+                    </div>
+                    <span className="ms-3">+90 (505) 020 20 95</span>
+                  </div>
+                  <div className="d-flex align-items-center">
+                    <div className="contact-info-icon">
+                      <i className="fas fa-map-marker-alt"></i>
+                    </div>
+                    <span className="ms-3">Maslak, İstanbul</span>
+                  </div>
+                </div>
+                <div className="social-links mt-5 d-flex gap-3">
+                  <a href="#" className="social-link">
+                    <i className="fab fa-linkedin"></i>
+                  </a>
+                  <a href="#" className="social-link">
+                    <i className="fab fa-twitter"></i>
+                  </a>
+                  <a href="#" className="social-link">
+                    <i className="fab fa-instagram"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-7">
+              <div className="contact-form glass-card p-5">
+                <form id="contactForm">
+                  <div className="row g-4">
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label className="form-label small fw-bold">
+                          Ad Soyad
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Adınız Soyadınız"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label className="form-label small fw-bold">
+                          E-posta
+                        </label>
+                        <input
+                          type="email"
+                          className="form-control"
+                          placeholder="ornek@sirket.com"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="col-12">
+                      <div className="form-group">
+                        <label className="form-label small fw-bold">Konu</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Nasıl yardımcı olabiliriz?"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="col-12">
+                      <div className="form-group">
+                        <label className="form-label small fw-bold">
+                          Mesaj
+                        </label>
+                        <textarea
+                          className="form-control"
+                          rows={4}
+                          placeholder="Mesajınızı buraya yazın..."
+                          required
+                        ></textarea>
+                      </div>
+                    </div>
+                    <div className="col-12 mt-4">
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-lg w-100"
+                      >
+                        Gönder <i className="fas fa-paper-plane ms-2"></i>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="py-5 bg-dark text-white mt-5">
-        <div className="container text-center">
-          <span className="h4 fw-bold">SmartSafe AI</span>
-          <p className="mt-2 text-white-50">
-            Yapay zeka ile modernize edilmiş iş güvenliği.
-          </p>
-          <hr className="border-secondary my-4" />
-          <p className="small text-white-50 mb-0">
-            © 2025 SmartSafe AI. Tüm Hakları Saklıdır.
-          </p>
+      <footer className="footer-section py-5">
+        <div className="container py-4">
+          <div className="row g-4 mb-5">
+            <div className="col-lg-6">
+              <div className="footer-brand mb-4">
+                <h3 className="text-white mb-2">
+                  <i className="fas fa-shield-alt"></i> SmartSafe AI
+                </h3>
+                <p className="text-white-50 small">
+                  Yapay zeka destekli endüstriyel güvenlik çözümleriyle iş
+                  yerinizi daha güvenli hale getiriyoruz.
+                </p>
+              </div>
+            </div>
+            <div className="col-md-4 col-lg-3">
+              <h5 className="text-white mb-4">Sektörler</h5>
+              <ul className="list-unstyled footer-links">
+                <li className="mb-2">
+                  <a
+                    href="#sectors"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    İnşaat
+                  </a>
+                </li>
+                <li className="mb-2">
+                  <a
+                    href="#sectors"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    Kimya
+                  </a>
+                </li>
+                <li className="mb-2">
+                  <a
+                    href="#sectors"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    Gıda
+                  </a>
+                </li>
+                <li className="mb-2">
+                  <a
+                    href="#sectors"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    Üretim
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div className="col-md-4 col-lg-3">
+              <h5 className="text-white mb-4">Destek</h5>
+              <ul className="list-unstyled footer-links">
+                <li className="mb-2">
+                  <a
+                    href="#contact"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    Yardım Merkezi
+                  </a>
+                </li>
+                <li className="mb-2">
+                  <a
+                    href="#contact"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    İletişim
+                  </a>
+                </li>
+                <li className="mb-2">
+                  <a
+                    href="#contact"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    Demo Talebi
+                  </a>
+                </li>
+                <li className="mb-2">
+                  <a
+                    href="#contact"
+                    className="text-white-50 text-decoration-none small"
+                  >
+                    Fiyatlandırma
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <hr className="border-secondary opacity-25" />
+          <div className="row align-items-center mt-4">
+            <div className="col-md-6">
+              <p className="text-white-50 small mb-0">
+                © 2025 SmartSafe AI. Tüm Hakları Saklıdır.
+              </p>
+            </div>
+            <div className="col-md-6 text-md-end">
+              <a
+                href="#"
+                className="text-white-50 text-decoration-none small me-3"
+              >
+                Gizlilik Politikası
+              </a>
+              <a href="#" className="text-white-50 text-decoration-none small">
+                Kullanım Koşulları
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
 
