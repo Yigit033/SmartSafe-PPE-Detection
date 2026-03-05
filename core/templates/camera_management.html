@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,7 +21,7 @@
             color: white;
             margin-bottom: 30px;
         }
-        
+
         .smart-detection-section {
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             border-radius: 15px;
@@ -28,40 +29,41 @@
             color: white;
             margin-bottom: 30px;
         }
-        
-        .form-control, .form-select {
+
+        .form-control,
+        .form-select {
             border: none;
             border-radius: 10px;
             padding: 12px 15px;
             background: rgba(255, 255, 255, 0.9);
         }
-        
+
         .btn {
             border-radius: 10px;
             padding: 12px 25px;
             font-weight: 600;
             transition: all 0.3s ease;
         }
-        
+
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
-        
+
         .result-card {
             background: white;
             border-radius: 15px;
             padding: 20px;
             margin: 20px 0;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         }
-        
+
         .loading {
             display: none;
             text-align: center;
             padding: 20px;
         }
-        
+
         .spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3498db;
@@ -71,24 +73,29 @@
             animation: spin 1s linear infinite;
             margin: 0 auto 10px;
         }
-        
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
-        
+
         .alert {
             border-radius: 10px;
             border: none;
         }
-        
+
         .camera-model-select {
             background: rgba(255, 255, 255, 0.9);
             border-radius: 10px;
             padding: 15px;
             margin: 15px 0;
         }
-        
+
         .feature-badge {
             background: rgba(255, 255, 255, 0.2);
             color: white;
@@ -98,7 +105,7 @@
             display: inline-block;
             font-size: 0.8em;
         }
-        
+
         /* Professional Video Container Styles */
         .unified-video-container {
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
@@ -112,7 +119,7 @@
             min-height: 400px;
             display: block;
         }
-        
+
         /* Single Video Container for Video Elements */
         .single-video-container {
             background: #000;
@@ -127,7 +134,7 @@
             justify-content: center;
             margin: 10px 0;
         }
-        
+
         .live-video-element {
             width: 100% !important;
             height: 100% !important;
@@ -144,83 +151,91 @@
             z-index: 1;
             border: none;
         }
-        
+
         .live-video-element:focus {
             outline: none;
             box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
         }
-        
+
         .live-video-element:hover {
             transform: scale(1.02);
             box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.15), 0 6px 20px rgba(0, 0, 0, 0.4);
             border-color: #555;
         }
-        
+
         /* Video container responsive adjustments */
         @media (max-width: 576px) {
             .live-video-element {
                 max-height: 250px !important;
                 min-height: 200px !important;
             }
+
             .unified-video-container {
                 padding: 10px;
                 margin: 5px 0;
                 min-height: 250px;
             }
+
             .single-video-container {
                 min-height: 250px;
                 margin: 5px 0;
             }
         }
-        
+
         @media (max-width: 768px) {
             .live-video-element {
                 max-height: 350px !important;
                 min-height: 250px !important;
             }
+
             .unified-video-container {
                 padding: 15px;
                 margin: 8px 0;
                 min-height: 300px;
             }
+
             .single-video-container {
                 min-height: 300px;
                 margin: 8px 0;
             }
         }
-        
+
         @media (min-width: 992px) {
             .live-video-element {
                 max-height: 550px !important;
                 min-height: 400px !important;
             }
+
             .unified-video-container {
                 padding: 20px;
                 margin: 10px 0;
                 min-height: 400px;
             }
+
             .single-video-container {
                 min-height: 400px;
                 margin: 10px 0;
             }
         }
-        
+
         @media (min-width: 1200px) {
             .live-video-element {
                 max-height: 650px !important;
                 min-height: 500px !important;
             }
+
             .unified-video-container {
                 padding: 25px;
                 margin: 15px 0;
                 min-height: 500px;
             }
+
             .single-video-container {
                 min-height: 500px;
                 margin: 15px 0;
             }
         }
-        
+
         /* Professional video controls overlay */
         .video-controls-overlay {
             position: absolute;
@@ -232,21 +247,21 @@
             opacity: 0;
             transition: opacity 0.3s ease;
         }
-        
+
         .unified-video-container:hover .video-controls-overlay {
             opacity: 1;
         }
-        
+
         .unified-video-container:hover {
             transform: translateY(-2px);
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
             border-color: #555;
         }
-        
+
         .unified-video-container {
             transition: all 0.3s ease;
         }
-        
+
         /* Stream status badge styling */
         #streamStatus {
             position: absolute;
@@ -258,57 +273,57 @@
             border-radius: 20px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
-        
+
         /* Navbar Styles */
         .navbar {
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
-        
+
         .navbar-brand {
             font-size: 1.5rem;
             font-weight: 700;
         }
-        
+
         .nav-link {
             font-weight: 500;
             transition: all 0.3s ease;
         }
-        
+
         .nav-link:hover {
             color: #667eea !important;
         }
-        
+
         .nav-link.active {
             color: #667eea !important;
             font-weight: 600;
         }
-        
+
         .btn-outline-danger {
             border-color: #dc3545;
             color: #dc3545;
         }
-        
+
         .btn-outline-danger:hover {
             background-color: #dc3545;
             border-color: #dc3545;
         }
-        
+
         /* Kamera Kartları */
         .camera-card {
             background: white;
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
         }
-        
+
         .camera-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
-        
+
         .camera-status {
             display: inline-flex;
             align-items: center;
@@ -320,32 +335,40 @@
             min-width: 60px;
             justify-content: center;
         }
-        
+
         .camera-status.online {
             background-color: rgba(40, 167, 69, 0.1);
             color: #28a745;
             border: 1px solid rgba(40, 167, 69, 0.3);
         }
-        
+
         .camera-status.offline {
             background-color: rgba(220, 53, 69, 0.1);
             color: #dc3545;
             border: 1px solid rgba(220, 53, 69, 0.3);
         }
-        
+
         .camera-status.testing {
             background-color: rgba(255, 193, 7, 0.1);
             color: #ffc107;
             border: 1px solid rgba(255, 193, 7, 0.3);
             animation: pulse 1.5s infinite;
         }
-        
+
         @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
-        
+
         .camera-stream {
             width: 100%;
             height: 200px;
@@ -357,53 +380,54 @@
             margin-bottom: 15px;
             overflow: hidden;
         }
-        
-        .camera-stream img, .camera-stream video {
+
+        .camera-stream img,
+        .camera-stream video {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        
+
         .camera-actions {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
         }
-        
+
         .camera-actions .btn {
             flex: 1;
             min-width: 120px;
         }
-        
+
         .camera-info {
             margin-bottom: 15px;
         }
-        
+
         .camera-info h5 {
             margin-bottom: 10px;
             color: #333;
         }
-        
+
         .camera-info p {
             margin-bottom: 5px;
             color: #666;
             font-size: 0.9em;
         }
-        
+
         .camera-info strong {
             color: #333;
         }
-        
+
         /* Profil Dropdown Stilleri */
         .profile-dropdown {
             min-width: 280px;
             border: none;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             padding: 0;
             margin-top: 10px;
         }
-        
+
         .profile-dropdown .dropdown-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -411,7 +435,7 @@
             border-radius: 15px 15px 0 0;
             border: none;
         }
-        
+
         .profile-avatar {
             width: 32px;
             height: 32px;
@@ -423,11 +447,11 @@
             color: white;
             font-size: 14px;
         }
-        
+
         .profile-avatar-large {
             width: 48px;
             height: 48px;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -435,44 +459,44 @@
             color: white;
             font-size: 20px;
         }
-        
+
         .profile-name {
             font-weight: 600;
             color: #2c3e50;
         }
-        
+
         .profile-dropdown .dropdown-item {
             padding: 12px 20px;
             border: none;
             transition: all 0.3s ease;
         }
-        
+
         .profile-dropdown .dropdown-item:hover {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             transform: translateX(5px);
         }
-        
+
         .profile-dropdown .dropdown-item i {
             width: 20px;
             text-align: center;
         }
-        
+
         .profile-dropdown .dropdown-divider {
             margin: 0;
             border-color: #e9ecef;
         }
-        
+
         /* Kamera Tablosu Stilleri */
         .table-responsive {
             border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
-        
+
         .table {
             margin-bottom: 0;
         }
-        
+
         .table thead th {
             background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
@@ -481,24 +505,24 @@
             font-weight: 600;
             font-size: 0.9rem;
         }
-        
+
         .table tbody tr {
             transition: all 0.3s ease;
             border-bottom: 1px solid #f8f9fa;
         }
-        
+
         .table tbody tr:hover {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-        
+
         .table tbody td {
             padding: 12px;
             vertical-align: middle;
             border: none;
         }
-        
+
         .camera-status {
             display: inline-flex;
             align-items: center;
@@ -507,38 +531,38 @@
             font-size: 0.8rem;
             font-weight: 600;
         }
-        
+
         .status-online {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .status-offline {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .status-testing {
             background: #fff3cd;
             color: #856404;
         }
-        
+
         .camera-actions {
             display: flex;
             gap: 5px;
             flex-wrap: wrap;
         }
-        
+
         .camera-actions .btn {
             padding: 6px 12px;
             font-size: 0.8rem;
             border-radius: 6px;
         }
-        
+
         .camera-actions .btn i {
             font-size: 0.75rem;
         }
-        
+
         .camera-icon {
             width: 32px;
             height: 32px;
@@ -550,29 +574,29 @@
             color: white;
             font-size: 14px;
         }
-        
+
         .search-box {
             border-radius: 20px;
             border: 2px solid #e9ecef;
             transition: all 0.3s ease;
         }
-        
+
         .search-box:focus {
             border-color: #667eea;
             box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
         }
-        
+
         .search-box .input-group-text {
             background: transparent;
             border: none;
             color: #6c757d;
         }
-        
+
         .search-box .form-control {
             border: none;
             box-shadow: none;
         }
-        
+
         .search-box .form-control:focus {
             box-shadow: none;
         }
@@ -634,7 +658,7 @@
         .table tbody tr:hover {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .table tbody td {
@@ -738,66 +762,75 @@
             .table-responsive {
                 max-height: 300px;
             }
-            
+
             .table thead th,
             .table tbody td {
                 padding: 0.5rem 0.75rem;
                 font-size: 0.75rem;
             }
-            
+
             .camera-actions .btn {
                 padding: 0.25rem 0.5rem;
                 font-size: 0.625rem;
             }
         }
-        
+
         /* Live Detection Dashboard Styles */
         .badge-pulse {
             animation: pulse 2s infinite;
         }
-        
+
         /* Pulse animation for active detection badges */
         .pulse-animation {
             animation: pulse 2s infinite;
         }
-        
+
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
-        
+
         /* 🎯 DİNAMİK ANİMASYONLAR */
         @keyframes fadeIn {
             from {
                 opacity: 0;
                 transform: translateY(10px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
-        
+
         .hover-highlight {
             transition: all 0.3s ease;
         }
-        
+
         .hover-highlight:hover {
             background-color: #f8f9fa;
             transform: translateX(5px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-        
+
         .animate__animated {
             animation-duration: 1s;
             animation-fill-mode: both;
         }
-        
+
         .animate__pulse {
             animation-name: pulse;
         }
     </style>
 </head>
+
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white">
@@ -821,10 +854,11 @@
                 <a class="nav-link" href="/company/{{ company_id }}/settings">
                     <i class="fas fa-cog"></i> Ayarlar
                 </a>
-                
+
                 <!-- Profil Dropdown -->
                 <div class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown"
+                        role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <div class="profile-avatar me-2">
                             <i class="fas fa-building"></i>
                         </div>
@@ -842,7 +876,9 @@
                                 </div>
                             </div>
                         </li>
-                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
                         <li>
                             <a class="dropdown-item" href="/company/{{ company_id }}/profile">
                                 <i class="fas fa-user me-2"></i> Şirket Profili
@@ -858,7 +894,9 @@
                                 <i class="fas fa-credit-card me-2"></i> Fatura & Ödeme
                             </a>
                         </li>
-                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
                         <li>
                             <a class="dropdown-item text-danger" href="#" onclick="logout()">
                                 <i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap
@@ -875,7 +913,7 @@
             <i class="fas fa-video me-3"></i>
             SmartSafe AI - Kamera Yönetimi
         </h1>
-        
+
         <!-- DVR Yönetimi Bölümü -->
         <div class="dvr-management-section mb-5">
             <div class="card">
@@ -893,11 +931,13 @@
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">DVR Adı</label>
-                                        <input type="text" class="form-control" id="dvrName" placeholder="Örn: Merkez DVR" required>
+                                        <input type="text" class="form-control" id="dvrName"
+                                            placeholder="Örn: Merkez DVR" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">IP Adresi</label>
-                                        <input type="text" class="form-control" id="dvrIp" placeholder="192.168.1.100" required>
+                                        <input type="text" class="form-control" id="dvrIp" placeholder="192.168.1.100"
+                                            required>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -911,7 +951,8 @@
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Şifre</label>
-                                        <input type="password" class="form-control" id="dvrPassword" placeholder="DVR şifresi" required>
+                                        <input type="password" class="form-control" id="dvrPassword"
+                                            placeholder="DVR şifresi" required>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -926,7 +967,8 @@
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Maksimum Kanal</label>
-                                        <input type="number" class="form-control" id="dvrMaxChannels" value="16" min="1" max="64">
+                                        <input type="number" class="form-control" id="dvrMaxChannels" value="16" min="1"
+                                            max="64">
                                     </div>
                                 </div>
                                 <button type="submit" class="btn btn-primary">
@@ -942,58 +984,66 @@
                                     <p>Henüz DVR sistemi eklenmemiş</p>
                                 </div>
                             </div>
-                            
+
                             <!-- 🎯 ESKİ DVR Kanalları Container - KALDIRILDI (Yeni dinamik grid kullanılıyor) -->
                             <!-- <div id="dvrChannelsContainer" class="mt-4">
                                 Keşfedilen kanallar burada gösterilecek
                             </div> -->
-                            
+
                             <!-- DVR PPE Detection Controls -->
                             <div class="mt-4 p-3 border rounded bg-light">
                                 <h6><i class="fas fa-shield-alt me-2"></i>DVR PPE Detection</h6>
-                                
+
                                 <!-- 🎯 PRODUCTION-GRADE: Dinamik Kanal Seçimi -->
                                 <div class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <label class="form-label mb-0">📺 Kanal Seçimi (Dinamik):</label>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary" onclick="selectAllChannels()" title="Tümünü Seç">
+                                            <button type="button" class="btn btn-outline-primary"
+                                                onclick="selectAllChannels()" title="Tümünü Seç">
                                                 <i class="fas fa-check-double"></i> Tümü
                                             </button>
-                                            <button type="button" class="btn btn-outline-secondary" onclick="clearAllChannels()" title="Seçimi Kaldır">
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                onclick="clearAllChannels()" title="Seçimi Kaldır">
                                                 <i class="fas fa-times"></i> Temizle
                                             </button>
-                                            <button type="button" class="btn btn-outline-info" onclick="toggleChannelFilters()" title="Filtreleri Göster">
+                                            <button type="button" class="btn btn-outline-info"
+                                                onclick="toggleChannelFilters()" title="Filtreleri Göster">
                                                 <i class="fas fa-filter"></i> Filtrele
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Kanal Filtreleri -->
                                     <div id="channelFilters" style="display:none;" class="mb-3 p-2 bg-light rounded">
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" id="filterActive" checked onchange="applyChannelFilters()">
+                                            <input class="form-check-input" type="checkbox" id="filterActive" checked
+                                                onchange="applyChannelFilters()">
                                             <label class="form-check-label" for="filterActive">Aktif Kanallar</label>
                                         </div>
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" id="filterInactive" onchange="applyChannelFilters()">
-                                            <label class="form-check-label" for="filterInactive">İnaktif Kanallar</label>
+                                            <input class="form-check-input" type="checkbox" id="filterInactive"
+                                                onchange="applyChannelFilters()">
+                                            <label class="form-check-label" for="filterInactive">İnaktif
+                                                Kanallar</label>
                                         </div>
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" id="filterOnline" checked onchange="applyChannelFilters()">
+                                            <input class="form-check-input" type="checkbox" id="filterOnline" checked
+                                                onchange="applyChannelFilters()">
                                             <label class="form-check-label" for="filterOnline">Çevrimiçi</label>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Dinamik Kanal Grid -->
                                     <div id="dvrChannelsGrid" class="row g-2">
                                         <!-- Kanallar JavaScript tarafından dinamik olarak yüklenecek -->
                                         <div class="col-12 text-center text-muted">
-                                            <small><i class="fas fa-info-circle"></i> Kanalları yüklemek için DVR keşfi yapın</small>
+                                            <small><i class="fas fa-info-circle"></i> Kanalları yüklemek için DVR keşfi
+                                                yapın</small>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Detection Mode -->
                                 <div class="mb-3">
                                     <label class="form-label">Detection Modu:</label>
@@ -1007,20 +1057,23 @@
                                         <option value="aviation">Havacılık</option>
                                     </select>
                                 </div>
-                                
+
                                 <!-- Action Buttons -->
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-success btn-sm" id="startDetectionBtn" onclick="startDVRDetectionDynamic()">
+                                    <button class="btn btn-success btn-sm" id="startDetectionBtn"
+                                        onclick="startDVRDetectionDynamic()">
                                         <i class="fas fa-play me-2"></i>Detection Başlat
                                     </button>
-                                    <button class="btn btn-danger btn-sm" id="stopDetectionBtn" onclick="stopDVRDetectionDynamic()">
+                                    <button class="btn btn-danger btn-sm" id="stopDetectionBtn"
+                                        onclick="stopDVRDetectionDynamic()">
                                         <i class="fas fa-stop me-2"></i>Detection Durdur
                                     </button>
-                                    <button class="btn btn-info btn-sm" id="statusDetectionBtn" onclick="updateDVRDetectionStatusDynamic()">
+                                    <button class="btn btn-info btn-sm" id="statusDetectionBtn"
+                                        onclick="updateDVRDetectionStatusDynamic()">
                                         <i class="fas fa-sync me-2"></i>Durum Güncelle
                                     </button>
                                 </div>
-                                
+
                                 <!-- Status Display -->
                                 <div class="mt-3" id="dvr-status-display">
                                     <span class="badge bg-secondary">Durum Bekleniyor</span>
@@ -1032,7 +1085,77 @@
             </div>
         </div>
 
-        <!-- 🎯 AKTİF DETECTIONLAR DASHBOARD -->
+        <!-- 🔍 ONVIF Otomatik Keşif Bölümü -->
+        <div class="onvif-discovery-section mb-5">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-broadcast-tower me-2"></i>
+                        ONVIF Otomatik Keşif
+                    </h4>
+                    <span class="badge bg-light text-info">Kurumsal Standart</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Ağınızdaki ONVIF uyumlu kameraları ve NVR/DVR'ları otomatik olarak keşfedin.
+                        Bulunan cihazları tek tıkla sisteme ekleyebilirsiniz.
+                    </p>
+
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-info" id="onvifDiscoverBtn" onclick="startOnvifDiscovery()">
+                            <i class="fas fa-search me-2"></i>Ağı Tara
+                        </button>
+                        <button class="btn btn-outline-info" id="onvifDiscoverBtnAdvanced"
+                            onclick="startOnvifDiscoveryAdvanced()" title="Gelişmiş tarama: IP aralığı ile">
+                            <i class="fas fa-network-wired me-2"></i>Gelişmiş Tarama
+                        </button>
+                    </div>
+
+                    <!-- Gelişmiş Tarama Formu (varsayılan gizli) -->
+                    <div id="onvifAdvancedForm" style="display:none;" class="mb-3 p-3 rounded bg-light">
+                        <div class="row">
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">Başlangıç IP</label>
+                                <input type="text" class="form-control" id="onvifStartIp" placeholder="192.168.1.1">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">Bitiş IP</label>
+                                <input type="text" class="form-control" id="onvifEndIp" placeholder="192.168.1.254">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">Zaman Aşımı (sn)</label>
+                                <input type="number" class="form-control" id="onvifTimeout" value="5" min="2" max="30">
+                            </div>
+                        </div>
+                        <button class="btn btn-info btn-sm" onclick="runAdvancedOnvifScan()">
+                            <i class="fas fa-search-plus me-2"></i>Taramayı Başlat
+                        </button>
+                    </div>
+
+                    <!-- Tarama Durumu -->
+                    <div id="onvifScanStatus" style="display:none;" class="mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
+                            <span class="text-info" id="onvifScanStatusText">Ağ taranıyor...</span>
+                        </div>
+                    </div>
+
+                    <!-- Bulunan Cihazlar -->
+                    <div id="onvifDevicesList" class="row g-3">
+                        <!-- Cihazlar JavaScript ile yüklenecek -->
+                    </div>
+
+                    <!-- Sonuç Yoksa -->
+                    <div id="onvifNoDevices" style="display:none;" class="text-center text-muted py-3">
+                        <i class="fas fa-search fa-2x mb-2"></i>
+                        <p class="mb-0">ONVIF cihaz bulunamadı. Ağ bağlantınızı kontrol edin.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
         <div class="active-detections-dashboard mb-4" id="activeDetectionsDashboard" style="display:none;">
             <div class="card border-success">
                 <div class="card-header bg-success text-white">
@@ -1070,7 +1193,7 @@
                     </button>
                 </div>
             </div>
-            
+
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -1104,9 +1227,10 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Kamera Detay Modal -->
-            <div class="modal fade" id="cameraDetailModal" tabindex="-1" aria-labelledby="cameraDetailModalLabel" aria-hidden="true">
+            <div class="modal fade" id="cameraDetailModal" tabindex="-1" aria-labelledby="cameraDetailModalLabel"
+                aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -1129,9 +1253,10 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Live Detection Modal -->
-            <div class="modal fade" id="liveDetectionModal" tabindex="-1" aria-labelledby="liveDetectionModalLabel" aria-hidden="true">
+            <div class="modal fade" id="liveDetectionModal" tabindex="-1" aria-labelledby="liveDetectionModalLabel"
+                aria-hidden="true">
                 <div class="modal-dialog modal-fullscreen">
                     <div class="modal-content">
                         <div class="modal-header bg-dark text-white">
@@ -1139,9 +1264,11 @@
                                 <i class="fas fa-brain me-2"></i>
                                 <span id="detectionCameraName">Canlı PPE Tespiti</span>
                             </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                                aria-label="Close"></button>
                         </div>
-                        <div class="modal-body p-0" style="background: #f8f9fa; overflow-y: auto; max-height: calc(100vh - 120px);">
+                        <div class="modal-body p-0"
+                            style="background: #f8f9fa; overflow-y: auto; max-height: calc(100vh - 120px);">
                             <div class="container-fluid p-4">
                                 <div class="row">
                                     <!-- Sol Panel - Video Stream -->
@@ -1156,10 +1283,15 @@
                                                 </h6>
                                             </div>
                                             <div class="card-body p-0">
-                                                <div id="detectionVideoContainer" style="background: #000; position: relative; min-height: 400px; max-height: 70vh; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                                                    <img id="detectionStream" style="width: 100%; height: 100%; object-fit: contain; display: none;" alt="Detection Stream">
-                                                    <div id="detectionLoading" class="text-center p-5" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                                                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                                <div id="detectionVideoContainer"
+                                                    style="background: #000; position: relative; min-height: 400px; max-height: 70vh; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                                                    <img id="detectionStream"
+                                                        style="width: 100%; height: 100%; object-fit: contain; display: none;"
+                                                        alt="Detection Stream">
+                                                    <div id="detectionLoading" class="text-center p-5"
+                                                        style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                                        <div class="spinner-border text-primary" role="status"
+                                                            style="width: 3rem; height: 3rem;">
                                                             <span class="visually-hidden">Yükleniyor...</span>
                                                         </div>
                                                         <p class="text-white mt-3">Detection başlatılıyor...</p>
@@ -1167,7 +1299,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <!-- İstatistik Kartları -->
                                         <div class="row g-3">
                                             <div class="col-md-3">
@@ -1191,7 +1323,8 @@
                                             <div class="col-md-3">
                                                 <div class="card shadow-sm text-center">
                                                     <div class="card-body">
-                                                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                                                        <i
+                                                            class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
                                                         <h3 class="mb-0" id="violationCount">0</h3>
                                                         <small class="text-muted">İhlaller</small>
                                                     </div>
@@ -1208,7 +1341,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Sağ Panel - Detection History & Stats -->
                                     <div class="col-lg-4">
                                         <!-- Detection History -->
@@ -1227,7 +1360,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <!-- Violation Details -->
                                         <div class="card shadow-sm">
                                             <div class="card-header bg-warning text-dark">
@@ -1268,7 +1401,7 @@
                 Yeni Kamera Ekleme
             </h3>
             <p class="mb-4">Sadece IP adresi ile kameranızı otomatik olarak tespit edin ve yapılandırın.</p>
-            
+
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
@@ -1283,7 +1416,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="row">
                 <div class="col-md-6">
                     <button id="smartDetectBtn" class="btn btn-light btn-lg w-100">
@@ -1298,17 +1431,17 @@
                     </button>
                 </div>
             </div>
-            
+
             <div id="smartResult" class="result-card mt-4" style="display: none;"></div>
         </div>
-        
+
         <!-- Manuel Kamera Ekleme -->
         <div class="camera-form camera-form-section">
             <h3 class="mb-4">
                 <i class="fas fa-cogs me-2"></i>
                 Manuel Kamera Ekleme
             </h3>
-            
+
             <form id="cameraForm">
                 <div class="row">
                     <div class="col-md-4">
@@ -1326,11 +1459,12 @@
                     <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Konum *</label>
-                            <input type="text" id="cameraLocation" class="form-control" placeholder="Örn: Giriş, Dış Mekan, Ofis" required>
+                            <input type="text" id="cameraLocation" class="form-control"
+                                placeholder="Örn: Giriş, Dış Mekan, Ofis" required>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-4">
                         <div class="mb-3">
@@ -1355,22 +1489,24 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Kullanıcı Adı</label>
-                            <input type="text" id="cameraUsername" class="form-control" placeholder="Kamera kullanıcı adı (opsiyonel)">
+                            <input type="text" id="cameraUsername" class="form-control"
+                                placeholder="Kamera kullanıcı adı (opsiyonel)">
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Parola</label>
-                            <input type="password" id="cameraPassword" class="form-control" placeholder="Kamera parolası (opsiyonel)">
+                            <input type="password" id="cameraPassword" class="form-control"
+                                placeholder="Kamera parolası (opsiyonel)">
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Kamera Modeli Seçimi -->
                 <div class="camera-model-select">
                     <label class="form-label fw-bold text-dark">Kamera Modeli (Opsiyonel)</label>
@@ -1397,16 +1533,18 @@
                         </small>
                     </div>
                 </div>
-                
+
                 <div class="row mt-4">
                     <div class="col-md-6">
-                        <button type="button" id="testBtn" class="btn btn-warning btn-lg w-100" style="height: 50px; font-size: 16px; font-weight: 600;">
+                        <button type="button" id="testBtn" class="btn btn-warning btn-lg w-100"
+                            style="height: 50px; font-size: 16px; font-weight: 600;">
                             <i class="fas fa-vial me-2"></i>
                             Bağlantıyı Test Et
                         </button>
                     </div>
                     <div class="col-md-6">
-                        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100" style="height: 50px; font-size: 16px; font-weight: 600;">
+                        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100"
+                            style="height: 50px; font-size: 16px; font-weight: 600;">
                             <i class="fas fa-plus me-2"></i>
                             Kamera Ekle
                         </button>
@@ -1414,32 +1552,33 @@
                 </div>
                 <div class="row mt-3">
                     <div class="col-md-6 offset-md-3">
-                        <button type="button" id="cancelBtn" class="btn btn-secondary btn-lg w-100" onclick="cancelEdit()" style="display: none;">
+                        <button type="button" id="cancelBtn" class="btn btn-secondary btn-lg w-100"
+                            onclick="cancelEdit()" style="display: none;">
                             <i class="fas fa-times me-2"></i>
                             İptal Et
                         </button>
                     </div>
                 </div>
             </form>
-            
+
             <div id="testResult" class="result-card mt-4" style="display: none;"></div>
         </div>
-        
+
         <!-- Loading -->
         <div id="loading" class="loading">
             <div class="spinner"></div>
             <p>İşlem yapılıyor...</p>
         </div>
-        
+
         <!-- Alert Container -->
         <div id="alertContainer"></div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function escapeHtml(str) {
             if (str === null || str === undefined) return '';
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
         }
 
         // Kamera modeli bilgileri
@@ -1505,22 +1644,22 @@
                 path: '/cam/realmonitor'
             }
         };
-        
+
         // Model seçimi değiştiğinde
-        document.getElementById('cameraModel').addEventListener('change', function() {
+        document.getElementById('cameraModel').addEventListener('change', function () {
             const model = this.value;
             const modelInfo = document.getElementById('modelInfo');
             const modelFeatures = document.getElementById('modelFeatures');
             const modelPorts = document.getElementById('modelPorts');
             const modelPath = document.getElementById('modelPath');
-            
+
             if (model && cameraModels[model]) {
                 const info = cameraModels[model];
                 modelFeatures.textContent = info.features.join(', ');
                 modelPorts.textContent = info.ports.join(', ');
                 modelPath.textContent = info.path;
                 modelInfo.style.display = 'block';
-                
+
                 // Varsayılan değerleri doldur
                 document.getElementById('cameraPort').value = info.ports[0];
                 document.getElementById('cameraPath').value = info.path;
@@ -1528,47 +1667,47 @@
                 modelInfo.style.display = 'none';
             }
         });
-        
+
         // Akıllı tespit
-        document.getElementById('smartDetectBtn').addEventListener('click', async function() {
+        document.getElementById('smartDetectBtn').addEventListener('click', async function () {
             const ip = document.getElementById('smartIP').value;
             const name = document.getElementById('smartName').value || 'Akıllı Tespit Kamera';
-            
+
             if (!ip) {
                 showAlert('IP adresi gerekli!', 'warning');
                 return;
             }
-            
+
             showLoading(true);
-            
+
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/cameras/smart-test`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ip_address: ip, camera_name: name })
                 });
-                
+
                 const result = await response.json();
                 showSmartResult(result);
-                
+
             } catch (error) {
                 showAlert('Akıllı tespit hatası: ' + error.message, 'danger');
             } finally {
                 showLoading(false);
             }
         });
-        
+
         // Hızlı test
-        document.getElementById('quickTestBtn').addEventListener('click', async function() {
+        document.getElementById('quickTestBtn').addEventListener('click', async function () {
             const formData = getFormData();
-            
+
             if (!formData.ip_address) {
                 showAlert('IP adresi gerekli!', 'warning');
                 return;
             }
-            
+
             showLoading(true);
-            
+
             try {
                 console.log('⚡ Quick test starting...');
                 const response = await fetch(`/api/company/{{ company_id }}/cameras/quick-test`, {
@@ -1576,31 +1715,31 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
-                
+
                 const result = await response.json();
                 console.log('⚡ Quick test result:', result);
                 showTestResult(result);
-                
+
             } catch (error) {
                 showAlert('Hızlı test hatası: ' + error.message, 'danger');
             } finally {
                 showLoading(false);
             }
         });
-        
+
         // Manuel test
-        document.getElementById('testBtn').addEventListener('click', async function() {
+        document.getElementById('testBtn').addEventListener('click', async function () {
             console.log('🎯 Test button clicked from event listener!');
             const formData = getFormData();
             console.log('📝 Form data from test button:', formData);
-            
+
             if (!formData.ip_address || !formData.name) {
                 showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
                 return;
             }
-            
+
             showLoading(true);
-            
+
             try {
                 console.log('🔧 Sending test request...');
                 const response = await fetch(`/api/company/{{ company_id }}/cameras/manual-test`, {
@@ -1608,138 +1747,138 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
-                
+
                 console.log('📡 Test response status:', response.status);
                 const result = await response.json();
                 console.log('📡 Test result:', result);
                 console.log('📡 Test result type:', typeof result);
                 console.log('📡 Test result keys:', Object.keys(result));
                 showTestResult(result);
-                
+
             } catch (error) {
                 showAlert('Test hatası: ' + error.message, 'danger');
             } finally {
                 showLoading(false);
             }
         });
-        
+
         // Form submit
         console.log('🔧 Setting up form submit event listener...');
         const cameraForm = document.getElementById('cameraForm');
         console.log('📋 Camera form element:', cameraForm);
-        
-        cameraForm.addEventListener('submit', async function(e) {
+
+        cameraForm.addEventListener('submit', async function (e) {
             console.log('🎯 Form submit event triggered!');
             e.preventDefault();
-            
+
             const formData = getFormData();
-            
+
             if (!formData.camera_ip || !formData.camera_name) {
                 showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
                 return;
             }
-            
+
             // Kamera ekleme işlemini başlat
             await addCameraToSystem(formData);
         });
-        
+
         // Alternatif: Click event for submit button
         const submitBtn = cameraForm.querySelector('button[type="submit"]');
         const addCameraBtn = document.getElementById('addCameraBtn');
-        
+
         if (submitBtn) {
             console.log('🔧 Setting up submit button click event...');
-            submitBtn.addEventListener('click', async function(e) {
+            submitBtn.addEventListener('click', async function (e) {
                 console.log('🎯 Submit button clicked!');
                 e.preventDefault();
-                
+
                 const formData = getFormData();
                 console.log('📝 Form data from click:', formData);
-                
+
                 if (!formData.camera_ip || !formData.camera_name) {
                     showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
                     return;
                 }
-                
+
                 // Kamera ekleme işlemini başlat
                 await addCameraToSystem(formData);
             });
         }
-        
+
         // Ekstra: ID ile de click event ekle
         if (addCameraBtn) {
             console.log('🔧 Setting up addCameraBtn click event...');
-            addCameraBtn.addEventListener('click', async function(e) {
+            addCameraBtn.addEventListener('click', async function (e) {
                 console.log('🎯 Add camera button clicked from event listener!');
                 e.preventDefault();
-                
+
                 const formData = getFormData();
                 console.log('📝 Form data from addCameraBtn click:', formData);
-                
+
                 if (!formData.camera_ip || !formData.camera_name) {
                     showAlert('Kamera adı ve IP adresi gerekli!', 'warning');
                     return;
                 }
-                
+
                 console.log('🚀 Starting camera addition from event listener...');
                 // Kamera ekleme işlemini başlat
                 await addCameraToSystem(formData);
             });
         }
-        
+
         // Kamera ekleme fonksiyonu
         async function addCameraToSystem(formData) {
             console.log('🚀 Starting camera addition process...');
-            
+
             showLoading(true);
-            
+
             try {
                 // Edit modu kontrolü
                 const cameraForm = document.getElementById('cameraForm');
                 const isEditMode = cameraForm.dataset.editMode === 'true';
                 const editCameraId = cameraForm.dataset.editCameraId;
-                
+
                 if (isEditMode && editCameraId) {
                     console.log('🔄 Updating camera:', editCameraId);
                     console.log('📝 Form data:', formData);
-                    
+
                     // Kamera güncelleme
                     const updateResponse = await fetch(`/api/company/{{ company_id }}/cameras/${editCameraId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(formData)
                     });
-                    
+
                     console.log('Update response status:', updateResponse.status);
-                    
+
                     if (!updateResponse.ok) {
                         throw new Error(`HTTP ${updateResponse.status}: ${updateResponse.statusText}`);
                     }
-                    
+
                     const updateResult = await updateResponse.json();
                     console.log('Update result:', updateResult);
-                    
+
                     if (updateResult.success) {
                         showAlert('✅ Kamera başarıyla güncellendi!', 'success');
-                        
+
                         // Edit modunu sıfırla
                         cameraForm.dataset.editMode = 'false';
                         delete cameraForm.dataset.editCameraId;
                         cameraForm.reset();
-                        
+
                         // Submit butonunu geri al
                         const submitBtn = cameraForm.querySelector('button[type="submit"]');
                         if (submitBtn) {
                             submitBtn.innerHTML = '<i class="fas fa-plus"></i> Kamera Ekle';
                             submitBtn.className = 'btn btn-primary btn-lg w-100';
                         }
-                        
+
                         // Hide cancel button
                         const cancelBtn = document.getElementById('cancelBtn');
                         if (cancelBtn) {
                             cancelBtn.style.display = 'none';
                         }
-                        
+
                         // Kamera listesini yenile
                         setTimeout(() => {
                             if (typeof loadCameras === 'function') {
@@ -1752,26 +1891,26 @@
                 } else {
                     // Yeni kamera ekleme
                     console.log('📹 Adding camera with data:', formData);
-                    
+
                     const addResponse = await fetch(`/api/company/{{ company_id }}/cameras`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(formData)
                     });
-                    
+
                     console.log('📡 Add camera response status:', addResponse.status);
-                    
+
                     if (!addResponse.ok) {
                         throw new Error(`HTTP ${addResponse.status}: ${addResponse.statusText}`);
                     }
-                    
+
                     const addResult = await addResponse.json();
                     console.log('📡 Add camera result:', addResult);
-                    
+
                     if (addResult.success) {
                         showAlert('✅ Kamera başarıyla eklendi!', 'success');
                         cameraForm.reset();
-                        
+
                         // Kamera listesini yenile
                         setTimeout(() => {
                             if (typeof loadCameras === 'function') {
@@ -1804,7 +1943,7 @@
                         }
                     }
                 }
-                
+
             } catch (error) {
                 console.error('Camera operation error:', error);
                 showAlert('❌ İşlem hatası: ' + error.message, 'danger');
@@ -1812,7 +1951,7 @@
                 showLoading(false);
             }
         }
-        
+
         function getFormData() {
             return {
                 camera_name: document.getElementById('cameraName').value,
@@ -1825,56 +1964,56 @@
                 camera_password: document.getElementById('cameraPassword').value
             };
         }
-        
+
         // Onclick fonksiyonu
         async function addCameraFromForm() {
             console.log('🎯 addCameraFromForm() called from onclick!');
             const formData = getFormData();
             console.log('📝 Form data from onclick:', formData);
-            
+
             // Form validasyonu
             if (!formData.camera_name || formData.camera_name.trim() === '') {
                 showAlert('❌ Kamera adı gerekli!', 'warning');
                 return;
             }
-            
+
             if (!formData.camera_location || formData.camera_location.trim() === '') {
                 showAlert('❌ Konum gerekli!', 'warning');
                 return;
             }
-            
+
             if (!formData.camera_ip || formData.camera_ip.trim() === '') {
                 showAlert('❌ IP adresi gerekli!', 'warning');
                 return;
             }
-            
+
             // IP adresi format kontrolü
             const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
             if (!ipPattern.test(formData.camera_ip)) {
                 showAlert('❌ Geçersiz IP adresi formatı! Örnek: 192.168.1.100', 'warning');
                 return;
             }
-            
+
             // Port kontrolü
             if (formData.camera_port < 1 || formData.camera_port > 65535) {
                 showAlert('❌ Port numarası 1-65535 arasında olmalı!', 'warning');
                 return;
             }
-            
+
             console.log('🚀 Starting camera addition from onclick...');
             // Kamera ekleme işlemini başlat
             await addCameraToSystem(formData);
         }
-        
+
         function showSmartResult(result) {
             console.log('🎯 showSmartResult called with:', result);
             const container = document.getElementById('smartResult');
-            
+
             if (result.success) {
                 console.log('✅ Smart detection successful');
                 const detectionInfo = result.detection_info;
                 console.log('📋 Detection info:', detectionInfo);
-                
+
                 container.innerHTML = `
                     <div class="alert alert-success">
                         <h5><i class="fas fa-check-circle me-2"></i>Kamera Tespit Edildi!</h5>
@@ -1900,37 +2039,37 @@
                     </div>
                 `;
             }
-            
+
             container.style.display = 'block';
         }
-        
+
         function showTestResult(result) {
             const resultDiv = document.getElementById('testResult');
             if (!resultDiv) return;
-            
+
             console.log('📊 Test result:', result);
-            
+
             let html = '';
-            
+
             if (result.success) {
                 html = `
                     <div class="alert alert-success">
                         <h5><i class="fas fa-check-circle"></i> ${result.message}</h5>
                 `;
-                                        } else {
+            } else {
                 html = `
                     <div class="alert alert-danger">
                         <h5><i class="fas fa-exclamation-triangle"></i> Test Başarısız</h5>
                         <p>${result.error || 'Bilinmeyen hata'}</p>
                 `;
             }
-            
+
             // Kapsamlı test sonuçları
             if (result.test_results) {
                 const tests = result.test_results;
-                
+
                 html += '<div class="mt-3"><h6>📋 Test Detayları:</h6>';
-                
+
                 // Bağlantı Testi
                 if (tests.connection_test) {
                     const conn = tests.connection_test;
@@ -1939,76 +2078,76 @@
                     html += `
                         <div class="mb-2 p-2 border rounded">
                             <strong>🔗 Bağlantı Testi:</strong> ${connStatus}
-                            ${conn.status === 'success' ? 
-                                `<br><small class="${connClass}">Response Time: ${conn.response_time_ms?.toFixed(1)}ms | Status: ${conn.status_code}</small>` : 
-                                `<br><small class="${connClass}">${conn.error}</small>`
-                            }
+                            ${conn.status === 'success' ?
+                            `<br><small class="${connClass}">Response Time: ${conn.response_time_ms?.toFixed(1)}ms | Status: ${conn.status_code}</small>` :
+                            `<br><small class="${connClass}">${conn.error}</small>`
+                        }
                         </div>
                     `;
                 }
-                    
+
                 // Stream Testi
                 if (tests.stream_test) {
                     const stream = tests.stream_test;
                     const streamStatus = stream.status === 'success' ? '✅' : '❌';
                     const streamClass = stream.status === 'success' ? 'text-success' : 'text-danger';
                     const isDemo = stream.demo_mode;
-                    
+
                     html += `
                         <div class="mb-2 p-2 border rounded ${isDemo ? 'border-warning bg-light' : ''}">
                             <strong>🎥 Video Stream Testi:</strong> ${streamStatus}
                             ${isDemo ? '<span class="badge bg-warning ms-2">DEMO</span>' : ''}
-                            ${stream.status === 'success' && stream.frame_info ? 
-                                `<br><small class="${streamClass}">Resolution: ${stream.frame_info.width}x${stream.frame_info.height} | Channels: ${stream.frame_info.channels}</small>` : 
-                                `<br><small class="${streamClass}">${stream.error}</small>`
-                            }
+                            ${stream.status === 'success' && stream.frame_info ?
+                            `<br><small class="${streamClass}">Resolution: ${stream.frame_info.width}x${stream.frame_info.height} | Channels: ${stream.frame_info.channels}</small>` :
+                            `<br><small class="${streamClass}">${stream.error}</small>`
+                        }
                         </div>
                     `;
                 }
-                
+
                 // PPE Detection Testi
                 if (tests.ppe_test) {
                     const ppe = tests.ppe_test;
                     const ppeStatus = ppe.status === 'success' ? '✅' : '❌';
                     const ppeClass = ppe.status === 'success' ? 'text-success' : 'text-danger';
                     const isDemo = ppe.demo_mode;
-                    
+
                     html += `
                         <div class="mb-2 p-2 border rounded ${isDemo ? 'border-warning bg-light' : ''}">
                             <strong>🎯 PPE Detection Testi:</strong> ${ppeStatus}
                             ${isDemo ? '<span class="badge bg-warning ms-2">DEMO</span>' : ''}
-                            ${ppe.status === 'success' ? 
-                                `<br><small class="${ppeClass}">System: ${ppe.system_used} | People: ${ppe.people_detected} | Compliant: ${ppe.ppe_compliant} | Violations: ${ppe.ppe_violations?.length || 0}</small>` : 
-                                `<br><small class="${ppeClass}">${ppe.error}</small>`
-                            }
+                            ${ppe.status === 'success' ?
+                            `<br><small class="${ppeClass}">System: ${ppe.system_used} | People: ${ppe.people_detected} | Compliant: ${ppe.ppe_compliant} | Violations: ${ppe.ppe_violations?.length || 0}</small>` :
+                            `<br><small class="${ppeClass}">${ppe.error}</small>`
+                        }
                     </div>
                 `;
                 }
-                
+
                 html += '</div>';
             }
-            
+
             html += '</div>';
             resultDiv.innerHTML = html;
             resultDiv.style.display = 'block';
-            
+
             // Test sonucunu console'a yazdır
             console.log('📊 Final test result:', result);
         }
-        
+
         function fillFormFromDetection(protocol, port, path) {
             document.getElementById('cameraProtocol').value = protocol;
             document.getElementById('cameraPort').value = port;
             document.getElementById('cameraPath').value = path;
-            
+
             // Forma scroll
             document.querySelector('.camera-form').scrollIntoView({ behavior: 'smooth' });
         }
-        
+
         function showLoading(show) {
             document.getElementById('loading').style.display = show ? 'block' : 'none';
         }
-        
+
         function showAlert(message, type) {
             const container = document.getElementById('alertContainer');
             const alert = document.createElement('div');
@@ -2018,20 +2157,20 @@
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
             container.appendChild(alert);
-            
+
             // 5 saniye sonra otomatik kapat
             setTimeout(() => {
                 alert.remove();
             }, 5000);
         }
-        
+
         // Kamera Yönetimi Fonksiyonları
         function loadCameras() {
             console.log('🔍 loadCameras function called');
-            
+
             // Element'i tekrar kontrol et
             const camerasTableBody = document.getElementById('camerasTableBody');
-            
+
             if (!camerasTableBody) {
                 console.error('❌ camerasTableBody element not found in loadCameras!');
                 console.error('❌ Available elements with "camera" in ID:');
@@ -2052,11 +2191,11 @@
                 });
                 return;
             }
-            
+
             console.log('📋 camerasTableBody found:', camerasTableBody);
             console.log('📋 camerasTableBody.innerHTML length:', camerasTableBody.innerHTML.length);
             console.log('📋 camerasTableBody.offsetHeight:', camerasTableBody.offsetHeight);
-            
+
             // Element'in yazılabilir olduğunu kontrol et
             try {
                 const testDiv = document.createElement('div');
@@ -2068,7 +2207,7 @@
                 console.error('❌ camerasTableBody is not writable:', error);
                 return;
             }
-            
+
             try {
                 camerasTableBody.innerHTML = `
                     <tr>
@@ -2085,45 +2224,45 @@
                 console.error('❌ Error setting loading state:', error);
                 return;
             }
-            
+
             const apiUrl = `/api/company/{{ company_id }}/cameras?t=${Date.now()}`;
             console.log('🌐 Fetching from URL:', apiUrl);
-            
+
             fetch(apiUrl)
-            .then(response => {
-                console.log('📡 Response received:', response);
-                console.log('📡 Response status:', response.status);
-                console.log('📡 Response headers:', response.headers);
-                console.log('📡 Company ID:', '{{ company_id }}');
-                
-                if (response.status === 401) {
-                    console.error('❌ Unauthorized - Session expired');
-                    // Session hatası - login sayfasına yönlendir
-                    window.location.href = '/login';
-                    throw new Error('Unauthorized');
-                }
-                
-                if (!response.ok) {
-                    console.error('❌ Response not ok:', response.status, response.statusText);
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                return response.json();
-            })
-            .then(data => {
-                console.log('📊 Data received:', data);
-                console.log('📊 Data type:', typeof data);
-                console.log('📊 Data keys:', Object.keys(data || {}));
-                console.log('📊 Cameras array:', data?.cameras);
-                console.log('📊 Camera count:', data?.cameras?.length || 0);
-                
-                if (data && data.cameras && Array.isArray(data.cameras) && data.cameras.length > 0) {
-                    console.log('✅ Cameras found, displaying...');
-                    displayCameras(data.cameras);
-                } else {
-                    console.log('ℹ️ No cameras found, showing empty state');
-                    try {
-                        camerasTableBody.innerHTML = `
+                .then(response => {
+                    console.log('📡 Response received:', response);
+                    console.log('📡 Response status:', response.status);
+                    console.log('📡 Response headers:', response.headers);
+                    console.log('📡 Company ID:', '{{ company_id }}');
+
+                    if (response.status === 401) {
+                        console.error('❌ Unauthorized - Session expired');
+                        // Session hatası - login sayfasına yönlendir
+                        window.location.href = '/login';
+                        throw new Error('Unauthorized');
+                    }
+
+                    if (!response.ok) {
+                        console.error('❌ Response not ok:', response.status, response.statusText);
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📊 Data received:', data);
+                    console.log('📊 Data type:', typeof data);
+                    console.log('📊 Data keys:', Object.keys(data || {}));
+                    console.log('📊 Cameras array:', data?.cameras);
+                    console.log('📊 Camera count:', data?.cameras?.length || 0);
+
+                    if (data && data.cameras && Array.isArray(data.cameras) && data.cameras.length > 0) {
+                        console.log('✅ Cameras found, displaying...');
+                        displayCameras(data.cameras);
+                    } else {
+                        console.log('ℹ️ No cameras found, showing empty state');
+                        try {
+                            camerasTableBody.innerHTML = `
                             <tr>
                                 <td colspan="8" class="text-center py-4">
                                     <i class="fas fa-video fa-3x text-muted mb-3"></i>
@@ -2132,20 +2271,20 @@
                                 </td>
                             </tr>
                         `;
-                        console.log('✅ Empty state set successfully');
-                    } catch (error) {
-                        console.error('❌ Error setting empty state:', error);
+                            console.log('✅ Empty state set successfully');
+                        } catch (error) {
+                            console.error('❌ Error setting empty state:', error);
+                        }
                     }
-                }
-            })
-            .catch(error => {
-                console.error('❌ Camera loading error:', error);
-                console.error('❌ Error name:', error.name);
-                console.error('❌ Error message:', error.message);
-                console.error('❌ Error stack:', error.stack);
-                
-                try {
-                    camerasTableBody.innerHTML = `
+                })
+                .catch(error => {
+                    console.error('❌ Camera loading error:', error);
+                    console.error('❌ Error name:', error.name);
+                    console.error('❌ Error message:', error.message);
+                    console.error('❌ Error stack:', error.stack);
+
+                    try {
+                        camerasTableBody.innerHTML = `
                         <tr>
                             <td colspan="8" class="text-center py-4">
                                 <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
@@ -2162,37 +2301,37 @@
                             </td>
                         </tr>
                     `;
-                    console.log('✅ Error state set successfully');
-                } catch (innerError) {
-                    console.error('❌ Error setting error state:', innerError);
-                }
-            });
+                        console.log('✅ Error state set successfully');
+                    } catch (innerError) {
+                        console.error('❌ Error setting error state:', innerError);
+                    }
+                });
         }
-        
+
         // Session kontrolü fonksiyonu
         function checkSession() {
             console.log('🔍 Checking session...');
             fetch('/api/company/{{ company_id }}/cameras')
-            .then(response => {
-                console.log('📡 Session check response:', response.status);
-                if (response.status === 401) {
-                    alert('Session süresi dolmuş. Login sayfasına yönlendiriliyorsunuz.');
-                    window.location.href = '/login';
-                } else {
-                    alert(`Session durumu: ${response.status}`);
-                }
-            })
-            .catch(error => {
-                console.error('❌ Session check error:', error);
-                alert('Session kontrolü sırasında hata: ' + error.message);
-            });
+                .then(response => {
+                    console.log('📡 Session check response:', response.status);
+                    if (response.status === 401) {
+                        alert('Session süresi dolmuş. Login sayfasına yönlendiriliyorsunuz.');
+                        window.location.href = '/login';
+                    } else {
+                        alert(`Session durumu: ${response.status}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Session check error:', error);
+                    alert('Session kontrolü sırasında hata: ' + error.message);
+                });
         }
-        
+
         function displayCameras(cameras) {
             console.log('🎥 Displaying cameras:', cameras);
             const camerasTableBody = document.getElementById('camerasTableBody');
             console.log('📋 Table body element:', camerasTableBody);
-            
+
             if (cameras.length === 0) {
                 camerasTableBody.innerHTML = `
                     <tr>
@@ -2205,7 +2344,7 @@
                 `;
                 return;
             }
-            
+
             camerasTableBody.innerHTML = cameras.map(camera => {
                 const statusClass = camera.status === 'active' ? 'status-online' : 'status-offline';
                 const statusText = camera.status === 'active' ? 'Aktif' : 'Pasif';
@@ -2214,7 +2353,7 @@
                 const safeIp = escapeHtml(camera.ip_address || 'N/A');
                 const safeLocation = escapeHtml(camera.location || 'N/A');
                 const safeId = escapeHtml(camera.camera_id);
-                
+
                 return `
                     <tr data-camera-id="${safeId}">
                         <td>
@@ -2276,26 +2415,26 @@
                     </tr>
                 `;
             }).join('');
-            
+
             // Detection statuslarını güncelle
             cameras.forEach(camera => {
                 updateCameraDetectionStatus(camera.camera_id);
             });
         }
-        
+
         function loadCameraStream(camera) {
             const streamContainer = document.getElementById(`stream-${camera.camera_id}`);
             if (!streamContainer) return;
-            
+
             // Kamera stream URL'sini oluştur
             const streamUrl = generateStreamUrl(camera);
-            
+
             if (streamUrl) {
                 const img = document.createElement('img');
                 img.src = streamUrl;
                 img.alt = camera.camera_name || '';
-                img.onload = function() { this.style.display = 'block'; };
-                img.onerror = function() {
+                img.onload = function () { this.style.display = 'block'; };
+                img.onerror = function () {
                     this.style.display = 'none';
                     this.parentElement.innerHTML = '<div class="text-center text-muted"><i class="fas fa-exclamation-triangle fa-2x mb-2"></i><p>Görüntü alınamadı</p></div>';
                 };
@@ -2303,16 +2442,16 @@
                 streamContainer.appendChild(img);
             }
         }
-        
+
         function generateStreamUrl(camera) {
             if (!camera.ip_address) return null;
-            
+
             const protocol = camera.protocol || 'http';
             const port = camera.port || 8080;  // Android IP Webcam default port
             const path = camera.stream_path || '/video';
             const username = camera.username || '';
             const password = camera.password || '';
-            
+
             // URL oluştur - Android IP Webcam için optimize edilmiş
             if (username && password) {
                 return `${protocol}://${username}:${password}@${camera.ip_address}:${port}${path}`;
@@ -2320,18 +2459,18 @@
                 return `${protocol}://${camera.ip_address}:${port}${path}`;
             }
         }
-        
+
         function viewCameraDetails(cameraId) {
             // Kamera detaylarını yükle
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const camera = data.camera;
-                    console.log('🔍 Camera details received:', camera);
-                    const modal = new bootstrap.Modal(document.getElementById('cameraDetailModal'));
-                    
-                    document.getElementById('cameraDetailContent').innerHTML = `
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const camera = data.camera;
+                        console.log('🔍 Camera details received:', camera);
+                        const modal = new bootstrap.Modal(document.getElementById('cameraDetailModal'));
+
+                        document.getElementById('cameraDetailContent').innerHTML = `
                         <div class="row">
                             <div class="col-md-6">
                                 <h6><i class="fas fa-info-circle text-primary me-2"></i>Kamera Bilgileri</h6>
@@ -2371,29 +2510,29 @@
                             </div>
                         </div>
                     `;
-                    
-                    // Kamera görüntüsünü yükle
-                    loadCameraStreamForModal(camera);
-                    
-                    modal.show();
-                } else {
-                    alert('Kamera detayları yüklenemedi: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Kamera detayları yükleme hatası:', error);
-                alert('Kamera detayları yüklenirken bir hata oluştu.');
-            });
+
+                        // Kamera görüntüsünü yükle
+                        loadCameraStreamForModal(camera);
+
+                        modal.show();
+                    } else {
+                        alert('Kamera detayları yüklenemedi: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Kamera detayları yükleme hatası:', error);
+                    alert('Kamera detayları yüklenirken bir hata oluştu.');
+                });
         }
-        
+
         // Global tryNextUrl fonksiyonu - Cache busting ile
         let globalStreamUrls = [];
         let globalCurrentUrlIndex = 0;
         let globalStreamContainer = null;
         let globalCamera = null;
-        
+
         // Global scope'ta tanımla
-        window.tryNextUrl = function() {
+        window.tryNextUrl = function () {
             console.log('🔄 tryNextUrl fonksiyonu çağrıldı');
             if (globalCurrentUrlIndex < globalStreamUrls.length) {
                 const img = document.getElementById('stream-img');
@@ -2432,38 +2571,38 @@
                 }
             }
         };
-        
+
         function loadCameraStreamForModal(camera) {
             const streamContainer = document.getElementById('cameraStreamContainer');
             if (!streamContainer) return;
-            
+
             // Debug: Log camera data
             console.log('🔍 Camera data for stream:', camera);
-            
+
             // Global değişkenleri ayarla
             globalStreamContainer = streamContainer;
             globalCamera = camera;
             globalCurrentUrlIndex = 0;
-            
+
             // Alternatif URL'ler oluştur - stream_path kullan
             const protocol = camera.protocol || 'http';
             const port = camera.port || 8080;
             const stream_path = camera.stream_path || '/video';
             const username = camera.username || '';
             const password = camera.password || '';
-            
+
             console.log('🔧 Stream parameters:', { protocol, port, stream_path, username: username ? '***' : 'none' });
-            
-            const baseUrl = username && password ? 
+
+            const baseUrl = username && password ?
                 `${protocol}://${username}:${password}@${camera.ip_address}:${port}` :
                 `${protocol}://${camera.ip_address}:${port}`;
-            
+
             globalStreamUrls = [
                 // Proxy endpoints (CORS sorunları için) - Backend tüm path'leri dener
                 `/api/company/{{ company_id }}/cameras/${camera.camera_id}/proxy-stream`,
                 `/api/company/{{ company_id }}/cameras/${camera.camera_id}/proxy-snapshot`,
             ];
-            
+
             // İlk URL'yi dene - Cache busting ile
             const timestamp = new Date().getTime();
             streamContainer.innerHTML = `
@@ -2489,24 +2628,24 @@
                 </button>
             `;
         }
-        
+
         // Yeniden deneme fonksiyonu
         function retryCameraStream() {
             if (globalCamera) {
                 loadCameraStreamForModal(globalCamera);
             }
         }
-        
+
         // Bağlantı testi fonksiyonu
         function testCameraConnection() {
             if (globalCamera) {
                 testCamera(globalCamera.camera_id);
             }
         }
-        
+
         function testCamera(cameraId) {
             console.log('🎯 Testing camera:', cameraId);
-            
+
             // Test sonuçları için div oluştur
             let testResultDiv = document.getElementById('testResult');
             if (!testResultDiv) {
@@ -2515,7 +2654,7 @@
                 testResultDiv.className = 'mt-3';
                 document.querySelector('.container').appendChild(testResultDiv);
             }
-            
+
             // Loading göster
             testResultDiv.innerHTML = `
                 <div class="alert alert-info">
@@ -2524,7 +2663,7 @@
                 </div>
             `;
             testResultDiv.style.display = 'block';
-            
+
             // Önce kamerayı API'den al
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`)
                 .then(response => response.json())
@@ -2538,10 +2677,10 @@
                         `;
                         return;
                     }
-                    
+
                     const camera = cameraData.camera;
                     console.log('📹 Camera data:', camera);
-                    
+
                     // Test verilerini hazırla
                     const testData = {
                         ip_address: camera.ip_address,
@@ -2552,14 +2691,14 @@
                         password: camera.password || '',
                         detection_mode: 'construction' // Varsayılan sektör
                     };
-                    
+
                     console.log('📝 Test data:', testData);
-                    
+
                     // Kapsamlı test yap
                     return fetch(`/api/company/{{ company_id }}/cameras/manual-test`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify(testData)
                     });
@@ -2570,11 +2709,11 @@
                         return response.json();
                     }
                 })
-            .then(data => {
+                .then(data => {
                     console.log('📡 Test result:', data);
                     showTestResult(data);
-            })
-            .catch(error => {
+                })
+                .catch(error => {
                     console.error('❌ Test error:', error);
                     testResultDiv.innerHTML = `
                         <div class="alert alert-danger">
@@ -2582,149 +2721,149 @@
                             <p>${error.message}</p>
                         </div>
                     `;
-            });
+                });
         }
-        
+
         function toggleCameraStatus(cameraId) {
             console.log('🔄 Toggling camera status:', cameraId);
-            
+
             // Find the status element and toggle button more reliably
             const statusElement = document.getElementById(`status-${cameraId}`);
             const toggleButton = document.querySelector(`button[onclick="toggleCameraStatus('${cameraId}')"]`);
-            
+
             if (!statusElement) {
                 console.error('❌ Status element not found for camera:', cameraId);
                 showAlert('❌ Kamera durumu elementi bulunamadı', 'danger');
                 return;
             }
-            
+
             if (!toggleButton) {
                 console.error('❌ Toggle button not found for camera:', cameraId);
                 showAlert('❌ Kamera toggle butonu bulunamadı', 'danger');
                 return;
             }
-            
+
             // Prevent multiple rapid clicks
             if (toggleButton.disabled) {
                 console.log('🔄 Toggle already in progress, ignoring click');
                 return;
             }
-            
+
             // Store current status for fallback
             const currentStatus = statusElement.innerHTML.includes('Aktif') ? 'active' : 'inactive';
-            
+
             // Show loading state
             statusElement.className = 'camera-status status-testing';
             statusElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Güncelleniyor';
             toggleButton.disabled = true;
-            
+
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/toggle`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             })
-            .then(response => {
-                console.log('Toggle response status:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('Toggle response data:', data);
-                
-                if (data.success) {
-                    const newStatus = data.new_status;
-                    const statusText = newStatus === 'active' ? 'Aktif' : 'Pasif';
-                    const statusClass = newStatus === 'active' ? 'status-online' : 'status-offline';
-                    
-                    // Update status element
-                    statusElement.className = `camera-status ${statusClass}`;
-                    statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
-                    
-                    // Update toggle button
-                    toggleButton.className = `btn btn-sm ${newStatus === 'active' ? 'btn-warning' : 'btn-success'} ms-2`;
-                    toggleButton.innerHTML = `<i class="fas fa-${newStatus === 'active' ? 'pause' : 'play'}"></i>`;
-                    toggleButton.title = newStatus === 'active' ? 'Pasif Yap' : 'Aktif Yap';
-                    toggleButton.disabled = false;
-                    
-                    showAlert(`✅ Kamera durumu ${statusText} olarak güncellendi!`, 'success');
-                    
-                    // Eğer kamera pasif yapıldıysa, detection'ı da durdur
-                    if (newStatus === 'inactive') {
-                        // Detection durumunu güncelle
-                        setTimeout(() => {
-                            updateCameraDetectionStatus(cameraId);
-                            // Aktif detectionlar dashboard'unu güncelle (kamera pasif olduğu için listeden çıkacak)
-                            updateActiveDetectionsDashboard();
-                        }, 500);
-                    } else {
-                        // Kamera aktif yapıldı, dashboard'u güncelle
-                        setTimeout(() => {
-                            updateActiveDetectionsDashboard();
-                        }, 500);
-                    }
-                    
-                    // Add small delay to prevent race conditions
-                    setTimeout(() => {
+                .then(response => {
+                    console.log('Toggle response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Toggle response data:', data);
+
+                    if (data.success) {
+                        const newStatus = data.new_status;
+                        const statusText = newStatus === 'active' ? 'Aktif' : 'Pasif';
+                        const statusClass = newStatus === 'active' ? 'status-online' : 'status-offline';
+
+                        // Update status element
+                        statusElement.className = `camera-status ${statusClass}`;
+                        statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
+
+                        // Update toggle button
+                        toggleButton.className = `btn btn-sm ${newStatus === 'active' ? 'btn-warning' : 'btn-success'} ms-2`;
+                        toggleButton.innerHTML = `<i class="fas fa-${newStatus === 'active' ? 'pause' : 'play'}"></i>`;
+                        toggleButton.title = newStatus === 'active' ? 'Pasif Yap' : 'Aktif Yap';
                         toggleButton.disabled = false;
-                    }, 1000);
-                } else {
+
+                        showAlert(`✅ Kamera durumu ${statusText} olarak güncellendi!`, 'success');
+
+                        // Eğer kamera pasif yapıldıysa, detection'ı da durdur
+                        if (newStatus === 'inactive') {
+                            // Detection durumunu güncelle
+                            setTimeout(() => {
+                                updateCameraDetectionStatus(cameraId);
+                                // Aktif detectionlar dashboard'unu güncelle (kamera pasif olduğu için listeden çıkacak)
+                                updateActiveDetectionsDashboard();
+                            }, 500);
+                        } else {
+                            // Kamera aktif yapıldı, dashboard'u güncelle
+                            setTimeout(() => {
+                                updateActiveDetectionsDashboard();
+                            }, 500);
+                        }
+
+                        // Add small delay to prevent race conditions
+                        setTimeout(() => {
+                            toggleButton.disabled = false;
+                        }, 1000);
+                    } else {
+                        // Error fallback - restore previous state
+                        const statusText = currentStatus === 'active' ? 'Aktif' : 'Pasif';
+                        const statusClass = currentStatus === 'active' ? 'status-online' : 'status-offline';
+
+                        statusElement.className = `camera-status ${statusClass}`;
+                        statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
+                        toggleButton.disabled = false;
+
+                        showAlert('❌ Kamera durumu güncellenemedi: ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Toggle camera status error:', error);
+
                     // Error fallback - restore previous state
                     const statusText = currentStatus === 'active' ? 'Aktif' : 'Pasif';
                     const statusClass = currentStatus === 'active' ? 'status-online' : 'status-offline';
-                    
+
                     statusElement.className = `camera-status ${statusClass}`;
                     statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
                     toggleButton.disabled = false;
-                    
-                    showAlert('❌ Kamera durumu güncellenemedi: ' + (data.error || 'Bilinmeyen hata'), 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Toggle camera status error:', error);
-                
-                // Error fallback - restore previous state
-                const statusText = currentStatus === 'active' ? 'Aktif' : 'Pasif';
-                const statusClass = currentStatus === 'active' ? 'status-online' : 'status-offline';
-                
-                statusElement.className = `camera-status ${statusClass}`;
-                statusElement.innerHTML = `<i class="fas fa-circle me-1"></i>${statusText}`;
-                toggleButton.disabled = false;
-                
-                showAlert('❌ Kamera durumu güncellenirken hata oluştu', 'danger');
-            });
+
+                    showAlert('❌ Kamera durumu güncellenirken hata oluştu', 'danger');
+                });
         }
-        
+
         /**
          * PPE Detection durumunu toggle et (başlat/durdur)
          */
         function toggleDetectionStatus(cameraId) {
             console.log('🔄 Toggling detection status for camera:', cameraId);
-            
+
             const toggleButton = document.getElementById(`detection-toggle-${cameraId}`);
             if (!toggleButton) {
                 console.error('❌ Detection toggle button not found for camera:', cameraId);
                 return;
             }
-            
+
             // Prevent multiple rapid clicks
             if (toggleButton.disabled) {
                 console.log('🔄 Toggle already in progress, ignoring click');
                 return;
             }
-            
+
             // Get current status from button
             const isCurrentlyActive = toggleButton.classList.contains('btn-success');
             const action = isCurrentlyActive ? 'stop' : 'start';
-            
+
             // Show loading state
             toggleButton.disabled = true;
             toggleButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
-            
+
             // API endpoint
-            const endpoint = action === 'start' 
+            const endpoint = action === 'start'
                 ? `/api/company/{{ company_id }}/start-detection`
                 : `/api/company/{{ company_id }}/stop-detection`;
-            
+
             fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -2734,153 +2873,153 @@
                     camera_id: cameraId
                 })
             })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(errData => {
-                        throw new Error(errData.error || `HTTP ${response.status}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    // Update button state
-                    const newIsActive = action === 'start';
-                    toggleButton.className = `btn btn-sm ${newIsActive ? 'btn-success pulse-animation' : 'btn-outline-secondary'}`;
-                    toggleButton.innerHTML = `<i class="fas ${newIsActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${newIsActive ? 'Aktif' : 'Durdu'}`;
-                    toggleButton.title = newIsActive ? 'PPE Detection\'ı Durdur' : 'PPE Detection\'ı Başlat';
-                    
-                    showAlert(`✅ PPE Detection ${newIsActive ? 'başlatıldı' : 'durduruldu'}!`, 'success');
-                    
-                    // Tespit başlatıldıysa ve canlı modal bu kamera için açıksa stream'i yenile
-                    // (yeni istek bbox'lı akışı alır - generate_saas_frames)
-                    if (newIsActive && currentDetectionCameraId === cameraId) {
-                        startDetectionStream(cameraId);
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(errData => {
+                            throw new Error(errData.error || `HTTP ${response.status}`);
+                        });
                     }
-                    
-                    // Refresh detection status after a short delay
-                    setTimeout(() => {
-                        updateCameraDetectionStatus(cameraId);
-                        // Aktif detectionlar dashboard'unu güncelle
-                        updateActiveDetectionsDashboard();
-                    }, 1000);
-                } else {
-                    const errorMsg = data.error || 'Bilinmeyen hata';
-                    
-                    // Özel mesaj kontrolü - kamera pasifse kullanıcıya bilgi ver
-                    if (errorMsg.includes('pasif') || data.camera_status === 'inactive') {
-                        showAlert(`⚠️ ${errorMsg}. Lütfen önce kamerayı aktif yapın.`, 'warning');
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Update button state
+                        const newIsActive = action === 'start';
+                        toggleButton.className = `btn btn-sm ${newIsActive ? 'btn-success pulse-animation' : 'btn-outline-secondary'}`;
+                        toggleButton.innerHTML = `<i class="fas ${newIsActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${newIsActive ? 'Aktif' : 'Durdu'}`;
+                        toggleButton.title = newIsActive ? 'PPE Detection\'ı Durdur' : 'PPE Detection\'ı Başlat';
+
+                        showAlert(`✅ PPE Detection ${newIsActive ? 'başlatıldı' : 'durduruldu'}!`, 'success');
+
+                        // Tespit başlatıldıysa ve canlı modal bu kamera için açıksa stream'i yenile
+                        // (yeni istek bbox'lı akışı alır - generate_saas_frames)
+                        if (newIsActive && currentDetectionCameraId === cameraId) {
+                            startDetectionStream(cameraId);
+                        }
+
+                        // Refresh detection status after a short delay
+                        setTimeout(() => {
+                            updateCameraDetectionStatus(cameraId);
+                            // Aktif detectionlar dashboard'unu güncelle
+                            updateActiveDetectionsDashboard();
+                        }, 1000);
                     } else {
-                        showAlert(`❌ PPE Detection ${action === 'start' ? 'başlatılamadı' : 'durdurulamadı'}: ${errorMsg}`, 'danger');
+                        const errorMsg = data.error || 'Bilinmeyen hata';
+
+                        // Özel mesaj kontrolü - kamera pasifse kullanıcıya bilgi ver
+                        if (errorMsg.includes('pasif') || data.camera_status === 'inactive') {
+                            showAlert(`⚠️ ${errorMsg}. Lütfen önce kamerayı aktif yapın.`, 'warning');
+                        } else {
+                            showAlert(`❌ PPE Detection ${action === 'start' ? 'başlatılamadı' : 'durdurulamadı'}: ${errorMsg}`, 'danger');
+                        }
+
+                        // Restore previous state
+                        toggleButton.className = `btn btn-sm ${isCurrentlyActive ? 'btn-success' : 'btn-outline-secondary'}`;
+                        toggleButton.innerHTML = `<i class="fas ${isCurrentlyActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${isCurrentlyActive ? 'Aktif' : 'Durdu'}`;
                     }
-                    
+                    toggleButton.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Toggle detection status error:', error);
+                    showAlert('❌ PPE Detection durumu güncellenirken hata oluştu', 'danger');
+
                     // Restore previous state
                     toggleButton.className = `btn btn-sm ${isCurrentlyActive ? 'btn-success' : 'btn-outline-secondary'}`;
                     toggleButton.innerHTML = `<i class="fas ${isCurrentlyActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${isCurrentlyActive ? 'Aktif' : 'Durdu'}`;
-                }
-                toggleButton.disabled = false;
-            })
-            .catch(error => {
-                console.error('Toggle detection status error:', error);
-                showAlert('❌ PPE Detection durumu güncellenirken hata oluştu', 'danger');
-                
-                // Restore previous state
-                toggleButton.className = `btn btn-sm ${isCurrentlyActive ? 'btn-success' : 'btn-outline-secondary'}`;
-                toggleButton.innerHTML = `<i class="fas ${isCurrentlyActive ? 'fa-brain' : 'fa-pause-circle'}"></i> ${isCurrentlyActive ? 'Aktif' : 'Durdu'}`;
-                toggleButton.disabled = false;
-                
-                // Dashboard'u güncelle (hata durumunda da güncelleme yap)
-                setTimeout(() => {
-                    updateActiveDetectionsDashboard();
-                }, 500);
-            });
+                    toggleButton.disabled = false;
+
+                    // Dashboard'u güncelle (hata durumunda da güncelleme yap)
+                    setTimeout(() => {
+                        updateActiveDetectionsDashboard();
+                    }, 500);
+                });
         }
-        
+
         function viewStream(cameraId) {
             // Yeni pencerede stream'i aç
             window.open(`/api/company/{{ company_id }}/cameras/${cameraId}/stream`, '_blank');
         }
-        
+
         function editCamera(cameraId) {
             console.log('🔧 Editing camera:', cameraId);
-            
+
             // Show loading state
             showAlert('📝 Kamera bilgileri yükleniyor...', 'info');
-            
+
             // Kamera bilgilerini getir
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`)
-            .then(response => {
-                console.log('Edit response status:', response.status);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Edit camera data:', data);
-                if (data.success && data.camera) {
-                    const camera = data.camera;
-                    console.log('Camera details:', camera);
-                    
-                    // Form alanlarını doldur - field mapping'i düzelt
-                    const form = document.getElementById('cameraForm');
-                    
-                    // Clear form first
-                    form.reset();
-                    
-                    // Map camera data to form fields correctly
-                    document.getElementById('cameraName').value = camera.camera_name || camera.name || '';
-                    document.getElementById('cameraIP').value = camera.ip_address || '';
-                    document.getElementById('cameraPort').value = camera.port || 8080;
-                    document.getElementById('cameraProtocol').value = camera.protocol || 'http';
-                    document.getElementById('cameraPath').value = camera.stream_path || '/video';
-                    document.getElementById('cameraUsername').value = camera.username || '';
-                    document.getElementById('cameraPassword').value = camera.password || '';
-                    document.getElementById('cameraLocation').value = camera.location || '';
-                    
-                    // Set edit mode
-                    form.dataset.editMode = 'true';
-                    form.dataset.editCameraId = cameraId;
-                    
-                    // Update submit button
-                    const submitBtn = form.querySelector('button[type="submit"]');
-                    const cancelBtn = document.getElementById('cancelBtn');
-                    
-                    if (submitBtn) {
-                        submitBtn.innerHTML = '<i class="fas fa-save"></i> Güncelle';
-                        submitBtn.className = 'btn btn-warning btn-lg w-100';
+                .then(response => {
+                    console.log('Edit response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
-                    
-                    // Show cancel button
-                    if (cancelBtn) {
-                        cancelBtn.style.display = 'block';
-                    }
-                    
-                    // Scroll to form
-                    const formSection = document.querySelector('.camera-form-section');
-                    if (formSection) {
-                        formSection.scrollIntoView({ behavior: 'smooth' });
-                    }
-                    
-                    showAlert('📝 Kamera düzenleme modu aktif. Değişiklikleri yapıp "Güncelle" butonuna tıklayın.', 'info');
-                } else {
-                    showAlert('❌ Kamera bilgileri yüklenemedi: ' + (data.error || 'Bilinmeyen hata'), 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Kamera bilgileri yükleme hatası:', error);
-                showAlert('❌ Kamera bilgileri yüklenirken hata oluştu: ' + error.message, 'danger');
-            });
-        }
-        
-                    function deleteCamera(cameraId) {
-                if (confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) {
-                    fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json'
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Edit camera data:', data);
+                    if (data.success && data.camera) {
+                        const camera = data.camera;
+                        console.log('Camera details:', camera);
+
+                        // Form alanlarını doldur - field mapping'i düzelt
+                        const form = document.getElementById('cameraForm');
+
+                        // Clear form first
+                        form.reset();
+
+                        // Map camera data to form fields correctly
+                        document.getElementById('cameraName').value = camera.camera_name || camera.name || '';
+                        document.getElementById('cameraIP').value = camera.ip_address || '';
+                        document.getElementById('cameraPort').value = camera.port || 8080;
+                        document.getElementById('cameraProtocol').value = camera.protocol || 'http';
+                        document.getElementById('cameraPath').value = camera.stream_path || '/video';
+                        document.getElementById('cameraUsername').value = camera.username || '';
+                        document.getElementById('cameraPassword').value = camera.password || '';
+                        document.getElementById('cameraLocation').value = camera.location || '';
+
+                        // Set edit mode
+                        form.dataset.editMode = 'true';
+                        form.dataset.editCameraId = cameraId;
+
+                        // Update submit button
+                        const submitBtn = form.querySelector('button[type="submit"]');
+                        const cancelBtn = document.getElementById('cancelBtn');
+
+                        if (submitBtn) {
+                            submitBtn.innerHTML = '<i class="fas fa-save"></i> Güncelle';
+                            submitBtn.className = 'btn btn-warning btn-lg w-100';
                         }
-                    })
+
+                        // Show cancel button
+                        if (cancelBtn) {
+                            cancelBtn.style.display = 'block';
+                        }
+
+                        // Scroll to form
+                        const formSection = document.querySelector('.camera-form-section');
+                        if (formSection) {
+                            formSection.scrollIntoView({ behavior: 'smooth' });
+                        }
+
+                        showAlert('📝 Kamera düzenleme modu aktif. Değişiklikleri yapıp "Güncelle" butonuna tıklayın.', 'info');
+                    } else {
+                        showAlert('❌ Kamera bilgileri yüklenemedi: ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Kamera bilgileri yükleme hatası:', error);
+                    showAlert('❌ Kamera bilgileri yüklenirken hata oluştu: ' + error.message, 'danger');
+                });
+        }
+
+        function deleteCamera(cameraId) {
+            if (confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) {
+                fetch(`/api/company/{{ company_id }}/cameras/${cameraId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
                     .then(response => {
                         console.log('Delete response status:', response.status);
                         return response.json();
@@ -2910,19 +3049,19 @@
                         console.error('Delete error:', error);
                         showAlert('❌ Silme işlemi sırasında hata oluştu: ' + error.message, 'danger');
                     });
-                }
             }
-        
+        }
+
         // Arama fonksiyonu
-        document.getElementById('cameraSearch').addEventListener('input', function(e) {
+        document.getElementById('cameraSearch').addEventListener('input', function (e) {
             const searchTerm = e.target.value.toLowerCase();
             const tableRows = document.querySelectorAll('#camerasTableBody tr');
-            
+
             tableRows.forEach(row => {
                 const cameraName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
                 const ipAddress = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
                 const location = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
-                
+
                 if (cameraName.includes(searchTerm) || ipAddress.includes(searchTerm) || location.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
@@ -2930,22 +3069,22 @@
                 }
             });
         });
-        
+
         function refreshCameras() {
             console.log('🔄 Refresh cameras triggered');
             loadCameras();
         }
-        
+
         // Arama fonksiyonu
         function filterCameras() {
             const searchTerm = document.getElementById('cameraSearch').value.toLowerCase();
             const tableRows = document.querySelectorAll('#camerasTableBody tr');
-            
+
             tableRows.forEach(row => {
                 const cameraName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
                 const ipAddress = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
                 const location = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
-                
+
                 if (cameraName.includes(searchTerm) || ipAddress.includes(searchTerm) || location.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
@@ -2953,23 +3092,23 @@
                 }
             });
         }
-        
+
         // Arama input event listener
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const searchInput = document.getElementById('cameraSearch');
             if (searchInput) {
                 searchInput.addEventListener('input', filterCameras);
             }
-            
+
             // Sayfa yüklendiğinde kameraları otomatik yükle
             console.log('📄 DOM loaded, automatically loading cameras...');
             setTimeout(() => {
                 loadCameras();
             }, 300); // 300ms gecikme ile yükle
         });
-        
+
         // Sayfa yüklendiğinde kameraları otomatik yükle
-        window.onload = function() {
+        window.onload = function () {
             console.log('🚀 Window loaded, automatically loading cameras...');
             // Otomatik yükleme aktif
             setTimeout(() => {
@@ -2978,7 +3117,7 @@
         };
 
 
-        
+
         // Logout function
         function logout() {
             if (confirm('Çıkış yapmak istediğinizden emin misiniz?')) {
@@ -2988,87 +3127,87 @@
                         'Content-Type': 'application/json'
                     }
                 })
-                .then(response => {
-                    if (response.ok) {
-                        window.location.href = '/';
-                    } else {
+                    .then(response => {
+                        if (response.ok) {
+                            window.location.href = '/';
+                        } else {
+                            alert('Çıkış yapılırken bir hata oluştu.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Logout error:', error);
                         alert('Çıkış yapılırken bir hata oluştu.');
-                    }
-                })
-                .catch(error => {
-                    console.error('Logout error:', error);
-                    alert('Çıkış yapılırken bir hata oluştu.');
-                });
+                    });
             }
         }
 
         function cancelEdit() {
             console.log('❌ Canceling edit mode');
-            
+
             const cameraForm = document.getElementById('cameraForm');
             if (cameraForm) {
                 // Reset edit mode
                 cameraForm.dataset.editMode = 'false';
                 delete cameraForm.dataset.editCameraId;
                 cameraForm.reset();
-                
+
                 // Reset submit button
                 const submitBtn = cameraForm.querySelector('button[type="submit"]');
                 if (submitBtn) {
                     submitBtn.innerHTML = '<i class="fas fa-plus"></i> Kamera Ekle';
                     submitBtn.className = 'btn btn-primary btn-lg w-100';
                 }
-                
+
                 // Hide cancel button
                 const cancelBtn = document.getElementById('cancelBtn');
                 if (cancelBtn) {
                     cancelBtn.style.display = 'none';
                 }
-                
+
                 showAlert('❌ Düzenleme iptal edildi', 'info');
             }
         }
-        
+
         function resetForm() {
             console.log('🔄 Resetting form');
-            
+
             const cameraForm = document.getElementById('cameraForm');
             if (cameraForm) {
                 // Reset form
                 cameraForm.reset();
-                
+
                 // Reset edit mode
                 cameraForm.dataset.editMode = 'false';
                 delete cameraForm.dataset.editCameraId;
-                
+
                 // Reset submit button
                 const submitBtn = cameraForm.querySelector('button[type="submit"]');
                 if (submitBtn) {
                     submitBtn.innerHTML = '<i class="fas fa-plus"></i> Kamera Ekle';
                     submitBtn.className = 'btn btn-primary btn-lg w-100';
                 }
-                
+
                 // Hide cancel button
                 const cancelBtn = document.getElementById('cancelBtn');
                 if (cancelBtn) {
                     cancelBtn.style.display = 'none';
                 }
-                
+
                 showAlert('🔄 Form sıfırlandı', 'info');
             }
         }
-        
+
         // Canlı görüntü büyütme fonksiyonu
         function expandStream() {
             const streamContainer = document.getElementById('cameraStreamContainer');
             const expandBtn = document.getElementById('expandStreamBtn');
             const streamImg = document.getElementById('stream-img');
-            
+
             if (!streamContainer || !streamImg) return;
-            
+
             // Büyütme durumunu kontrol et
             const isExpanded = streamContainer.classList.contains('expanded');
-            
+
             if (!isExpanded) {
                 // Overlay oluştur
                 let overlay = document.getElementById('streamOverlay');
@@ -3091,7 +3230,7 @@
                     `;
                     document.body.appendChild(overlay);
                 }
-                
+
                 // Büyüt
                 streamContainer.style.position = 'fixed';
                 streamContainer.style.top = '50%';
@@ -3108,14 +3247,14 @@
                 streamContainer.style.boxShadow = '0 20px 60px rgba(0,0,0,0.5)';
                 streamContainer.style.transition = 'all 0.3s ease';
                 streamContainer.classList.add('expanded');
-                
+
                 // Görüntüyü büyüt
                 streamImg.style.maxWidth = '100%';
                 streamImg.style.maxHeight = '100%';
                 streamImg.style.objectFit = 'contain';
                 streamImg.style.borderRadius = '10px';
                 streamImg.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
-                
+
                 // Butonu güncelle - daha güzel tasarım
                 expandBtn.style.position = 'fixed';
                 expandBtn.style.top = '20px';
@@ -3131,8 +3270,8 @@
                 expandBtn.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)';
                 expandBtn.style.transition = 'all 0.3s ease';
                 expandBtn.innerHTML = '<i class="fas fa-compress fa-lg"></i>';
-                expandBtn.onclick = function() { expandStream(); };
-                
+                expandBtn.onclick = function () { expandStream(); };
+
                 // Kapatma butonu ekle
                 let closeBtn = document.getElementById('streamCloseBtn');
                 if (!closeBtn) {
@@ -3154,23 +3293,23 @@
                         transition: all 0.3s ease;
                     `;
                     closeBtn.innerHTML = '<i class="fas fa-times fa-lg"></i>';
-                    closeBtn.onclick = function() { expandStream(); };
+                    closeBtn.onclick = function () { expandStream(); };
                     document.body.appendChild(closeBtn);
                 }
                 closeBtn.style.display = 'flex';
-                
+
                 // Overlay'i göster
                 overlay.style.opacity = '1';
-                
+
                 // ESC tuşu ile kapatma
-                const escapeHandler = function(e) {
+                const escapeHandler = function (e) {
                     if (e.key === 'Escape') {
                         expandStream();
                         document.removeEventListener('keydown', escapeHandler);
                     }
                 };
                 document.addEventListener('keydown', escapeHandler);
-                
+
             } else {
                 // Küçült
                 streamContainer.style.position = 'relative';
@@ -3188,14 +3327,14 @@
                 streamContainer.style.boxShadow = '';
                 streamContainer.style.transition = '';
                 streamContainer.classList.remove('expanded');
-                
+
                 // Görüntüyü küçült
                 streamImg.style.maxWidth = '100%';
                 streamImg.style.maxHeight = '100%';
                 streamImg.style.objectFit = '';
                 streamImg.style.borderRadius = '';
                 streamImg.style.boxShadow = '';
-                
+
                 // Butonu güncelle
                 expandBtn.style.position = 'absolute';
                 expandBtn.style.top = '10px';
@@ -3211,14 +3350,14 @@
                 expandBtn.style.boxShadow = '';
                 expandBtn.style.transition = '';
                 expandBtn.innerHTML = '<i class="fas fa-expand"></i>';
-                expandBtn.onclick = function() { expandStream(); };
-                
+                expandBtn.onclick = function () { expandStream(); };
+
                 // Kapatma butonunu gizle
                 const closeBtn = document.getElementById('streamCloseBtn');
                 if (closeBtn) {
                     closeBtn.style.display = 'none';
                 }
-                
+
                 // Overlay'i gizle
                 const overlay = document.getElementById('streamOverlay');
                 if (overlay) {
@@ -3231,20 +3370,20 @@
                 }
             }
         }
-        
+
         // === DVR YÖNETİMİ FONKSİYONLARI ===
-        
+
         // DVR sistemlerini yükle
         async function loadDVRSystems() {
             try {
                 console.log('🔍 Loading DVR systems...');
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/list`);
                 const data = await response.json();
-                
+
                 console.log('📊 DVR systems response:', data);
-                
+
                 const dvrList = document.getElementById('dvrSystemsList');
-                
+
                 if (data.success && data.dvr_systems && data.dvr_systems.length > 0) {
                     console.log(`📋 Found ${data.dvr_systems.length} DVR systems`);
                     let html = '';
@@ -3282,7 +3421,7 @@
                     });
                     dvrList.innerHTML = html;
                     console.log('✅ DVR systems loaded successfully');
-                    
+
                     // 🎯 PRODUCTION-GRADE: Sayfa yüklendiğinde ilk DVR'ın kanallarını otomatik yükle
                     if (data.dvr_systems.length > 0) {
                         const firstDVR = data.dvr_systems[0];
@@ -3299,7 +3438,7 @@
                             <p>Henüz DVR sistemi eklenmemiş</p>
                         </div>
                     `;
-                    
+
                     // 🎯 PRODUCTION-GRADE: DVR yoksa grid'i temizle
                     const grid = document.getElementById('dvrChannelsGrid');
                     if (grid) {
@@ -3315,11 +3454,11 @@
                 showAlert('DVR sistemleri yüklenirken hata oluştu', 'danger');
             }
         }
-        
+
         // DVR sistemi ekle
         async function addDVRSystem(event) {
             event.preventDefault();
-            
+
             const formData = {
                 dvr_id: `DVR_${document.getElementById('dvrIp').value.replace(/\./g, '_')}`,
                 name: document.getElementById('dvrName').value,
@@ -3333,7 +3472,7 @@
                 rtsp_port: 554,
                 max_channels: parseInt(document.getElementById('dvrMaxChannels').value)
             };
-            
+
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/add`, {
                     method: 'POST',
@@ -3342,9 +3481,9 @@
                     },
                     body: JSON.stringify(formData)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert('DVR sistemi başarıyla eklendi!', 'success');
                     document.getElementById('dvrAddForm').reset();
@@ -3357,29 +3496,29 @@
                 showAlert('DVR sistemi eklenirken hata oluştu', 'danger');
             }
         }
-        
+
         // DVR kanallarını keşfet ve göster
         // 🎯 PRODUCTION-GRADE: DVR Kanal Keşfi - Dinamik Grid Yükleme
         async function discoverDVRChannels(dvrId) {
             try {
                 console.log(`🔍 Discovering channels for DVR: ${dvrId}`);
-                
+
                 // 🎯 PRODUCTION-GRADE: Aktif DVR ID'yi set et
                 currentActiveDVRId = dvrId;
                 console.log(`✅ Active DVR ID set to: ${currentActiveDVRId}`);
-                
+
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/discover`, {
                     method: 'POST'
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert(`✅ ${data.channels.length} kanal keşfedildi!`, 'success');
-                    
+
                     // Eski container'ı güncelle
                     displayDVRChannels(dvrId, data.channels);
-                    
+
                     // Yeni dinamik grid'i de güncelle
                     renderDVRChannelsGrid(data.channels);
                 } else {
@@ -3390,17 +3529,17 @@
                 showAlert('DVR kanalları keşfedilirken hata oluştu', 'danger');
             }
         }
-        
+
         // 🎯 DVR kanallarını göster - YENİ DİNAMİK GRID KULLAN
         function displayDVRChannels(dvrId, channels) {
             console.log(`📺 Displaying ${channels.length} DVR channels in dynamic grid`);
-            
+
             // Yeni dinamik grid'i güncelle
             renderDVRChannelsGrid(channels);
-            
+
             // ESKİ CONTAINER KALDIRILDI - Artık sadece dinamik grid kullanılıyor
         }
-        
+
         // Belirli bir kanal için detection başlat
         async function startDVRDetectionForChannel(dvrId, channelNumber) {
             try {
@@ -3414,9 +3553,9 @@
                         detection_mode: 'construction'
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert(`✅ Kanal ${channelNumber} için PPE Detection başlatıldı!`, 'success');
                 } else {
@@ -3427,7 +3566,7 @@
                 showAlert('DVR kanal detection başlatılırken hata oluştu', 'danger');
             }
         }
-        
+
         // DVR stream başlat
         async function startDVRStream(dvrId, channel) {
             try {
@@ -3438,13 +3577,13 @@
                     },
                     body: JSON.stringify({ quality: 'high' })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     const streamUrl = data.stream_url;
                     showAlert(`Stream başlatıldı! RTSP URL: ${streamUrl}`, 'success');
-                    
+
                     // Show stream URL in a modal or info box
                     const streamInfo = `
                         <div class="alert alert-info">
@@ -3455,11 +3594,11 @@
                             <p class="mb-0"><small>Bu URL'yi VLC Player veya benzeri bir uygulamada açabilirsiniz.</small></p>
                         </div>
                     `;
-                    
+
                     // Add stream info to page
                     const streamContainer = document.getElementById('streamInfo') || createStreamInfoContainer();
                     streamContainer.innerHTML = streamInfo;
-                    
+
                     // Don't try to open RTSP URL in browser (it won't work)
                     console.log('RTSP URL generated:', streamUrl);
                 } else {
@@ -3470,13 +3609,13 @@
                 showAlert('Stream başlatılırken hata oluştu', 'danger');
             }
         }
-        
+
         // Create stream info container if it doesn't exist
         function createStreamInfoContainer() {
             const container = document.createElement('div');
             container.id = 'streamInfo';
             container.className = 'mt-3';
-            
+
             // Try to find DVR section, if not found, add to body
             const dvrSection = document.querySelector('.dvr-management-section');
             if (dvrSection) {
@@ -3486,29 +3625,29 @@
                 const mainContainer = document.querySelector('.container') || document.body;
                 mainContainer.appendChild(container);
             }
-            
+
             return container;
         }
-        
+
         // DVR sistemi sil
         async function removeDVRSystem(dvrId) {
             console.log('🗑️ Removing DVR system:', dvrId);
-            
+
             if (!confirm('Bu DVR sistemini silmek istediğinizden emin misiniz?')) {
                 console.log('❌ User cancelled DVR deletion');
                 return;
             }
-            
+
             try {
                 console.log('📡 Sending delete request...');
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/delete`, {
                     method: 'DELETE'
                 });
-                
+
                 console.log('📡 Delete response status:', response.status);
                 const data = await response.json();
                 console.log('📊 Delete response data:', data);
-                
+
                 if (data.success) {
                     showAlert('DVR sistemi başarıyla silindi!', 'success');
                     console.log('✅ DVR system deleted successfully, reloading...');
@@ -3522,18 +3661,18 @@
                 showAlert('DVR sistemi silinirken hata oluştu', 'danger');
             }
         }
-        
+
         // DVR PPE Detection Functions
         async function startDVRDetection(dvrId) {
             try {
                 const channels = getSelectedChannels();
                 const detectionMode = document.getElementById('dvrDetectionMode').value;
-                
+
                 if (channels.length === 0) {
                     showAlert('Lütfen en az bir kanal seçin!', 'warning');
                     return;
                 }
-                
+
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/start`, {
                     method: 'POST',
                     headers: {
@@ -3544,9 +3683,9 @@
                         detection_mode: detectionMode
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert(`DVR PPE Detection başlatıldı! ${data.successful_channels}/${data.total_channels} kanal aktif`, 'success');
                     updateDVRDetectionStatus(dvrId);
@@ -3558,7 +3697,7 @@
                 showAlert('DVR PPE Detection başlatılırken hata oluştu', 'danger');
             }
         }
-        
+
         async function stopDVRDetection(dvrId) {
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/stop`, {
@@ -3568,9 +3707,9 @@
                     },
                     body: JSON.stringify({})
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert(`DVR PPE Detection durduruldu! ${data.stopped_detections.length} kanal durduruldu`, 'success');
                     updateDVRDetectionStatus(dvrId);
@@ -3582,19 +3721,19 @@
                 showAlert('DVR PPE Detection durdurulurken hata oluştu', 'danger');
             }
         }
-        
+
         async function getDVRDetectionStatus(dvrId) {
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/detection/status`);
                 const data = await response.json();
-                
+
                 return data;
             } catch (error) {
                 console.error('DVR Detection status hatası:', error);
                 return null;
             }
         }
-        
+
         async function updateDVRDetectionStatus(dvrId) {
             try {
                 const status = await getDVRDetectionStatus(dvrId);
@@ -3603,7 +3742,7 @@
                     if (statusElement) {
                         const activeCount = status.active_detections.length || 0;
                         const totalViolations = status.total_violations || 0;
-                        
+
                         statusElement.innerHTML = `
                             <span class="badge bg-success">${activeCount} Aktif Detection</span>
                             <span class="badge bg-warning">${totalViolations} İhlal</span>
@@ -3627,17 +3766,17 @@
                 }
             }
         }
-        
+
         // 🎯 PRODUCTION-GRADE: Global DVR ID Tracker
         let currentActiveDVRId = null;
-        
+
         // 🎯 PRODUCTION-GRADE: Dinamik Kanal Yönetimi Fonksiyonları
-        
+
         function getSelectedChannels() {
             const checkboxes = document.querySelectorAll('input[name="dvrChannels"]:checked');
             return Array.from(checkboxes).map(cb => parseInt(cb.value));
         }
-        
+
         // 🎯 PRODUCTION-GRADE: Dinamik Detection Fonksiyonları
         function startDVRDetectionDynamic() {
             if (!currentActiveDVRId) {
@@ -3646,7 +3785,7 @@
             }
             startDVRDetection(currentActiveDVRId);
         }
-        
+
         function stopDVRDetectionDynamic() {
             if (!currentActiveDVRId) {
                 showAlert('Lütfen önce DVR kanallarını keşfedin!', 'warning');
@@ -3654,7 +3793,7 @@
             }
             stopDVRDetection(currentActiveDVRId);
         }
-        
+
         function updateDVRDetectionStatusDynamic() {
             if (!currentActiveDVRId) {
                 showAlert('Lütfen önce DVR kanallarını keşfedin!', 'warning');
@@ -3662,7 +3801,7 @@
             }
             updateDVRDetectionStatus(currentActiveDVRId);
         }
-        
+
         // Tüm kanalları seç
         function selectAllChannels() {
             const checkboxes = document.querySelectorAll('input[name="dvrChannels"]');
@@ -3670,7 +3809,7 @@
             saveChannelSelection();
             showAlert('✅ Tüm kanallar seçildi', 'success');
         }
-        
+
         // Seçimi kaldır
         function clearAllChannels() {
             const checkboxes = document.querySelectorAll('input[name="dvrChannels"]');
@@ -3678,39 +3817,39 @@
             saveChannelSelection();
             showAlert('✅ Seçim temizlendi', 'info');
         }
-        
+
         // Filtreleri aç/kapat
         function toggleChannelFilters() {
             const filters = document.getElementById('channelFilters');
             filters.style.display = filters.style.display === 'none' ? 'block' : 'none';
         }
-        
+
         // Kanal filtrelerini uygula
         function applyChannelFilters() {
             const filterActive = document.getElementById('filterActive').checked;
             const filterInactive = document.getElementById('filterInactive').checked;
             const filterOnline = document.getElementById('filterOnline').checked;
-            
+
             const channelCards = document.querySelectorAll('[data-channel-card]');
             channelCards.forEach(card => {
                 const isActive = card.dataset.channelActive === 'true';
                 const isOnline = card.dataset.channelOnline === 'true';
-                
+
                 let show = false;
                 if (isActive && filterActive) show = true;
                 if (!isActive && filterInactive) show = true;
                 if (isOnline && filterOnline) show = true;
-                
+
                 card.style.display = show ? 'block' : 'none';
             });
         }
-        
+
         // Kanal seçimini LocalStorage'a kaydet
         function saveChannelSelection() {
             const channels = getSelectedChannels();
             localStorage.setItem('dvrSelectedChannels', JSON.stringify(channels));
         }
-        
+
         // Kanal seçimini LocalStorage'dan yükle
         function loadChannelSelection() {
             const saved = localStorage.getItem('dvrSelectedChannels');
@@ -3726,7 +3865,7 @@
                 }
             }
         }
-        
+
         // Dinamik kanal grid'i oluştur
         function renderDVRChannelsGrid(channels) {
             const grid = document.getElementById('dvrChannelsGrid');
@@ -3738,7 +3877,7 @@
                 `;
                 return;
             }
-            
+
             let html = '';
             channels.forEach(ch => {
                 const channelNum = ch.channel_number || ch.number || ch.id;
@@ -3747,7 +3886,7 @@
                 const isOnline = ch.online !== false;
                 const statusBadge = isActive ? '<span class="badge bg-success">Aktif</span>' : '<span class="badge bg-secondary">İnaktif</span>';
                 const onlineBadge = isOnline ? '<span class="badge bg-info">Çevrimiçi</span>' : '<span class="badge bg-danger">Çevrimdışı</span>';
-                
+
                 html += `
                     <div class="col-md-6 col-lg-4" data-channel-card data-channel-active="${isActive}" data-channel-online="${isOnline}">
                         <div class="card h-100 border-0 shadow-sm hover-shadow" style="transition: all 0.3s;">
@@ -3774,17 +3913,17 @@
                     </div>
                 `;
             });
-            
+
             grid.innerHTML = html;
             loadChannelSelection();
         }
-        
+
         // DVR kanallarını keşfet ve grid'i güncelle
         async function discoverAndLoadDVRChannels(dvrId) {
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
                 const data = await response.json();
-                
+
                 if (data.success && data.channels) {
                     renderDVRChannelsGrid(data.channels);
                     showAlert(`✅ ${data.channels.length} kanal keşfedildi!`, 'success');
@@ -3796,12 +3935,12 @@
                 showAlert('❌ Kanal keşfi sırasında hata oluştu', 'danger');
             }
         }
-        
+
         // DVR form submit event listener
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('🔄 DOMContentLoaded event fired');
             console.log('📍 Company ID:', '{{ company_id }}');
-            
+
             const dvrForm = document.getElementById('dvrAddForm');
             if (dvrForm) {
                 dvrForm.addEventListener('submit', addDVRSystem);
@@ -3809,26 +3948,26 @@
             } else {
                 console.warn('⚠️ DVR form not found');
             }
-            
+
             // DVR sistemlerini yükle
             console.log('🔄 Loading DVR systems...');
             loadDVRSystems();
         });
-        
+
         // DVR kanal canlı görüntüsünü göster
         async function showDVRChannelLive(dvrId, channelNumber) {
             try {
                 console.log(`🎥 Showing live DVR channel: ${dvrId} - Channel ${channelNumber}`);
-                
+
                 // Get DVR system info
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/info`);
                 const data = await response.json();
-                
+
                 if (data.success) {
                     const dvr = data.dvr_system;
                     // Build RTSP using universal XM/Dahua-compatible format
                     const rtspUrl = `rtsp://${dvr.ip_address}:${dvr.rtsp_port}/user=${encodeURIComponent(dvr.username)}&password=${encodeURIComponent(dvr.password)}&channel=${channelNumber}&stream=0.sdp`;
-                    
+
                     // Create modal for live view
                     const modalHtml = `
                         <div class="modal fade" id="dvrLiveModal" tabindex="-1" data-dvr-id="${dvrId}" data-channel-number="${channelNumber}">
@@ -3919,29 +4058,29 @@
                             </div>
                         </div>
                     `;
-                    
+
                     // Add modal to page
                     document.body.insertAdjacentHTML('beforeend', modalHtml);
-                    
+
                     // Show modal
                     const modal = new bootstrap.Modal(document.getElementById('dvrLiveModal'));
                     modal.show();
-                    
+
                     // Load available channels
                     loadAvailableChannels(dvrId, channelNumber);
-                    
+
                     // Update detection status
                     updateDVRDetectionStatusInModal(dvrId);
-                    
+
                     // Start video stream
                     startVideoStream(dvrId, channelNumber);
-                    
+
                     // Clean up modal when closed
-                    document.getElementById('dvrLiveModal').addEventListener('hidden.bs.modal', function() {
+                    document.getElementById('dvrLiveModal').addEventListener('hidden.bs.modal', function () {
                         stopVideoStream();
                         this.remove();
                     });
-                    
+
                 } else {
                     showAlert('DVR sistemi bilgisi alınamadı', 'danger');
                 }
@@ -3950,22 +4089,22 @@
                 showAlert('DVR canlı görüntü açılırken hata oluştu', 'danger');
             }
         }
-        
+
         // Mevcut kanalları yükle
         async function loadAvailableChannels(dvrId, currentChannel) {
             try {
                 console.log(`🔍 Loading available channels for DVR: ${dvrId}`);
-                
+
                 // Get DVR channels from database
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
                 const data = await response.json();
                 console.log('📊 Channels API response:', data);
-                
+
                 const channelSelector = document.getElementById('channelSelector');
                 if (channelSelector && data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
                     // Clear existing options
                     channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
-                    
+
                     // Add channel options
                     data.channels.forEach(channel => {
                         const option = document.createElement('option');
@@ -3976,7 +4115,7 @@
                         }
                         channelSelector.appendChild(option);
                     });
-                    
+
                     console.log(`✅ Loaded ${data.channels.length} channels`);
                 } else {
                     // Fallback: create channels 1-16
@@ -3995,10 +4134,10 @@
                         }
                     }
                 }
-                
+
                 // Also refresh previews
                 await loadChannelPreviews(dvrId);
-                
+
                 // Defensive fallback: if still no options (only placeholder), synthesize 1..16
                 const sel = document.getElementById('channelSelector');
                 if (sel && sel.options.length <= 1) {
@@ -4011,7 +4150,7 @@
                         sel.appendChild(option);
                     }
                 }
-                
+
             } catch (error) {
                 console.error('❌ Load channels error:', error);
                 // Fallback to basic channel list
@@ -4066,70 +4205,70 @@
             }
             switchChannel(dvrId);
         }
-        
+
         // Kanal değiştir
         async function switchChannel(dvrId) {
             const channelSelector = document.getElementById('channelSelector');
             const newChannel = channelSelector.value;
-            
+
             if (!newChannel) return;
-            
+
             try {
                 console.log(`🔄 Switching to channel: ${newChannel}`);
-                
+
                 // Stop current stream
                 stopVideoStream();
-                
+
                 // Update modal data
                 const modal = document.getElementById('dvrLiveModal');
                 modal.setAttribute('data-channel-number', newChannel);
-                
+
                 // Update current channel display
                 const currentChannelSpan = document.getElementById('currentChannel');
                 if (currentChannelSpan) {
                     currentChannelSpan.textContent = newChannel;
                 }
-                
+
                 // Update RTSP URL
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/info`);
                 const data = await response.json();
-                
+
                 if (data.success) {
                     const dvr = data.dvr_system;
                     const newRtspUrl = `rtsp://${dvr.username}:${dvr.password}@${dvr.ip_address}:${dvr.rtsp_port}/ch${newChannel.toString().padStart(2, '0')}/main`;
-                    
+
                     const currentRTSPUrl = document.getElementById('currentRTSPUrl');
                     if (currentRTSPUrl) {
                         currentRTSPUrl.textContent = newRtspUrl;
                     }
-                    
+
                     // Start new stream with new channel
                     await startVideoStream(dvrId, parseInt(newChannel));
-                    
+
                     showAlert(`✅ Kanal ${newChannel} seçildi`, 'success');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Switch channel error:', error);
                 showAlert('Kanal değiştirilirken hata oluştu', 'danger');
             }
         }
-        
+
         // Video stream değişkenleri
         let videoStreamInterval = null;
         let isStreamActive = false;
         let currentStreamId = null;
-        
+
         // Video stream'i başlat
         async function startVideoStream(dvrId, channelNumber) {
             try {
                 console.log(`🎥 Starting video stream: ${dvrId} - Channel ${channelNumber}`);
-                
+
                 // Stop any existing stream
                 if (currentStreamId) {
                     await stopDVRStream(dvrId, parseInt(currentStreamId.split('_ch')[1]));
                 }
-                
+
                 // Start new stream on server
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/stream/${channelNumber}`, {
                     method: 'POST',
@@ -4138,7 +4277,7 @@
                     }
                 });
                 const data = await response.json();
-                
+
                 if (data.success) {
                     currentStreamId = `${dvrId}_ch${channelNumber.toString().padStart(2, '0')}`;
                     isStreamActive = true;
@@ -4149,18 +4288,18 @@
                         if (currentRTSPUrl && data.rtsp_url) {
                             currentRTSPUrl.textContent = data.rtsp_url;
                         }
-                    } catch (e) {}
-                    
+                    } catch (e) { }
+
                     // Clear any existing interval
                     if (videoStreamInterval) {
                         clearInterval(videoStreamInterval);
                     }
-                    
+
                     // Use MJPEG live stream for smooth video playback (25 FPS)
                     try {
                         const img = document.getElementById('dvrLiveImage');
                         const mjpegUrl = `/api/company/{{ company_id }}/dvr/${dvrId}/mjpeg/${channelNumber}`;
-                        
+
                         if (img) {
                             img.style.display = 'block';
                             img.className = 'live-video-element';
@@ -4168,13 +4307,13 @@
                             img.src = mjpegUrl;
                             console.log(`🎥 MJPEG stream started: ${mjpegUrl}`);
                         }
-                        
+
                         // No need for frame polling interval when using MJPEG
                         if (videoStreamInterval) {
                             clearInterval(videoStreamInterval);
                             videoStreamInterval = null;
                         }
-                        
+
                     } catch (e) {
                         console.warn('MJPEG setup failed, falling back to polling frames', e);
                         // Fallback to frame polling if MJPEG fails
@@ -4182,7 +4321,7 @@
                             img.style.display = 'block';
                             img.className = 'live-video-element';
                         }
-                        
+
                         videoStreamInterval = setInterval(() => {
                             const modal = document.getElementById('dvrLiveModal');
                             if (modal) {
@@ -4197,14 +4336,14 @@
                             }
                         }, 200); // Faster polling for fallback (5 FPS)
                     }
-                    
+
                     console.log(`✅ Video stream started: ${currentStreamId} for channel ${channelNumber}`);
-                    
+
                 } else {
                     updateStreamStatus('Hata', 'danger');
                     showAlert('Video stream başlatılamadı', 'danger');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Start video stream error:', error);
                 updateStreamStatus('Hata', 'danger');
@@ -4212,14 +4351,14 @@
         }
 
 
-        
+
         // Video stream'i durdur
         async function stopVideoStream() {
             if (videoStreamInterval) {
                 clearInterval(videoStreamInterval);
                 videoStreamInterval = null;
             }
-            
+
             // Stop server-side stream if active
             if (currentStreamId) {
                 try {
@@ -4233,12 +4372,12 @@
                     console.error('❌ Stop server stream error:', error);
                 }
             }
-            
+
             isStreamActive = false;
             currentStreamId = null;
             updateStreamStatus('Durduruldu', 'secondary');
         }
-        
+
         // DVR stream'i durdur (server-side)
         async function stopDVRStream(dvrId, channelNumber) {
             try {
@@ -4246,7 +4385,7 @@
                     method: 'POST'
                 });
                 const data = await response.json();
-                
+
                 if (data.success) {
                     console.log(`✅ Server stream stopped: ${dvrId} - Channel ${channelNumber}`);
                 }
@@ -4254,14 +4393,14 @@
                 console.error('❌ Stop DVR stream error:', error);
             }
         }
-        
+
         // Video frame'ini güncelle
         async function updateVideoFrame(dvrId, channelNumber) {
             if (!isStreamActive) return;
-            
+
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/frame/${channelNumber}?overlay=true`);
-                
+
                 if (!response.ok) {
                     if (response.status === 429) {
                         console.log('⚠️ Rate limited, slowing down frame updates');
@@ -4272,9 +4411,9 @@
                     }
                     throw new Error(`HTTP ${response.status}`);
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success && data.frame) {
                     const img = document.getElementById('dvrLiveImage');
                     if (img) {
@@ -4297,7 +4436,7 @@
                 }
             }
         }
-        
+
         // Stream durumunu güncelle
         function updateStreamStatus(status, type) {
             const statusElement = document.getElementById('streamStatus');
@@ -4306,14 +4445,14 @@
                 statusElement.className = `badge bg-${type}`;
             }
         }
-        
+
         // Video stream'i yenile
         async function refreshVideoStream(dvrId, channelNumber) {
             stopVideoStream();
             await startVideoStream(dvrId, channelNumber);
             showAlert('Video stream yenileniyor...', 'info');
         }
-        
+
         // Video stream'i aç/kapat
         function toggleVideoStream() {
             const toggleText = document.getElementById('toggleText');
@@ -4331,7 +4470,7 @@
                 toggleText.textContent = 'Durdur';
             }
         }
-        
+
         // RTSP URL'yi kopyala
         function copyRTSPUrl(url) {
             navigator.clipboard.writeText(url).then(() => {
@@ -4340,7 +4479,7 @@
                 showAlert('URL kopyalanamadı', 'danger');
             });
         }
-        
+
         // Tam ekran modu
         function fullscreenVideo() {
             const container = document.getElementById('dvrVideoContainer');
@@ -4354,7 +4493,7 @@
                 }
             }
         }
-        
+
         // Belirli bir kanal için detection durdur
         async function stopDVRDetectionForChannel(dvrId, channelNumber) {
             try {
@@ -4367,9 +4506,9 @@
                         channels: [channelNumber]
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert(`✅ Kanal ${channelNumber} için PPE Detection durduruldu!`, 'success');
                     updateDVRDetectionStatusInModal(dvrId);
@@ -4381,13 +4520,13 @@
                 showAlert('DVR kanal detection durdurulurken hata oluştu', 'danger');
             }
         }
-        
+
         // Modal içinde detection durumunu güncelle
         async function updateDVRDetectionStatusInModal(dvrId) {
             try {
                 const status = await getDVRDetectionStatus(dvrId);
                 const statusElement = document.getElementById('dvrDetectionStatus');
-                
+
                 if (status && status.active_detections && status.active_detections.length > 0) {
                     statusElement.className = 'alert alert-success';
                     statusElement.innerHTML = `
@@ -4413,56 +4552,56 @@
                 `;
             }
         }
-        
+
         // ========================================================================
         // LIVE DETECTION DASHBOARD FUNCTIONS
         // ========================================================================
-        
+
         let currentDetectionCameraId = null;
         let detectionUpdateInterval = null;
         let detectionStreamImg = null;
-        
+
         function startLiveDetection(cameraId, cameraName) {
             console.log('🎯 Starting live detection for:', cameraId, cameraName);
-            
+
             currentDetectionCameraId = cameraId;
-            
+
             // Modal'ı aç
             const modal = new bootstrap.Modal(document.getElementById('liveDetectionModal'));
             document.getElementById('detectionCameraName').textContent = `Canlı PPE Tespiti - ${cameraName}`;
             modal.show();
-            
+
             // Stream'i başlat
             startDetectionStream(cameraId);
-            
+
             // Detection history'yi yükle
             loadDetectionHistory(cameraId);
-            
+
             // Real-time updates başlat
             startDetectionUpdates(cameraId);
         }
-        
+
         function startDetectionStream(cameraId) {
             const streamImg = document.getElementById('detectionStream');
             const loadingDiv = document.getElementById('detectionLoading');
-            
+
             // Stream URL'i oluştur
             const streamUrl = `/api/company/{{ company_id }}/cameras/${cameraId}/detection/stream?t=${Date.now()}`;
-            
+
             console.log('🎥 Starting detection stream:', streamUrl);
-            
+
             // MJPEG stream için onload çalışmaz, direkt göster
             streamImg.src = streamUrl;
-            
+
             // 2 saniye sonra loading'i kaldır (stream başlamış olmalı)
             setTimeout(() => {
                 console.log('✅ Detection stream started');
                 loadingDiv.style.display = 'none';
                 streamImg.style.display = 'block';
             }, 2000);
-            
+
             // Hata durumunu kontrol et
-            streamImg.onerror = function() {
+            streamImg.onerror = function () {
                 console.error('❌ Detection stream error');
                 loadingDiv.innerHTML = `
                     <div class="alert alert-danger m-4">
@@ -4472,35 +4611,35 @@
                 `;
             };
         }
-        
+
         function startDetectionUpdates(cameraId) {
             // Önceki interval'i temizle
             if (detectionUpdateInterval) {
                 clearInterval(detectionUpdateInterval);
             }
-            
+
             // Her 2 saniyede bir güncelle
             detectionUpdateInterval = setInterval(() => {
                 updateDetectionStats(cameraId);
             }, 2000);
-            
+
             // İlk güncellemeyi hemen yap
             updateDetectionStats(cameraId);
         }
-        
+
         function updateDetectionStats(cameraId) {
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.detection) {
                         const detection = data.detection;
-                        
+
                         // 🎯 DİNAMİK: İstatistikleri animasyonlu güncelle
                         const totalPeopleEl = document.getElementById('totalPeople');
                         const compliantPeopleEl = document.getElementById('compliantPeople');
                         const violationCountEl = document.getElementById('violationCount');
                         const complianceRateEl = document.getElementById('complianceRate');
-                        
+
                         // Değer değişirse animasyon ekle
                         if (totalPeopleEl.textContent != (detection.total_people || 0)) {
                             totalPeopleEl.style.animation = 'none';
@@ -4509,7 +4648,7 @@
                                 totalPeopleEl.style.animation = 'pulse 0.5s ease-in-out';
                             }, 10);
                         }
-                        
+
                         if (compliantPeopleEl.textContent != (detection.ppe_compliant || 0)) {
                             compliantPeopleEl.style.animation = 'none';
                             setTimeout(() => {
@@ -4517,7 +4656,7 @@
                                 compliantPeopleEl.style.animation = 'pulse 0.5s ease-in-out';
                             }, 10);
                         }
-                        
+
                         if (violationCountEl.textContent != (detection.violations_count || 0)) {
                             violationCountEl.style.animation = 'none';
                             setTimeout(() => {
@@ -4525,12 +4664,12 @@
                                 violationCountEl.style.animation = 'pulse 0.5s ease-in-out';
                             }, 10);
                         }
-                        
+
                         // Uyum oranını hesapla
-                        const complianceRate = detection.total_people > 0 
-                            ? Math.round((detection.ppe_compliant / detection.total_people) * 100) 
+                        const complianceRate = detection.total_people > 0
+                            ? Math.round((detection.ppe_compliant / detection.total_people) * 100)
                             : 100;
-                        
+
                         if (complianceRateEl.textContent != complianceRate + '%') {
                             complianceRateEl.style.animation = 'none';
                             setTimeout(() => {
@@ -4538,10 +4677,10 @@
                                 complianceRateEl.style.animation = 'pulse 0.5s ease-in-out';
                             }, 10);
                         }
-                        
+
                         // 🎯 DİNAMİK: Violation details güncelle
                         updateViolationDetails(detection);
-                        
+
                         // 🎯 DİNAMİK: Detection history'yi güncelle
                         loadDetectionHistory(cameraId);
                     }
@@ -4550,7 +4689,7 @@
                     console.error('Detection stats update error:', error);
                 });
         }
-        
+
         function loadDetectionHistory(cameraId) {
             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/history?limit=20`)
                 .then(response => response.json())
@@ -4558,22 +4697,22 @@
                     if (data.success && data.results && data.results.length > 0) {
                         const historyContainer = document.getElementById('detectionHistory');
                         historyContainer.innerHTML = '';
-                        
+
                         // 🎯 DİNAMİK: Her kayıt detaylı ve animasyonlu
                         data.results.forEach((result, index) => {
                             const timestamp = new Date(result.timestamp).toLocaleString('tr-TR');
-                            const complianceRate = result.total_people > 0 
-                                ? Math.round((result.ppe_compliant / result.total_people) * 100) 
+                            const complianceRate = result.total_people > 0
+                                ? Math.round((result.ppe_compliant / result.total_people) * 100)
                                 : 100;
-                            
+
                             // Zaman farkını hesapla
                             const now = new Date();
                             const detectionTime = new Date(result.timestamp);
                             const diffMinutes = Math.floor((now - detectionTime) / 60000);
-                            const timeAgo = diffMinutes < 1 ? 'Az önce' : 
-                                          diffMinutes < 60 ? `${diffMinutes} dakika önce` : 
-                                          `${Math.floor(diffMinutes / 60)} saat önce`;
-                            
+                            const timeAgo = diffMinutes < 1 ? 'Az önce' :
+                                diffMinutes < 60 ? `${diffMinutes} dakika önce` :
+                                    `${Math.floor(diffMinutes / 60)} saat önce`;
+
                             const historyItem = document.createElement('div');
                             historyItem.className = 'border-bottom p-3 hover-highlight';
                             historyItem.style.animation = `fadeIn 0.3s ease-in ${index * 0.05}s both`;
@@ -4594,21 +4733,21 @@
                                             <span class="badge bg-${complianceRate >= 80 ? 'success' : complianceRate >= 60 ? 'warning' : 'danger'}">
                                                 <i class="fas fa-percentage me-1"></i>${complianceRate}% Uyum
                                             </span>
-                                            ${result.violations_count > 0 ? 
-                                                `<span class="badge bg-danger">
+                                            ${result.violations_count > 0 ?
+                                    `<span class="badge bg-danger">
                                                     <i class="fas fa-exclamation-triangle me-1"></i>${result.violations_count} İhlal
-                                                </span>` : 
-                                                `<span class="badge bg-success">
+                                                </span>` :
+                                    `<span class="badge bg-success">
                                                     <i class="fas fa-check-circle me-1"></i>Tam Uyum
                                                 </span>`
-                                            }
+                                }
                                         </div>
                                     </div>
                                     <div class="ms-2">
-                                        ${result.violations_count > 0 ? 
-                                            `<i class="fas fa-exclamation-circle fa-2x text-danger"></i>` : 
-                                            `<i class="fas fa-check-circle fa-2x text-success"></i>`
-                                        }
+                                        ${result.violations_count > 0 ?
+                                    `<i class="fas fa-exclamation-circle fa-2x text-danger"></i>` :
+                                    `<i class="fas fa-check-circle fa-2x text-success"></i>`
+                                }
                                     </div>
                                 </div>
                             `;
@@ -4638,7 +4777,7 @@
                     `;
                 });
         }
-        
+
         async function updateViolationDetails(detection) {
             const violationContainer = document.getElementById('violationDetails');
             try {
@@ -4717,13 +4856,13 @@
                 `;
             }
         }
-        
+
         function downloadDetectionReport() {
             if (!currentDetectionCameraId) {
                 alert('Kamera seçilmedi!');
                 return;
             }
-            
+
             // Detection stats al
             fetch(`/api/company/{{ company_id }}/detection/stats?hours=24`)
                 .then(response => response.json())
@@ -4744,7 +4883,7 @@ Toplam İhlal: ${stats.total_violations}
 Uyum Oranı: ${stats.compliance_rate.toFixed(2)}%
 Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                         `.trim();
-                        
+
                         // Dosyayı indir
                         const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8' });
                         const url = window.URL.createObjectURL(blob);
@@ -4755,7 +4894,7 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                         a.click();
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
-                        
+
                         showAlert('success', 'Rapor başarıyla indirildi!');
                     }
                 })
@@ -4764,7 +4903,7 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                     showAlert('danger', 'Rapor indirilemedi!');
                 });
         }
-        
+
         // Modal kapatıldığında interval'i temizle
         document.getElementById('liveDetectionModal').addEventListener('hidden.bs.modal', function () {
             if (detectionUpdateInterval) {
@@ -4772,18 +4911,18 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 detectionUpdateInterval = null;
             }
             currentDetectionCameraId = null;
-            
+
             // Stream'i durdur
             const streamImg = document.getElementById('detectionStream');
             streamImg.src = '';
             streamImg.style.display = 'none';
             document.getElementById('detectionLoading').style.display = 'block';
         });
-        
+
         // ========================================================================
         // CAMERA DETECTION STATUS TRACKING FUNCTIONS
         // ========================================================================
-        
+
         /**
          * Kamera detection durumunu kontrol et ve badge'i güncelle
          * Bu fonksiyon her kamera için real-time status gösterir
@@ -4803,21 +4942,21 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 const isActive = statusData && statusData.success ? !!statusData.is_active : false;
                 const detection = latestData && latestData.success ? latestData.detection : null;
                 const violationCount = detection ? (detection.violations_count || 0) : 0;
-                
+
                 // Buton oluştur
                 const buttonClass = isActive ? 'btn-success' : 'btn-outline-secondary';
                 const buttonIcon = isActive ? 'fa-brain' : 'fa-pause-circle';
                 const buttonText = isActive ? 'Aktif' : 'Durdu';
                 const buttonTitle = isActive ? 'PPE Detection\'ı Durdur' : 'PPE Detection\'ı Başlat';
-                
+
                 let extra = '';
                 if (detection && isActive) {
-                    const complianceRate = detection.total_people > 0 
-                        ? Math.round((detection.ppe_compliant / detection.total_people) * 100) 
+                    const complianceRate = detection.total_people > 0
+                        ? Math.round((detection.ppe_compliant / detection.total_people) * 100)
                         : 100;
                     extra = `<br><small class="text-${violationCount > 0 ? 'danger' : 'success'}">${violationCount > 0 ? `${violationCount} İhlal` : `${complianceRate}% Uyum`}</small>`;
                 }
-                
+
                 statusElement.innerHTML = `
                     <button class="btn btn-sm ${buttonClass} ${isActive ? 'pulse-animation' : ''}" 
                             onclick="toggleDetectionStatus('${cameraId}')" 
@@ -4831,7 +4970,7 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 console.error(`Detection status update error for ${cameraId}:`, error);
             }
         }
-        
+
         /**
          * Tüm kameraların detection statusunu güncelle
          * Sayfa yüklendiğinde ve periyodik olarak çalışır
@@ -4844,11 +4983,11 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                     updateCameraDetectionStatus(cameraId);
                 }
             });
-            
+
             // Aktif detectionlar dashboard'unu güncelle
             updateActiveDetectionsDashboard();
         }
-        
+
         /**
          * Aktif detectionlar dashboard'unu güncelle
          * Tüm aktif detectionları bir arada gösterir
@@ -4858,35 +4997,35 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
             try {
                 const cameraRows = document.querySelectorAll('[data-camera-id]');
                 const activeDetections = [];
-                
+
                 // Her kamera için detection durumunu kontrol et
                 for (const row of cameraRows) {
                     const cameraId = row.getAttribute('data-camera-id');
                     const cameraName = row.querySelector('strong')?.textContent || 'Bilinmeyen Kamera';
-                    
+
                     try {
                         // 1. Kamera durumunu kontrol et (aktif/pasif)
                         const statusElement = document.getElementById(`status-${cameraId}`);
                         const isCameraActive = statusElement && statusElement.innerHTML.includes('Aktif');
-                        
+
                         if (!isCameraActive) {
                             // Kamera pasif, bu kamerayı atla
                             continue;
                         }
-                        
+
                         // 2. PPE Detection durumunu kontrol et
                         const [statusRes, latestRes] = await Promise.all([
                             fetch(`/api/company/{{ company_id }}/detection-status/${cameraId}`),
                             fetch(`/api/company/{{ company_id }}/cameras/${cameraId}/detection/latest`)
                         ]);
-                        
+
                         const statusData = await statusRes.json();
                         const latestData = await latestRes.json();
-                        
+
                         // 3. Sadece hem kamera aktif hem de PPE Detection aktif olan kameraları ekle
                         const isDetectionActive = statusData && statusData.success ? !!statusData.is_active : false;
                         const hasDetectionData = latestData && latestData.success && latestData.detection;
-                        
+
                         if (isCameraActive && isDetectionActive && hasDetectionData) {
                             activeDetections.push({
                                 cameraId: cameraId,
@@ -4900,25 +5039,25 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                         continue;
                     }
                 }
-                
+
                 // Dashboard'u göster/gizle
                 const dashboard = document.getElementById('activeDetectionsDashboard');
                 const countBadge = document.getElementById('activeDetectionsCount');
                 const listContainer = document.getElementById('activeDetectionsList');
-                
+
                 if (activeDetections.length > 0) {
                     dashboard.style.display = 'block';
                     countBadge.textContent = activeDetections.length;
-                    
+
                     // Kart listesini oluştur
                     listContainer.innerHTML = activeDetections.map(item => {
                         const detection = item.detection;
                         const violationCount = detection.violations_count || 0;
-                        const complianceRate = detection.total_people > 0 
-                            ? Math.round((detection.ppe_compliant / detection.total_people) * 100) 
+                        const complianceRate = detection.total_people > 0
+                            ? Math.round((detection.ppe_compliant / detection.total_people) * 100)
                             : 100;
                         const totalPeople = detection.total_people || 0;
-                        
+
                         return `
                             <div class="col-md-6 col-lg-4">
                                 <div class="card border-${violationCount > 0 ? 'danger' : 'success'} h-100">
@@ -4971,30 +5110,30 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 console.error('Active detections dashboard update error:', error);
             }
         }
-        
+
         /**
          * Auto-refresh: Her 5 saniyede bir tüm detection statusları güncelle
          * Performans için: Sadece aktif detection varsa çalışır
          */
         let globalDetectionStatusInterval = null;
-        
+
         function startGlobalDetectionStatusTracking() {
             // Eğer zaten çalışıyorsa, yeniden başlatma
             if (globalDetectionStatusInterval) {
                 clearInterval(globalDetectionStatusInterval);
             }
-            
+
             // İlk güncellemeyi hemen yap
             updateAllCameraDetectionStatuses();
-            
+
             // Her 5 saniyede bir güncelle
             globalDetectionStatusInterval = setInterval(() => {
                 updateAllCameraDetectionStatuses();
             }, 5000);
-            
+
             console.log('✅ Global detection status tracking started');
         }
-        
+
         function stopGlobalDetectionStatusTracking() {
             if (globalDetectionStatusInterval) {
                 clearInterval(globalDetectionStatusInterval);
@@ -5002,24 +5141,251 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 console.log('⏹️ Global detection status tracking stopped');
             }
         }
-        
+
         /**
          * Sayfa yüklendiğinde tracking'i başlat
          */
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Kameralar yüklendikten 2 saniye sonra tracking'i başlat
             setTimeout(() => {
                 startGlobalDetectionStatusTracking();
             }, 2000);
         });
-        
+
         /**
          * Sayfa kapatıldığında tracking'i durdur
          */
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             stopGlobalDetectionStatusTracking();
         });
-        
+
+        // =========================================================================
+        // ONVIF OTOMATİK KEŞİF FONKSİYONLARI
+        // =========================================================================
+
+        /**
+         * ONVIF WS-Discovery ile ağdaki cihazları keşfet
+         */
+        function startOnvifDiscovery() {
+            const btn = document.getElementById('onvifDiscoverBtn');
+            const statusDiv = document.getElementById('onvifScanStatus');
+            const statusText = document.getElementById('onvifScanStatusText');
+            const devicesList = document.getElementById('onvifDevicesList');
+            const noDevices = document.getElementById('onvifNoDevices');
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Taranıyor...';
+            statusDiv.style.display = 'block';
+            statusText.textContent = 'ONVIF WS-Discovery ile ağ taranıyor...';
+            devicesList.innerHTML = '';
+            noDevices.style.display = 'none';
+
+            fetch(`/api/company/{{ company_id }}/onvif/discover`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timeout: 5.0 })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-search me-2"></i>Ağı Tara';
+                    statusDiv.style.display = 'none';
+
+                    if (data.success && data.devices && data.devices.length > 0) {
+                        renderOnvifDevices(data.devices);
+                    } else {
+                        noDevices.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-search me-2"></i>Ağı Tara';
+                    statusDiv.style.display = 'none';
+                    noDevices.style.display = 'block';
+                    console.error('ONVIF discover error:', err);
+                });
+        }
+
+        /**
+         * Bulunan ONVIF cihazlarını kart olarak göster
+         */
+        function renderOnvifDevices(devices) {
+            const container = document.getElementById('onvifDevicesList');
+            container.innerHTML = '';
+
+            devices.forEach((device, idx) => {
+                const card = document.createElement('div');
+                card.className = 'col-md-4 col-sm-6';
+                card.innerHTML = `
+                    <div class="card h-100 border-info shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-video text-info me-1"></i>
+                                    ${device.manufacturer || 'Bilinmeyen'}
+                                </h6>
+                                <span class="badge bg-success">ONVIF</span>
+                            </div>
+                            <p class="card-text small text-muted mb-1">
+                                <i class="fas fa-network-wired me-1"></i>IP: <strong>${device.ip || 'N/A'}</strong>
+                            </p>
+                            <p class="card-text small text-muted mb-1">
+                                <i class="fas fa-tag me-1"></i>Model: ${device.model || 'Bilinmeyen'}
+                            </p>
+                            <p class="card-text small text-muted mb-2">
+                                <i class="fas fa-plug me-1"></i>Port: ${device.port || 80}
+                            </p>
+                            <div class="d-grid gap-1">
+                                <button class="btn btn-sm btn-info" onclick="autoProvisionDevice('${device.ip}', ${device.port || 80})">
+                                    <i class="fas fa-plus-circle me-1"></i>Sisteme Ekle
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="testOnvifConnection('${device.ip}', ${device.port || 80})">
+                                    <i class="fas fa-plug me-1"></i>Bağlantı Test
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        /**
+         * Tek bir ONVIF cihazını otomatik olarak sisteme ekle
+         */
+        function autoProvisionDevice(ip, port) {
+            const username = prompt('ONVIF Kullanıcı Adı:', 'admin');
+            if (!username) return;
+            const password = prompt('ONVIF Şifre:', '');
+            if (password === null) return;
+
+            const statusDiv = document.getElementById('onvifScanStatus');
+            const statusText = document.getElementById('onvifScanStatusText');
+            statusDiv.style.display = 'block';
+            statusText.textContent = `${ip} cihazı ekleniyor...`;
+
+            fetch(`/api/company/{{ company_id }}/onvif/auto-provision`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                    timeout: 5.0,
+                    network_range: `${ip}/32`  // Sadece bu cihaz
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    statusDiv.style.display = 'none';
+
+                    if (data.success && data.provisioned_count > 0) {
+                        alert(`✅ Başarılı! ${data.provisioned_count} kamera/kanal eklendi.`);
+                        // Kamera listesini yenile
+                        if (typeof loadCameras === 'function') loadCameras();
+                    } else if (data.errors && data.errors.length > 0) {
+                        alert(`⚠️ Bazı hatalar oluştu:\n${data.errors.map(e => e.error).join('\n')}`);
+                    } else {
+                        alert('⚠️ Bu cihazdan kamera eklenemedi. Kullanıcı adı/şifre kontrol edin.');
+                    }
+                })
+                .catch(err => {
+                    statusDiv.style.display = 'none';
+                    alert('❌ Hata: ' + err.message);
+                    console.error('Auto-provision error:', err);
+                });
+        }
+
+        /**
+         * ONVIF bağlantı testi
+         */
+        function testOnvifConnection(ip, port) {
+            const username = prompt('ONVIF Kullanıcı Adı:', 'admin');
+            if (!username) return;
+            const password = prompt('ONVIF Şifre:', '');
+            if (password === null) return;
+
+            const statusDiv = document.getElementById('onvifScanStatus');
+            const statusText = document.getElementById('onvifScanStatusText');
+            statusDiv.style.display = 'block';
+            statusText.textContent = `${ip}:${port} bağlantı test ediliyor...`;
+
+            fetch(`/api/company/{{ company_id }}/onvif/test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, port, username, password })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    statusDiv.style.display = 'none';
+                    if (data.success) {
+                        alert(`✅ Bağlantı başarılı!\n\nCihaz: ${data.device_info || ip}\nDurum: Bağlı`);
+                    } else {
+                        alert(`❌ Bağlantı başarısız:\n${data.error || 'Bilinmeyen hata'}`);
+                    }
+                })
+                .catch(err => {
+                    statusDiv.style.display = 'none';
+                    alert('❌ Test hatası: ' + err.message);
+                });
+        }
+
+        /**
+         * Gelişmiş tarama formunu aç/kapat
+         */
+        function startOnvifDiscoveryAdvanced() {
+            const form = document.getElementById('onvifAdvancedForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        /**
+         * IP aralığı ile gelişmiş ONVIF tarama
+         */
+        function runAdvancedOnvifScan() {
+            const startIp = document.getElementById('onvifStartIp').value;
+            const endIp = document.getElementById('onvifEndIp').value;
+            const timeout = document.getElementById('onvifTimeout').value || 5;
+
+            if (!startIp) {
+                alert('Başlangıç IP adresi giriniz.');
+                return;
+            }
+
+            const statusDiv = document.getElementById('onvifScanStatus');
+            const statusText = document.getElementById('onvifScanStatusText');
+            const devicesList = document.getElementById('onvifDevicesList');
+            const noDevices = document.getElementById('onvifNoDevices');
+
+            statusDiv.style.display = 'block';
+            statusText.textContent = `${startIp} - ${endIp || 'ağ'} aralığında taranıyor...`;
+            devicesList.innerHTML = '';
+            noDevices.style.display = 'none';
+
+            // Ağ aralığını CIDR formatına çevir (basit yaklaşım)
+            const networkParts = startIp.split('.');
+            const networkRange = networkParts.slice(0, 3).join('.') + '.0/24';
+
+            fetch(`/api/company/{{ company_id }}/onvif/discover`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timeout: parseInt(timeout), network_range: networkRange })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    statusDiv.style.display = 'none';
+                    if (data.success && data.devices && data.devices.length > 0) {
+                        renderOnvifDevices(data.devices);
+                    } else {
+                        noDevices.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    statusDiv.style.display = 'none';
+                    noDevices.style.display = 'block';
+                    console.error('Advanced ONVIF scan error:', err);
+                });
+        }
+
     </script>
 </body>
-</html> 
+
+</html>
