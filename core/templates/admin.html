@@ -1,118 +1,743 @@
 <!DOCTYPE html>
-        <html lang="tr">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Admin Panel - SmartSafe AI</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-            <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-            <style>
-                body { background: #f8f9fa; }
-                .navbar { background: #dc3545; }
-                .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-            </style>
-        </head>
-        <body>
-            <nav class="navbar navbar-dark">
-                <div class="container-fluid">
-                    <a class="navbar-brand" href="/admin">SmartSafe AI - Admin Panel</a>
-                </div>
-            </nav>
-            <div class="container mt-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Şirket Yönetimi</h5>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - SmartSafe AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #dc3545;
+            --sidebar-w: 240px;
+        }
+
+        body {
+            background: #f0f2f5;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+        }
+
+        /* ── SIDEBAR ─────────────────────────────────────────── */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: var(--sidebar-w);
+            background: #1a1a2e;
+            color: #adb5bd;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 1.25rem 1rem;
+            font-weight: 700;
+            font-size: 1rem;
+            color: #fff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+        }
+
+        .sidebar-brand span {
+            color: var(--primary);
+        }
+
+        .nav-section {
+            padding: .5rem 1rem;
+            font-size: .68rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #6c757d;
+            margin-top: 1rem;
+        }
+
+        .sidebar .nav-link {
+            color: #adb5bd;
+            padding: .55rem 1rem;
+            border-radius: 6px;
+            margin: 2px .5rem;
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            font-size: .88rem;
+            transition: all .15s;
+        }
+
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background: rgba(220, 53, 69, .15);
+            color: #fff;
+        }
+
+        .sidebar .nav-link i {
+            width: 16px;
+            text-align: center;
+        }
+
+        /* ── MAIN AREA ───────────────────────────────────────── */
+        .main {
+            margin-left: var(--sidebar-w);
+            padding: 1.5rem;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            background: #fff;
+            border-radius: 10px;
+            padding: .75rem 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+        }
+
+        .topbar h5 {
+            margin: 0;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        /* ── STAT CARDS ──────────────────────────────────────── */
+        .stat-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+
+        .stat-val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .stat-lbl {
+            font-size: .78rem;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+
+        /* ── TABLE CARD ──────────────────────────────────────── */
+        .table-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+            overflow: hidden;
+        }
+
+        .table-card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #f0f2f5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-card-header h6 {
+            margin: 0;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .table th {
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: #6c757d;
+            border-bottom: 2px solid #f0f2f5;
+            background: #fafbfc;
+        }
+
+        .table td {
+            vertical-align: middle;
+            font-size: .875rem;
+            border-color: #f0f2f5;
+        }
+
+        .plan-badge {
+            font-size: .7rem;
+            padding: .25em .6em;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .plan-starter {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .plan-professional {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .plan-enterprise {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .plan-demo {
+            background: #fce4ec;
+            color: #880e4f;
+        }
+
+        /* ── MODAL ───────────────────────────────────────────── */
+        .modal-header {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .modal-header .btn-close {
+            filter: invert(1);
+        }
+
+        .form-label {
+            font-size: .82rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .section-divider {
+            font-size: .7rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #6c757d;
+            margin: 1rem 0 .5rem;
+            padding-bottom: .3rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        /* ── ALERTS ──────────────────────────────────────────── */
+        #alertBox {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 9999;
+            min-width: 300px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-shield-alt" style="color:var(--primary)"></i>
+            Smart<span>Safe</span> Admin
+        </div>
+        <div class="nav-section">Yönetim</div>
+        <nav class="nav flex-column">
+            <a class="nav-link active" href="#" onclick="showSection('companies')">
+                <i class="fas fa-building"></i> Şirketler
+            </a>
+            <a class="nav-link" href="#" onclick="showSection('stats')">
+                <i class="fas fa-chart-bar"></i> İstatistikler
+            </a>
+            <a class="nav-link" href="#" onclick="showSection('logs')">
+                <i class="fas fa-list-alt"></i> Sistem Logları
+            </a>
+        </nav>
+        <div class="nav-section">Hesap</div>
+        <nav class="nav flex-column">
+            <a class="nav-link text-danger" href="/admin/logout">
+                <i class="fas fa-sign-out-alt"></i> Çıkış
+            </a>
+        </nav>
+    </div>
+
+    <!-- ── MAIN ────────────────────────────────────────────────── -->
+    <div class="main">
+        <div id="alertBox"></div>
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <h5 id="pageTitle"><i class="fas fa-building me-2 text-danger"></i>Şirket Yönetimi</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshAll()">
+                    <i class="fas fa-sync-alt"></i> Yenile
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="openCreateModal()">
+                    <i class="fas fa-plus"></i> Yeni Şirket
+                </button>
+            </div>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fde8ea">
+                        <i class="fas fa-building text-danger"></i>
                     </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table" id="companiesTable">
-                                <thead>
-                                    <tr>
-                                        <th>Şirket Adı</th>
-                                        <th>Sektör</th>
-                                        <th>Durum</th>
-                                        <th>İşlemler</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="companyTableBody"></tbody>
-                            </table>
-                        </div>
+                    <div>
+                        <div class="stat-val text-danger" id="statTotal">—</div>
+                        <div class="stat-lbl">Toplam Şirket</div>
                     </div>
                 </div>
             </div>
-            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-            <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
-            <script>
-                $(document).ready(function() {
-                    loadCompanies();
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#e8f5e9">
+                        <i class="fas fa-check-circle" style="color:#2e7d32"></i>
+                    </div>
+                    <div>
+                        <div class="stat-val" style="color:#2e7d32" id="statActive">—</div>
+                        <div class="stat-lbl">Aktif Hesap</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fff3e0">
+                        <i class="fas fa-camera" style="color:#e65100"></i>
+                    </div>
+                    <div>
+                        <div class="stat-val" style="color:#e65100" id="statCameras">—</div>
+                        <div class="stat-lbl">Toplam Kamera Kapasitesi</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fce4ec">
+                        <i class="fas fa-flask" style="color:#880e4f"></i>
+                    </div>
+                    <div>
+                        <div class="stat-val" style="color:#880e4f" id="statDemo">—</div>
+                        <div class="stat-lbl">Demo Hesap</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Companies Table -->
+        <div class="table-card" id="section-companies">
+            <div class="table-card-header">
+                <h6><i class="fas fa-list me-2"></i>Kayıtlı Şirketler</h6>
+                <input type="search" class="form-control form-control-sm w-auto" placeholder="Ara..." id="searchInput"
+                    oninput="filterTable()">
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Şirket</th>
+                            <th>Sektör</th>
+                            <th>Plan</th>
+                            <th>Kamera Limit</th>
+                            <th>Durum</th>
+                            <th>Kayıt</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="companyTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Yükleniyor...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- CREATE / EDIT MODAL                                        -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div class="modal fade" id="companyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Yeni Şirket Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="companyForm">
+                        <input type="hidden" id="editCompanyId">
+
+                        <div class="section-divider">Temel Bilgiler</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Şirket Adı *</label>
+                                <input type="text" class="form-control" id="fCompanyName" required
+                                    placeholder="ABC Gıda A.Ş.">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Sektör *</label>
+                                <select class="form-select" id="fSector" required>
+                                    <option value="">Seç...</option>
+                                    <option value="construction">🏗️ İnşaat</option>
+                                    <option value="manufacturing">🏭 İmalat</option>
+                                    <option value="chemical">⚗️ Kimya</option>
+                                    <option value="food">🍕 Gıda</option>
+                                    <option value="food_beverage">🥤 Gıda &amp; İçecek</option>
+                                    <option value="warehouse">📦 Depo/Lojistik</option>
+                                    <option value="warehouse_logistics">📦 Depo/Lojistik</option>
+                                    <option value="energy">⚡ Enerji</option>
+                                    <option value="petrochemical">🛢️ Petrokimya</option>
+                                    <option value="marine_shipyard">🚢 Denizcilik</option>
+                                    <option value="aviation">✈️ Havacılık</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">İletişim Kişisi *</label>
+                                <input type="text" class="form-control" id="fContactPerson" required
+                                    placeholder="Ahmet Yılmaz">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">E-posta *</label>
+                                <input type="email" class="form-control" id="fEmail" required
+                                    placeholder="admin@firma.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Telefon</label>
+                                <input type="text" class="form-control" id="fPhone" placeholder="+90 555 000 00 00">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Adres</label>
+                                <input type="text" class="form-control" id="fAddress" placeholder="İstanbul, Türkiye">
+                            </div>
+                        </div>
+
+                        <div class="section-divider mt-3">Plan &amp; Kamera Limiti</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Plan *</label>
+                                <select class="form-select" id="fPlan" onchange="applyPlanDefaults()" required>
+                                    <option value="demo">Demo (2 kamera)</option>
+                                    <option value="starter">Starter (5 kamera)</option>
+                                    <option value="professional" selected>Professional (25 kamera)</option>
+                                    <option value="enterprise">Enterprise (100 kamera)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Maksimum Kamera</label>
+                                <input type="number" class="form-control" id="fMaxCameras" value="25" min="1" max="500">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Hesap Tipi</label>
+                                <select class="form-select" id="fAccountType">
+                                    <option value="full">Full</option>
+                                    <option value="demo">Demo</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="section-divider mt-3">Şifre (yeni hesap için)</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Şifre *</label>
+                                <input type="password" class="form-control" id="fPassword" placeholder="Min 8 karakter">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Şifre (Tekrar) *</label>
+                                <input type="password" class="form-control" id="fPassword2"
+                                    placeholder="Şifreyi tekrar gir">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-danger" onclick="saveCompany()">
+                        <i class="fas fa-save me-1"></i><span id="saveBtn">Kaydet</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL MODAL -->
+    <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-building me-2"></i>Şirket Detayı</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="detailBody">Yükleniyor...</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                    <button type="button" class="btn btn-warning" id="detailEditBtn">
+                        <i class="fas fa-edit me-1"></i>Düzenle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        /* ── GLOBALS ─────────────────────────────────────────────── */
+        let allCompanies = [];
+        const companyModal = new bootstrap.Modal('#companyModal');
+        const detailModal = new bootstrap.Modal('#detailModal');
+
+        const PLAN_DEFAULTS = {
+            demo: { max: 2, account: 'demo' },
+            starter: { max: 5, account: 'full' },
+            professional: { max: 25, account: 'full' },
+            enterprise: { max: 100, account: 'full' },
+        };
+
+        const SECTOR_LABELS = {
+            construction: '🏗️ İnşaat', manufacturing: '🏭 İmalat', chemical: '⚗️ Kimya',
+            food: '🍕 Gıda', food_beverage: '🥤 Gıda & İçecek', warehouse: '📦 Depo',
+            warehouse_logistics: '📦 Depo/Lojistik', energy: '⚡ Enerji',
+            petrochemical: '🛢️ Petrokimya', marine_shipyard: '🚢 Denizcilik', aviation: '✈️ Havacılık'
+        };
+
+        /* ── LOAD ────────────────────────────────────────────────── */
+        async function loadCompanies() {
+            try {
+                const r = await fetch('/api/admin/companies');
+                const data = await r.json();
+                allCompanies = data.companies || [];
+                renderTable(allCompanies);
+                updateStats(allCompanies);
+            } catch (e) {
+                showAlert('danger', 'Şirketler yüklenemedi: ' + e.message);
+                document.getElementById('companyTableBody').innerHTML =
+                    '<tr><td colspan="7" class="text-center py-4 text-danger">Bağlantı hatası. API çalışıyor mu?</td></tr>';
+            }
+        }
+
+        function updateStats(companies) {
+            document.getElementById('statTotal').textContent = companies.length;
+            document.getElementById('statActive').textContent = companies.filter(c => c.status === 'active').length;
+            document.getElementById('statCameras').textContent = companies.reduce((s, c) => s + (parseInt(c.max_cameras) || 0), 0);
+            document.getElementById('statDemo').textContent = companies.filter(c => c.account_type === 'demo').length;
+        }
+
+        function renderTable(list) {
+            const tbody = document.getElementById('companyTableBody');
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">' +
+                    '<i class="fas fa-building fa-2x mb-2 d-block opacity-25"></i>' +
+                    'Henüz kayıtlı şirket yok. <strong>"+ Yeni Şirket"</strong> ile ekle.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(c => {
+                const planClass = 'plan-' + (c.subscription_type || 'starter');
+                const statusBadge = c.status === 'active'
+                    ? '<span class="badge bg-success">Aktif</span>'
+                    : '<span class="badge bg-secondary">Pasif</span>';
+                const created = c.created_at ? c.created_at.split('T')[0] : '—';
+                return `<tr>
+            <td>
+                <div class="fw-semibold">${c.company_name}</div>
+                <small class="text-muted">${c.email}</small>
+            </td>
+            <td>${SECTOR_LABELS[c.sector] || c.sector}</td>
+            <td><span class="plan-badge ${planClass}">${(c.subscription_type || 'starter').toUpperCase()}</span></td>
+            <td><i class="fas fa-camera text-muted me-1"></i>${c.max_cameras}</td>
+            <td>${statusBadge}</td>
+            <td class="text-muted small">${created}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="showDetail('${c.company_id}')" title="Detay">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-warning me-1" onclick="openEditModal('${c.company_id}')" title="Düzenle">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteCompany('${c.company_id}','${c.company_name}')" title="Sil">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+            }).join('');
+        }
+
+        /* ── SEARCH ──────────────────────────────────────────────── */
+        function filterTable() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allCompanies.filter(c =>
+                (c.company_name || '').toLowerCase().includes(q) ||
+                (c.email || '').toLowerCase().includes(q) ||
+                (c.sector || '').toLowerCase().includes(q)
+            );
+            renderTable(filtered);
+        }
+
+        /* ── CREATE MODAL ────────────────────────────────────────── */
+        function openCreateModal() {
+            document.getElementById('modalTitle').textContent = 'Yeni Şirket Ekle';
+            document.getElementById('saveBtn').textContent = 'Kaydet';
+            document.getElementById('editCompanyId').value = '';
+            document.getElementById('companyForm').reset();
+            applyPlanDefaults();
+            companyModal.show();
+        }
+
+        function applyPlanDefaults() {
+            const plan = document.getElementById('fPlan').value;
+            const def = PLAN_DEFAULTS[plan] || { max: 25, account: 'full' };
+            document.getElementById('fMaxCameras').value = def.max;
+            document.getElementById('fAccountType').value = def.account;
+        }
+
+        /* ── EDIT MODAL ──────────────────────────────────────────── */
+        function openEditModal(companyId) {
+            const c = allCompanies.find(x => x.company_id === companyId);
+            if (!c) return;
+            document.getElementById('modalTitle').textContent = 'Şirket Düzenle';
+            document.getElementById('saveBtn').textContent = 'Güncelle';
+            document.getElementById('editCompanyId').value = companyId;
+            document.getElementById('fCompanyName').value = c.company_name || '';
+            document.getElementById('fSector').value = c.sector || '';
+            document.getElementById('fContactPerson').value = c.contact_person || '';
+            document.getElementById('fEmail').value = c.email || '';
+            document.getElementById('fPhone').value = c.phone || '';
+            document.getElementById('fAddress').value = c.address || '';
+            document.getElementById('fPlan').value = c.subscription_type || 'professional';
+            document.getElementById('fMaxCameras').value = c.max_cameras || 25;
+            document.getElementById('fAccountType').value = c.account_type || 'full';
+            document.getElementById('fPassword').value = '';
+            document.getElementById('fPassword2').value = '';
+            companyModal.show();
+        }
+
+        /* ── SAVE (Create or Update) ─────────────────────────────── */
+        async function saveCompany() {
+            const id = document.getElementById('editCompanyId').value;
+            const isEdit = !!id;
+
+            const name = document.getElementById('fCompanyName').value.trim();
+            const sector = document.getElementById('fSector').value;
+            const contact = document.getElementById('fContactPerson').value.trim();
+            const email = document.getElementById('fEmail').value.trim();
+            const pw = document.getElementById('fPassword').value;
+            const pw2 = document.getElementById('fPassword2').value;
+
+            if (!name || !sector || !contact || !email) {
+                showAlert('warning', 'Lütfen zorunlu alanları doldurun (*)'); return;
+            }
+            if (!isEdit && !pw) {
+                showAlert('warning', 'Yeni hesap için şifre zorunlu'); return;
+            }
+            if (pw && pw !== pw2) {
+                showAlert('warning', 'Şifreler eşleşmiyor'); return;
+            }
+
+            const payload = {
+                company_name: name,
+                sector,
+                contact_person: contact,
+                email,
+                phone: document.getElementById('fPhone').value.trim(),
+                address: document.getElementById('fAddress').value.trim(),
+                subscription_type: document.getElementById('fPlan').value,
+                max_cameras: parseInt(document.getElementById('fMaxCameras').value) || 25,
+                account_type: document.getElementById('fAccountType').value,
+            };
+            if (pw) payload.password = pw;
+
+            try {
+                const url = isEdit ? `/api/admin/companies/${id}` : '/api/admin/companies';
+                const method = isEdit ? 'PUT' : 'POST';
+                const r = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
-                
-                function loadCompanies() {
-                    fetch('/api/admin/companies')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.companies) {
-                                const tbody = document.querySelector('#companiesTable tbody');
-                                tbody.innerHTML = '';
-                                
-                                data.companies.forEach(company => {
-                                    const row = document.createElement('tr');
-                                    row.innerHTML = `
-                                        <td>${company.company_name}</td>
-                                        <td>${company.email}</td>
-                                        <td>${company.sector}</td>
-                                        <td>${company.max_cameras}</td>
-                                        <td>${company.created_at}</td>
-                                        <td>
-                                            <span class="badge bg-${company.status === 'active' ? 'success' : 'danger'}">
-                                                ${company.status}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <button class="btn btn-sm btn-danger" onclick="deleteCompany('${company.company_id}')">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    `;
-                                    tbody.appendChild(row);
-                                });
-                                
-                                // Initialize DataTable after loading data
-                                $('#companiesTable').DataTable({
-                                    destroy: true, // Allow reinitialization
-                                    language: {
-                                        url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json'
-                                    }
-                                });
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error loading companies:', error);
-                            alert('Şirketler yüklenirken hata oluştu: ' + error.message);
-                        });
+                const data = await r.json();
+                if (data.success) {
+                    showAlert('success', isEdit ? 'Şirket güncellendi ✅' : 'Şirket oluşturuldu ✅');
+                    companyModal.hide();
+                    loadCompanies();
+                } else {
+                    showAlert('danger', 'Hata: ' + (data.error || 'Bilinmeyen hata'));
                 }
-                
-                function deleteCompany(companyId) {
-                    if (confirm('Bu şirketi silmek istediğinizden emin misiniz?')) {
-                        fetch(`/api/admin/companies/${companyId}`, {
-                            method: 'DELETE'
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                alert('Şirket başarıyla silindi');
-                                loadCompanies(); // Reload table
-                            } else {
-                                alert('Hata: ' + data.error);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error deleting company:', error);
-                            alert('Silme işlemi sırasında hata oluştu');
-                        });
-                    }
+            } catch (e) {
+                showAlert('danger', 'Sunucu hatası: ' + e.message);
+            }
+        }
+
+        /* ── DETAIL ──────────────────────────────────────────────── */
+        function showDetail(companyId) {
+            const c = allCompanies.find(x => x.company_id === companyId);
+            if (!c) return;
+            const ppe = (() => { try { return JSON.stringify(JSON.parse(c.ppe_requirements || '[]'), null, 2); } catch { return c.ppe_requirements || '—'; } })();
+            document.getElementById('detailBody').innerHTML = `
+        <div class="row g-3">
+            <div class="col-md-6"><small class="text-muted">Şirket ID</small><div class="fw-semibold small font-monospace">${c.company_id}</div></div>
+            <div class="col-md-6"><small class="text-muted">API Key</small><div class="fw-semibold small font-monospace">${c.api_key || '—'}</div></div>
+            <div class="col-md-6"><small class="text-muted">Şirket Adı</small><div class="fw-semibold">${c.company_name}</div></div>
+            <div class="col-md-6"><small class="text-muted">Sektör</small><div>${SECTOR_LABELS[c.sector] || c.sector}</div></div>
+            <div class="col-md-6"><small class="text-muted">E-posta</small><div>${c.email}</div></div>
+            <div class="col-md-6"><small class="text-muted">İletişim</small><div>${c.contact_person}</div></div>
+            <div class="col-md-4"><small class="text-muted">Plan</small><div><span class="plan-badge plan-${c.subscription_type || 'starter'}">${(c.subscription_type || 'starter').toUpperCase()}</span></div></div>
+            <div class="col-md-4"><small class="text-muted">Kamera Limiti</small><div><i class="fas fa-camera me-1 text-muted"></i>${c.max_cameras}</div></div>
+            <div class="col-md-4"><small class="text-muted">Hesap Tipi</small><div>${c.account_type || 'full'}</div></div>
+            <div class="col-12"><small class="text-muted">PPE Gereksinimleri</small><pre class="bg-light p-2 rounded small mt-1">${ppe}</pre></div>
+            <div class="col-md-6"><small class="text-muted">Durum</small><div>${c.status === 'active' ? '<span class="badge bg-success">Aktif</span>' : '<span class="badge bg-secondary">Pasif</span>'}</div></div>
+            <div class="col-md-6"><small class="text-muted">Kayıt Tarihi</small><div>${c.created_at || '—'}</div></div>
+        </div>
+    `;
+            document.getElementById('detailEditBtn').onclick = () => { detailModal.hide(); openEditModal(companyId); };
+            detailModal.show();
+        }
+
+        /* ── DELETE ──────────────────────────────────────────────── */
+        async function deleteCompany(id, name) {
+            if (!confirm(`"${name}" şirketini silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!`)) return;
+            try {
+                const r = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
+                const data = await r.json();
+                if (data.success) {
+                    showAlert('success', 'Şirket silindi');
+                    loadCompanies();
+                } else {
+                    showAlert('danger', 'Silinemedi: ' + data.error);
                 }
-            </script>
-        </body>
-        </html>
+            } catch (e) {
+                showAlert('danger', 'Hata: ' + e.message);
+            }
+        }
+
+        /* ── SECTION SWITCH ──────────────────────────────────────── */
+        function showSection(s) {
+            document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+            event.target.closest('.nav-link').classList.add('active');
+        }
+
+        function refreshAll() { loadCompanies(); showAlert('info', 'Yenileniyor...'); }
+
+        /* ── ALERT ───────────────────────────────────────────────── */
+        function showAlert(type, msg) {
+            const box = document.getElementById('alertBox');
+            const id = 'alert_' + Date.now();
+            box.insertAdjacentHTML('beforeend', `
+        <div id="${id}" class="alert alert-${type} alert-dismissible shadow-sm mb-2" role="alert">
+            ${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`);
+            setTimeout(() => document.getElementById(id)?.remove(), 4000);
+        }
+
+        /* ── INIT ────────────────────────────────────────────────── */
+        loadCompanies();
+    </script>
+</body>
+
+</html>

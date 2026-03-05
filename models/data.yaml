@@ -1,0 +1,16 @@
+names:
+- Apron
+- Googles
+- Haircap
+- Mask
+- gloves
+nc: 5
+roboflow:
+  license: CC BY 4.0
+  project: ppe-food-manufacturing
+  url: https://universe.roboflow.com/rahma-5lrz6/ppe-food-manufacturing/dataset/5
+  version: 5
+  workspace: rahma-5lrz6
+test: ../test/images
+train: ../train/images
+val: ../valid/images
