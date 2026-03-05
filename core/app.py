@@ -2469,6 +2469,7 @@ smartsafe_requests_total 100
                         # Kişi bazlı ihlal event'leri üret; her ihlal sadece başladığında DB'ye
                         # yazılır (her frame'de spam yerine).
                         tracker_new_violations: list = []
+                        tracker_ended_violations: list = []
                         if people_detected > 0 and ppe_violations:
                             try:
                                 # results listesinden person bbox'larını çıkar
@@ -2486,13 +2487,7 @@ smartsafe_requests_total 100
                                             violations=list(ppe_violations),
                                         )
                                         tracker_new_violations.extend(new_v)
-                                        if ended_v:
-                                            for ev in ended_v:
-                                                logger.info(
-                                                    f"✅ İhlal ÇÖZÜLDÜ: {ev.get('violation_type')} "
-                                                    f"| Kişi: {ev.get('person_id')} "
-                                                    f"| Süre: {ev.get('duration_seconds', 0)}s"
-                                                )
+                                        tracker_ended_violations.extend(ended_v)
                                 else:
                                     # Kişi bbox yok; dummy bbox ile tek kayıt
                                     new_v, ended_v = violation_tracker.process_detection(
@@ -2502,52 +2497,119 @@ smartsafe_requests_total 100
                                         violations=list(ppe_violations),
                                     )
                                     tracker_new_violations.extend(new_v)
+                                    tracker_ended_violations.extend(ended_v)
                             except Exception as vt_err:
                                 logger.warning(f"⚠️ ViolationTracker güncelleme hatası: {vt_err}")
 
-                        # Reports kayıt (both SH17 and YOLOv8 paths)
+                        # ── VIOLATION DB & SNAPSHOT KAYIT ──────────────────────────────────
+                        # DVR yoluyla aynı kalitede: snapshot + violation_events + person stats
                         try:
-                            report_processing_time = time.time() - start_time
-                            if people_detected > 0 or len(ppe_violations) > 0:
-                                self._save_detection_to_reports(
-                                    company_id,
-                                    camera_id,
-                                    detection_mode,
-                                    people_detected,
-                                    ppe_compliant,
-                                    len(ppe_violations),
-                                    report_processing_time,
-                                    confidence,
-                                )
-                                self._generate_live_alerts(
-                                    company_id,
-                                    camera_id,
-                                    people_detected,
-                                    ppe_compliant,
-                                    len(ppe_violations),
-                                    detection_mode,
-                                )
-                            # Yeni ihlalleri DB'ye yaz (sadece event başlangıcında — her frame'de spam yok)
+                            db_adapter = get_db_adapter()
+                            
+                            # 📸 YENİ İHLALLER İÇİN SNAPSHOT ÇEK + VIOLATION_EVENTS TABLOSUNA YAZ
                             if tracker_new_violations:
                                 for new_ev in tracker_new_violations:
+                                    try:
+                                        logger.info(
+                                            f"🚨 YENİ İHLAL: {new_ev.get('violation_type')} "
+                                            f"| Kişi: {new_ev.get('person_id')} "
+                                            f"| Kamera: {camera_id}"
+                                        )
+                                        
+                                        # Kişi bbox'ını bul (snapshot için)
+                                        p_bbox = new_ev.get('person_bbox', [0, 0, 10, 10])
+                                        
+                                        # Kişi görünürlük kontrolü
+                                        person_visible = True
+                                        if p_bbox and len(p_bbox) == 4 and frame is not None:
+                                            px1, py1, px2, py2 = p_bbox
+                                            if px1 < 0 or py1 < 0 or px2 > frame.shape[1] or py2 > frame.shape[0]:
+                                                person_visible = False
+                                            person_area = (px2 - px1) * (py2 - py1)
+                                            frame_area = frame.shape[0] * frame.shape[1]
+                                            if person_area < (frame_area * 0.005):
+                                                person_visible = False
+                                        
+                                        # Snapshot çek (kişi görünürse crop, değilse full frame)
+                                        snapshot_path = None
+                                        try:
+                                            snapshot_mgr = get_snapshot_manager()
+                                            if person_visible and p_bbox != [0, 0, 10, 10]:
+                                                snapshot_path = snapshot_mgr.capture_violation_snapshot(
+                                                    frame=frame,
+                                                    company_id=company_id,
+                                                    camera_id=camera_id,
+                                                    person_id=new_ev['person_id'],
+                                                    violation_type=new_ev['violation_type'],
+                                                    person_bbox=p_bbox,
+                                                    event_id=new_ev['event_id']
+                                                )
+                                            else:
+                                                # Bbox yoksa veya geçersizse full frame snapshot
+                                                snapshot_path = snapshot_mgr.capture_full_frame_snapshot(
+                                                    frame=frame,
+                                                    company_id=company_id,
+                                                    camera_id=camera_id,
+                                                    tag=new_ev['violation_type']
+                                                )
+                                            
+                                            if snapshot_path:
+                                                new_ev['snapshot_path'] = snapshot_path
+                                                logger.info(f"📸 VIOLATION SNAPSHOT: {snapshot_path}")
+                                        except Exception as snap_err:
+                                            logger.warning(f"⚠️ Snapshot çekilemedi: {snap_err}")
+                                        
+                                        # violation_events tablosuna kaydet
+                                        db_adapter.add_violation_event(new_ev)
+                                        
+                                    except Exception as ev_err:
+                                        logger.error(f"❌ Violation event kayıt hatası: {ev_err}")
+                            
+                            # ✅ BİTEN İHLALLER İÇİN GÜNCELLEME + PERSON STATS
+                            for ended_ev in tracker_ended_violations:
+                                try:
                                     logger.info(
-                                        f"🚨 YENİ İHLAL: {new_ev.get('violation_type')} "
-                                        f"| Kişi: {new_ev.get('person_id')} "
-                                        f"| Kamera: {camera_id}"
+                                        f"✅ İhlal ÇÖZÜLDÜ: {ended_ev.get('violation_type')} "
+                                        f"| Kişi: {ended_ev.get('person_id')} "
+                                        f"| Süre: {ended_ev.get('duration_seconds', 0)}s"
                                     )
-                                tracker_normalized = [
-                                    {
-                                        'person_id': ev.get('person_id', 'unknown'),
-                                        'missing_ppe': [ev.get('violation_type', 'unknown')],
-                                        'confidence': 0.9,
-                                    }
-                                    for ev in tracker_new_violations
-                                ]
-                                self.save_violations_to_db(company_id, camera_id, tracker_normalized)
-                            elif normalized_ppe_violations:
-                                # Tracker'dan event gelmedi (cooldown vs.); ilk frame fallback
-                                for violation in normalized_ppe_violations:
-                                    self._save_violation_to_reports(company_id, camera_id, violation)
+                                    
+                                    # Çözüm snapshot'ı çek
+                                    resolution_snapshot_path = None
+                                    try:
+                                        snapshot_mgr = get_snapshot_manager()
+                                        resolution_snapshot_path = snapshot_mgr.capture_full_frame_snapshot(
+                                            frame=frame,
+                                            company_id=company_id,
+                                            camera_id=camera_id,
+                                            tag=f"{ended_ev['violation_type']}_resolved"
+                                        )
+                                        if resolution_snapshot_path:
+                                            logger.info(f"📸 RESOLUTION SNAPSHOT: {resolution_snapshot_path}")
+                                    except Exception as snap_err:
+                                        logger.warning(f"⚠️ Resolution snapshot çekilemedi: {snap_err}")
+                                    
+                                    # violation_events tablosunu güncelle
+                                    db_adapter.update_violation_event(
+                                        ended_ev['event_id'],
+                                        {
+                                            'end_time': ended_ev.get('end_time'),
+                                            'duration_seconds': ended_ev.get('duration_seconds'),
+                                            'status': ended_ev.get('status', 'resolved'),
+                                            'resolution_snapshot_path': resolution_snapshot_path
+                                        }
+                                    )
+                                    
+                                    # Kişi ihlal istatistiklerini güncelle (aylık takip)
+                                    db_adapter.update_person_violation_stats(
+                                        person_id=ended_ev['person_id'],
+                                        company_id=company_id,
+                                        violation_type=ended_ev['violation_type'],
+                                        duration_seconds=ended_ev.get('duration_seconds', 0)
+                                    )
+                                    
+                                except Exception as end_err:
+                                    logger.error(f"❌ Ended violation güncelleme hatası: {end_err}")
                         except Exception as result_error:
                             logger.error(f"❌ Result processing hatası: {result_error}")
                         
