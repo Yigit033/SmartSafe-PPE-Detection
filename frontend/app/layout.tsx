@@ -18,13 +18,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body className={`${inter.className} antialiased`}>
+      <body
+        className={`${inter.className} antialiased bg-slate-950 text-slate-50`}
+      >
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 ml-[--sidebar-width] transition-all duration-300">
+          {/* Sidebar fix: Always use fixed padding to prevent overlap */}
+          <div className="flex-1 pl-[280px]">
             <TopBar />
-            <div className="p-8 animate-fade-in">{children}</div>
-          </main>
+            <main className="p-8 animate-fade-in max-w-[1600px] mx-auto">
+              {children}
+            </main>
+          </div>
         </div>
       </body>
     </html>
