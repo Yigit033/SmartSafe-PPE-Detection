@@ -55,11 +55,30 @@ class DVRStreamProcessor:
             safe_username = urllib.parse.quote(dvr_system['username'])
             safe_password = urllib.parse.quote(dvr_system['password'])
 
-            rtsp_url = (
-                f"rtsp://{dvr_system['ip_address']}:{dvr_system.get('rtsp_port', 554)}"
-                f"/user={safe_username}&password={safe_password}"
-                f"&channel={channel}&stream=0.sdp"
-            )
+            # ── ONVIF-first URI resolution ──────────────────────────────
+            rtsp_url = None
+            try:
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                stream_handler = get_stream_handler()
+                onvif_uri = stream_handler._try_onvif_stream_uri(
+                    dvr_system['ip_address'],
+                    dvr_system['username'],
+                    dvr_system['password'],
+                    channel
+                )
+                if onvif_uri:
+                    rtsp_url = onvif_uri
+                    logger.info(f"✅ ONVIF URI kullanılıyor (detection): kanal {channel}")
+            except Exception as onvif_err:
+                logger.debug(f"ℹ️ ONVIF URI alınamadı, XM fallback: {onvif_err}")
+
+            # Fallback: XM/Dahua style URL
+            if not rtsp_url:
+                rtsp_url = (
+                    f"rtsp://{dvr_system['ip_address']}:{dvr_system.get('rtsp_port', 554)}"
+                    f"/user={safe_username}&password={safe_password}"
+                    f"&channel={channel}&stream=0.sdp"
+                )
             
             # Resolve sector/detection_mode from company configuration when not provided
             if not detection_mode:

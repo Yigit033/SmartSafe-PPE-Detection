@@ -13,6 +13,7 @@ from blueprints.camera import create_blueprint as create_camera_bp
 from blueprints.detection import create_blueprint as create_detection_bp
 from blueprints.report import create_blueprint as create_report_bp
 from blueprints.subscription import create_blueprint as create_subscription_bp
+from blueprints.onvif import create_blueprint as create_onvif_bp
 
 
 def register_all_blueprints(api):
@@ -28,6 +29,8 @@ def register_all_blueprints(api):
         create_detection_bp(api),
         create_report_bp(api),
         create_subscription_bp(api),
+        create_onvif_bp(api),
     ]
     for bp in blueprints:
         api.app.register_blueprint(bp)
+

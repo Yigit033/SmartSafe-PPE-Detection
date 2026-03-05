@@ -82,6 +82,9 @@ loguru>=0.7.2
 # Production Deployment Support
 python-multipart>=0.0.6  # File upload support
 
+# ONVIF Camera Integration (Enterprise)
+onvif-zeep>=0.2.12  # ONVIF protocol for IP camera auto-discovery & management
+
 # Note: The following packages are built-in to Python 3.7+ and don't need to be installed:
 # - concurrent.futures (built-in since Python 3.2)
 # - dataclasses (built-in since Python 3.7)

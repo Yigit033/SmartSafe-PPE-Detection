@@ -55,21 +55,62 @@ class IPCameraDiscovery:
         }
     
     def scan_network(self, network_range="192.168.1.0/24", timeout=2):
-        """Ağı tarar ve IP kameraları bulur"""
+        """Ağı tarar ve IP kameraları bulur.
+
+        Strateji:
+        1. ONVIF WS-Discovery (multicast, ~3-4 saniye) — ONVIF destekleyen cihazlar
+        2. Paralel port tarama (kalan IP'ler) — ONVIF desteklemeyen cihazlar
+        """
         try:
             network = ipaddress.IPv4Network(network_range, strict=False)
             self.total_ips = len(list(network.hosts()))
             self.scan_progress = 0
             self.discovered_cameras = []
-            
+            onvif_found_ips = set()
+
             print(f"🔍 Ağ taranıyor: {network_range} ({self.total_ips} IP)")
             start_time = time.time()
-            
-            # Paralel tarama için ThreadPool kullan
+
+            # ── Phase 1: ONVIF WS-Discovery (fast path) ─────────────────
+            try:
+                from integrations.cameras.onvif_discovery import get_onvif_manager
+                onvif_mgr = get_onvif_manager()
+                onvif_devices = onvif_mgr.discover_devices(timeout=min(timeout, 4.0))
+
+                for dev in onvif_devices:
+                    ip = dev['ip']
+                    onvif_found_ips.add(ip)
+                    camera_info = {
+                        'ip': ip,
+                        'port': 554,  # Standard RTSP port
+                        'brand': dev.get('manufacturer', 'ONVIF Device'),
+                        'model': dev.get('model', 'IP Camera'),
+                        'rtsp_url': f'rtsp://{ip}:554/stream',
+                        'resolution': 'Unknown',
+                        'status': 'online',
+                        'auth_required': True,
+                        'detected_ports': [dev.get('port', 80), 554],
+                        'discovery_method': 'onvif',
+                        'onvif_port': dev.get('port', 80),
+                    }
+                    self.discovered_cameras.append(camera_info)
+                    print(f"📹 ONVIF kamera bulundu: {ip} - {camera_info['brand']}")
+
+                if onvif_devices:
+                    print(f"✅ ONVIF keşfi: {len(onvif_devices)} cihaz bulundu")
+            except Exception as e:
+                print(f"ℹ️ ONVIF keşfi atlandı: {e}")
+
+            # ── Phase 2: Port scan for remaining IPs ─────────────────────
+            remaining_hosts = [
+                str(ip) for ip in network.hosts()
+                if str(ip) not in onvif_found_ips
+            ]
+
             with ThreadPoolExecutor(max_workers=50) as executor:
                 futures = {
-                    executor.submit(self.scan_ip, str(ip), timeout): str(ip) 
-                    for ip in network.hosts()
+                    executor.submit(self.scan_ip, ip, timeout): ip
+                    for ip in remaining_hosts
                 }
                 
                 for future in as_completed(futures):
@@ -90,7 +131,8 @@ class IPCameraDiscovery:
                 'cameras': self.discovered_cameras,
                 'scan_time': f"{scan_time:.1f} saniye",
                 'total_scanned': self.total_ips,
-                'found_count': len(self.discovered_cameras)
+                'found_count': len(self.discovered_cameras),
+                'onvif_count': len(onvif_found_ips),
             }
             
         except Exception as e:

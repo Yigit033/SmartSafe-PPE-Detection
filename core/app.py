@@ -2601,9 +2601,9 @@ smartsafe_requests_total 100
                         if detection_count % 10 == 0:
                             self.save_detection_to_db(detection_data)
                         
-                        # İhlal varsa veritabanına kaydet (normalize edilmiş dict listesiyle)
-                        if normalized_ppe_violations:
-                            self.save_violations_to_db(company_id, camera_id, normalized_ppe_violations)
+                        # NOT: İhlal kayıtları ViolationTracker tarafından event-based olarak
+                        # yukarıda (tracker_new_violations) zaten DB'ye yazılıyor.
+                        # Burada tekrar yazmak duplicate kayıt oluşturur — kaldırıldı.
                     
                     time.sleep(0.01)  # CPU'yu rahatlatmak için
                 else:

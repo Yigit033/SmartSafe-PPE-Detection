@@ -393,15 +393,15 @@ def create_blueprint(api):
                             'stream_id': stream_id
                         })
                     else:
-                                if retry < max_frame_retries - 1:
-                                    logger.warning(f"⚠️ Frame not available, retrying... (attempt {retry + 1}/{max_frame_retries})")
-                                    time.sleep(0.5)
-                                else:
-                                    logger.error(f"❌ No frame available after {max_frame_retries} attempts: {stream_id}")
-                                    return jsonify({
-                                        'success': False,
-                                        'error': 'No frame available'
-                                    }), 404
+                        if retry < max_frame_retries - 1:
+                            logger.warning(f"⚠️ Frame not available, retrying... (attempt {retry + 1}/{max_frame_retries})")
+                            time.sleep(0.5)
+                        else:
+                            logger.error(f"❌ No frame available after {max_frame_retries} attempts: {stream_id}")
+                            return jsonify({
+                                'success': False,
+                                'error': 'No frame available'
+                            }), 404
                 except Exception as frame_error:
                     logger.error(f"❌ Frame retrieval error: {frame_error}")
                     if retry < max_frame_retries - 1:

@@ -33,6 +33,9 @@ class DVRStreamHandler:
         self._sh17_manager = None   # Lazy init at first use
         self._pose_detector = None  # Lazy init at first use
 
+        # ONVIF URI cache — cihazdan alınan kesin URI'ler saklanır (tahmine gerek kalmaz)
+        self._onvif_uri_cache: Dict[str, str] = {}
+
 
         # DVR brand-specific URL patterns
         self.dvr_url_patterns = {
@@ -121,7 +124,10 @@ class DVRStreamHandler:
             # Test multiple channels for brand detection
             safe_username = urllib.parse.quote(username)
             safe_password = urllib.parse.quote(password)
-            
+
+            test_channels = [1, 2]  # Kanal 1 ve 2 yeterli — çoğu DVR'da bu kanallar aktif
+            test_urls = []
+
             for channel in test_channels:
                 test_urls.extend([
                     f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}/ISAPI/Streaming/channels/{channel}01",
@@ -133,11 +139,14 @@ class DVRStreamHandler:
                 ])
             
             for url in test_urls:
+                cap = None
                 try:
                     cap = cv2.VideoCapture(url)
                     cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
+                    cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 2000)
                     if cap.isOpened():
                         cap.release()
+                        cap = None
                         if 'stream=0.sdp' in url and '/user=' in url:
                             logger.info(f"✅ Detected XM DVR via URL: {url}")
                             return 'xm'
@@ -152,6 +161,9 @@ class DVRStreamHandler:
                             return 'generic'
                 except Exception as e:
                     continue
+                finally:
+                    if cap is not None:
+                        cap.release()
             
             # Default to generic
             logger.info("ℹ️ Brand detection failed, using generic")
@@ -280,43 +292,80 @@ class DVRStreamHandler:
                                   rtsp_port: int, max_channels: int = 32) -> List[int]:
         """Probe DVR to detect which channel numbers are available.
 
-        Tries multiple brand-specific URL patterns per channel and returns
-        a list of channel numbers that successfully yielded at least one frame.
+        Strategy (ONVIF-first, RTSP-fallback):
+        1. Try ONVIF channel enumeration — instant, ~2 seconds
+        2. Fallback: parallel RTSP probe with ThreadPoolExecutor — ~30 seconds
         """
         available_channels: List[int] = []
 
+        # ── Phase 1: ONVIF Channel Enumeration (fast path) ──────────────
+        try:
+            from integrations.cameras.onvif_discovery import get_onvif_manager
+            onvif_mgr = get_onvif_manager()
+            onvif_channels = onvif_mgr.enumerate_channels(
+                ip_address, port=80, username=username, password=password
+            )
+            if onvif_channels:
+                available_channels = [ch['channel_number'] for ch in onvif_channels
+                                      if ch.get('stream_uri')]
+                if available_channels:
+                    logger.info(
+                        f"✅ ONVIF kanal keşfi: {ip_address} — "
+                        f"{len(available_channels)} kanal bulundu (anında)"
+                    )
+                    # Cache ONVIF URIs for later use by start_stream
+                    for ch in onvif_channels:
+                        if ch.get('stream_uri'):
+                            cache_key = f"{ip_address}:{ch['channel_number']}"
+                            self._onvif_uri_cache[cache_key] = ch['stream_uri']
+                    return sorted(available_channels)
+        except Exception as e:
+            logger.debug(f"ℹ️ ONVIF kanal keşfi başarısız, RTSP probe'a geçiliyor: {e}")
+
+        # ── Phase 2: Parallel RTSP Probe (fallback) ─────────────────────
         try:
             if not self.test_network_connectivity(ip_address, rtsp_port):
                 logger.error(f"❌ No network connectivity to {ip_address}:{rtsp_port}")
                 return available_channels
 
-            for channel in range(1, max_channels + 1):
-                try:
-                    urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel)
-                    found = False
-                    for url in urls[:8]:  # limit attempts per channel for speed
-                        cap = None
-                        try:
-                            cap = cv2.VideoCapture(url)
-                            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
-                            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
-                            if cap.isOpened():
-                                ret, frame = cap.read()
-                                if ret and frame is not None:
-                                    available_channels.append(channel)
-                                    found = True
-                                    logger.info(f"✅ Channel probe success: {channel} via {url}")
-                                    break
-                        except Exception:
-                            pass
-                        finally:
-                            if cap:
-                                cap.release()
-                    if not found:
-                        logger.debug(f"ℹ️ Channel probe failed: {channel}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Channel probe error for channel {channel}: {e}")
-                    continue
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def _probe_channel(channel: int) -> int:
+                """Probe a single channel — returns channel number or -1."""
+                urls = self.generate_rtsp_urls(
+                    ip_address, username, password, rtsp_port, channel
+                )
+                for url in urls[:6]:  # limit attempts per channel
+                    cap = None
+                    try:
+                        cap = cv2.VideoCapture(url)
+                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
+                        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
+                        if cap.isOpened():
+                            ret, frame = cap.read()
+                            if ret and frame is not None:
+                                logger.info(f"✅ Channel probe success: {channel} via {url}")
+                                return channel
+                    except Exception:
+                        pass
+                    finally:
+                        if cap:
+                            cap.release()
+                return -1
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {
+                    executor.submit(_probe_channel, ch): ch
+                    for ch in range(1, max_channels + 1)
+                }
+                for future in as_completed(futures, timeout=60):
+                    try:
+                        result = future.result()
+                        if result > 0:
+                            available_channels.append(result)
+                    except Exception:
+                        continue
+
         except Exception as e:
             logger.error(f"❌ Channel detection error: {e}")
 
@@ -340,8 +389,20 @@ class DVRStreamHandler:
                     password: str = None, rtsp_port: int = None,
                     channel_number: int = None,
                     sector: Optional[str] = None) -> bool:
-        """Start streaming with enhanced URL handling"""
+        """Start streaming with ONVIF-first URL resolution + fallback to guessed URL."""
         try:
+            # ── ONVIF URI resolution: prefer device-provided URI ─────────
+            effective_url = rtsp_url
+            if ip_address and channel_number:
+                onvif_uri = self._try_onvif_stream_uri(
+                    ip_address, username, password, channel_number
+                )
+                if onvif_uri:
+                    effective_url = onvif_uri
+                    logger.info(
+                        f"✅ ONVIF URI kullanılıyor: {stream_id} kanal {channel_number}"
+                    )
+
             if stream_id in self.active_streams:
                 existing_status = self.active_streams[stream_id].get('status')
                 if existing_status == 'active':
@@ -354,7 +415,7 @@ class DVRStreamHandler:
                     # Restart stream if present but not active
                     logger.info(f"🔄 Stream {stream_id} is in status '{existing_status}', restarting...")
                     self.active_streams[stream_id].update({
-                        'rtsp_url': rtsp_url,
+                        'rtsp_url': effective_url,
                         'status': 'starting',
                         'start_time': time.time(),
                         'frame_count': 0,
@@ -370,7 +431,7 @@ class DVRStreamHandler:
                         self.frame_buffers[stream_id] = []
                     thread = threading.Thread(
                         target=self._stream_worker,
-                        args=(stream_id, rtsp_url, ip_address, username, password, rtsp_port, channel_number),
+                        args=(stream_id, effective_url, ip_address, username, password, rtsp_port, channel_number),
                         daemon=True
                     )
                     thread.start()
@@ -378,7 +439,7 @@ class DVRStreamHandler:
                 
             # Initialize stream info
             self.active_streams[stream_id] = {
-                'rtsp_url': rtsp_url,
+                'rtsp_url': effective_url,
                 'status': 'starting',
                 'start_time': time.time(),
                 'frame_count': 0,
@@ -403,7 +464,7 @@ class DVRStreamHandler:
             # Start streaming thread
             thread = threading.Thread(
                 target=self._stream_worker,
-                args=(stream_id, rtsp_url, ip_address, username, password, rtsp_port, channel_number),
+                args=(stream_id, effective_url, ip_address, username, password, rtsp_port, channel_number),
                 daemon=True
             )
             thread.start()
@@ -414,6 +475,31 @@ class DVRStreamHandler:
         except Exception as e:
             logger.error(f"❌ Start stream error: {e}")
             return False
+
+    def _try_onvif_stream_uri(self, ip_address: str, username: str,
+                              password: str, channel_number: int) -> Optional[str]:
+        """Try to get stream URI via ONVIF. Returns URI or None on failure."""
+        # Check cache first
+        cache_key = f"{ip_address}:{channel_number}"
+        cached = self._onvif_uri_cache.get(cache_key)
+        if cached:
+            return cached
+
+        try:
+            from integrations.cameras.onvif_discovery import get_onvif_manager
+            onvif_mgr = get_onvif_manager()
+            # profile_index = channel_number - 1 (ONVIF profiles are 0-indexed)
+            uri = onvif_mgr.get_stream_uri(
+                ip_address, port=80,
+                username=username, password=password,
+                profile_index=max(0, channel_number - 1),
+            )
+            if uri:
+                self._onvif_uri_cache[cache_key] = uri
+            return uri
+        except Exception as e:
+            logger.debug(f"ONVIF URI alınamadı ({ip_address} ch{channel_number}): {e}")
+            return None
     
     def stop_stream(self, stream_id: str) -> bool:
         """Stop streaming"""
@@ -553,9 +639,17 @@ class DVRStreamHandler:
     def capture_single_frame(self, ip_address: str, username: str, password: str,
                               rtsp_port: int, channel_number: int) -> Optional[str]:
         """Open RTSP briefly, grab a single frame, and close (base64). Designed to be fast and resilient for previews."""
+        # ONVIF cache: if we already resolved this channel's URI, try it first
+        candidates = []
+        cache_key = f"{ip_address}:{channel_number}"
+        cached_uri = self._onvif_uri_cache.get(cache_key)
+        if cached_uri:
+            candidates.append(cached_uri)
+
         urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number)
         # Try a very small subset first for speed (most likely to work)
-        candidates = urls[:4]
+        candidates.extend(urls[:4])
+
         for url in candidates:
             cap = None
             try:
