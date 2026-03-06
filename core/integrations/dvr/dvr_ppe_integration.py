@@ -22,30 +22,114 @@ from detection.snapshot_manager import get_snapshot_manager
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 3.1  RTSP URL TEMPLATES — Marka bazlı doğru format otomatik seçilir
+# ─────────────────────────────────────────────────────────────────────────────
+RTSP_TEMPLATES = {
+    # Büyük NVR/DVR markalar
+    'hikvision': 'rtsp://{user}:{pwd}@{ip}:{port}/Streaming/Channels/{ch:03d}01',
+    'dahua':     'rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=0',
+    'axis':      'rtsp://{user}:{pwd}@{ip}:{port}/axis-media/media.amp',
+    'samsung':   'rtsp://{user}:{pwd}@{ip}:{port}/profile3/media.smp',
+    'bosch':     'rtsp://{user}:{pwd}@{ip}:{port}/video?inst=1&h26x=4',
+    'hanwha':    'rtsp://{user}:{pwd}@{ip}:{port}/profile3/media.smp',
+    'reolink':   'rtsp://{user}:{pwd}@{ip}:{port}/h264Preview_0{ch:02d}_main',
+    'tp_link':   'rtsp://{user}:{pwd}@{ip}:{port}/stream1',
+    # XM tabanlı ucuz DVR'lar (varsayılan)
+    'xm':        'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=0.sdp',
+    'generic':   'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=0.sdp',
+}
+
+# Birden fazla URL formatı denenecek markalar (bazı ürünler karışık firmware kullanır)
+RTSP_FALLBACKS = {
+    'hikvision': [
+        'rtsp://{user}:{pwd}@{ip}:{port}/Streaming/Channels/{ch:03d}01',
+        'rtsp://{user}:{pwd}@{ip}:{port}/h264/ch{ch}/main/av_stream',
+        'rtsp://{user}:{pwd}@{ip}:{port}/Streaming/channels/{ch}01',
+    ],
+    'dahua': [
+        'rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=0',
+        'rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=1',
+    ],
+    'generic': [
+        'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=0.sdp',
+        'rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=0',
+        'rtsp://{user}:{pwd}@{ip}:{port}/Streaming/Channels/{ch:03d}01',
+        'rtsp://{user}:{pwd}@{ip}:{port}/h264/ch{ch}/main/av_stream',
+    ],
+}
+
+
+def get_rtsp_url_for_brand(
+    ip: str, port: int, user: str, pwd: str, channel: int,
+    brand: str = 'generic'
+) -> str:
+    """
+    Marka bazlı RTSP URL döndürür.
+
+    Args:
+        ip: IP adresi
+        port: RTSP portu (genellikle 554)
+        user, pwd: Kimlik bilgileri (URL-encode edilmemiş ham değer)
+        channel: Kanal numarası (1-tabanlı)
+        brand: dvr_type alanından gelen marka anahtarı (küçük harf)
+
+    Returns:
+        Hazır RTSP URL string'i
+    """
+    import urllib.parse
+    _u = urllib.parse.quote(user, safe='')
+    _p = urllib.parse.quote(pwd, safe='')
+    brand_key = brand.lower().replace('-', '_').replace(' ', '_')
+    template = RTSP_TEMPLATES.get(brand_key, RTSP_TEMPLATES['generic'])
+    return template.format(ip=ip, port=port, user=_u, pwd=_p, ch=channel)
+
+
+def get_rtsp_url_fallbacks(
+    ip: str, port: int, user: str, pwd: str, channel: int,
+    brand: str = 'generic'
+) -> list:
+    """Bir marka için denenecek RTSP URL listesi döndürür."""
+    import urllib.parse
+    _u = urllib.parse.quote(user, safe='')
+    _p = urllib.parse.quote(pwd, safe='')
+    brand_key = brand.lower().replace('-', '_').replace(' ', '_')
+    templates = RTSP_FALLBACKS.get(brand_key) or RTSP_FALLBACKS['generic']
+    return [t.format(ip=ip, port=port, user=_u, pwd=_p, ch=channel) for t in templates]
+
+
 class DVRStreamProcessor:
     """DVR RTSP stream'lerini PPE detection için işler"""
     
     def __init__(self):
         self.active_streams = {}  # {stream_id: cv2.VideoCapture}
         self.detection_threads = {}  # {stream_id: Thread}
-        self.results_queue = queue.Queue()
+        self.results_queue = queue.Queue(maxsize=200)  # Bounded queue — bellek dolmasını önler
         self.ppe_manager = PPEDetectionManager()
         self.db_adapter = get_db_adapter()
-        
+        self._lock = threading.Lock()  # Thread-safe dict operasyonları için
+        self.sh17_manager = None  # EnhancedPPEDetectionManager tarafından set edilir
+
         # Performance settings
         self.frame_skip = 3  # Her 3 frame'de bir detection
         self.max_frames_per_second = 10  # Maksimum FPS
         self.detection_confidence = 0.5
-        
+
         logger.info("✅ DVR Stream Processor initialized")
     
     def start_dvr_detection(self, dvr_id: str, channel: int, company_id: str, detection_mode: Optional[str] = None, use_sh17: bool = False) -> Dict[str, Any]:
         """DVR kanalından PPE detection başlatır"""
-        
+
         try:
             # Stream ID oluştur
             stream_id = f"dvr_{dvr_id}_ch{channel:02d}"
-            
+
+            # Zaten çalışıyorsa yeniden başlatma
+            with self._lock:
+                if stream_id in self.detection_threads and self.detection_threads[stream_id].is_alive():
+                    logger.warning(f"⚠️ DVR detection already running: {stream_id}")
+                    return {"success": True, "stream_id": stream_id, "already_running": True}
+
             # RTSP URL oluştur (şirket/dvr bazlı dinamik bilgilerle)
             dvr_system = self.db_adapter.get_dvr_system(company_id, dvr_id)
             if not dvr_system:
@@ -72,14 +156,19 @@ class DVRStreamProcessor:
             except Exception as onvif_err:
                 logger.debug(f"ℹ️ ONVIF URI alınamadı, XM fallback: {onvif_err}")
 
-            # Fallback: XM/Dahua style URL
+            # Fallback: marka bazlı RTSP URL (XM sabit format kaldırıldı)
             if not rtsp_url:
-                rtsp_url = (
-                    f"rtsp://{dvr_system['ip_address']}:{dvr_system.get('rtsp_port', 554)}"
-                    f"/user={safe_username}&password={safe_password}"
-                    f"&channel={channel}&stream=0.sdp"
+                brand = dvr_system.get('dvr_type', 'generic') or 'generic'
+                rtsp_url = get_rtsp_url_for_brand(
+                    ip=dvr_system['ip_address'],
+                    port=int(dvr_system.get('rtsp_port', 554)),
+                    user=dvr_system['username'],
+                    pwd=dvr_system['password'],
+                    channel=channel,
+                    brand=brand
                 )
-            
+                logger.info(f"🏷️ Brand RTSP URL ({brand}): {rtsp_url}")
+
             # Resolve sector/detection_mode from company configuration when not provided
             if not detection_mode:
                 try:
@@ -91,105 +180,129 @@ class DVRStreamProcessor:
                             detection_mode = company[4] or detection_mode
                 except Exception as sec_err:
                     logger.warning(f"⚠️ DVR sector resolve failed for company {company_id}: {sec_err}")
+
+            detection_mode = detection_mode or 'construction'
             logger.info(f"🎥 Starting DVR detection: {stream_id} - {rtsp_url}")
-            logger.info(f"🔧 Detection System: {'SH17' if use_sh17 else 'Klasik'}")
-            
+            logger.info(f"🔧 Detection System: {'SH17' if use_sh17 and self.sh17_manager else 'Klasik'}")
+
             # Detection thread'i başlat
             detection_thread = threading.Thread(
                 target=self.process_dvr_stream,
                 args=(stream_id, rtsp_url, company_id, detection_mode, use_sh17),
-                daemon=True
+                daemon=True,
+                name=f"dvr-detection-{stream_id}"
             )
-            
-            self.detection_threads[stream_id] = detection_thread
+
+            with self._lock:
+                self.detection_threads[stream_id] = detection_thread
             detection_thread.start()
-            
+
             # Database'e detection session kaydet
             self.save_detection_session(stream_id, dvr_id, company_id, channel, detection_mode)
-            
+
             return {
                 "success": True,
                 "stream_id": stream_id,
                 "rtsp_url": rtsp_url,
                 "channel": channel,
                 "detection_mode": detection_mode,
-                "detection_system": "SH17" if use_sh17 else "Klasik"
+                "detection_system": "SH17" if (use_sh17 and self.sh17_manager) else "Klasik"
             }
-            
+
         except Exception as e:
             logger.error(f"❌ DVR detection start error: {e}")
             return {"success": False, "error": str(e)}
     
     def process_dvr_stream(self, stream_id: str, rtsp_url: str, company_id: str, detection_mode: str, use_sh17: bool = False):
         """RTSP stream'i işler ve PPE detection yapar"""
-        
+
+        # sh17 gerçekten kullanılabilir mi kontrol et
+        _use_sh17 = use_sh17 and (self.sh17_manager is not None)
         logger.info(f"🔄 Processing DVR stream: {stream_id}")
-        logger.info(f"🔧 Detection System: {'SH17' if use_sh17 else 'Klasik'}")
-        
+        logger.info(f"🔧 Detection System: {'SH17' if _use_sh17 else 'Klasik'}")
+
+        ALTERNATIVE_URL_SUFFIXES = [
+            f"/cam/realmonitor?channel={stream_id.split('ch')[-1].lstrip('0') or '1'}&subtype=0",
+        ]
+
+        def _open_stream(url: str) -> Optional[cv2.VideoCapture]:
+            """RTSP stream'i açar — başarısızsa fallback URL'leri dener."""
+            cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+            if cap.isOpened():
+                return cap
+            # Fallback URL'leri dene
+            for alt in [
+                url.replace('&', '?'),
+                url.replace('stream=0.sdp', 'stream=1'),
+                url.split('&stream')[0],
+            ]:
+                cap2 = cv2.VideoCapture(alt, cv2.CAP_FFMPEG)
+                if cap2.isOpened():
+                    logger.info(f"✅ Alternatif URL ile bağlandı: {alt}")
+                    return cap2
+                cap2.release()
+            return None
+
         try:
-            # 🎯 PRODUCTION-GRADE: RTSP stream açma - Fallback mekanizması ile
-            cap = cv2.VideoCapture(rtsp_url)
-            
-            if not cap.isOpened():
-                logger.warning(f"⚠️ Failed to open RTSP stream with URL: {rtsp_url}")
-                logger.info(f"🔄 Trying alternative RTSP formats...")
-                
-                # Alternative RTSP URLs'leri dene
-                alternative_urls = [
-                    rtsp_url.replace('&', '?'),  # & yerine ? kullan
-                    rtsp_url.replace('stream=0.sdp', 'stream=1'),  # stream parametresi değiştir
-                    rtsp_url.split('&stream')[0],  # stream parametresini kaldır
-                ]
-                
-                for alt_url in alternative_urls:
-                    logger.info(f"🔄 Trying alternative URL: {alt_url}")
-                    cap = cv2.VideoCapture(alt_url)
-                    if cap.isOpened():
-                        logger.info(f"✅ Connected with alternative URL: {alt_url}")
-                        rtsp_url = alt_url
-                        break
-                
-                if not cap.isOpened():
-                    logger.error(f"❌ Failed to open RTSP stream with all formats: {rtsp_url}")
-                    logger.error(f"❌ DVR may not support RTSP or credentials are incorrect")
-                    return
-            
-            # Stream'i active streams'e ekle
-            self.active_streams[stream_id] = cap
-            
+            cap = _open_stream(rtsp_url)
+            if cap is None:
+                logger.error(f"❌ Tüm RTSP formatları başarısız — detection başlatılamadı: {stream_id}")
+                with self._lock:
+                    self.detection_threads.pop(stream_id, None)
+                return
+
+            with self._lock:
+                self.active_streams[stream_id] = cap
+
             frame_count = 0
             detection_count = 0
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 10  # Bu kadar art arda hata olursa yeniden bağlan
             start_time = time.time()
-            
-            logger.info(f"✅ RTSP stream opened successfully: {stream_id}")
-            
-            while stream_id in self.detection_threads:
+
+            logger.info(f"✅ RTSP stream açıldı: {stream_id}")
+
+            while True:
+                # Stop sinyali kontrolü (thread-safe)
+                with self._lock:
+                    running = stream_id in self.detection_threads
+                if not running:
+                    break
+
                 try:
-                    # Frame oku
                     ret, frame = cap.read()
                     if not ret:
-                        logger.warning(f"⚠️ Failed to read frame from {stream_id}")
-                        time.sleep(1)
+                        consecutive_failures += 1
+                        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                            logger.warning(f"⚠️ {stream_id}: {consecutive_failures} art arda frame hatası — stream yeniden açılıyor...")
+                            cap.release()
+                            cap = _open_stream(rtsp_url)
+                            if cap is None:
+                                logger.error(f"❌ {stream_id}: Yeniden bağlantı başarısız. Detection durduruluyor.")
+                                break
+                            with self._lock:
+                                self.active_streams[stream_id] = cap
+                            consecutive_failures = 0
+                            logger.info(f"✅ {stream_id}: Stream yeniden açıldı.")
+                        else:
+                            time.sleep(0.5)
                         continue
-                    
+
+                    consecutive_failures = 0  # Başarılı okumada sıfırla
                     frame_count += 1
-                    
+
                     # Frame skip uygula
                     if frame_count % self.frame_skip != 0:
                         continue
-                    
-                    # 🎯 PPE Detection yap - PRODUCTION-GRADE SH17 veya Klasik sistem
+
+                    # 🎯 PPE Detection yap — SH17 veya Klasik
                     detection_start = time.time()
                     try:
-                        if use_sh17 and hasattr(self, 'sh17_manager'):
-                            # 🎯 PRODUCTION-GRADE SH17 detection - Lowered confidence threshold
+                        if _use_sh17:
                             ppe_result = self.sh17_manager.detect_ppe(frame, detection_mode, confidence=0.25)
                             detection_time = time.time() - detection_start
-                            
-                            # SH17 sonuçlarını klasik formata çevir (production-grade)
                             ppe_result = self._convert_sh17_to_classic_format_production(ppe_result, detection_mode, frame)
                         else:
-                            # 🎯 PRODUCTION-GRADE Klasik detection
                             ppe_result = self.ppe_manager.detect_ppe_comprehensive(frame, detection_mode)
                             detection_time = time.time() - detection_start
                         
@@ -343,16 +456,20 @@ class DVRStreamProcessor:
                 except Exception as e:
                     logger.error(f"❌ Stream processing error for {stream_id}: {e}")
                     time.sleep(1)
-            
+
             # Cleanup
             cap.release()
-            if stream_id in self.active_streams:
-                del self.active_streams[stream_id]
-            
+            with self._lock:
+                self.active_streams.pop(stream_id, None)
+                self.detection_threads.pop(stream_id, None)  # Temizlik
+
             logger.info(f"🛑 DVR stream processing stopped: {stream_id}")
-            
+
         except Exception as e:
-            logger.error(f"❌ DVR stream processing error: {e}")
+            logger.error(f"❌ DVR stream processing fatal error: {e}")
+            with self._lock:
+                self.active_streams.pop(stream_id, None)
+                self.detection_threads.pop(stream_id, None)
     
     def _convert_sh17_to_classic_format_production(self, sh17_result: List[Dict], detection_mode: str, frame: np.ndarray) -> Dict[str, Any]:
         """🎯 PRODUCTION-GRADE: SH17 sonuçlarını klasik PPE formatına çevirir - Advanced spatial reasoning ile"""
@@ -526,33 +643,39 @@ class DVRStreamProcessor:
         }
     
     def stop_dvr_detection(self, stream_id: str) -> Dict[str, Any]:
-        """DVR detection'ı durdurur"""
-        
+        """DVR detection'ı durdurur (thread-safe)"""
+
         try:
             logger.info(f"🛑 Stopping DVR detection: {stream_id}")
-            
-            # Thread'i durdur
-            if stream_id in self.detection_threads:
-                del self.detection_threads[stream_id]
-            
+
+            # Detection thread'ini durdur — dict'ten sil, thread while döngüsünden çıkar
+            thread_to_join = None
+            with self._lock:
+                thread_to_join = self.detection_threads.pop(stream_id, None)
+
+            # Thread'in durmasını bekle (max 3 saniye)
+            if thread_to_join and thread_to_join.is_alive():
+                thread_to_join.join(timeout=3.0)
+
             # Stream'i kapat
-            if stream_id in self.active_streams:
-                cap = self.active_streams[stream_id]
+            with self._lock:
+                cap = self.active_streams.pop(stream_id, None)
+            if cap:
                 cap.release()
-                del self.active_streams[stream_id]
-            
+
             # Database'de session'ı güncelle
             self.update_detection_session(stream_id, 'stopped')
-            
+
             return {"success": True, "stream_id": stream_id}
-            
+
         except Exception as e:
             logger.error(f"❌ Stop DVR detection error: {e}")
             return {"success": False, "error": str(e)}
     
     def get_active_detections(self) -> List[str]:
-        """Aktif detection'ları döndürür"""
-        return list(self.detection_threads.keys())
+        """Aktif detection'ları döndürür (thread-safe)"""
+        with self._lock:
+            return [sid for sid, t in self.detection_threads.items() if t.is_alive()]
     
     def get_detection_results(self, stream_id: str, limit: int = 50) -> List[Dict]:
         """Detection sonuçlarını döndürür"""
@@ -618,42 +741,60 @@ class EnhancedPPEDetectionManager:
     def __init__(self):
         self.ppe_manager = PPEDetectionManager()
         self.dvr_processor = DVRStreamProcessor()
-        
+        self.sh17_manager = None
+        self.sh17_available = False
+
         # SH17 Model Manager entegrasyonu
         try:
             from models.sh17_model_manager import SH17ModelManager
             self.sh17_manager = SH17ModelManager()
             self.sh17_manager.load_models()
             self.sh17_available = True
-            logger.info("✅ SH17 Model Manager entegre edildi")
+            # DVRStreamProcessor'a da sh17_manager'ı ver — artık DVR stream'leri de SH17 kullanır
+            self.dvr_processor.sh17_manager = self.sh17_manager
+            logger.info("✅ SH17 Model Manager entegre edildi (DVR stream processor dahil)")
         except Exception as e:
             logger.warning(f"⚠️ SH17 Model Manager yüklenemedi: {e}")
             self.sh17_available = False
         
     def start_dvr_ppe_detection(self, dvr_id: str, channels: List[int], company_id: str, detection_mode: str = 'construction') -> Dict[str, Any]:
         """Birden fazla DVR kanalında PPE detection başlatır"""
-        
+
+        # Kapasite kontrolü — maksimum 64 eş zamanlı DVR kanalı
+        MAX_DVR_CHANNELS = 64
+        current_active = len(self.dvr_processor.get_active_detections())
+        if current_active + len(channels) > MAX_DVR_CHANNELS:
+            return {
+                "success": False,
+                "error": f"Maksimum eş zamanlı DVR kanal limitine ulaşıldı ({MAX_DVR_CHANNELS}). Şu an {current_active} kanal aktif.",
+                "active_channels": current_active,
+                "max_channels": MAX_DVR_CHANNELS
+            }
+
         # SH17 kullanımını kontrol et
-        use_sh17 = self.sh17_available and detection_mode in ['construction', 'manufacturing', 'chemical', 'food_beverage', 'warehouse_logistics', 'energy', 'petrochemical', 'marine_shipyard', 'aviation']
-        
+        use_sh17 = self.sh17_available and detection_mode in [
+            'construction', 'manufacturing', 'chemical', 'food_beverage',
+            'warehouse_logistics', 'energy', 'petrochemical', 'marine_shipyard', 'aviation'
+        ]
+
         if use_sh17:
             logger.info(f"🎯 SH17 detection mode aktif: {detection_mode}")
         else:
             logger.info(f"🔄 Klasik detection mode: {detection_mode}")
-        
+
         active_detections = []
-        
+
         for channel in channels:
             result = self.dvr_processor.start_dvr_detection(
                 dvr_id, channel, company_id, detection_mode, use_sh17
             )
-            
+
             if result['success']:
                 active_detections.append(result['stream_id'])
                 logger.info(f"✅ DVR detection started: {result['stream_id']} - {'SH17' if use_sh17 else 'Klasik'}")
             else:
                 logger.error(f"❌ DVR detection failed for channel {channel}: {result.get('error', 'Unknown error')}")
-        
+
         return {
             "success": len(active_detections) > 0,
             "active_detections": active_detections,
