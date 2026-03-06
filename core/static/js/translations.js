@@ -22,46 +22,46 @@ const translations = {
         // Features Section
         features_title: "Features",
         features_subtitle: "Advanced workplace safety capabilities",
-        
+
         // Features Tab Navigation
         performance: "Performance",
         ai: "AI Technology",
         monitoring: "Monitoring",
         integration: "Integration",
         security: "Security",
-        
+
         // Performance Tab
         high_performance: "High Performance",
         high_performance_desc: "Real-time detection with 24.7 frames per second processing capability.",
         gpu_optimization: "GPU Optimization",
         nvidia_cuda: "NVIDIA CUDA Support",
         low_latency: "Low Latency Processing",
-        
+
         scalability: "Scalability",
         scalability_desc: "Flexible system architecture that scales with your needs.",
         horizontal_vertical: "Horizontal & Vertical Scaling",
         multi_location: "Multi-Site Support",
         load_balancing: "Intelligent Load Balancing",
-        
+
         system_stability: "System Reliability",
         system_stability_desc: "Guaranteed uptime with uninterrupted operation.",
         auto_backup: "Automated Backup",
         fault_tolerance: "Fault Tolerance",
         continuous_work: "24/7 Operation",
-        
+
         // AI Tab
         ai_title: "Artificial Intelligence",
         ai_desc: "Precision detection powered by advanced deep learning models.",
         realtime_analysis: "Real-time Analysis",
         high_accuracy: "High Accuracy Detection",
         continuous_learning: "Continuous Learning",
-        
+
         smart_analytics: "Smart Analytics",
         smart_analytics_desc: "Advanced data analysis and predictive insights.",
         anomaly_detection: "Anomaly Detection",
         behavior_analysis: "Behavioral Analysis",
         predictive_maintenance: "Predictive Maintenance",
-        
+
         automation: "Automation",
         automation_desc: "Intelligent workflows and automated responses.",
         event_triggering: "Event-Based Triggers",
@@ -85,39 +85,39 @@ const translations = {
         custom_dashboards: "Custom Dashboards",
         excel_pdf_export: "Excel/PDF Export",
         trend_analysis: "Trend Analysis",
-        
+
         // Integration Tab
         easy_integration: "Seamless Integration",
         easy_integration_desc: "Effortless integration with existing systems.",
         rest_api_support: "REST API Support",
         erp_integration: "ERP Integration",
         custom_integration: "Custom Integration Support",
-        
+
         cloud_support: "Cloud Support",
         cloud_support_desc: "Flexible cloud infrastructure and hybrid solutions.",
         aws_azure_gcp: "AWS/Azure/GCP Support",
         private_cloud: "Private Cloud Solutions",
         hybrid_configuration: "Hybrid Configuration",
-        
+
         support_247: "24/7 Support",
         support_247_desc: "Round-the-clock technical support and maintenance services.",
         live_support: "Live Support",
         remote_intervention: "Remote Assistance",
         periodic_maintenance: "Scheduled Maintenance",
-        
+
         // Security Tab
         advanced_security: "Advanced Security",
         advanced_security_desc: "Enterprise-grade data protection with highest security standards.",
         ssl_tls_encryption: "SSL/TLS Encryption",
         role_based_access: "Role-Based Access Control",
         data_backup: "Data Backup & Recovery",
-        
+
         user_management: "User Management",
         user_management_desc: "Comprehensive user authorization and access control.",
         multi_level_auth: "Multi-Level Authorization",
         activity_logs: "Activity Logging",
         sso_support: "Single Sign-On (SSO)",
-        
+
         data_security: "Data Security",
         data_security_desc: "End-to-end data security and regulatory compliance.",
         gdpr_compliance: "GDPR Compliance",
@@ -127,7 +127,7 @@ const translations = {
         // Sectors
         sectors_title: "Industry Solutions",
         sectors_subtitle: "Tailored safety solutions for every industry",
-        
+
         // Construction Sector
         construction: "Construction",
         helmet_detection: "Hard Hat Detection",
@@ -164,19 +164,19 @@ const translations = {
         hairnet_control: "Hair Net Compliance",
         hygiene_gloves: "Hygiene Gloves",
         apron_detection: "Apron Detection",
-        
+
         // Energy Sector
         energy: "Energy Sector",
         insulated_equipment: "Insulated Equipment",
         arc_flash_protection: "Arc Flash Protection",
         dielectric_ppe: "Dielectric PPE",
-        
+
         // Petrochemical
         petrochemical: "Petrochemical",
         gas_mask: "Gas Mask",
         chemical_hazard: "Chemical Hazard Protection",
         special_equipment: "Specialized Equipment",
-        
+
         // Aviation
         aviation: "Aviation",
         headset_control: "Headset Monitoring",
@@ -185,7 +185,7 @@ const translations = {
         // Benefits
         benefits_title: "Benefits",
         benefits_subtitle: "Why choose our solution",
-        
+
         // Benefits Tab Navigation
         financial: "Financial",
         operational: "Operational",
@@ -270,14 +270,14 @@ const translations = {
         message_placeholder: "Your Message",
         select_sector: "Select Industry",
         send: "Send Message",
-        
+
         // Contact Info
         contact_title: "Get in Touch",
         contact_subtitle: "Contact us for inquiries, quotes, or partnership opportunities. We'll respond promptly.",
         contact_email: "yigittilaver2000@gmail.com",
         contact_phone: "+90 (505) 020 20 95",
         contact_address: "Maslak, Istanbul",
-        
+
         // Legal Benefits
         legal_benefits: "Legal Compliance",
         legal_desc: "Solutions ensuring full regulatory compliance and streamlined legal processes",
@@ -292,7 +292,7 @@ const translations = {
 
         // Contact Form
         sector_placeholder: "Select Your Industry",
-        
+
         // Footer
         footer_description: "Transforming workplace safety with AI-powered industrial security solutions.",
         footer_contact: "Contact",
@@ -334,46 +334,46 @@ const translations = {
         // Features Section
         features_title: "Özellikler",
         features_subtitle: "İş güvenliği için gelişmiş özellikler",
-        
+
         // Features Tab Navigation
         performance: "Performans",
         ai: "Yapay Zeka",
         monitoring: "İzleme",
         integration: "Entegrasyon",
         security: "Güvenlik",
-        
+
         // Performance Tab
         high_performance: "Yüksek Performans",
         high_performance_desc: "Saniyede 24.7 kare işleme kapasitesi ile gerçek zamanlı tespit.",
         gpu_optimization: "GPU Optimizasyonu",
         nvidia_cuda: "NVIDIA CUDA Desteği",
         low_latency: "Düşük Gecikme",
-        
+
         scalability: "Ölçeklenebilirlik",
         scalability_desc: "İhtiyaçlara göre büyüyebilen esnek sistem mimarisi.",
         horizontal_vertical: "Yatay/Dikey Ölçeklendirme",
         multi_location: "Çok Lokasyon Desteği",
         load_balancing: "Yük Dengeleme",
-        
+
         system_stability: "Sistem Kararlılığı",
         system_stability_desc: "Kesintisiz çalışma ve yüksek çalışma süresi garantisi.",
         auto_backup: "Otomatik Yedekleme",
         fault_tolerance: "Hata Toleransı",
         continuous_work: "7/24 Çalışma",
-        
+
         // AI Tab
         ai_title: "Yapay Zeka",
         ai_desc: "Gelişmiş derin öğrenme modelleri ile hassas tespit.",
         realtime_analysis: "Gerçek Zamanlı Analiz",
         high_accuracy: "Yüksek Doğruluk",
         continuous_learning: "Sürekli Öğrenme",
-        
+
         smart_analytics: "Akıllı Analitik",
         smart_analytics_desc: "İleri seviye veri analizi ve tahminleme.",
         anomaly_detection: "Anomali Tespiti",
         behavior_analysis: "Davranış Analizi",
         predictive_maintenance: "Tahminsel Bakım",
-        
+
         automation: "Otomasyon",
         automation_desc: "Akıllı iş akışları ve otomatik aksiyonlar.",
         event_triggering: "Olay Tetikleme",
@@ -397,39 +397,39 @@ const translations = {
         custom_dashboards: "Özelleştirilebilir Dashboardlar",
         excel_pdf_export: "Excel/PDF Export",
         trend_analysis: "Trend Analizi",
-        
+
         // Integration Tab
         easy_integration: "Kolay Entegrasyon",
         easy_integration_desc: "Mevcut sistemlerle sorunsuz entegrasyon imkanı.",
         rest_api_support: "REST API Desteği",
         erp_integration: "ERP Entegrasyonu",
         custom_integration: "Özel Entegrasyon Desteği",
-        
+
         cloud_support: "Bulut Desteği",
         cloud_support_desc: "Esnek bulut altyapısı ve hibrit çözümler.",
         aws_azure_gcp: "AWS/Azure/GCP Desteği",
         private_cloud: "Özel Bulut Çözümleri",
         hybrid_configuration: "Hibrit Yapılandırma",
-        
+
         support_247: "7/24 Destek",
         support_247_desc: "Kesintisiz teknik destek ve bakım hizmetleri.",
         live_support: "Canlı Destek",
         remote_intervention: "Uzaktan Müdahale",
         periodic_maintenance: "Periyodik Bakım",
-        
+
         // Security Tab
         advanced_security: "Gelişmiş Güvenlik",
         advanced_security_desc: "En üst düzey güvenlik standartları ile veri koruma.",
         ssl_tls_encryption: "SSL/TLS Şifreleme",
         role_based_access: "Rol Tabanlı Erişim",
         data_backup: "Veri Yedekleme",
-        
+
         user_management: "Kullanıcı Yönetimi",
         user_management_desc: "Detaylı yetkilendirme ve kullanıcı kontrolü.",
         multi_level_auth: "Çok Seviyeli Yetkilendirme",
         activity_logs: "Aktivite Logları",
         sso_support: "SSO Desteği",
-        
+
         data_security: "Veri Güvenliği",
         data_security_desc: "Uçtan uca veri güvenliği ve uyumluluk.",
         gdpr_compliance: "KVKK Uyumluluğu",
@@ -439,7 +439,7 @@ const translations = {
         // Sectors
         sectors_title: "Sektörel Çözümler",
         sectors_subtitle: "Her sektör için optimize edilmiş güvenlik çözümleri",
-        
+
         // Construction Sector
         construction: "İnşaat Sektörü",
         helmet_detection: "Baret Tespiti",
@@ -476,19 +476,19 @@ const translations = {
         hairnet_control: "Bone Kontrolü",
         hygiene_gloves: "Hijyen Eldiveni",
         apron_detection: "Önlük Tespiti",
-        
+
         // Energy Sector
         energy: "Enerji",
         insulated_equipment: "İzolasyonlu Ekipman",
         arc_flash_protection: "Ark Flaş Koruması",
         dielectric_ppe: "Dielektrik KKD",
-        
+
         // Petrochemical
         petrochemical: "Petrokimya",
         gas_mask: "Gaz Maskesi",
         chemical_hazard: "Kimyasal Tehlike",
         special_equipment: "Özel Ekipman",
-        
+
         // Aviation
         aviation: "Havacılık",
         headset_control: "Kulaklık Kontrolü",
@@ -497,7 +497,7 @@ const translations = {
         // Benefits
         benefits_title: "Faydalar",
         benefits_subtitle: "Çözümümüzün avantajları",
-        
+
         // Benefits Tab Navigation
         financial: "Finansal",
         operational: "Operasyonel",
@@ -582,14 +582,14 @@ const translations = {
         message_placeholder: "Mesajınız",
         select_sector: "Sektör Seçin",
         send: "Gönder",
-        
+
         // Contact Info
         contact_title: "İletişime Geçin",
         contact_subtitle: "Her türlü soru, teklif veya iş birliği için bize ulaşabilirsiniz. Size en kısa sürede dönüş yapacağız.",
         contact_email: "yigittilaver2000@gmail.com",
         contact_phone: "+90 (505) 020 20 95",
         contact_address: "Maslak, İstanbul",
-        
+
         // Legal Benefits
         legal_benefits: "Yasal Uyumluluk",
         legal_desc: "Mevzuata tam uyumluluk ve yasal süreçlerde kolaylık sağlayan çözümler",
@@ -604,7 +604,7 @@ const translations = {
 
         // Contact Form
         sector_placeholder: "Sektörünüz",
-        
+
         // Footer
         footer_description: "Yapay zeka destekli endüstriyel güvenlik çözümleriyle iş yerinizi daha güvenli hale getiriyoruz.",
         footer_contact: "İletişim",
@@ -620,26 +620,26 @@ const translations = {
         footer_demo_request: "Demo Talebi",
         footer_pricing: "Fiyatlandırma",
         footer_sector_consulting: "Sektörel Danışmanlık",
-        all_rights_reserved: "© 2025 SmartSafe AI. Tüm hakları saklıdır.",
+        all_rights_reserved: "© 2026 SmartSafe AI. Tüm hakları saklıdır.",
         privacy_policy: "Gizlilik Politikası",
         terms_of_use: "Kullanım Koşulları"
     }
 };
 
 // Initialize language handling
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('Initializing language handling...');
-    
+
     // Initialize with stored language or default to Turkish
     const currentLang = localStorage.getItem('preferredLanguage') || 'tr';
     console.log('Initial language:', currentLang);
-    
+
     try {
         // Update UI to reflect current language
         const languageBtn = document.querySelector('.language-btn');
         const flagImg = languageBtn.querySelector('img');
         const langText = languageBtn.querySelector('span');
-        
+
         if (flagImg) {
             flagImg.src = `/static/images/flags/${currentLang}.png`;
             flagImg.alt = currentLang.toUpperCase();
@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Apply translations
         updateLanguage(currentLang);
-        
+
         // Initialize language selector
         initializeLanguageSelector();
     } catch (error) {
@@ -668,26 +668,26 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeLanguageSelector() {
     const languageBtn = document.querySelector('.language-btn');
     const languageSelector = document.querySelector('.language-selector');
-    
+
     if (!languageBtn || !languageSelector) {
         console.error('Language selector elements not found');
         return;
     }
 
     console.log('Adding click event to language button');
-    
+
     // Remove any existing click listeners
     languageBtn.removeEventListener('click', toggleDropdown);
     document.removeEventListener('click', closeDropdownOutside);
-    
+
     // Add click listener to language button - Güvenli ekleme
     if (languageBtn) {
         languageBtn.addEventListener('click', toggleDropdown);
     }
-    
+
     // Add click listener to document to close dropdown when clicking outside
     document.addEventListener('click', closeDropdownOutside);
-    
+
     // Add click listeners to language options - Güvenli ekleme
     const languageOptions = document.querySelectorAll('.language-option');
     if (languageOptions && languageOptions.length > 0) {
@@ -701,19 +701,19 @@ function initializeLanguageSelector() {
 function toggleDropdown(event) {
     event.stopPropagation();
     console.log('Language button clicked');
-    
+
     const languageSelector = document.querySelector('.language-selector');
     const isActive = languageSelector.classList.toggle('active');
-    
+
     console.log('Dropdown toggled:', isActive ? 'shown' : 'hidden');
 }
 
 function closeDropdownOutside(event) {
     const languageSelector = document.querySelector('.language-selector');
     const languageBtn = document.querySelector('.language-btn');
-    
+
     if (!languageSelector || !languageBtn) return;
-    
+
     if (!languageSelector.contains(event.target) && !languageBtn.contains(event.target)) {
         languageSelector.classList.remove('active');
         console.log('Dropdown closed from outside click');
@@ -722,25 +722,25 @@ function closeDropdownOutside(event) {
 
 function handleLanguageSelection(event) {
     event.stopPropagation();
-    
+
     const selectedLang = this.dataset.lang;
     const currentLang = localStorage.getItem('preferredLanguage');
-    
+
     if (selectedLang === currentLang) {
         console.log('Same language selected, no change needed');
         return;
     }
-    
+
     try {
         // Update language
         localStorage.setItem('preferredLanguage', selectedLang);
         updateLanguage(selectedLang);
-        
+
         // Update UI
         const languageBtn = document.querySelector('.language-btn');
         const flagImg = languageBtn.querySelector('img');
         const langText = languageBtn.querySelector('span');
-        
+
         if (flagImg) {
             flagImg.src = `/static/images/flags/${selectedLang}.png`;
             flagImg.alt = selectedLang.toUpperCase();
@@ -748,17 +748,17 @@ function handleLanguageSelection(event) {
         if (langText) {
             langText.textContent = selectedLang.toUpperCase();
         }
-        
+
         // Update active states
         document.querySelectorAll('.language-option').forEach(option => {
             const isActive = option.dataset.lang === selectedLang;
             option.classList.toggle('active', isActive);
             option.querySelector('.fa-check').style.opacity = isActive ? '1' : '0';
         });
-        
+
         // Close dropdown
         document.querySelector('.language-selector').classList.remove('active');
-        
+
         console.log('Language update completed');
     } catch (error) {
         console.error('Error updating language:', error);
@@ -769,13 +769,13 @@ function updateLanguage(lang) {
     try {
         // Update HTML lang attribute
         document.documentElement.lang = lang;
-        
+
         // Update page title
         const titleElement = document.querySelector('title[data-translate]');
         if (titleElement) {
             titleElement.textContent = translations[lang][titleElement.dataset.translate] || titleElement.textContent;
         }
-        
+
         // Update all elements with data-translate attribute
         document.querySelectorAll('[data-translate]').forEach(element => {
             const key = element.dataset.translate;
@@ -799,7 +799,7 @@ function updateLanguage(lang) {
                 console.warn(`Translation missing for placeholder key: ${key} in language: ${lang}`);
             }
         });
-        
+
         console.log(`Language updated to: ${lang}`);
     } catch (error) {
         console.error('Error in updateLanguage:', error);
@@ -807,7 +807,7 @@ function updateLanguage(lang) {
 }
 
 // Handle any unhandled promise rejections
-window.addEventListener('unhandledrejection', function(event) {
+window.addEventListener('unhandledrejection', function (event) {
     console.warn('Unhandled promise rejection:', event.reason);
 });
 

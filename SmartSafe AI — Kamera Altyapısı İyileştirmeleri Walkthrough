@@ -1,0 +1,107 @@
+# SmartSafe AI — Kamera Altyapısı İyileştirmeleri Walkthrough
+
+## Senin Soruların ve Cevapları
+
+### "Bir şirkete gidip IP verdiğimde tüm kanalları bulabilir miyiz?"
+
+**Evet, iki yol var:**
+
+1. **ONVIF Auto-Provision** (`POST /onvif/auto-provision`): NVR/DVR cihazının IP'sini ve kullanıcı adı/şifresini verirsen, ONVIF protokolü ile cihazın tüm kanallarını (tüm bağlı kameraları) otomatik keşfeder. Ama bu **kurumsal ağlarda genellikle çalışmaz** (multicast kapalı, VLAN izolasyonu).
+
+2. **Batch Provisioning** (`POST /cameras/batch-provision`) ← **YENİ, en güvenilir yol**: IT ekibinden aldığın IP listesini toplu olarak gir. Her IP için önce ONVIF dener, başarısızsa bilinen marka RTSP URL formatlarını (Hikvision, Dahua, generic) dener. Tüm bulunan kameraları/kanalları otomatik DB'ye ekler.
+
+### "Her kameranın ayrı IP'si mi olur?"
+
+İki yaygın senaryo var:
+
+| Senaryo | IP Yapısı | Bizim Sistemde Nasıl İşler |
+|---------|-----------|----------------------------|
+| **NVR/DVR sistemi** | NVR'nin **tek IP'si** var (ör. `192.168.1.100`). Kameralar NVR'ye kablo ile bağlı, her biri bir **kanal** (channel 1, 2, 3...) | Batch-provision ile NVR IP'yi girince tüm kanalları otomatik bulur |
+| **Bağımsız IP kameralar** | Her kameranın **ayrı IP'si** var (ör. `192.168.1.101`, `.102`, `.103`...) | Her IP'yi batch-provision listesine ekle |
+
+Şirketlerin çoğu **NVR + IP kamera karışımı** kullanır.
+
+### "100 kameranın sadece 8 tanesinde detection çalıştırabilir miyiz?"
+
+**Evet!** Yeni eklediğimiz `POST /start-detection-batch` endpoint'i ile istediğin kameraları seçip sadece onlarda detection başlatabilirsin:
+
+```json
+POST /api/company/{id}/start-detection-batch
+{
+    "camera_ids": ["cam_001", "cam_002", "cam_003", "cam_004", "cam_005", "cam_006", "cam_007", "cam_008"],
+    "mode": "ppe",
+    "confidence": 0.5
+}
+```
+
+Geri kalan 92 kameraya dokunulmaz. Sadece seçtiğin üretim sahası kameralarında PPE tespiti yapılır.
+
+---
+
+## Yapılan Değişiklikler
+
+### 1. Stream Watchdog — [YENİ DOSYA]
+**Dosya:** [stream_watchdog.py](file:///c:/Users/Yiğit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_(PPE)_Detection/core/integrations/cameras/stream_watchdog.py)
+
+- Daemon thread olarak çalışır, her 10 saniyede bir tüm aktif kamera stream'lerini kontrol eder
+- 30 saniye frame gelmezse → kamerayı stale olarak işaretler
+- Exponential backoff ile restart: 5s → 10s → 20s → 40s → 80s → 120s (max)
+- Max 10 restart denemesinden sonra → kamerayı "dead" olarak işaretler, detection durdurur
+- Tüm olayları loglar ve API ile erişilebilir
+
+### 2. Güçlendirilmiş Reconnect — [MODIFY]
+**Dosya:** [app.py](file:///c:/Users/Yiğit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_(PPE)_Detection/core/app.py)
+
+Önceki davranış:
+- Her 30 başarısız frame'de sadece `cv2.VideoCapture` yeniden açılıyordu
+- Hiçbir limit yoktu, backoff yoktu, alternatif URL denmiyordu
+
+Yeni davranış:
+- Max 5 reconnect denemesi
+- Exponential backoff: 1s → 2s → 4s → 8s → 16s
+- Her denemede tüm alternatif URL'ler sırayla denenir
+- Max aşılırsa → `active_detectors[key] = False` → worker temiz sonlanır
+- Her frame'de `frame_timestamps` güncellenir (watchdog için)
+
+### 3. Kamera Sağlık API — [YENİ ENDPOINT]
+**Dosya:** [camera.py](file:///c:/Users/Yiğit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_(PPE)_Detection/core/blueprints/camera.py)
+
+`GET /api/company/{id}/cameras/health` — Her kameranın gerçek zamanlı durumu:
+- [stream_status](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/integrations/dvr/dvr_stream_handler.py#536-546): online / stale / connecting / offline
+- `detection_active`: true/false
+- `seconds_since_last_frame`: watchdog'dan
+- `reconnect_count`: kaç kez yeniden bağlandı
+- Özet: toplam online/offline/detection_active sayıları
+- Watchdog durumu: çalışıyor mu, toplam restart sayısı
+
+### 4. Batch IP Provisioning — [YENİ ENDPOINT]
+**Dosya:** [camera.py](file:///c:/Users/Yiğit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_(PPE)_Detection/core/blueprints/camera.py)
+
+`POST /api/company/{id}/cameras/batch-provision`:
+- IT'den alınan IP listesini toplu olarak ekleme
+- Her IP için: ONVIF → RTSP probe → DB'ye kaydet
+- Abonelik limiti kontrolü
+- Detaylı sonuç raporu
+
+### 5. ONVIF Fallback Mesajları — [MODIFY]
+**Dosya:** [onvif.py](file:///c:/Users/Yiğit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_(PPE)_Detection/core/blueprints/onvif.py)
+
+Discovery/auto-provision başarısız olduğunda kullanıcıyı batch-provision'a yönlendiren açık mesajlar.
+
+### 6. Toplu Detection Başlatma — [YENİ ENDPOINT]
+**Dosya:** [detection.py](file:///c:/Users/Yiğit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_(PPE)_Detection/core/blueprints/detection.py)
+
+`POST /api/company/{id}/start-detection-batch` — Seçili kameralarda toplu detection başlatma.
+
+---
+
+## Test Sonuçları
+
+| Test Dosyası | Sonuç |
+|---|---|
+| [test_stream_watchdog.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/tests/test_stream_watchdog.py) (9 test) | ✅ 9/9 passed |
+| [test_health.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/tests/test_health.py) | ✅ passed |
+| [test_auth.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/tests/test_auth.py) | ✅ passed |
+| [test_violation_tracker.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/tests/test_violation_tracker.py) | ✅ passed |
+| [test_security.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/tests/test_security.py) | ⚠️ 4 fail (önceden var, .env.example ile ilgili) |
+| **Toplam** | **33 passed, 4 pre-existing fails** |

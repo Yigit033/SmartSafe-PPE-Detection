@@ -2430,5 +2430,374 @@ def create_blueprint(api):
                 'error': str(e), 
                 'timestamp': datetime.now().isoformat()
             }), 500
+    # ── Kamera Sağlık Durumu (Health Monitoring) API ───────────────────────
+    @bp.route('/api/company/<company_id>/cameras/health', methods=['GET'])
+    def camera_health_status(company_id):
+        """Tüm kameraların gerçek zamanlı sağlık durumu — Stream Watchdog entegreli.
+        
+        Dönüş: her kamera için online/offline, son frame zamanı, detection durumu,
+        reconnect sayısı ve genel özet istatistikler.
+        """
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+            
+            import app as app_module
+            
+            cameras = api.db.get_company_cameras(company_id)
+            now = time.time()
+            
+            # Watchdog instance'ını al
+            watchdog = None
+            watchdog_status = {'running': False, 'total_restarts': 0, 'last_check': None}
+            try:
+                from integrations.cameras.stream_watchdog import get_stream_watchdog
+                watchdog = get_stream_watchdog()
+                if watchdog:
+                    watchdog_status = watchdog.get_status()
+            except Exception:
+                pass
+            
+            camera_health_list = []
+            online_count = 0
+            detection_active_count = 0
+            
+            for cam in cameras:
+                camera_id = cam.get('id', cam.get('camera_id', ''))
+                camera_key = f"{company_id}_{camera_id}"
+                
+                # Stream aktif mi?
+                is_active = app_module.active_detectors.get(camera_key, False)
+                
+                # Son frame zamanı
+                last_ts = app_module.frame_timestamps.get(camera_key)
+                seconds_since_frame = round(now - last_ts, 1) if last_ts else None
+                
+                # Stream durumu: online (son 30s frame var), stale (30-120s), offline
+                if last_ts and seconds_since_frame <= 30:
+                    stream_status = 'online'
+                    online_count += 1
+                elif last_ts and seconds_since_frame <= 120:
+                    stream_status = 'stale'
+                elif is_active:
+                    stream_status = 'connecting'
+                else:
+                    stream_status = 'offline'
+                
+                # Detection aktif mi?
+                detection_active = is_active and stream_status in ('online', 'stale')
+                if detection_active:
+                    detection_active_count += 1
+                
+                # Reconnect bilgisi (watchdog'dan)
+                reconnect_count = 0
+                watchdog_cam_status = 'unknown'
+                if watchdog:
+                    cam_health = watchdog.get_camera_health(camera_key)
+                    reconnect_count = cam_health.get('restart_count', 0)
+                    watchdog_cam_status = cam_health.get('watchdog_status', 'unknown')
+                
+                # Hata sayısı
+                failure_count = app_module.frame_failure_counts.get(camera_key, 0)
+                
+                # Stream URL maskeleme (güvenlik)
+                ip_addr = cam.get('ip_address', '')
+                masked_url = f"rtsp://***@{ip_addr}:..." if ip_addr else None
+                
+                camera_health_list.append({
+                    'camera_id': camera_id,
+                    'name': cam.get('name', f'Kamera {camera_id}'),
+                    'location': cam.get('location', ''),
+                    'ip_address': ip_addr,
+                    'stream_status': stream_status,
+                    'watchdog_status': watchdog_cam_status,
+                    'detection_active': detection_active,
+                    'last_frame_time': (
+                        datetime.utcfromtimestamp(last_ts).isoformat() + 'Z'
+                        if last_ts else None
+                    ),
+                    'seconds_since_last_frame': seconds_since_frame,
+                    'reconnect_count': reconnect_count,
+                    'consecutive_failures': failure_count,
+                    'stream_url_masked': masked_url,
+                })
+            
+            total = len(cameras)
+            
+            return jsonify({
+                'success': True,
+                'cameras': camera_health_list,
+                'summary': {
+                    'total': total,
+                    'online': online_count,
+                    'offline': total - online_count,
+                    'detection_active': detection_active_count,
+                },
+                'watchdog': watchdog_status,
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+            })
+            
+        except Exception as e:
+            logger.error(f"❌ Camera health API error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── Toplu Kamera Ekleme (Batch Provisioning) ─────────────────────────
+    @bp.route('/api/company/<company_id>/cameras/batch-provision', methods=['POST'])
+    def batch_provision_cameras(company_id):
+        """Manuel IP listesi ile toplu kamera ekleme.
+        
+        ONVIF otomatik keşif kurumsal ağlarda çoğu zaman çalışmaz (multicast
+        kapalı, VLAN izolasyonu). Bu endpoint, IT ekibinin verdiği IP listesini
+        alıp her IP için:
+          1. ONVIF bağlantısı dener (opsiyonel)
+          2. Başarısızsa marka-tahmin RTSP URL'lerini dener
+          3. Bulunan her kamera/kanalı DB'ye ekler
+          4. Bağlantı testi sonucunu raporlar
+        """
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+            
+            data = request.get_json()
+            if not data or 'cameras' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Geçersiz istek: "cameras" listesi gerekli',
+                    'expected_format': {
+                        'cameras': [
+                            {'ip': '192.168.10.10', 'port': 554, 'username': 'admin', 'password': '...', 'name': 'Kamera Adı'}
+                        ],
+                        'use_onvif': True,
+                        'auto_detect_channels': True
+                    }
+                }), 400
+            
+            camera_list = data['cameras']
+            if not camera_list or not isinstance(camera_list, list):
+                return jsonify({'success': False, 'error': '"cameras" boş olamaz'}), 400
+            
+            use_onvif = data.get('use_onvif', True)
+            auto_detect_channels = data.get('auto_detect_channels', True)
+            
+            # Abonelik limit kontrolü
+            subscription_info = api.get_subscription_info_internal(company_id)
+            if not subscription_info.get('success'):
+                return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
+            
+            current_cameras = subscription_info['used_cameras']
+            max_cameras = subscription_info['max_cameras']
+            remaining_slots = max_cameras - current_cameras
+            
+            logger.info(
+                f"📦 Batch provision: {len(camera_list)} IP, "
+                f"kalan slot: {remaining_slots}/{max_cameras}, "
+                f"ONVIF: {use_onvif}, şirket: {company_id}"
+            )
+            
+            results = []
+            total_added = 0
+            
+            for entry in camera_list:
+                ip = entry.get('ip', '').strip()
+                port = int(entry.get('port', 554))
+                username = entry.get('username', '')
+                password = entry.get('password', '')
+                cam_name = entry.get('name', f'Kamera {ip}')
+                protocol = entry.get('protocol', 'rtsp')
+                
+                if not ip:
+                    results.append({'ip': ip, 'status': 'error', 'detail': 'IP adresi boş'})
+                    continue
+                
+                # Kalan slot kontrolü
+                if total_added >= remaining_slots:
+                    results.append({
+                        'ip': ip, 'status': 'skipped',
+                        'detail': f'Kamera limiti aşıldı ({max_cameras})'
+                    })
+                    continue
+                
+                entry_result = {
+                    'ip': ip,
+                    'port': port,
+                    'status': 'pending',
+                    'channels_found': 0,
+                    'cameras_added': [],
+                    'method': 'unknown',
+                    'detail': '',
+                }
+                
+                # ── 1) ONVIF ile dene ────────────────────────────────────────
+                onvif_success = False
+                channels_from_onvif = []
+                
+                if use_onvif:
+                    try:
+                        from integrations.cameras.onvif_discovery import ONVIFDeviceManager
+                        manager = ONVIFDeviceManager()
+                        
+                        # ONVIF bağlantı testi
+                        conn_result = manager.test_onvif_connection(ip, port=port,
+                                                                      username=username,
+                                                                      password=password)
+                        if conn_result.get('success'):
+                            entry_result['method'] = 'onvif'
+                            
+                            # Kanal listesini al
+                            if auto_detect_channels:
+                                try:
+                                    ch_result = manager.enumerate_nvr_channels(
+                                        ip, username=username, password=password
+                                    )
+                                    channels_from_onvif = ch_result.get('channels', [])
+                                except Exception:
+                                    pass
+                            
+                            # Eğer kanal bulunamadıysa en azından stream URI al
+                            if not channels_from_onvif:
+                                try:
+                                    profiles = manager.get_media_profiles(
+                                        ip, username=username, password=password
+                                    )
+                                    if profiles:
+                                        stream_uri = manager.get_stream_uri(
+                                            ip, profiles[0].get('token', ''),
+                                            username=username, password=password
+                                        )
+                                        channels_from_onvif = [{
+                                            'channel_number': 1,
+                                            'name': cam_name,
+                                            'stream_uri': stream_uri.get('uri', ''),
+                                        }]
+                                except Exception:
+                                    pass
+                            
+                            if channels_from_onvif:
+                                onvif_success = True
+                                
+                    except ImportError:
+                        logger.warning("⚠️ ONVIF modülü yüklü değil, RTSP probing'e geçiliyor")
+                    except Exception as onvif_err:
+                        logger.debug(f"ONVIF bağlantı hatası ({ip}): {onvif_err}")
+                
+                # ── 2) ONVIF başarısızsa → RTSP URL tahmini ─────────────────
+                if not onvif_success:
+                    entry_result['method'] = 'rtsp_probe'
+                    
+                    # Yaygın RTSP URL formatları (Hikvision, Dahua, generic)
+                    rtsp_templates = [
+                        # Hikvision
+                        f"rtsp://{username}:{password}@{ip}:{port}/Streaming/Channels/101",
+                        f"rtsp://{username}:{password}@{ip}:{port}/Streaming/Channels/1",
+                        # Dahua
+                        f"rtsp://{username}:{password}@{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
+                        # Generic ONVIF
+                        f"rtsp://{username}:{password}@{ip}:{port}/stream1",
+                        f"rtsp://{username}:{password}@{ip}:{port}/live",
+                        f"rtsp://{username}:{password}@{ip}:{port}/h264",
+                        # Auth-free variants
+                        f"rtsp://{ip}:{port}/stream1",
+                    ] if username and password else [
+                        f"rtsp://{ip}:{port}/stream1",
+                        f"rtsp://{ip}:{port}/live",
+                        f"rtsp://{ip}:{port}/h264",
+                    ]
+                    
+                    working_url = None
+                    try:
+                        import cv2
+                        for url in rtsp_templates:
+                            try:
+                                cap = cv2.VideoCapture(url)
+                                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                                if cap.isOpened():
+                                    ret, _frame = cap.read()
+                                    if ret:
+                                        working_url = url
+                                        cap.release()
+                                        break
+                                cap.release()
+                            except Exception:
+                                continue
+                    except ImportError:
+                        pass
+                    
+                    if working_url:
+                        channels_from_onvif = [{
+                            'channel_number': 1,
+                            'name': cam_name,
+                            'stream_uri': working_url,
+                        }]
+                    else:
+                        # Hiçbir URL çalışmasa bile kamerayı ekle (kullanıcı sonra düzeltebilir)
+                        channels_from_onvif = [{
+                            'channel_number': 1,
+                            'name': cam_name,
+                            'stream_uri': f"rtsp://{username}:{password}@{ip}:{port}/stream1" if username else f"rtsp://{ip}:{port}/stream1",
+                        }]
+                        entry_result['detail'] = (
+                            'Otomatik bağlantı testi başarısız oldu. '
+                            'Kamera eklendi fakat stream URL\'si doğrulanmadı — '
+                            'kamera ayarlarından manuel olarak kontrol edin.'
+                        )
+                
+                # ── 3) Bulunan kanalları DB'ye ekle ─────────────────────────
+                entry_result['channels_found'] = len(channels_from_onvif)
+                
+                for ch in channels_from_onvif:
+                    if total_added >= remaining_slots:
+                        break
+                    
+                    ch_number = ch.get('channel_number', 1)
+                    ch_name = ch.get('name', f'{cam_name} CH{ch_number}')
+                    stream_uri = ch.get('stream_uri', '')
+                    
+                    camera_data = {
+                        'name': ch_name,
+                        'location': entry.get('location', ''),
+                        'ip_address': ip,
+                        'port': port,
+                        'protocol': protocol,
+                        'stream_path': stream_uri,
+                        'username': username,
+                        'password': password,
+                        'status': 'active',
+                        'channel_number': ch_number,
+                    }
+                    
+                    try:
+                        success, result = api.db.add_camera(company_id, camera_data)
+                        if success:
+                            entry_result['cameras_added'].append(result)
+                            total_added += 1
+                        else:
+                            entry_result['detail'] += f' CH{ch_number} ekleme hatası: {result}.'
+                    except Exception as db_err:
+                        entry_result['detail'] += f' CH{ch_number} DB hatası: {db_err}.'
+                
+                entry_result['status'] = 'success' if entry_result['cameras_added'] else 'failed'
+                results.append(entry_result)
+            
+            failed_count = len([r for r in results if r['status'] == 'failed'])
+            
+            return jsonify({
+                'success': True,
+                'total_submitted': len(camera_list),
+                'successfully_added': total_added,
+                'failed': failed_count,
+                'remaining_slots': remaining_slots - total_added,
+                'details': results,
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+            })
+            
+        except Exception as e:
+            logger.error(f"❌ Batch provision error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     return bp

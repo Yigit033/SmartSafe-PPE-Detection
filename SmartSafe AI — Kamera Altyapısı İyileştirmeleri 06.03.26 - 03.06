@@ -1,0 +1,58 @@
+# SmartSafe AI — Kamera Altyapısı İyileştirmeleri
+
+## Yapılan Tüm Değişiklikler (Backend + Frontend)
+
+### Backend Değişiklikleri
+
+| Dosya | Değişiklik | Açıklama |
+|-------|-----------|----------|
+| [stream_watchdog.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/tests/test_stream_watchdog.py) | **YENİ** | Stale stream tespiti + exp. backoff ile restart |
+| [app.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/app.py) | **MODIFY** | Reconnect 5 attempt + 1→16s backoff, frame_timestamps |
+| [app.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/app.py) | **MODIFY** | [_watchdog_restart_camera](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/app.py#3627-3673) callback, camera_key format fix |
+| [camera.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/blueprints/camera.py) | **YENİ ENDPOINT** | `GET /cameras/health` — real-time kamera sağlık durumu |
+| [camera.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/blueprints/camera.py) | **YENİ ENDPOINT** | `POST /cameras/batch-provision` — toplu IP ekleme |
+| [detection.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/blueprints/detection.py) | **YENİ ENDPOINT** | `POST /start-detection-batch` — seçili kameralarda toplu detection |
+| [onvif.py](file:///c:/Users/Yi%C4%9Fit/Desktop/projects/computer_vision_adventure/Personal_Protective_Equipment_%28PPE%29_Detection/core/blueprints/onvif.py) | **MODIFY** | Başarısız discovery → batch-provision yönlendirmesi |
+
+### Frontend Değişiklikleri
+
+| Bölüm | Açıklama |
+|-------|----------|
+| 📦 **Toplu IP Ekleme** | Textarea ile IP listesi girme, ONVIF/RTSP probe toggle, sonuç tablosu |
+| 💓 **Sağlık Dashboard** | Online/Offline/Detection Aktif/Watchdog badge'leri, 30sn auto-refresh |
+| ✅ **Toplu Detection** | Checkbox kolonu + "Seçililerde Detection Başlat" toolbar |
+| ⚠️ **ONVIF Fallback** | Cihaz bulunamazsa batch-provision yönlendirme mesajı |
+
+### Sayfa Akışı
+
+```
+Kamera Yönetimi Sayfası
+│
+├── DVR/NVR Yönetimi (mevcut)
+│   └── Kanal seçimi + detection başlat/durdur
+│
+├── ONVIF Keşif (mevcut)
+│   └── Cihaz bulunamazsa → "Toplu IP Ekleme"ye yönlendirir
+│
+├── 📦 Toplu IP Ekleme (YENİ)
+│   └── IT'den alınan IP listesi → ONVIF + RTSP probe → DB'ye ekle
+│
+├── 💓 Sağlık Dashboard (YENİ)
+│   └── Online/Offline/Detecting sayıları + Watchdog durumu
+│
+├── ✅ Kamera Tablosu (GÜNCELLENDİ)
+│   ├── Checkbox kolonu (hepsini seç / tek tek seç)
+│   ├── Toolbar: "X kamera seçili — Seçililerde Detection Başlat"
+│   ├── Per-kamera PPE Detection toggle (mevcut)
+│   └── Canlı Detection modal (mevcut)
+│
+└── Kamera Ekleme Formu (mevcut)
+```
+
+## Test Sonuçları
+
+| Test | Sonuç |
+|------|-------|
+| StreamWatchdog (9 test) | ✅ 9/9 passed |
+| Mevcut testler (33 test) | ✅ 33/33 passed |
+| test_security (4 test) | ⚠️ 4 fail (pre-existing, .env.example) |

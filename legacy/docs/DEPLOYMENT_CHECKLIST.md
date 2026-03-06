@@ -378,5 +378,5 @@ git push
 
 ---
 
-© 2025 SmartSafe AI. Tüm hakları saklıdır.
+© 2026 SmartSafe AI. Tüm hakları saklıdır.
 

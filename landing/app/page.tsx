@@ -624,9 +624,8 @@ export default function LandingPage() {
                 ].map((tab) => (
                   <button
                     key={tab.id}
-                    className={`nav-link px-4 py-2 border-0 rounded-pill transition-all ${
-                      activeTab === tab.id ? "active" : ""
-                    }`}
+                    className={`nav-link px-4 py-2 border-0 rounded-pill transition-all ${activeTab === tab.id ? "active" : ""
+                      }`}
                     onClick={() => setActiveTab(tab.id)}
                     style={{ whiteSpace: "nowrap" }}
                   >
@@ -725,9 +724,8 @@ export default function LandingPage() {
               }).map((_, i) => (
                 <div
                   key={i}
-                  className={`scroll-dot ${
-                    activeSectorDot === i ? "active" : ""
-                  }`}
+                  className={`scroll-dot ${activeSectorDot === i ? "active" : ""
+                    }`}
                   onClick={() => scrollToSector(i)}
                 ></div>
               ))}
@@ -766,9 +764,8 @@ export default function LandingPage() {
                 ].map((tab) => (
                   <button
                     key={tab.id}
-                    className={`nav-link px-4 py-2 border-0 rounded-pill transition-all ${
-                      activeBenefitTab === tab.id ? "active" : ""
-                    }`}
+                    className={`nav-link px-4 py-2 border-0 rounded-pill transition-all ${activeBenefitTab === tab.id ? "active" : ""
+                      }`}
                     onClick={() => setActiveBenefitTab(tab.id)}
                     style={{ whiteSpace: "nowrap" }}
                   >
@@ -1052,7 +1049,7 @@ export default function LandingPage() {
           <div className="row align-items-center mt-4">
             <div className="col-md-6">
               <p className="text-white-50 small mb-0">
-                © 2025 SmartSafe AI. Tüm Hakları Saklıdır.
+                © 2026 SmartSafe AI. Tüm Hakları Saklıdır.
               </p>
             </div>
             <div className="col-md-6 text-md-end">

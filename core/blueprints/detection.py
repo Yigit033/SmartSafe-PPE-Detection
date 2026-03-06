@@ -391,6 +391,141 @@ def create_blueprint(api):
             logger.error(f"❌ Detection start error: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    # ── Toplu Detection Başlatma (Seçili Kameralar) ──────────────────────
+    @bp.route('/api/company/<company_id>/start-detection-batch', methods=['POST'])
+    def start_detection_batch(company_id):
+        """Birden fazla kamera için aynı anda detection başlat.
+        
+        Kullanım senaryosu: 100 kameralı bir şirkette sadece üretim sahasındaki
+        8 kameraya detection başlatmak.
+        
+        Request body:
+            {
+                "camera_ids": ["cam_001", "cam_002", "cam_003"],
+                "mode": "ppe",
+                "confidence": 0.5
+            }
+        """
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+            
+            data = request.get_json() or {}
+            camera_ids = data.get('camera_ids', [])
+            detection_mode = data.get('mode', 'ppe')
+            confidence = data.get('confidence', 0.5)
+            
+            if not camera_ids or not isinstance(camera_ids, list):
+                return jsonify({
+                    'success': False,
+                    'error': '"camera_ids" listesi gerekli',
+                    'expected_format': {
+                        'camera_ids': ['cam_001', 'cam_002'],
+                        'mode': 'ppe',
+                        'confidence': 0.5
+                    }
+                }), 400
+            
+            logger.info(f"🎯 Batch detection start: {len(camera_ids)} kamera, şirket: {company_id}")
+            
+            # Kameraları doğrula
+            cameras = api.db.get_company_cameras(company_id)
+            valid_camera_ids = {cam['camera_id'] for cam in cameras}
+            
+            # Plan limiti kontrolü
+            import core.app as _api_mod
+            state = _get_detection_state()
+            company_active = sum(
+                1 for k, v in state['active_detectors'].items()
+                if v and k.startswith(f"{company_id}_")
+            )
+            
+            company_info = api.db.get_company_info(company_id) if hasattr(api, 'db') and hasattr(api.db, 'get_company_info') else None
+            if company_info:
+                plan_max = int(company_info.get('max_cameras') or 25)
+                if company_info.get('account_type') == 'demo':
+                    try:
+                        demo_limits = company_info.get('demo_limits')
+                        if isinstance(demo_limits, str):
+                            import json as _json
+                            demo_limits = _json.loads(demo_limits) if demo_limits else {}
+                        plan_max = int((demo_limits or {}).get('max_cameras', 2))
+                    except Exception:
+                        plan_max = 2
+            else:
+                plan_max = getattr(_api_mod, 'MAX_CONCURRENT_CAMERAS', 25)
+            
+            remaining_slots = plan_max - company_active
+            
+            results = []
+            started = 0
+            
+            for camera_id in camera_ids:
+                # Geçerli kamera mı?
+                if camera_id not in valid_camera_ids:
+                    results.append({'camera_id': camera_id, 'status': 'error', 'detail': 'Kamera bulunamadı'})
+                    continue
+                
+                camera_key = f"{company_id}_{camera_id}"
+                
+                # Zaten aktif mi?
+                if camera_key in state['active_detectors'] and state['active_detectors'][camera_key]:
+                    results.append({'camera_id': camera_id, 'status': 'already_active', 'detail': 'Zaten çalışıyor'})
+                    continue
+                
+                # Limit aşıldı mı?
+                if started >= remaining_slots:
+                    results.append({'camera_id': camera_id, 'status': 'skipped', 'detail': f'Plan limiti ({plan_max}) aşıldı'})
+                    continue
+                
+                # Kamerayı başlat
+                try:
+                    state['active_detectors'][camera_key] = True
+                    _api_mod.active_detectors[camera_key] = True
+                    
+                    active_detectors_ref = state['active_detectors']
+                    detection_thread = threading.Thread(
+                        target=api.saas_detection_worker,
+                        args=(camera_key, camera_id, company_id, detection_mode, confidence, active_detectors_ref),
+                        daemon=True
+                    )
+                    detection_thread.start()
+                    
+                    state['detection_threads'][camera_key] = {
+                        'thread': detection_thread,
+                        'config': {
+                            'mode': detection_mode,
+                            'confidence': confidence,
+                            'started_at': datetime.now().isoformat()
+                        }
+                    }
+                    
+                    started += 1
+                    results.append({'camera_id': camera_id, 'status': 'started', 'detail': 'Başarıyla başlatıldı'})
+                    
+                except Exception as cam_err:
+                    state['active_detectors'][camera_key] = False
+                    _api_mod.active_detectors[camera_key] = False
+                    results.append({'camera_id': camera_id, 'status': 'error', 'detail': str(cam_err)})
+            
+            return jsonify({
+                'success': True,
+                'total_requested': len(camera_ids),
+                'started': started,
+                'already_active': len([r for r in results if r['status'] == 'already_active']),
+                'failed': len([r for r in results if r['status'] == 'error']),
+                'skipped': len([r for r in results if r['status'] == 'skipped']),
+                'remaining_slots': remaining_slots - started,
+                'details': results,
+                'detection_mode': detection_mode,
+                'confidence': confidence,
+            })
+            
+        except Exception as e:
+            logger.error(f"❌ Batch detection start error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @bp.route('/api/company/<company_id>/stop-detection', methods=['POST'])
     def stop_detection(company_id):
         """Şirket için tespit durdur - Tek kamera veya tüm kameralar"""
