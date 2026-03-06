@@ -1155,6 +1155,80 @@
             </div>
         </div>
 
+        <!-- 📦 Toplu IP ile Kamera Ekleme (Batch Provisioning) -->
+        <div class="batch-provision-section mb-5">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-list-ol me-2"></i>
+                        Toplu IP ile Kamera Ekleme
+                    </h4>
+                    <span class="badge bg-dark">IT Ekibinden Alınan IP Listesi</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Kurumsal ağlarda ONVIF keşfi çoğu zaman çalışmaz (multicast kapalı / VLAN izolasyonu).
+                        IT ekibinden aldığınız kamera IP listesini aşağıya girerek tüm kameraları toplu olarak
+                        ekleyebilirsiniz.
+                        Sistem her IP için otomatik olarak ONVIF ve RTSP bağlantı testi yapar.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">Kamera IP Listesi:</label>
+                            <textarea id="batchIpList" class="form-control" rows="6" placeholder="Her satıra bir kamera — Format: IP, port, kullanıcı, şifre, isim
+Örnek:
+192.168.1.100, 554, admin, pass123, Üretim Sahası K1
+192.168.1.101, 554, admin, pass123, Üretim Sahası K2
+10.0.5.50, 80, , , Ofis Girişi"></textarea>
+                            <small class="text-muted mt-1 d-block">Port, kullanıcı, şifre ve isim opsiyoneldir. Sadece
+                                IP girmek yeterlidir.</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Seçenekler:</label>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="batchUseOnvif" checked>
+                                <label class="form-check-label" for="batchUseOnvif">ONVIF ile dene</label>
+                            </div>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="batchAutoChannels" checked>
+                                <label class="form-check-label" for="batchAutoChannels">Kanalları otomatik bul</label>
+                            </div>
+                            <button class="btn btn-warning w-100 mb-2" id="batchProvisionBtn"
+                                onclick="startBatchProvision()">
+                                <i class="fas fa-upload me-2"></i>Toplu Ekle
+                            </button>
+                            <div id="batchProvisionStatus" style="display:none;" class="mt-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border spinner-border-sm text-warning me-2"></div>
+                                    <span class="text-warning" id="batchProvisionStatusText">Kameralar
+                                        ekleniyor...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Sonuç Tablosu -->
+                    <div id="batchProvisionResults" style="display:none;" class="mt-3">
+                        <h6><i class="fas fa-clipboard-check me-2"></i>Sonuçlar</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered" id="batchResultsTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>IP</th>
+                                        <th>Port</th>
+                                        <th>Yöntem</th>
+                                        <th>Kanal</th>
+                                        <th>Durum</th>
+                                        <th>Detay</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batchResultsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="active-detections-dashboard mb-4" id="activeDetectionsDashboard" style="display:none;">
             <div class="card border-success">
@@ -1168,6 +1242,51 @@
                 <div class="card-body">
                     <div id="activeDetectionsList" class="row g-3">
                         <!-- Aktif detectionlar buraya yüklenecek -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 💓 Kamera Sağlık Durumu Dashboard -->
+        <div class="camera-health-dashboard mb-4" id="cameraHealthDashboard">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-heartbeat text-danger me-2"></i>Kamera Sağlık Durumu</h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <small class="text-muted" id="healthLastUpdate">—</small>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshCameraHealth()"
+                                title="Yenile">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-2" id="healthSummaryCards">
+                        <div class="col-auto">
+                            <span class="badge bg-success fs-6 px-3 py-2">
+                                <i class="fas fa-circle me-1"></i>
+                                <span id="healthOnline">0</span> Online
+                            </span>
+                        </div>
+                        <div class="col-auto">
+                            <span class="badge bg-danger fs-6 px-3 py-2">
+                                <i class="fas fa-circle me-1"></i>
+                                <span id="healthOffline">0</span> Offline
+                            </span>
+                        </div>
+                        <div class="col-auto">
+                            <span class="badge bg-primary fs-6 px-3 py-2">
+                                <i class="fas fa-brain me-1"></i>
+                                <span id="healthDetecting">0</span> Detection Aktif
+                            </span>
+                        </div>
+                        <div class="col-auto">
+                            <span class="badge fs-6 px-3 py-2" id="healthWatchdogBadge"
+                                style="background:#6c757d;color:#fff;">
+                                <i class="fas fa-shield-alt me-1"></i>
+                                Watchdog: <span id="healthWatchdog">—</span>
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1197,10 +1316,25 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
+                        <!-- Toplu Detection Toolbar -->
+                        <div id="batchDetectionToolbar" style="display:none;"
+                            class="p-2 bg-light border-bottom d-flex align-items-center gap-2">
+                            <span class="text-muted"><span id="selectedCameraCount">0</span> kamera seçili</span>
+                            <button class="btn btn-success btn-sm" onclick="startBatchDetection()">
+                                <i class="fas fa-play me-2"></i>Seçililerde Detection Başlat
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="clearCameraSelection()">
+                                <i class="fas fa-times me-1"></i>Seçimi Kaldır
+                            </button>
+                        </div>
                         <table class="table table-hover mb-0" id="camerasTable">
                             <thead class="table-dark">
                                 <tr>
-                                    <th style="width: 50px;">
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" class="form-check-input" id="selectAllCameras"
+                                            onchange="toggleAllCameras(this)" title="Tümünü Seç">
+                                    </th>
+                                    <th style="width: 40px;">
                                         <i class="fas fa-video"></i>
                                     </th>
                                     <th>Kamera Adı</th>
@@ -1215,7 +1349,7 @@
                             <tbody id="camerasTableBody">
                                 <!-- Kameralar buraya yüklenecek -->
                                 <tr>
-                                    <td colspan="8" class="text-center py-4">
+                                    <td colspan="9" class="text-center py-4">
                                         <div class="spinner-border text-primary" role="status">
                                             <span class="visually-hidden">Yükleniyor...</span>
                                         </div>
@@ -2211,7 +2345,7 @@
             try {
                 camerasTableBody.innerHTML = `
                     <tr>
-                        <td colspan="8" class="text-center py-4">
+                        <td colspan="9" class="text-center py-4">
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Yükleniyor...</span>
                             </div>
@@ -2264,7 +2398,7 @@
                         try {
                             camerasTableBody.innerHTML = `
                             <tr>
-                                <td colspan="8" class="text-center py-4">
+                                <td colspan="9" class="text-center py-4">
                                     <i class="fas fa-video fa-3x text-muted mb-3"></i>
                                     <p class="text-muted mb-0">Henüz kamera eklenmemiş.</p>
                                     <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
@@ -2286,7 +2420,7 @@
                     try {
                         camerasTableBody.innerHTML = `
                         <tr>
-                            <td colspan="8" class="text-center py-4">
+                            <td colspan="9" class="text-center py-4">
                                 <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
                                 <h5 class="text-danger">Kamera listesi yüklenemedi</h5>
                                 <p class="text-muted">Hata: ${error.message}</p>
@@ -2335,7 +2469,7 @@
             if (cameras.length === 0) {
                 camerasTableBody.innerHTML = `
                     <tr>
-                        <td colspan="8" class="text-center py-4">
+                        <td colspan="9" class="text-center py-4">
                             <i class="fas fa-video fa-3x text-muted mb-3"></i>
                             <p class="text-muted mb-0">Henüz kamera eklenmemiş.</p>
                             <p class="text-muted">Aşağıdaki form ile ilk kameranızı ekleyebilirsiniz.</p>
@@ -2357,9 +2491,7 @@
                 return `
                     <tr data-camera-id="${safeId}">
                         <td>
-                            <div class="camera-icon">
-                                <i class="fas fa-video"></i>
-                            </div>
+                            <input type="checkbox" class="form-check-input camera-select-checkbox" data-camera-id="${safeId}" onchange="updateBatchToolbar()">
                         </td>
                         <td>
                             <strong>${safeName}</strong>
@@ -5375,6 +5507,12 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                     if (data.success && data.devices && data.devices.length > 0) {
                         renderOnvifDevices(data.devices);
                     } else {
+                        noDevices.innerHTML = `
+                            <i class="fas fa-search fa-2x mb-2"></i>
+                            <p class="mb-1">ONVIF cihaz bulunamadı.</p>
+                            <p class="mb-2 small">Kurumsal ağlarda multicast genellikle kapalıdır veya kamera ağı VLAN ile izole edilmiş olabilir.</p>
+                            <p class="mb-0 small"><strong>Alternatif:</strong> IT ekibinden kamera IP listesini alın ve yukarıdaki <em>"Toplu IP ile Kamera Ekleme"</em> bölümünü kullanın.</p>
+                        `;
                         noDevices.style.display = 'block';
                     }
                 })
@@ -5383,6 +5521,172 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                     noDevices.style.display = 'block';
                     console.error('Advanced ONVIF scan error:', err);
                 });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 📦 BATCH PROVISIONING
+        // ═══════════════════════════════════════════════════════════════
+        function startBatchProvision() {
+            const raw = document.getElementById('batchIpList').value.trim();
+            if (!raw) { showAlert('IP listesi boş!', 'warning'); return; }
+
+            const lines = raw.split('\n').filter(l => l.trim());
+            const cameras = lines.map(line => {
+                const parts = line.split(',').map(s => s.trim());
+                return {
+                    ip: parts[0] || '',
+                    port: parseInt(parts[1]) || 554,
+                    username: parts[2] || '',
+                    password: parts[3] || '',
+                    name: parts[4] || `Kamera ${parts[0]}`
+                };
+            }).filter(c => c.ip);
+
+            if (cameras.length === 0) { showAlert('Geçerli IP bulunamadı!', 'warning'); return; }
+
+            const useOnvif = document.getElementById('batchUseOnvif').checked;
+            const autoChannels = document.getElementById('batchAutoChannels').checked;
+
+            document.getElementById('batchProvisionStatus').style.display = 'block';
+            document.getElementById('batchProvisionBtn').disabled = true;
+
+            fetch(`/api/company/{{ company_id }}/cameras/batch-provision`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cameras, use_onvif: useOnvif, auto_detect_channels: autoChannels })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('batchProvisionStatus').style.display = 'none';
+                    document.getElementById('batchProvisionBtn').disabled = false;
+
+                    if (data.success) {
+                        showAlert(`✅ ${data.successfully_added} kamera başarıyla eklendi, ${data.failed} başarısız`,
+                            data.failed > 0 ? 'warning' : 'success');
+                        renderBatchResults(data.details);
+                        loadCameras(); // Tabloyu yenile
+                    } else {
+                        showAlert('❌ Toplu ekleme hatası: ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('batchProvisionStatus').style.display = 'none';
+                    document.getElementById('batchProvisionBtn').disabled = false;
+                    showAlert('❌ Bağlantı hatası: ' + err.message, 'danger');
+                });
+        }
+
+        function renderBatchResults(details) {
+            const container = document.getElementById('batchProvisionResults');
+            const tbody = document.getElementById('batchResultsBody');
+            container.style.display = 'block';
+
+            tbody.innerHTML = details.map(d => {
+                const statusBadge = d.status === 'success'
+                    ? '<span class="badge bg-success">Başarılı</span>'
+                    : d.status === 'skipped'
+                        ? '<span class="badge bg-secondary">Atlandı</span>'
+                        : '<span class="badge bg-danger">Başarısız</span>';
+                return `<tr>
+                    <td><code>${escapeHtml(d.ip)}</code></td>
+                    <td>${d.port || '-'}</td>
+                    <td>${escapeHtml(d.method || '-')}</td>
+                    <td>${d.channels_found || 0}</td>
+                    <td>${statusBadge}</td>
+                    <td><small>${escapeHtml(d.detail || '-')}</small></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 💓 CAMERA HEALTH DASHBOARD
+        // ═══════════════════════════════════════════════════════════════
+        let healthRefreshTimer = null;
+
+        function refreshCameraHealth() {
+            fetch(`/api/company/{{ company_id }}/cameras/health`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('healthOnline').textContent = data.summary.online || 0;
+                        document.getElementById('healthOffline').textContent = data.summary.offline || 0;
+                        document.getElementById('healthDetecting').textContent = data.summary.detection_active || 0;
+
+                        const wdStatus = data.watchdog && data.watchdog.running ? 'Aktif' : 'Pasif';
+                        document.getElementById('healthWatchdog').textContent = wdStatus;
+                        const wdBadge = document.getElementById('healthWatchdogBadge');
+                        wdBadge.style.background = data.watchdog && data.watchdog.running ? '#28a745' : '#6c757d';
+
+                        document.getElementById('healthLastUpdate').textContent =
+                            'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
+                    }
+                })
+                .catch(err => console.warn('Health refresh error:', err));
+        }
+
+        // İlk yükleme ve 30sn'de bir otomatik yenileme
+        refreshCameraHealth();
+        healthRefreshTimer = setInterval(refreshCameraHealth, 30000);
+
+        // ═══════════════════════════════════════════════════════════════
+        // ✅ BATCH DETECTION START (Checkbox Selection)
+        // ═══════════════════════════════════════════════════════════════
+        function toggleAllCameras(masterCheckbox) {
+            const checkboxes = document.querySelectorAll('.camera-select-checkbox');
+            checkboxes.forEach(cb => { cb.checked = masterCheckbox.checked; });
+            updateBatchToolbar();
+        }
+
+        function updateBatchToolbar() {
+            const selected = document.querySelectorAll('.camera-select-checkbox:checked');
+            const toolbar = document.getElementById('batchDetectionToolbar');
+            const countEl = document.getElementById('selectedCameraCount');
+            if (selected.length > 0) {
+                toolbar.style.display = 'flex';
+                countEl.textContent = selected.length;
+            } else {
+                toolbar.style.display = 'none';
+            }
+        }
+
+        function clearCameraSelection() {
+            document.querySelectorAll('.camera-select-checkbox').forEach(cb => { cb.checked = false; });
+            document.getElementById('selectAllCameras').checked = false;
+            updateBatchToolbar();
+        }
+
+        function startBatchDetection() {
+            const selected = document.querySelectorAll('.camera-select-checkbox:checked');
+            const cameraIds = Array.from(selected).map(cb => cb.dataset.cameraId);
+
+            if (cameraIds.length === 0) { showAlert('Hiç kamera seçilmedi!', 'warning'); return; }
+
+            if (!confirm(`${cameraIds.length} kamerada PPE Detection başlatılacak. Devam?`)) return;
+
+            showAlert(`⏳ ${cameraIds.length} kamerada detection başlatılıyor...`, 'info');
+
+            fetch(`/api/company/{{ company_id }}/start-detection-batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ camera_ids: cameraIds, mode: 'ppe', confidence: 0.5 })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(
+                            `✅ ${data.started} kamerada detection başlatıldı` +
+                            (data.already_active > 0 ? `, ${data.already_active} zaten aktifti` : '') +
+                            (data.failed > 0 ? `, ${data.failed} başarısız` : ''),
+                            data.failed > 0 ? 'warning' : 'success'
+                        );
+                        clearCameraSelection();
+                        loadCameras(); // Yenile
+                        refreshCameraHealth();
+                    } else {
+                        showAlert('❌ ' + (data.error || 'Bilinmeyen hata'), 'danger');
+                    }
+                })
+                .catch(err => showAlert('❌ Bağlantı hatası: ' + err.message, 'danger'));
         }
 
     </script>

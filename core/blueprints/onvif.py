@@ -44,14 +44,35 @@ def create_blueprint(api):
                 network_range=network_range,
             )
 
-            return jsonify({
+            result = {
                 'success': True,
                 'devices': devices,
                 'total_count': len(devices),
-            })
+            }
+
+            if not devices:
+                result['warning'] = (
+                    'ONVIF multicast discovery hiçbir cihaz bulamadı. '
+                    'Kurumsal ağlarda multicast genellikle kapalıdır veya '
+                    'kamera ağı VLAN ile izole edilmiş olabilir. '
+                    'Alternatif: IT ekibinizden kamera IP listesini alın ve '
+                    '"batch-provision" endpoint\'ini kullanarak toplu ekleyin. '
+                    f'Endpoint: POST /api/company/{company_id}/cameras/batch-provision'
+                )
+
+            return jsonify(result)
         except Exception as e:
             logger.error(f"❌ ONVIF discover error: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'fallback_suggestion': (
+                    'ONVIF keşfi başarısız oldu. Kurumsal ağlarda bu yaygındır. '
+                    'IT ekibinden kamera IP listesi alarak '
+                    f'POST /api/company/{company_id}/cameras/batch-provision '
+                    'endpoint\'ini kullanabilirsiniz.'
+                )
+            }), 500
 
     # =========================================================================
     # DEVICE INFO
@@ -312,16 +333,42 @@ def create_blueprint(api):
                 except Exception as dev_err:
                     errors.append({'ip': ip, 'error': str(dev_err)})
 
-            return jsonify({
+            result = {
                 'success': True,
                 'provisioned': provisioned,
                 'provisioned_count': len(provisioned),
                 'errors': errors,
                 'discovered_devices': len(devices),
-            })
+            }
+
+            if not devices:
+                result['warning'] = (
+                    'ONVIF auto-discovery hiçbir cihaz bulamadı. '
+                    'Bunun en sık sebebi: kurumsal ağlarda multicast kapalıdır '
+                    'veya kamera ağı VLAN ile izole edilmiştir. '
+                    'Çözüm: IT ekibinden kamera IP listesini alın ve '
+                    f'"batch-provision" endpoint\'ini kullanın: '
+                    f'POST /api/company/{company_id}/cameras/batch-provision'
+                )
+            elif not provisioned and errors:
+                result['warning'] = (
+                    'Cihazlar bulundu fakat kamera eklenemedi. '
+                    'Kullanıcı adı/şifre doğru olduğundan emin olun. '
+                    'Alternatif olarak batch-provision endpoint\'ini deneyebilirsiniz.'
+                )
+
+            return jsonify(result)
 
         except Exception as e:
             logger.error(f"❌ ONVIF auto-provision error: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'fallback_suggestion': (
+                    'ONVIF otomatik provizyon başarısız oldu. '
+                    'Manuel IP listesi ile toplu ekleme yapabilirsiniz: '
+                    f'POST /api/company/{company_id}/cameras/batch-provision'
+                )
+            }), 500
 
     return bp

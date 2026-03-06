@@ -341,5 +341,5 @@ Landing page anında yüklenecek, cold start sadece form gönderiminde olacak - 
 
 ---
 
-© 2025 SmartSafe AI. Tüm hakları saklıdır.
+© 2026 SmartSafe AI. Tüm hakları saklıdır.
 

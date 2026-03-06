@@ -120,6 +120,7 @@ frame_buffers = _ThreadSafeDict()  # Frame buffer'ları — thread-safe
 detection_results = {}     # Tespit sonuçları (Queue — zaten thread-safe)
 live_violation_state = {}  # SaaS canlı tespit için ihlal durumu (start/resolution)
 frame_failure_counts = {}  # Kamera okuma hataları sayacı
+frame_timestamps = {}      # camera_key → son frame zamanı (epoch) — StreamWatchdog izler
 
 # İYİLEŞTİRİLDİ: Response Caching
 response_cache = {}
@@ -408,6 +409,20 @@ class SmartSafeSaaSAPI:
         
         # Setup routes
         self.setup_routes()
+        
+        # ── Stream Watchdog başlat ──────────────────────────────────────────
+        try:
+            from integrations.cameras.stream_watchdog import init_stream_watchdog
+            self._stream_watchdog = init_stream_watchdog(
+                frame_timestamps=frame_timestamps,
+                active_detectors=active_detectors,
+                restart_callback=self._watchdog_restart_camera,
+            )
+            self._stream_watchdog.start()
+            logger.info("✅ Stream Watchdog başlatıldı")
+        except Exception as wdg_err:
+            logger.warning(f"⚠️ Stream Watchdog başlatılamadı: {wdg_err}")
+            self._stream_watchdog = None
         
         logger.info("🌐 SmartSafe AI SaaS API Server initialized")
         
@@ -3609,6 +3624,53 @@ smartsafe_requests_total 100
             'required_ppe': ['helmet', 'safety_vest']
         })
 
+    def _watchdog_restart_camera(self, camera_key: str) -> bool:
+        """StreamWatchdog callback: stale stream tespit edildiğinde kamerayı yeniden başlatır.
+        
+        Args:
+            camera_key: '{company_id}_{camera_id}' formatında
+            
+        Returns:
+            True başarılıysa, False başarısızsa
+        """
+        try:
+            # camera_key formatı: {company_id}_{camera_id}
+            parts = camera_key.split('_', 1)
+            if len(parts) < 2:
+                logger.error(f"[Watchdog] Geçersiz camera_key formatı: {camera_key}")
+                return False
+            
+            company_id = parts[0]
+            camera_id = parts[1]
+            
+            logger.info(f"[Watchdog] 🔄 Kamera yeniden başlatılıyor: {camera_id} (şirket: {company_id})")
+            
+            # Eski worker'ı durdur
+            active_detectors[camera_key] = False
+            time.sleep(1)  # Eski thread'in kapanması için kısa bekleme
+            
+            # Eski kaynakları temizle
+            if camera_key in camera_captures:
+                try:
+                    camera_captures[camera_key].release()
+                except Exception:
+                    pass
+                del camera_captures[camera_key]
+            if camera_key in frame_buffers:
+                del frame_buffers[camera_key]
+            
+            # Yeniden başlat
+            active_detectors[camera_key] = True
+            frame_timestamps[camera_key] = time.time()
+            self.start_saas_camera(camera_key, camera_id, company_id, active_detectors_ref=active_detectors)
+            
+            logger.info(f"[Watchdog] ✅ Kamera yeniden başlatıldı: {camera_id}")
+            return True
+            
+        except Exception as exc:
+            logger.error(f"[Watchdog] ❌ Kamera yeniden başlatma hatası ({camera_key}): {exc}")
+            return False
+
     def start_saas_camera(self, camera_key, camera_id, company_id, active_detectors_ref=None):
         """SaaS Kamera başlatma - proxy-stream ile aynı kaynak: get_camera_by_id. active_detectors_ref: detection worker'dan gelen dict ref."""
         try:
@@ -3866,45 +3928,118 @@ smartsafe_requests_total 100
             
             logger.info(f"✅ SaaS Kamera worker başladı: {camera_key}")
             frame_failure_counts[camera_key] = 0
+            frame_timestamps[camera_key] = time.time()  # Watchdog için ilk timestamp
+            
+            # ── Güçlendirilmiş reconnect parametreleri ──────────────────────
+            MAX_RECONNECT_ATTEMPTS = 5
+            reconnect_attempt = 0
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 30  # Bu kadar ardışık hata → reconnect dene
             
             while ad.get(camera_key, False):
                 ret, frame = cap.read()
                 if ret:
                     frame_buffers[camera_key] = frame
+                    frame_timestamps[camera_key] = time.time()  # Watchdog timestamp güncelle
                     frame_failure_counts[camera_key] = 0
+                    consecutive_failures = 0
+                    reconnect_attempt = 0  # Başarılı frame → reconnect sayacını sıfırla
                 else:
-                    # Art arda hataları say - 30'dan sonra sadece uyarı + hafif reconnect
-                    frame_failure_counts[camera_key] = frame_failure_counts.get(camera_key, 0) + 1
-                    fail_count = frame_failure_counts[camera_key]
+                    consecutive_failures += 1
+                    frame_failure_counts[camera_key] = consecutive_failures
                     
-                    if fail_count % 30 == 0:
-                        logger.warning(f"⚠️ Frame okunamadı (ardışık {fail_count}) - {camera_key}, yeniden deneniyor...")
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        # ── Reconnect mantığı (exponential backoff ile) ──────
+                        if reconnect_attempt >= MAX_RECONNECT_ATTEMPTS:
+                            logger.error(
+                                f"❌ Max reconnect denemesi aşıldı ({MAX_RECONNECT_ATTEMPTS}): "
+                                f"{camera_key} — kamera kalıcı arıza olarak işaretleniyor"
+                            )
+                            ad[camera_key] = False  # Detection worker'ı durdur
+                            break
+                        
+                        reconnect_attempt += 1
+                        backoff = min(2 ** (reconnect_attempt - 1), 16)  # 1→2→4→8→16s
+                        logger.warning(
+                            f"⚠️ Ardışık {consecutive_failures} hata — {camera_key}, "
+                            f"reconnect denemesi {reconnect_attempt}/{MAX_RECONNECT_ATTEMPTS} "
+                            f"(backoff {backoff}s)"
+                        )
+                        
                         try:
                             cap.release()
                         except Exception:
                             pass
-                        time.sleep(0.3)
-                        cap = cv2.VideoCapture(current_url)
-                        if cap.isOpened():
-                            logger.info(f"✅ Kamera yeniden baglandi (frame error sonrasi): {camera_key}")
-                            frame_failure_counts[camera_key] = 0
-                        else:
-                            logger.warning(f"⚠️ Kamera yeniden baglanamadi (frame error sonrasi): {camera_key}")
-                    # Çok fazla log atmamak için her hatada değil, sadece belirli eşiklerde uyarı ver
-                    elif fail_count in (1, 5, 10):
-                        logger.debug(f"⚠️ Frame okunamadı (count={fail_count}): {camera_key}")
+                        cap = None
+                        
+                        time.sleep(backoff)
+                        
+                        # Önce son başarılı URL'yi dene
+                        reconnected = False
+                        all_urls = [current_url] + [u for u in alternative_urls if u != current_url]
+                        
+                        for url in all_urls:
+                            try:
+                                cap = cv2.VideoCapture(url)
+                                if cap.isOpened():
+                                    test_ret, test_frame = cap.read()
+                                    if test_ret and test_frame is not None:
+                                        logger.info(f"✅ Reconnect başarılı ({reconnect_attempt}. deneme): {camera_key}")
+                                        current_url = url
+                                        camera_captures[camera_key] = cap
+                                        consecutive_failures = 0
+                                        reconnected = True
+                                        frame_timestamps[camera_key] = time.time()
+                                        break
+                                    else:
+                                        cap.release()
+                                        cap = None
+                                else:
+                                    if cap:
+                                        cap.release()
+                                    cap = None
+                            except Exception:
+                                if cap:
+                                    try:
+                                        cap.release()
+                                    except Exception:
+                                        pass
+                                cap = None
+                                continue
+                        
+                        if not reconnected:
+                            logger.warning(
+                                f"⚠️ Reconnect başarısız ({reconnect_attempt}. deneme): "
+                                f"{camera_key} — sonraki denemede tekrar denenecek"
+                            )
+                            # cap None kalacak, döngünün başına döndüğünde yine hata alıp
+                            # tekrar reconnect'e girecek
+                            if cap is None:
+                                cap = cv2.VideoCapture(current_url)
+                                camera_captures[camera_key] = cap
+                        
+                        continue  # Reconnect sonrası döngünün başına dön
                     
-                    time.sleep(0.1)
+                    # Çok fazla log atmamak için sadece belirli eşiklerde uyarı ver
+                    elif consecutive_failures in (1, 5, 10, 20):
+                        logger.debug(f"⚠️ Frame okunamadı (count={consecutive_failures}): {camera_key}")
+                    
+                    time.sleep(0.05)
                     
         except Exception as e:
             logger.error(f"❌ SaaS Kamera worker hatası: {e}")
         finally:
             if cap:
-                cap.release()
+                try:
+                    cap.release()
+                except Exception:
+                    pass
             if camera_key in camera_captures:
                 del camera_captures[camera_key]
             if camera_key in frame_buffers:
                 del frame_buffers[camera_key]
+            if camera_key in frame_timestamps:
+                del frame_timestamps[camera_key]
             
             logger.info(f"🛑 SaaS Kamera worker durduruldu: {camera_key}")
 
