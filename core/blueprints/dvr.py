@@ -521,21 +521,30 @@ def create_blueprint(api):
 
     @bp.route('/api/company/<company_id>/dvr/<dvr_id>/channels', methods=['GET'])
     def get_dvr_channels(company_id, dvr_id):
-        """Get DVR channels"""
+        """Get DVR channels — DB-first, max_channels-aware fallback"""
         user_data = api.validate_session()
         if not user_data:
             return jsonify({'error': 'Unauthorized'}), 401
-        
+
         try:
-            # Try database first (but don't fail if DB errors)
             manager = api.get_camera_manager().dvr_manager
+
+            # DVR bilgilerini al (max_channels için)
+            dvr_system = None
+            try:
+                dvr_system = manager.get_dvr_system(company_id, dvr_id)
+            except Exception:
+                pass
+            max_channels = int((dvr_system or {}).get('max_channels', 16))
+
+            # DB'den kanal listesi
             channels = None
             try:
                 channels = manager.db_adapter.get_dvr_channels(company_id, dvr_id)
             except Exception as db_err:
-                logger.warning(f"⚠️ DB channels fetch failed, using default list: {db_err}")
+                logger.warning(f"⚠️ DB channels fetch failed: {db_err}")
 
-            # Normalize: if DB returned empty/None, build a default 1..16 list
+            # Fallback: max_channels kadar kanal oluştur
             if not channels or not isinstance(channels, list):
                 channels = [
                     {
@@ -544,14 +553,10 @@ def create_blueprint(api):
                         'name': f'Kamera {i}',
                         'status': 'available'
                     }
-                    for i in range(1, 17)
+                    for i in range(1, max_channels + 1)
                 ]
 
-            # Always return a valid JSON response
-            return jsonify({
-                'success': True,
-                'channels': channels
-            })
+            return jsonify({'success': True, 'channels': channels, 'max_channels': max_channels})
         except Exception as e:
             logger.error(f"❌ Get DVR channels error: {e}")
             return jsonify({'error': str(e)}), 500
@@ -691,6 +696,141 @@ def create_blueprint(api):
             logger.error(f"❌ Delete DVR system error: {e}")
             return jsonify({'error': str(e)}), 500
 
+    @bp.route('/api/company/<company_id>/dvr/<dvr_id>/test', methods=['GET'])
+    def test_dvr_connection(company_id, dvr_id):
+        """DVR bağlantı testi — ONVIF önce, sonra RTSP denenir"""
+        user_data = api.validate_session()
+        if not user_data:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        try:
+            manager = api.get_camera_manager().dvr_manager
+            dvr_system = manager.get_dvr_system(company_id, dvr_id)
+            if not dvr_system:
+                return jsonify({'success': False, 'error': 'DVR sistemi bulunamadı'}), 404
+
+            ip  = dvr_system['ip_address']
+            user = dvr_system['username']
+            pwd  = dvr_system['password']
+            port = dvr_system.get('rtsp_port', 554)
+
+            result = {
+                'dvr_id': dvr_id,
+                'ip_address': ip,
+                'onvif_ok': False,
+                'rtsp_ok': False,
+                'channels_found': 0,
+                'method': None,
+                'error': None,
+            }
+
+            # 1° ONVIF teşt
+            try:
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                sh = get_stream_handler()
+                uri = sh._try_onvif_stream_uri(ip, user, pwd, 1)
+                if uri:
+                    result['onvif_ok'] = True
+                    result['method'] = 'ONVIF'
+                    result['channels_found'] = dvr_system.get('max_channels', 1)
+            except Exception as onvif_err:
+                logger.debug(f"ℹ️ ONVIF testi başarısız: {onvif_err}")
+
+            # 2° RTSP test (eğer ONVIF başarısız)
+            if not result['onvif_ok']:
+                import urllib.parse, cv2
+                safe_u = urllib.parse.quote(user)
+                safe_p = urllib.parse.quote(pwd)
+                test_urls = [
+                    f"rtsp://{ip}:{port}/user={safe_u}&password={safe_p}&channel=1&stream=0.sdp",
+                    f"rtsp://{user}:{pwd}@{ip}:{port}/Streaming/Channels/101",
+                    f"rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
+                    f"rtsp://{user}:{pwd}@{ip}:{port}/h264/ch1/main/av_stream",
+                ]
+                for url in test_urls:
+                    try:
+                        cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000)
+                        if cap.isOpened():
+                            ret, _ = cap.read()
+                            cap.release()
+                            if ret:
+                                result['rtsp_ok'] = True
+                                result['method'] = 'RTSP'
+                                result['channels_found'] = dvr_system.get('max_channels', 1)
+                                break
+                        else:
+                            cap.release()
+                    except Exception:
+                        pass
+
+            connected = result['onvif_ok'] or result['rtsp_ok']
+            result['success'] = connected
+            if not connected:
+                result['error'] = (
+                    f"{ip} adresine ulaşılamadı. "
+                    "Kameranın IP/port/kullanıcı adı/şifresini ve"
+                    " ağ bağlantısını kontrol edin."
+                )
+
+            logger.info(f"📶 DVR test: {dvr_id} - {'OK' if connected else 'FAIL'} ({result['method']})")
+            return jsonify(result)
+
+        except Exception as e:
+            logger.error(f"❌ DVR test error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @bp.route('/api/company/<company_id>/dvr/<dvr_id>/channels/health', methods=['GET'])
+    def get_dvr_channel_health(company_id, dvr_id):
+        """Kanal sağlık durumu — her kanal için hızlı ping"""
+        user_data = api.validate_session()
+        if not user_data:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        try:
+            manager = api.get_camera_manager().dvr_manager
+            dvr_system = manager.get_dvr_system(company_id, dvr_id)
+            if not dvr_system:
+                return jsonify({'success': False, 'error': 'DVR sistemi bulunamadı'}), 404
+
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
+            from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
+            sh = get_stream_handler()
+            dvr_ppe = get_dvr_ppe_manager()
+            active_streams = dvr_ppe.dvr_processor.get_active_detections()
+
+            max_ch = int(dvr_system.get('max_channels', 16))
+            # Sadece istenen kanalları dene (client ?channels=1,2,3)
+            try:
+                ch_param = request.args.get('channels', '')
+                req_channels = [int(c) for c in ch_param.split(',') if c.strip().isdigit()]
+            except Exception:
+                req_channels = []
+            channels_to_check = req_channels if req_channels else list(range(1, min(max_ch, 9) + 1))
+
+            health = []
+            for ch in channels_to_check:
+                stream_id = f"dvr_{dvr_id}_ch{ch:02d}"
+                detection_active = stream_id in active_streams
+                frame_b64 = sh.capture_single_frame(
+                    ip_address=dvr_system['ip_address'],
+                    username=dvr_system['username'],
+                    password=dvr_system['password'],
+                    rtsp_port=dvr_system['rtsp_port'],
+                    channel_number=ch
+                )
+                health.append({
+                    'channel_number': ch,
+                    'online': frame_b64 is not None,
+                    'detection_active': detection_active,
+                    'thumbnail': frame_b64
+                })
+
+            return jsonify({'success': True, 'channels': health})
+        except Exception as e:
+            logger.error(f"❌ Channel health error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     # DVR-PPE Detection API endpoints
     @bp.route('/api/company/<company_id>/dvr/<dvr_id>/detection/start', methods=['POST'])
     def start_dvr_detection(company_id, dvr_id):
@@ -802,6 +942,160 @@ def create_blueprint(api):
                 'status': status
             })
         except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+
+    # =========================================================================
+    # 3.1 MARKA L\u0130STES\u0130 — Frontend dropdown i\u00e7in
+    # =========================================================================
+
+    @bp.route('/api/dvr/brands', methods=['GET'])
+    def get_dvr_brands():
+        """DVR marka listesini ve RTSP \u015fablon \u00f6rne\u011fini d\u00f6nd\u00fcr."""
+        try:
+            from integrations.dvr.dvr_ppe_integration import RTSP_TEMPLATES
+            brands = []
+            for key, tmpl in RTSP_TEMPLATES.items():
+                label = key.replace('_', ' ').title()
+                brands.append({'value': key, 'label': label, 'template_preview': tmpl})
+            return jsonify({'success': True, 'brands': brands})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # =========================================================================
+    # 3.4 DVR DETECTION RAPORU — PDF / Print-ready HTML Export
+    # =========================================================================
+
+    @bp.route('/api/company/<company_id>/dvr/<dvr_id>/report/pdf', methods=['GET'])
+    def export_dvr_report_pdf(company_id, dvr_id):
+        """
+        DVR detection oturumlar\u0131n\u0131n print-ready HTML raporu.
+        ?format=html  \u2192 taray\u0131c\u0131da yeni sekme a\u00e7, yazd\u0131r d\u00fcatonu ile PDF yap
+        ?format=download  \u2192 attachment olarak indir (default)
+        """
+        from flask import make_response
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'error': 'Unauthorized'}), 401
+
+            fmt = request.args.get('format', 'download')
+
+            # Veri toplama
+            db_adapter = get_db_adapter()
+            manager = api.get_camera_manager().dvr_manager
+            dvr_system = manager.get_dvr_system(company_id, dvr_id)
+            if not dvr_system:
+                return jsonify({'error': 'DVR bulunamad\u0131'}), 404
+
+            sessions = db_adapter.get_dvr_detection_sessions(company_id, dvr_id)
+
+            # \u0130hlal verisi
+            all_results = []
+            for sess in (sessions or []):
+                if sess.get('session_id'):
+                    results = db_adapter.get_dvr_detection_results(sess['session_id'], 100) or []
+                    for r in results:
+                        r['session_id'] = sess.get('session_id')
+                        r['channel'] = sess.get('channel_number', '?')
+                    all_results.extend(results)
+
+            # Toplam violation say\u0131s\u0131
+            total_violations = sum(len(r.get('ppe_violations') or []) for r in all_results)
+            total_detections = len(all_results)
+
+            from datetime import datetime as _dt
+            now_str = _dt.now().strftime('%d.%m.%Y %H:%M')
+
+            # Session sat\u0131rlar\u0131
+            session_rows = ''
+            for s in (sessions or []):
+                session_rows += f"""
+                <tr>
+                    <td>{s.get('session_id', '-')}</td>
+                    <td>{s.get('channel_number', '-')}</td>
+                    <td>{s.get('start_time', '-')}</td>
+                    <td>{s.get('end_time', '') or 'Devam ediyor'}</td>
+                    <td>{s.get('detection_mode', 'construction')}</td>
+                </tr>"""
+
+            # Detection sat\u0131rlar\u0131
+            result_rows = ''
+            for r in all_results[:200]:
+                viols = ', '.join(r.get('ppe_violations') or []) or '\u2014'
+                ts = r.get('timestamp', '')
+                result_rows += f"""
+                <tr>
+                    <td>{ts}</td>
+                    <td>Kanal {r.get('channel', '?')}</td>
+                    <td>{r.get('people_detected', 0)}</td>
+                    <td class=\"{'violation' if viols != '\u2014' else ''}\">{viols}</td>
+                    <td>{r.get('detection_system', 'Klasik')}</td>
+                </tr>"""
+
+            html = f"""<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>DVR Raporu \u2014 {dvr_system.get('name', dvr_id)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: Inter, sans-serif; color: #1a1a2e; background: #fff; padding: 30px; }}
+  h1 {{ font-size: 22px; color: #0d6efd; margin-bottom: 4px; }}
+  .subtitle {{ color: #666; font-size: 13px; margin-bottom: 24px; }}
+  .meta-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }}
+  .meta-card {{ border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; text-align: center; }}
+  .meta-card .val {{ font-size: 28px; font-weight: 700; color: #0d6efd; }}
+  .meta-card .lbl {{ font-size: 12px; color: #888; margin-top: 4px; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 28px; }}
+  th {{ background: #0d6efd; color: #fff; padding: 8px 10px; text-align: left; }}
+  td {{ padding: 7px 10px; border-bottom: 1px solid #eee; }}
+  tr:hover td {{ background: #f8f9fa; }}
+  td.violation {{ color: #dc3545; font-weight: 600; }}
+  h2 {{ font-size: 15px; margin-bottom: 10px; border-left: 4px solid #0d6efd; padding-left: 10px; }}
+  .print-btn {{ display: inline-block; margin-bottom: 20px; padding: 8px 20px;
+               background: #0d6efd; color: #fff; border: none; border-radius: 6px; cursor: pointer;
+               font-size: 14px; font-family: inherit; }}
+  @media print {{ .print-btn {{ display: none; }} }}
+  footer {{ margin-top: 30px; font-size: 11px; color: #aaa; text-align: center; }}
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">&#128438; Yazdır / PDF Kaydet</button>
+<h1>SmartSafe AI \u2014 DVR Detection Raporu</h1>
+<p class="subtitle">Rapor tarihi: {now_str} &nbsp;&bull;&nbsp; {dvr_system.get('name','')} ({dvr_system.get('ip_address','')})</p>
+
+<div class="meta-grid">
+  <div class="meta-card"><div class="val">{len(sessions or [])}</div><div class="lbl">Detection Oturumu</div></div>
+  <div class="meta-card"><div class="val">{total_detections}</div><div class="lbl">Toplam Tespitler</div></div>
+  <div class="meta-card"><div class="val" style="color:#dc3545">{total_violations}</div><div class="lbl">Toplam \u0130hlaller</div></div>
+</div>
+
+<h2>Detection Oturumlar\u0131</h2>
+<table>
+  <thead><tr><th>Oturum ID</th><th>Kanal</th><th>Ba\u015flang\u0131\u00e7</th><th>Biti\u015f</th><th>Mod</th></tr></thead>
+  <tbody>{session_rows or '<tr><td colspan="5">Oturum bulunamad\u0131</td></tr>'}</tbody>
+</table>
+
+<h2>Detection Sonu\u00e7lar\u0131 (son 200)</h2>
+<table>
+  <thead><tr><th>Zaman</th><th>Kanal</th><th>Ki\u015fi</th><th>\u0130hlaller</th><th>Sistem</th></tr></thead>
+  <tbody>{result_rows or '<tr><td colspan="5">Sonu\u00e7 bulunamad\u0131</td></tr>'}</tbody>
+</table>
+
+<footer>SmartSafe AI &copy; {_dt.now().year} &nbsp;&bull;&nbsp; Otomatik olu\u015fturuldu: {now_str}</footer>
+</body></html>"""
+
+            response = make_response(html)
+            response.headers['Content-Type'] = 'text/html; charset=utf-8'
+            if fmt == 'download':
+                fname = f"DVR_Report_{dvr_id}_{_dt.now().strftime('%Y%m%d_%H%M')}.html"
+                response.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+            return response
+
+        except Exception as e:
+            logger.error(f"\u274c DVR PDF export error: {e}")
             return jsonify({'error': str(e)}), 500
 
     return bp

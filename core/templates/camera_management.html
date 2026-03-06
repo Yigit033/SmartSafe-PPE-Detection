@@ -3519,22 +3519,29 @@
                 if (data.success && data.dvr_systems && data.dvr_systems.length > 0) {
                     console.log(`📋 Found ${data.dvr_systems.length} DVR systems`);
                     let html = '';
+                    // Multi-DVR: aktif DVR selector dropdown için de liste oluştur
+                    let selectorHtml = '<option value="">-- DVR Seç --</option>';
                     data.dvr_systems.forEach((dvr, index) => {
                         console.log(`📋 DVR ${index + 1}:`, dvr);
+                        selectorHtml += `<option value="${dvr.dvr_id}">${dvr.name} (${dvr.ip_address})</option>`;
                         html += `
-                            <div class="card mb-3">
-                                <div class="card-body">
+                            <div class="card mb-3 dvr-list-card border-0 shadow-sm" id="dvr-card-${dvr.dvr_id}">
+                                <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
                                             <h6 class="mb-1">${dvr.name}</h6>
                                             <small class="text-muted">${dvr.ip_address}:${dvr.port}</small>
                                             <br>
                                             <span class="badge bg-${dvr.status === 'active' ? 'success' : 'secondary'}">${dvr.status}</span>
-                                            <span class="badge bg-info ms-1">${dvr.total_channels || 0} kanal</span>
+                                            <span class="badge bg-info ms-1">${dvr.total_channels || dvr.max_channels || 0} kanal</span>
+                                            <span class="badge ms-1" id="test-badge-${dvr.dvr_id}">--</span>
                                         </div>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" onclick="discoverDVRChannels('${dvr.dvr_id}')" title="Kanalları Keşfet">
-                                                <i class="fas fa-search"></i>
+                                            <button class="btn btn-outline-success" onclick="testDVRConnection('${dvr.dvr_id}')" title="Bağlantıyı Test Et">
+                                                <i class="fas fa-plug"></i>
+                                            </button>
+                                            <button class="btn btn-outline-primary" onclick="switchActiveDVR('${dvr.dvr_id}')" title="Bu DVR'ı Seç">
+                                                <i class="fas fa-check-circle"></i>
                                             </button>
                                             <button class="btn btn-outline-info" onclick="showDVRChannelLive('${dvr.dvr_id}', 1)" title="Canlı Görüntü">
                                                 <i class="fas fa-video"></i>
@@ -3549,14 +3556,17 @@
                         `;
                     });
                     dvrList.innerHTML = html;
+                    // Multi-DVR selector'u güncelle
+                    const sel = document.getElementById('activeDVRSelector');
+                    if (sel) sel.innerHTML = selectorHtml;
                     console.log('✅ DVR systems loaded successfully');
 
-                    // 🎯 PRODUCTION-GRADE: Sayfa yüklendiğinde ilk DVR'ın kanallarını otomatik yükle
+                    // Multi-DVR: ilk DVR'a otomatik geç
                     if (data.dvr_systems.length > 0) {
                         const firstDVR = data.dvr_systems[0];
                         console.log(`🔄 Auto-loading channels for first DVR: ${firstDVR.dvr_id}`);
                         setTimeout(() => {
-                            discoverDVRChannels(firstDVR.dvr_id);
+                            switchActiveDVR(firstDVR.dvr_id);
                         }, 500);
                     }
                 } else {
@@ -3990,8 +4000,8 @@
             }
         }
 
-        // Dinamik kanal grid'i oluştur
-        function renderDVRChannelsGrid(channels) {
+        // Dinamik kanal grid'i oluştur (health göstergeli)
+        function renderDVRChannelsGrid(channels, healthData) {
             const grid = document.getElementById('dvrChannelsGrid');
             if (!channels || channels.length === 0) {
                 grid.innerHTML = `
@@ -4002,23 +4012,43 @@
                 return;
             }
 
+            // healthData varsa channel_number → health map yap
+            const healthMap = {};
+            if (healthData && Array.isArray(healthData)) {
+                healthData.forEach(h => { healthMap[h.channel_number] = h; });
+            }
+
             let html = '';
             channels.forEach(ch => {
                 const channelNum = ch.channel_number || ch.number || ch.id;
                 const channelName = ch.name || `Kanal ${channelNum}`;
                 const isActive = ch.status === 'active' || ch.status === 'online';
-                const isOnline = ch.online !== false;
+                const healthEntry = healthMap[channelNum];
+                const isOnline = healthEntry ? healthEntry.online : (ch.online !== false);
+                const detectionActive = healthEntry ? healthEntry.detection_active : false;
+                const thumbnail = healthEntry ? healthEntry.thumbnail : null;
+
                 const statusBadge = isActive ? '<span class="badge bg-success">Aktif</span>' : '<span class="badge bg-secondary">İnaktif</span>';
-                const onlineBadge = isOnline ? '<span class="badge bg-info">Çevrimiçi</span>' : '<span class="badge bg-danger">Çevrimdışı</span>';
+                const onlineDot = isOnline
+                    ? '<span class="badge bg-success rounded-circle p-1" title="Çevrimiçi" style="width:12px;height:12px;"></span>'
+                    : '<span class="badge bg-danger rounded-circle p-1" title="Çevrimdışı" style="width:12px;height:12px;"></span>';
+                const detectionDot = detectionActive
+                    ? '<span class="badge bg-warning ms-1" title="Detection Aktif"><i class="fas fa-brain" style="font-size:10px"></i></span>'
+                    : '';
+
+                const thumbHtml = thumbnail
+                    ? `<img src="data:image/jpeg;base64,${thumbnail}" class="img-fluid rounded mb-2" style="max-height:80px;object-fit:cover;width:100%" alt="Kanal ${channelNum}">`
+                    : `<div class="bg-dark rounded d-flex align-items-center justify-content-center mb-2" style="height:60px;"><i class="fas fa-video text-secondary"></i></div>`;
 
                 html += `
-                    <div class="col-md-6 col-lg-4" data-channel-card data-channel-active="${isActive}" data-channel-online="${isOnline}">
-                        <div class="card h-100 border-0 shadow-sm" style="transition: all 0.3s; cursor:default;">
+                    <div class="col-md-6 col-lg-4" data-channel-card data-channel-active="${isActive}" data-channel-online="${isOnline}" id="channel-card-${channelNum}">
+                        <div class="card h-100 border-0 shadow-sm" style="transition: all 0.3s;">
                             <div class="card-body p-3">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
                                     <div>
-                                        <h6 class="card-title mb-1">
-                                            <i class="fas fa-video text-primary"></i> ${channelName}
+                                        <h6 class="card-title mb-0">
+                                            ${onlineDot}${detectionDot}
+                                            <i class="fas fa-video text-primary ms-1"></i> ${channelName}
                                         </h6>
                                         <small class="text-muted">Kanal #${channelNum}</small>
                                     </div>
@@ -4026,14 +4056,12 @@
                                         <input class="form-check-input" type="checkbox" name="dvrChannels" value="${channelNum}" id="ch${channelNum}" onchange="saveChannelSelection()">
                                     </div>
                                 </div>
-                                <div class="mb-2">
-                                    ${statusBadge}
-                                    ${onlineBadge}
-                                </div>
+                                ${thumbHtml}
+                                <div class="mb-2">${statusBadge}</div>
                                 ${ch.resolution ? `<small class="text-muted d-block">📐 ${ch.resolution}</small>` : ''}
                                 ${ch.fps ? `<small class="text-muted d-block">⚡ ${ch.fps} FPS</small>` : ''}
-                                <div class="mt-2">
-                                    <button class="btn btn-outline-info btn-sm w-100" onclick="showDVRChannelLive(currentActiveDVRId, ${channelNum})">
+                                <div class="mt-2 d-flex gap-1">
+                                    <button class="btn btn-outline-info btn-sm flex-grow-1" onclick="showDVRChannelLive(currentActiveDVRId, ${channelNum})">
                                         <i class="fas fa-eye me-1"></i>Canlı İzle
                                     </button>
                                 </div>
@@ -4047,23 +4075,290 @@
             loadChannelSelection();
         }
 
-        // DVR kanallarını keşfet ve grid'i güncelle
+        // DVR kanallar\u0131n\u0131 ke\u015ffet ve grid'i g\u00fcncelle (health ile birlikte)
         async function discoverAndLoadDVRChannels(dvrId) {
             try {
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
                 const data = await response.json();
 
                 if (data.success && data.channels) {
+                    // \u00d6nce grid'i kanallarla render et
                     renderDVRChannelsGrid(data.channels);
-                    showAlert(`✅ ${data.channels.length} kanal keşfedildi!`, 'success');
+                    showAlert(`\u2705 ${data.channels.length} kanal bulundu!`, 'success');
+                    // Arka planda health durumunu \u00e7ek
+                    pollChannelHealth(dvrId);
                 } else {
-                    showAlert('⚠️ Kanal keşfi başarısız', 'warning');
+                    showAlert('\u26a0\ufe0f Kanal ke\u015ffi ba\u015far\u0131s\u0131z', 'warning');
                 }
             } catch (error) {
-                console.error('❌ Kanal keşfi hatası:', error);
-                showAlert('❌ Kanal keşfi sırasında hata oluştu', 'danger');
+                console.error('\u274c Kanal ke\u015ffi hatas\u0131:', error);
+                showAlert('\u274c Kanal ke\u015ffi s\u0131ras\u0131nda hata olu\u015ftu', 'danger');
             }
         }
+
+        // =====================================================================
+        // 1.1 DVR BA\u011aLANTI TEST\u0130
+        // =====================================================================
+        async function testDVRConnection(dvrId) {
+            const badge = document.getElementById(`test-badge-${dvrId}`);
+            if (badge) { badge.className = 'badge bg-secondary ms-1'; badge.textContent = 'Test ediliyor...'; }
+
+            try {
+                const res = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/test`);
+                const data = await res.json();
+
+                if (badge) {
+                    if (data.success) {
+                        badge.className = 'badge bg-success ms-1';
+                        badge.textContent = `\u2705 ${data.method} (${data.channels_found} kanal)`;
+                    } else {
+                        badge.className = 'badge bg-danger ms-1';
+                        badge.textContent = '\u274c Ba\u011flant\u0131 Yok';
+                        badge.title = data.error || 'Bilinmeyen hata';
+                    }
+                }
+
+                showAlert(
+                    data.success
+                        ? `\u2705 ${data.ip_address} ba\u011flant\u0131s\u0131 ba\u015far\u0131l\u0131 (${data.method})`
+                        : `\u274c ${data.error || 'Ba\u011flant\u0131 kurulamad\u0131'}`,
+                    data.success ? 'success' : 'danger'
+                );
+            } catch (err) {
+                if (badge) { badge.className = 'badge bg-danger ms-1'; badge.textContent = '\u274c Hata'; }
+                showAlert(`\u274c Test hatas\u0131: ${err.message}`, 'danger');
+            }
+        }
+
+        // =====================================================================
+        // 2.2 MULTI-DVR SE\u00c7\u0130C\u0130
+        // =====================================================================
+        function switchActiveDVR(dvrId) {
+            currentActiveDVRId = dvrId;
+
+            // T\u00fcm kartlar\u0131 s\u0131f\u0131rla, se\u00e7ili olan\u0131 vurgula
+            document.querySelectorAll('.dvr-list-card').forEach(c => {
+                c.style.borderLeft = '';
+                c.style.boxShadow = '';
+            });
+            const card = document.getElementById(`dvr-card-${dvrId}`);
+            if (card) {
+                card.style.borderLeft = '4px solid #0d6efd';
+                card.style.boxShadow = '0 0 0 2px rgba(13,110,253,.25)';
+            }
+
+            // Selector'u g\u00fcncelle
+            const sel = document.getElementById('activeDVRSelector');
+            if (sel) sel.value = dvrId;
+
+            // Kanallar\u0131 y\u00fckle
+            console.log(`\ud83d\udd04 Switching to DVR: ${dvrId}`);
+            discoverAndLoadDVRChannels(dvrId);
+        }
+
+        // =====================================================================
+        // 2.3 KANAL SA\u011eLIK POLLINGi
+        // =====================================================================
+        async function pollChannelHealth(dvrId) {
+            try {
+                const res = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels/health`);
+                const data = await res.json();
+                if (!data.success || !data.channels) return;
+
+                data.channels.forEach(h => {
+                    const card = document.getElementById(`channel-card-${h.channel_number}`);
+                    if (!card) return;
+
+                    // Online dot g\u00fcncelle
+                    const onlineDot = card.querySelector('[title="\u00c7evrimi\u00e7i"], [title="\u00c7evrimd\u0131\u015f\u0131"]');
+                    if (onlineDot) {
+                        onlineDot.className = h.online
+                            ? 'badge bg-success rounded-circle p-1'
+                            : 'badge bg-danger rounded-circle p-1';
+                        onlineDot.title = h.online ? '\u00c7evrimi\u00e7i' : '\u00c7evrimd\u0131\u015f\u0131';
+                    }
+
+                    // Thumbnail g\u00fcncelle (varsa)
+                    if (h.thumbnail) {
+                        const mediaArea = card.querySelector('img, .bg-dark');
+                        if (mediaArea) {
+                            const img = document.createElement('img');
+                            img.src = `data:image/jpeg;base64,${h.thumbnail}`;
+                            img.className = 'img-fluid rounded mb-2';
+                            img.style.cssText = 'max-height:80px;object-fit:cover;width:100%';
+                            mediaArea.replaceWith(img);
+                        }
+                    }
+                });
+            } catch (e) {
+                console.debug('Health poll error:', e);
+            }
+        }
+
+        // =====================================================================
+        // 2.1 SSE — CANLI \u0130HLAL FEED\u0130
+        // =====================================================================
+        let _sseSource = null;
+
+        function initViolationSSE() {
+            // Zaten ba\u011fl\u0131 ise kapat
+            if (_sseSource) { _sseSource.close(); _sseSource = null; }
+
+            // Feed panel'i sayfaya ekle (yoksa)
+            if (!document.getElementById('violationFeedPanel')) {
+                const panel = document.createElement('div');
+                panel.id = 'violationFeedPanel';
+                panel.className = 'card border-0 shadow-sm mt-3';
+                panel.innerHTML = `
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <span><i class="fas fa-broadcast-tower text-danger me-1"></i> <strong>Canl\u0131 \u0130hlal Feed\u0130</strong>
+                            <span class="badge bg-secondary ms-2" id="sseStatusBadge">Ba\u011flan\u0131yor...</span>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('violationFeedList').innerHTML=''">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                    <div class="card-body p-2" style="max-height:260px;overflow-y:auto;" id="violationFeedList">
+                        <p class="text-muted text-center small mb-0">\u0130hlal bekleniyor...</p>
+                    </div>
+                `;
+                // DVR yonetim bolumunun ustune ekle
+                const dvrSection = document.getElementById('dvrSystemsList') || document.querySelector('[id*="dvr"]');
+                if (dvrSection && dvrSection.parentNode) {
+                    dvrSection.parentNode.insertBefore(panel, dvrSection);
+                } else {
+                    document.body.appendChild(panel);
+                }
+            }
+
+            _sseSource = new EventSource(`/api/company/{{ company_id }}/violations/stream`);
+
+            _sseSource.onopen = () => {
+                const b = document.getElementById('sseStatusBadge');
+                if (b) { b.className = 'badge bg-success ms-2'; b.textContent = 'Canl\u0131'; }
+            };
+
+            _sseSource.onmessage = (evt) => {
+                try {
+                    const msg = JSON.parse(evt.data);
+                    if (msg.type !== 'violation') return;
+                    appendViolationEntry(msg);
+                } catch (e) { }
+            };
+
+            _sseSource.onerror = () => {
+                const b = document.getElementById('sseStatusBadge');
+                if (b) { b.className = 'badge bg-warning ms-2'; b.textContent = 'Yeniden ba\u011flan\u0131yor...'; }
+            };
+        }
+
+        function appendViolationEntry(msg) {
+            const list = document.getElementById('violationFeedList');
+            if (!list) return;
+
+            // Eski "bekleniyor" mesaj\u0131n\u0131 kald\u0131r
+            const placeholder = list.querySelector('p.text-muted');
+            if (placeholder) placeholder.remove();
+
+            const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('tr-TR') : new Date().toLocaleTimeString('tr-TR');
+            const source = msg.source === 'dvr'
+                ? `<span class="badge bg-info">DVR ${msg.stream_id || ''}</span>`
+                : `<span class="badge bg-primary">Kamera ${msg.camera_id || ''}</span>`;
+            const vList = (msg.violations || []).slice(0, 3).map(v =>
+                `<span class="badge bg-warning text-dark me-1">${v.type || v}</span>`
+            ).join('');
+
+            const entry = document.createElement('div');
+            entry.className = 'border-bottom py-1 small d-flex align-items-center gap-2';
+            entry.innerHTML = `
+                <span class="text-muted">${ts}</span>
+                ${source}
+                <i class="fas fa-exclamation-circle text-danger"></i>
+                ${vList}
+                <span class="text-muted ms-auto">${msg.people_detected || 0} ki\u015fi</span>
+            `;
+
+            list.insertBefore(entry, list.firstChild);
+
+            // Maksimum 50 kay\u0131t tut
+            while (list.children.length > 50) list.removeChild(list.lastChild);
+        }
+
+        // =====================================================================
+        // 2.4 IP KAMERA TOPLU DURDURMA
+        // =====================================================================
+        function initBatchStopUI() {
+            // Kamera tablosunu bul
+            const cameraTable = document.getElementById('camerasTable') ||
+                document.querySelector('table[id*="camera"]') ||
+                document.querySelector('.camera-table');
+            if (!cameraTable) return;
+
+            // Tablo ba\u015fl\u0131\u011f\u0131na se\u00e7im kolonu ekle
+            const thead = cameraTable.querySelector('thead tr');
+            if (thead && !thead.querySelector('.batch-check-th')) {
+                const th = document.createElement('th');
+                th.className = 'batch-check-th';
+                th.style.width = '40px';
+                th.innerHTML = '<input type="checkbox" id="selectAllCameras" title="T\u00fcm\u00fcn\u00fc Se\u00e7" onchange="toggleAllCameraCheckboxes()">';
+                thead.insertBefore(th, thead.firstChild);
+            }
+
+            // Toplu durdur butonu ekle (tablonun \u00fcsst\u00fcnde)
+            if (!document.getElementById('batchStopBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'batchStopBtn';
+                btn.className = 'btn btn-sm btn-danger mb-2 ms-2';
+                btn.style.display = 'none';
+                btn.innerHTML = '<i class="fas fa-stop-circle me-1"></i> Se\u00e7ilenleri Durdur';
+                btn.onclick = stopDetectionBatch;
+                cameraTable.parentNode.insertBefore(btn, cameraTable);
+            }
+        }
+
+        function toggleAllCameraCheckboxes() {
+            const master = document.getElementById('selectAllCameras');
+            document.querySelectorAll('.camera-batch-cb').forEach(cb => cb.checked = master.checked);
+            const btn = document.getElementById('batchStopBtn');
+            if (btn) btn.style.display = master.checked ? 'inline-block' : 'none';
+        }
+
+        function onCameraCheckboxChange() {
+            const anyChecked = document.querySelectorAll('.camera-batch-cb:checked').length > 0;
+            const btn = document.getElementById('batchStopBtn');
+            if (btn) btn.style.display = anyChecked ? 'inline-block' : 'none';
+        }
+
+        async function stopDetectionBatch() {
+            const checked = document.querySelectorAll('.camera-batch-cb:checked');
+            const camera_ids = Array.from(checked).map(cb => cb.dataset.cameraId);
+
+            if (camera_ids.length === 0) {
+                showAlert('L\u00fctfen durdurulacak kameraları se\u00e7in.', 'warning');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/company/{{ company_id }}/stop-detection-batch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ camera_ids })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert(`\u2705 ${data.total_stopped} kamera durduruldu`, 'success');
+                    // Checkboxlar\u0131 temizle
+                    document.querySelectorAll('.camera-batch-cb').forEach(cb => cb.checked = false);
+                    const btn = document.getElementById('batchStopBtn');
+                    if (btn) btn.style.display = 'none';
+                } else {
+                    showAlert(`\u274c Toplu durdurma hatas\u0131: ${data.error}`, 'danger');
+                }
+            } catch (err) {
+                showAlert(`\u274c Hata: ${err.message}`, 'danger');
+            }
+        }
+
 
         // DVR form submit event listener
         document.addEventListener('DOMContentLoaded', function () {
@@ -4081,6 +4376,17 @@
             // DVR sistemlerini yükle
             console.log('🔄 Loading DVR systems...');
             loadDVRSystems();
+
+            // SSE: Canlı ihlal feed bağlantısı
+            initViolationSSE();
+
+            // IP kamera tablosuna batch-stop checkbox kolonunu ekle
+            initBatchStopUI();
+
+            // 30sn'de bir kanal sağlık ping
+            setInterval(() => {
+                if (currentActiveDVRId) pollChannelHealth(currentActiveDVRId);
+            }, 30000);
         });
 
         // DVR kanal canlı görüntüsünü göster
@@ -5648,6 +5954,372 @@ Ortalama Güven: ${(stats.avg_confidence * 100).toFixed(2)}%
                 })
                 .catch(err => showAlert('❌ Bağlantı hatası: ' + err.message, 'danger'));
         }
+
+        // =====================================================================
+        // PHASE 3.1 — DVR FORM: MARKA DROPDOWN DİNAMİK YÜKLEME
+        // =====================================================================
+        async function loadDVRBrands() {
+            try {
+                const res = await fetch('/api/dvr/brands');
+                const data = await res.json();
+                if (!data.success) return;
+
+                // dvrType select elementini bul
+                const sel = document.getElementById('dvrType');
+                if (!sel) return;
+
+                // Mevcut opsiyonları temizle, yenilerini ekle
+                sel.innerHTML = '';
+                data.brands.forEach(b => {
+                    const opt = document.createElement('option');
+                    opt.value = b.value;
+                    opt.textContent = b.label;
+                    opt.dataset.template = b.template_preview;
+                    sel.appendChild(opt);
+                });
+
+                // Değişince RTSP preview göster
+                sel.addEventListener('change', function () {
+                    const chosen = this.options[this.selectedIndex];
+                    let preview = document.getElementById('rtspTemplatePreview');
+                    if (!preview) {
+                        preview = document.createElement('div');
+                        preview.id = 'rtspTemplatePreview';
+                        preview.className = 'alert alert-secondary py-1 mt-1 small font-monospace';
+                        sel.parentNode.appendChild(preview);
+                    }
+                    preview.textContent = '📡 ' + (chosen.dataset.template || '');
+                });
+                // İlk marka için preview göster
+                sel.dispatchEvent(new Event('change'));
+            } catch (e) {
+                console.debug('Brand load error:', e);
+            }
+        }
+
+        // =====================================================================
+        // PHASE 3.2 — VİOLATION İSTATİSTİK DASHBOARD
+        // =====================================================================
+        let _statsCharts = {};
+        let _statsPeriod = '7d';
+
+        function openStatsDashboard() {
+            // Modal yoksa oluştur
+            if (!document.getElementById('statsDashboardModal')) {
+                const modal = document.createElement('div');
+                modal.innerHTML = `
+                <div class="modal fade" id="statsDashboardModal" tabindex="-1">
+                  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                      <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title"><i class="fas fa-chart-bar me-2"></i>İhlal İstatistik Dashboard</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <!-- Period seçici -->
+                        <div class="btn-group mb-4" role="group">
+                          <button type="button" class="btn btn-sm btn-outline-primary stats-period-btn" data-period="24h" onclick="loadStats('24h')">Son 24 Saat</button>
+                          <button type="button" class="btn btn-sm btn-primary stats-period-btn" data-period="7d" onclick="loadStats('7d')">Son 7 Gün</button>
+                          <button type="button" class="btn btn-sm btn-outline-primary stats-period-btn" data-period="30d" onclick="loadStats('30d')">Son 30 Gün</button>
+                        </div>
+                        <!-- Summary kartları -->
+                        <div class="row g-3 mb-4" id="statsSummaryCards">
+                          <div class="col-md-3"><div class="card border-0 bg-primary text-white text-center p-3"><div class="h2 mb-0" id="statsTotalViol">—</div><small>Toplam İhlal</small></div></div>
+                          <div class="col-md-3"><div class="card border-0 bg-danger text-white text-center p-3"><div class="h5 mb-0" id="statsWorstDay">—</div><small>En Kötü Gün</small></div></div>
+                          <div class="col-md-3"><div class="card border-0 bg-warning text-dark text-center p-3"><div class="h5 mb-0" id="statsWorstCamera">—</div><small>En Çok İhlal Kamera</small></div></div>
+                          <div class="col-md-3"><div class="card border-0 bg-info text-white text-center p-3"><div class="h5 mb-0" id="statsWorstPPE">—</div><small>En Sık İhlal PPE</small></div></div>
+                        </div>
+                        <!-- Grafikler -->
+                        <div class="row g-4">
+                          <div class="col-md-8">
+                            <div class="card border-0 shadow-sm p-3">
+                              <h6 class="mb-3"><i class="fas fa-chart-line text-primary me-1"></i>Günlük İhlal Trendi</h6>
+                              <canvas id="statsTimeChart" height="120"></canvas>
+                            </div>
+                          </div>
+                          <div class="col-md-4">
+                            <div class="card border-0 shadow-sm p-3">
+                              <h6 class="mb-3"><i class="fas fa-chart-pie text-danger me-1"></i>PPE Dağılımı</h6>
+                              <canvas id="statsPPEChart" height="200"></canvas>
+                            </div>
+                          </div>
+                          <div class="col-12">
+                            <div class="card border-0 shadow-sm p-3">
+                              <h6 class="mb-3"><i class="fas fa-chart-bar text-warning me-1"></i>Kamera Bazlı İhlal (Top 10)</h6>
+                              <canvas id="statsCameraChart" height="80"></canvas>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>`;
+                document.body.appendChild(modal.firstElementChild);
+            }
+
+            const m = new bootstrap.Modal(document.getElementById('statsDashboardModal'));
+            m.show();
+            loadStats('7d');
+        }
+
+        async function loadStats(period) {
+            _statsPeriod = period;
+            // Period button aktif
+            document.querySelectorAll('.stats-period-btn').forEach(b => {
+                b.className = b.dataset.period === period
+                    ? 'btn btn-sm btn-primary stats-period-btn'
+                    : 'btn btn-sm btn-outline-primary stats-period-btn';
+            });
+
+            try {
+                const res = await fetch(`/api/company/{{ company_id }}/violations/stats?period=${period}`);
+                const data = await res.json();
+                if (!data.success) return;
+
+                // Summary
+                document.getElementById('statsTotalViol').textContent = data.summary.total ?? 0;
+                document.getElementById('statsWorstDay').textContent = data.summary.worst_day ?? '—';
+                document.getElementById('statsWorstCamera').textContent = (data.summary.worst_camera ?? '—').slice(-8);
+                const ppe_names = { 'no_helmet': 'Baret', 'no_vest': 'Yelek', 'no_shoes': 'Ayakkabı', 'no_gloves': 'Eldiven' };
+                document.getElementById('statsWorstPPE').textContent = ppe_names[data.summary.worst_ppe] ?? data.summary.worst_ppe ?? '—';
+
+                // Chart.js yoksa yükle
+                if (!window.Chart) {
+                    await new Promise(resolve => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+                        s.onload = resolve;
+                        document.head.appendChild(s);
+                    });
+                }
+
+                // Günlük trend
+                const timeCtx = document.getElementById('statsTimeChart');
+                if (_statsCharts.time) _statsCharts.time.destroy();
+                _statsCharts.time = new Chart(timeCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.time_series.map(x => x.date),
+                        datasets: [{
+                            label: 'İhlal', data: data.time_series.map(x => x.count),
+                            backgroundColor: 'rgba(220,53,69,.7)', borderColor: '#dc3545', borderWidth: 1
+                        }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                });
+
+                // PPE doughnut
+                const ppeCtx = document.getElementById('statsPPEChart');
+                if (_statsCharts.ppe) _statsCharts.ppe.destroy();
+                const ppeColors = ['#dc3545', '#fd7e14', '#ffc107', '#20c997', '#0dcaf0', '#6610f2'];
+                _statsCharts.ppe = new Chart(ppeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.ppe_dist.map(x => ppe_names[x.ppe_type] ?? x.ppe_type),
+                        datasets: [{ data: data.ppe_dist.map(x => x.count), backgroundColor: ppeColors }]
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                });
+
+                // Kamera bar
+                const camCtx = document.getElementById('statsCameraChart');
+                if (_statsCharts.cam) _statsCharts.cam.destroy();
+                _statsCharts.cam = new Chart(camCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.camera_rank.map(x => x.camera_id.slice(-10)),
+                        datasets: [{
+                            label: 'İhlal', data: data.camera_rank.map(x => x.count),
+                            backgroundColor: 'rgba(255,193,7,.8)', borderColor: '#ffc107', borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', responsive: true, plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true } }
+                    }
+                });
+            } catch (e) {
+                console.error('Stats error:', e);
+            }
+        }
+
+        // Stats butonunu DVR kartlarına ekle — loadDVRSystems çağrısından sonra çalışır
+        function injectStatsDashboardBtn() {
+            const dvrListEl = document.getElementById('dvrSystemsList');
+            if (!dvrListEl) return;
+
+            if (!document.getElementById('openStatsDashboardBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'openStatsDashboardBtn';
+                btn.className = 'btn btn-sm btn-outline-info mb-3 me-2';
+                btn.innerHTML = '<i class="fas fa-chart-bar me-1"></i>İhlal İstatistikleri';
+                btn.onclick = openStatsDashboard;
+                dvrListEl.parentNode.insertBefore(btn, dvrListEl);
+            }
+        }
+
+        // =====================================================================
+        // PHASE 3.3 — SNAPSHOT GALERİSİ
+        // =====================================================================
+        async function openSnapshotGallery(cameraIdFilter = '') {
+            if (!document.getElementById('snapshotGalleryModal')) {
+                const modal = document.createElement('div');
+                modal.innerHTML = `
+                <div class="modal fade" id="snapshotGalleryModal" tabindex="-1">
+                  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-images me-2 text-warning"></i>İhlal Snapshot Galerisi</h5>
+                        <button class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <div class="d-flex gap-2 mb-3 flex-wrap">
+                          <input type="text" id="snapshotCamFilter" class="form-control form-control-sm" style="max-width:220px" placeholder="Kamera ID filtre...">
+                          <button class="btn btn-sm btn-primary" onclick="loadSnapshots()"><i class="fas fa-sync me-1"></i>Yenile</button>
+                          <span class="text-muted small align-self-center" id="snapshotCount"></span>
+                        </div>
+                        <div class="row g-2" id="snapshotGrid">
+                          <div class="col-12 text-center text-muted py-4"><i class="fas fa-spinner fa-spin fa-2x"></i></div>
+                        </div>
+                        <nav class="mt-3" id="snapshotPagination"></nav>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Lightbox -->
+                <div class="modal fade" id="snapshotLightbox" tabindex="-1">
+                  <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content bg-dark">
+                      <div class="modal-header border-0 pb-0">
+                        <small class="text-muted" id="lightboxCaption"></small>
+                        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body p-1 text-center">
+                        <img id="lightboxImg" src="" class="img-fluid rounded" style="max-height:70vh">
+                      </div>
+                    </div>
+                  </div>
+                </div>`;
+                document.body.appendChild(modal.firstElementChild);
+                document.body.appendChild(modal.lastElementChild);
+            }
+
+            if (cameraIdFilter) {
+                document.getElementById('snapshotCamFilter').value = cameraIdFilter;
+            }
+
+            const m = new bootstrap.Modal(document.getElementById('snapshotGalleryModal'));
+            m.show();
+            loadSnapshots(1);
+        }
+
+        async function loadSnapshots(page = 1) {
+            const grid = document.getElementById('snapshotGrid');
+            const camFilter = document.getElementById('snapshotCamFilter').value.trim();
+            if (!grid) return;
+            grid.innerHTML = '<div class="col-12 text-center py-4"><i class="fas fa-spinner fa-spin fa-2x text-primary"></i></div>';
+
+            try {
+                const params = new URLSearchParams({ page, limit: 48 });
+                if (camFilter) params.set('camera_id', camFilter);
+                const res = await fetch(`/api/company/{{ company_id }}/snapshots?${params}`);
+                const data = await res.json();
+
+                if (!data.success || data.snapshots.length === 0) {
+                    grid.innerHTML = '<div class="col-12 text-center text-muted py-5"><i class="fas fa-camera-slash fa-3x mb-2"></i><p>Snapshot bulunamadı</p></div>';
+                    return;
+                }
+
+                document.getElementById('snapshotCount').textContent = `Toplam: ${data.total} snapshot`;
+                grid.innerHTML = data.snapshots.map(s => `
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <div class="card border-0 shadow-sm h-100 snapshot-card" onclick="openLightbox('${s.url}', '${s.camera_id} — ${s.date} — ${s.filename}')" style="cursor:pointer">
+                            <img src="${s.url}" class="card-img-top" style="height:90px;object-fit:cover" onerror="this.src='';this.parentElement.querySelector('.snap-err').style.display='flex'">
+                            <div class="snap-err" style="display:none;height:90px;align-items:center;justify-content:center;background:#f8f9fa">
+                                <i class="fas fa-image text-muted"></i>
+                            </div>
+                            <div class="card-body p-1">
+                                <small class="text-muted d-block text-truncate">${s.camera_id.slice(-8)}</small>
+                                <small class="text-muted">${s.date}</small>
+                            </div>
+                        </div>
+                    </div>`).join('');
+
+                // Sayfalama
+                const pag = document.getElementById('snapshotPagination');
+                if (data.pages > 1) {
+                    let pagHtml = '<ul class="pagination pagination-sm justify-content-center">';
+                    for (let i = 1; i <= data.pages; i++) {
+                        pagHtml += `<li class="page-item ${i === page ? 'active' : ''}">
+                            <button class="page-link" onclick="loadSnapshots(${i})">${i}</button></li>`;
+                    }
+                    pagHtml += '</ul>';
+                    pag.innerHTML = pagHtml;
+                } else {
+                    pag.innerHTML = '';
+                }
+            } catch (e) {
+                grid.innerHTML = `<div class="col-12 text-center text-danger py-4"><i class="fas fa-exclamation-triangle me-2"></i>${e.message}</div>`;
+            }
+        }
+
+        function openLightbox(url, caption) {
+            document.getElementById('lightboxImg').src = url;
+            document.getElementById('lightboxCaption').textContent = caption;
+            new bootstrap.Modal(document.getElementById('snapshotLightbox')).show();
+        }
+
+        // Snapshot galeri butonunu kamera tablosuna ekle
+        function injectSnapshotGalleryBtn() {
+            const camTable = document.getElementById('camerasTable') || document.querySelector('table');
+            if (!camTable || document.getElementById('openSnapshotGalleryBtn')) return;
+            const btn = document.createElement('button');
+            btn.id = 'openSnapshotGalleryBtn';
+            btn.className = 'btn btn-sm btn-outline-warning mb-2 me-2';
+            btn.innerHTML = '<i class="fas fa-images me-1"></i>Snapshot Galerisi';
+            btn.onclick = () => openSnapshotGallery();
+            camTable.parentNode.insertBefore(btn, camTable);
+        }
+
+        // =====================================================================
+        // PHASE 3.4 — DVR DETECTION RAPORU PDF BUTONU
+        // DVR kartlarına PDF rapor butonu enjeksiyonu
+        // =====================================================================
+        function injectPDFReportBtns() {
+            document.querySelectorAll('.dvr-list-card').forEach(card => {
+                const dvrId = card.id.replace('dvr-card-', '');
+                if (dvrId && !card.querySelector('.dvr-pdf-btn')) {
+                    const btnGroup = card.querySelector('.btn-group');
+                    if (!btnGroup) return;
+                    const pdfBtn = document.createElement('button');
+                    pdfBtn.className = 'btn btn-outline-secondary dvr-pdf-btn';
+                    pdfBtn.title = 'PDF Rapor İndir';
+                    pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i>';
+                    pdfBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        window.open(`/api/company/{{ company_id }}/dvr/${dvrId}/report/pdf?format=html`, '_blank');
+                    };
+                    btnGroup.appendChild(pdfBtn);
+                }
+            });
+        }
+
+        // =====================================================================
+        // PHASE 3 DOMContentLoaded entegrasyon
+        // =====================================================================
+        // loadDVRSystems tamamlandığında Phase 3 butonlarını da ekle
+        const _origLoadDVRSystems = loadDVRSystems;
+        loadDVRSystems = async function () {
+            await _origLoadDVRSystems.apply(this, arguments);
+            injectStatsDashboardBtn();
+            injectPDFReportBtns();
+            injectSnapshotGalleryBtn();
+        };
+
+        // Sayfa yüklenince marka dropdown'ı doldur
+        document.addEventListener('DOMContentLoaded', function () {
+            loadDVRBrands();
+        });
 
     </script>
 </body>

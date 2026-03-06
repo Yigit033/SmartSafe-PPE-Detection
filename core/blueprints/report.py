@@ -1254,4 +1254,197 @@ def create_blueprint(api):
             logger.error(f"❌ Bildirim ayarları güncelleme hatası: {e}")
             return jsonify({'success': False, 'error': 'Güncelleme başarısız'}), 500
 
+
+    # =========================================================================
+    # 3.2 VIOLATION \u0130STATIST\u0130K DASHBOARD
+    # =========================================================================
+
+    @bp.route('/api/company/<company_id>/violations/stats', methods=['GET'])
+    def get_violation_stats(company_id):
+        """
+        \u0130hlal istatistikleri \u2014 Chart.js dashboard i\u00e7in.
+
+        ?period=24h | 7d | 30d  (default: 7d)
+        Yan\u0131t:
+          time_series  : [{ date, count }]
+          ppe_dist     : [{ ppe_type, count }]
+          camera_rank  : [{ camera_id, count }]
+          summary      : { total, worst_day, worst_camera, worst_ppe }
+        """
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'success': False, 'error': 'Yetkisiz'}), 401
+
+            period = request.args.get('period', '7d')
+            PERIOD_MAP = {'24h': 1, '7d': 7, '30d': 30}
+            days = PERIOD_MAP.get(period, 7)
+
+            start_date = (datetime.now() - timedelta(days=days)).isoformat()
+            ph = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
+            is_pg = hasattr(api.db, 'db_adapter') and api.db.db_adapter.db_type == 'postgresql'
+
+            conn = api.db.get_connection()
+            cur = conn.cursor()
+
+            # Time-series: g\u00fcnl\u00fck ihlal say\u0131s\u0131
+            if is_pg:
+                cur.execute(f'''
+                    SELECT DATE(timestamp) as d, COUNT(*) as cnt
+                    FROM violations
+                    WHERE company_id = {ph} AND timestamp >= {ph}
+                    GROUP BY DATE(timestamp) ORDER BY d
+                ''', (company_id, start_date))
+            else:
+                cur.execute(f'''
+                    SELECT DATE(timestamp) as d, COUNT(*) as cnt
+                    FROM violations
+                    WHERE company_id = {ph} AND timestamp >= {ph}
+                    GROUP BY DATE(timestamp) ORDER BY d
+                ''', (company_id, start_date))
+            time_series = [
+                {'date': str(r[0] if not hasattr(r, 'keys') else r['d']),
+                 'count': r[1] if not hasattr(r, 'keys') else r['cnt']}
+                for r in (cur.fetchall() or [])
+            ]
+
+            # PPE da\u011f\u0131l\u0131m\u0131
+            cur.execute(f'''
+                SELECT missing_ppe, COUNT(*) as cnt
+                FROM violations
+                WHERE company_id = {ph} AND timestamp >= {ph}
+                GROUP BY missing_ppe ORDER BY cnt DESC
+            ''', (company_id, start_date))
+            ppe_dist = [
+                {'ppe_type': (r['missing_ppe'] if hasattr(r, 'keys') else r[0]) or 'unknown',
+                 'count': r['cnt'] if hasattr(r, 'keys') else r[1]}
+                for r in (cur.fetchall() or [])
+            ]
+
+            # Kamera baz\u0131nda s\u0131ralama
+            cur.execute(f'''
+                SELECT camera_id, COUNT(*) as cnt
+                FROM violations
+                WHERE company_id = {ph} AND timestamp >= {ph}
+                GROUP BY camera_id ORDER BY cnt DESC LIMIT 10
+            ''', (company_id, start_date))
+            camera_rank = [
+                {'camera_id': r['camera_id'] if hasattr(r, 'keys') else r[0],
+                 'count': r['cnt'] if hasattr(r, 'keys') else r[1]}
+                for r in (cur.fetchall() or [])
+            ]
+
+            conn.close()
+
+            total = sum(x['count'] for x in time_series)
+            worst_day = max(time_series, key=lambda x: x['count'])['date'] if time_series else None
+            worst_camera = camera_rank[0]['camera_id'] if camera_rank else None
+            worst_ppe = ppe_dist[0]['ppe_type'] if ppe_dist else None
+
+            return jsonify({
+                'success': True,
+                'period': period,
+                'time_series': time_series,
+                'ppe_dist': ppe_dist,
+                'camera_rank': camera_rank,
+                'summary': {
+                    'total': total,
+                    'worst_day': worst_day,
+                    'worst_camera': worst_camera,
+                    'worst_ppe': worst_ppe,
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"\u274c Violation stats error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # =========================================================================
+    # 3.3 SNAPSHOT GALER\u0130S\u0130
+    # =========================================================================
+
+    @bp.route('/api/company/<company_id>/snapshots', methods=['GET'])
+    def list_snapshots(company_id):
+        """
+        \u0130hlal snapshot'lar\u0131n\u0131 listele.
+
+        ?camera_id=xxx   (opsiyonel filtre)
+        ?limit=50        (default 50)
+        ?page=1
+
+        Yan\u0131t: [{ path, camera_id, date, filename, url }]
+        """
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'success': False, 'error': 'Yetkisiz'}), 401
+
+            from pathlib import Path
+            camera_filter = request.args.get('camera_id', '')
+            limit = min(int(request.args.get('limit', 50)), 200)
+            page = max(int(request.args.get('page', 1)), 1)
+
+            base = Path('violations') / company_id
+            if not base.exists():
+                return jsonify({'success': True, 'snapshots': [], 'total': 0})
+
+            snapshots = []
+            for cam_dir in sorted(base.iterdir()):
+                if not cam_dir.is_dir():
+                    continue
+                cam_id = cam_dir.name
+                if camera_filter and cam_id != camera_filter:
+                    continue
+                for date_dir in sorted(cam_dir.iterdir(), reverse=True):
+                    if not date_dir.is_dir():
+                        continue
+                    for img in sorted(date_dir.iterdir(), reverse=True):
+                        if img.suffix.lower() not in {'.jpg', '.jpeg', '.png'}:
+                            continue
+                        rel = str(img.relative_to(Path('violations')))
+                        snapshots.append({
+                            'path': rel,
+                            'camera_id': cam_id,
+                            'date': date_dir.name,
+                            'filename': img.name,
+                            'url': f'/api/company/{company_id}/snapshots/file/{rel.replace(chr(92), "/")}',
+                            'timestamp': int(img.stat().st_mtime),
+                        })
+
+            total = len(snapshots)
+            offset = (page - 1) * limit
+            page_snaps = snapshots[offset: offset + limit]
+
+            return jsonify({
+                'success': True, 'snapshots': page_snaps,
+                'total': total, 'page': page, 'limit': limit,
+                'pages': max(1, (total + limit - 1) // limit)
+            })
+
+        except Exception as e:
+            logger.error(f"\u274c Snapshot list error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @bp.route('/api/company/<company_id>/snapshots/file/<path:rel_path>', methods=['GET'])
+    def serve_snapshot(company_id, rel_path):
+        """Snapshot dosyas\u0131n\u0131 g\u00fcvenli \u015fekilde sun."""
+        from flask import send_file, abort
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return abort(401)
+
+            from pathlib import Path
+            base = Path('violations').resolve()
+            target = (base / rel_path).resolve()
+            # Path traversal engeli
+            if not str(target).startswith(str(base)):
+                return abort(403)
+            if not target.exists():
+                return abort(404)
+            return send_file(str(target), mimetype='image/jpeg')
+        except Exception as e:
+            logger.error(f"\u274c Snapshot serve error: {e}")
+            return abort(500)
+
     return bp

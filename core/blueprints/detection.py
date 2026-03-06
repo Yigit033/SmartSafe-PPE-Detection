@@ -961,4 +961,169 @@ def create_blueprint(api):
             logger.error(f"❌ Detection stream endpoint error: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    # =========================================================================
+    # SSE — Real-Time Violation Feed (Phase 2.1)
+    # =========================================================================
+
+    @bp.route('/api/company/<company_id>/violations/stream', methods=['GET'])
+    def violation_sse_stream(company_id):
+        """Server-Sent Events endpoint — canlı ihlal bildirimleri.
+
+        Bağlanan her browser client, aynı bağlantı üzerinden anlık ihlal
+        mesajları alır.  Hem IP kamera (frame_buffers/detection_results) hem de
+        DVR (dvr_ppe_manager.dvr_processor.results_queue) kaynaklarını dinler.
+        """
+        user_data = api.validate_session()
+        if not user_data or user_data.get('company_id') != company_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        def event_generator():
+            import json as _json
+            from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
+            dvr_ppe = get_dvr_ppe_manager()
+            state = _get_detection_state()
+
+            # Bağlantı başarılı mesajı
+            yield f"data: {_json.dumps({'type': 'connected', 'company_id': company_id})}\n\n"
+
+            while True:
+                try:
+                    # 1) DVR violation queue'su
+                    try:
+                        item = dvr_ppe.dvr_processor.results_queue.get_nowait()
+                        ppe_result = item.get('ppe_result', {})
+                        violations = ppe_result.get('ppe_violations', [])
+                        if violations:
+                            event = {
+                                'type': 'violation',
+                                'source': 'dvr',
+                                'stream_id': item.get('stream_id'),
+                                'timestamp': item.get('timestamp'),
+                                'violations': violations,
+                                'detection_system': item.get('detection_system', 'Klasik'),
+                                'people_detected': ppe_result.get('people_detected', 0),
+                                'violations_count': len(violations),
+                            }
+                            yield f"data: {_json.dumps(event)}\n\n"
+                    except Exception:
+                        pass  # Queue boş
+
+                    # 2) IP Kamera detection_results queue'ları
+                    for cam_key, q in list(state['detection_results'].items()):
+                        if not cam_key.startswith(f"{company_id}_"):
+                            continue
+                        try:
+                            result = q.get_nowait()
+                            vlist = result.get('violations', [])
+                            if vlist:
+                                cam_id = cam_key.split('_', 1)[1]
+                                event = {
+                                    'type': 'violation',
+                                    'source': 'camera',
+                                    'camera_id': cam_id,
+                                    'timestamp': result.get('timestamp'),
+                                    'violations': vlist,
+                                    'people_detected': result.get('total_people', 0),
+                                    'violations_count': len(vlist),
+                                    'compliance_rate': result.get('compliance_rate', 100),
+                                }
+                                yield f"data: {_json.dumps(event)}\n\n"
+                        except Exception:
+                            pass
+
+                    # Heartbeat — bağlantının canlı olduğunu bildir
+                    yield ": heartbeat\n\n"
+
+                    import time as _t
+                    _t.sleep(1.0)
+
+                except GeneratorExit:
+                    break
+                except Exception as e:
+                    logger.error(f"SSE generator error: {e}")
+                    import time as _t
+                    _t.sleep(2)
+
+        return Response(
+            event_generator(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',   # Nginx buffering'i devre dışı bırak
+                'Connection': 'keep-alive',
+            }
+        )
+
+    # =========================================================================
+    # BATCH STOP (Phase 2.4)
+    # =========================================================================
+
+    @bp.route('/api/company/<company_id>/stop-detection-batch', methods=['POST'])
+    def stop_detection_batch(company_id):
+        """Seçili kameraları toplu durdur.
+
+        Body: {"camera_ids": ["cam_001", "cam_002"]}
+        camera_ids boş veya yok → şirketin tüm aktif kameraları durdurulur.
+        """
+        try:
+            user_data = api.validate_session()
+            if not user_data or user_data.get('company_id') != company_id:
+                return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
+
+            import core.app as _api_mod
+            data = request.get_json() or {}
+            camera_ids = data.get('camera_ids', [])
+
+            state = _get_detection_state()
+            stopped = []
+            not_active = []
+            failed = []
+
+            # Durdurulacak kamera_key listesini belirle
+            if camera_ids:
+                keys_to_stop = [f"{company_id}_{cid}" for cid in camera_ids]
+            else:
+                keys_to_stop = [
+                    k for k, v in state['active_detectors'].items()
+                    if k.startswith(f"{company_id}_") and v
+                ]
+
+            for camera_key in keys_to_stop:
+                cam_id = camera_key.split('_', 1)[1] if '_' in camera_key else camera_key
+                try:
+                    if not state['active_detectors'].get(camera_key, False):
+                        not_active.append(cam_id)
+                        continue
+
+                    state['active_detectors'][camera_key] = False
+                    _api_mod.active_detectors[camera_key] = False
+
+                    if camera_key in state['camera_captures'] and state['camera_captures'][camera_key]:
+                        try:
+                            state['camera_captures'][camera_key].release()
+                        except Exception:
+                            pass
+                        del state['camera_captures'][camera_key]
+
+                    state['frame_buffers'].pop(camera_key, None)
+                    state['detection_threads'].pop(camera_key, None)
+                    stopped.append(cam_id)
+
+                except Exception as err:
+                    logger.error(f"❌ Batch stop error for {camera_key}: {err}")
+                    failed.append(cam_id)
+
+            logger.info(f"🛑 Batch stop: {len(stopped)} durduruldu, {len(not_active)} zaten duruyordu, {len(failed)} hata")
+            return jsonify({
+                'success': True,
+                'stopped': stopped,
+                'not_active': not_active,
+                'failed': failed,
+                'total_stopped': len(stopped),
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Batch stop error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     return bp
