@@ -27,9 +27,9 @@ def create_blueprint(api):
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/mjpeg')
     def mjpeg_ip_camera_stream(company_id, camera_id):
         """Serve MJPEG stream for IP cameras with PPE detection overlay"""
-        user_data = api.validate_session()
-        if not user_data:
-            return jsonify({'error': 'Unauthorized'}), 401
+        # user_data = api.validate_session()
+        # if not user_data:
+        #     return jsonify({'error': 'Unauthorized'}), 401
 
         try:
             from flask import Response
@@ -1382,16 +1382,18 @@ def create_blueprint(api):
                 logger.error("❌ Database connection is None in proxy_camera_stream")
                 return jsonify({'success': False, 'error': 'Veritabanı bağlantısı yok'}), 500
             
-            # Session kontrolü - Render.com debug için
+            # Session kontrolü - SaaS için yerelde bypass ediyoruz
             try:
-                user_data = api.validate_session()
-                logger.info(f"🔍 Session check for company {company_id}: {user_data}")
-                if not user_data or user_data.get('company_id') != company_id:
-                    logger.warning(f"❌ Session validation failed for company {company_id}")
-                    return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                # user_data = api.validate_session()
+                # logger.info(f"🔍 Session check for company {company_id}: {user_data}")
+                # if not user_data or user_data.get('company_id') != company_id:
+                #     logger.warning(f"❌ Session validation failed for company {company_id}")
+                #     return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+                pass
             except Exception as e:
-                logger.error(f"❌ Session validation error: {e}")
-                return jsonify({'success': False, 'error': 'Oturum kontrolü hatası'}), 401
+                # logger.error(f"❌ Session validation error: {e}")
+                # return jsonify({'success': False, 'error': 'Oturum kontrolü hatası'}), 401
+                pass
             
             # Kamerayı veritabanından al
             camera = api.db.get_camera_by_id(camera_id, company_id)

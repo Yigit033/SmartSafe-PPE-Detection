@@ -23,7 +23,10 @@ export default function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between px-8 bg-white/80 backdrop-blur-md border-b border-slate-200">
+    <header
+      className="sticky top-0 z-30 flex h-16 w-full items-center justify-between px-8 bg-white/80 backdrop-blur-md border-b border-slate-200"
+      lang="tr"
+    >
       <div className="flex items-center gap-4">
         <h1 className="text-sm font-black tracking-[0.2em] text-slate-800">
           <span className="text-brand-teal mr-2">//</span>
@@ -32,7 +35,7 @@ export default function TopBar() {
       </div>
 
       <div className="flex items-center gap-6">
-        <button className="relative rounded-xl bg-slate-100 p-2 text-slate-500 hover:text-slate-900 transition-all border border-slate-200">
+        <button className="relative rounded-xl bg-slate-100 p-2 text-slate-500 hover:text-slate-900 transition-all border border-slate-200 cursor-pointer">
           <svg
             className="h-5 w-5"
             fill="none"

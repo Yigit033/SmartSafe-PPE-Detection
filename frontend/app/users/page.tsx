@@ -29,7 +29,7 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in text-slate-900 pb-12">
+    <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex flex-col gap-2">
           <h2 className="text-3xl font-extrabold tracking-tight">
@@ -39,7 +39,7 @@ export default function UsersPage() {
             Şirket personeli ve yetkilendirmeleri buradan yönetebilirsiniz.
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 transition-all hover:bg-brand-teal/90">
+        <button className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 transition-all hover:bg-brand-teal/90 cursor-pointer">
           <svg
             className="h-5 w-5"
             fill="none"
@@ -136,7 +136,7 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <button className="p-2.5 rounded-xl border border-slate-100 bg-white text-slate-400 hover:text-red-500 transition-all">
+                      <button className="p-2.5 rounded-xl border border-slate-100 bg-white text-slate-400 hover:text-red-500 transition-all cursor-pointer">
                         <svg
                           className="h-4 w-4"
                           fill="none"

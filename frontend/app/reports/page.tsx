@@ -29,7 +29,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in text-slate-900 pb-12">
+    <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex flex-col gap-2">
           <h2 className="text-3xl font-extrabold tracking-tight">
@@ -40,7 +40,7 @@ export default function ReportsPage() {
             istatistikleri.
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-xl bg-brand-orange px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-orange/20 transition-all hover:bg-brand-orange/90">
+        <button className="flex items-center gap-2 rounded-xl bg-brand-orange px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-orange/20 transition-all hover:bg-brand-orange/90 cursor-pointer">
           <svg
             className="h-5 w-5"
             fill="none"
@@ -124,7 +124,7 @@ export default function ReportsPage() {
                         {new Date(v.timestamp).toLocaleString()}
                       </td>
                       <td className="px-8 py-6 text-right">
-                        <button className="text-brand-teal hover:underline text-[10px] font-black tracking-widest leading-none">
+                        <button className="text-brand-teal hover:underline text-[10px] font-black tracking-widest leading-none cursor-pointer">
                           İNCELE
                         </button>
                       </td>

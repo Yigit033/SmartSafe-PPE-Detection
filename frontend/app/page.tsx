@@ -49,7 +49,7 @@ export default function Home() {
         {stats.map((stat) => (
           <div
             key={stat.name}
-            className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50 transition-all duration-300 hover:shadow-md hover:-translate-y-1"
+            className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50 transition-all duration-300 hover:shadow-md hover:-translate-y-1 cursor-pointer"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -139,7 +139,7 @@ export default function Home() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2" lang="tr">
         {/* Main Analytics Card */}
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col">
           <div className="bg-brand-teal p-4 flex items-center justify-between text-white">
@@ -171,10 +171,10 @@ export default function Home() {
                 Tesis genelindeki PPE uyumluluk oranı analizi.
               </p>
               <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-                <button className="px-3 py-1 bg-white shadow-sm rounded-md text-[10px] font-black text-slate-900 border border-slate-200">
+                <button className="px-3 py-1 bg-white shadow-sm rounded-md text-[10px] font-black text-slate-900 border border-slate-200 cursor-pointer">
                   GÜNLÜK
                 </button>
-                <button className="px-3 py-1 text-[10px] font-black text-slate-500 hover:text-slate-900">
+                <button className="px-3 py-1 text-[10px] font-black text-slate-500 hover:text-slate-900 cursor-pointer">
                   HAFTALIK
                 </button>
               </div>
@@ -270,7 +270,7 @@ export default function Home() {
                 </div>
               </div>
             ))}
-            <button className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-slate-50 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-800 hover:border-slate-200 group">
+            <button className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-slate-50 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-800 hover:border-slate-200 group cursor-pointer">
               TÜMÜNÜ GÖRÜNTÜLE
               <svg
                 className="h-4 w-4 transform group-hover:translate-x-1 transition-transform"

@@ -142,6 +142,38 @@ export const list = api(
   },
 );
 
+interface GetCompanyResponse {
+  success: boolean;
+  company?: any; // We can use 'any' here or define a full Company interface
+  error?: string;
+}
+
+/**
+ * Belirli bir şirketin tüm detaylarını getirir
+ */
+export const getById = api(
+  { expose: true, method: "GET", path: "/company/:company_id" },
+  async ({
+    company_id,
+  }: {
+    company_id: string;
+  }): Promise<GetCompanyResponse> => {
+    try {
+      const res = await pool.query(
+        "SELECT * FROM companies WHERE company_id = $1",
+        [company_id],
+      );
+      if (res.rows.length === 0) {
+        return { success: false, error: "Şirket bulunamadı" };
+      }
+      return { success: true, company: res.rows[0] };
+    } catch (error) {
+      console.error("Error getting company by id:", error);
+      return { success: false, error: "Sunucu hatası" };
+    }
+  },
+);
+
 /**
  * Şirket profil bilgilerini günceller
  */
