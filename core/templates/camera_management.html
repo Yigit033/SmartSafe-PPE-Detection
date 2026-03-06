@@ -3539,9 +3539,6 @@
                                             <button class="btn btn-outline-info" onclick="showDVRChannelLive('${dvr.dvr_id}', 1)" title="Canlı Görüntü">
                                                 <i class="fas fa-video"></i>
                                             </button>
-                                            <button class="btn btn-outline-success" onclick="startDVRStream('${dvr.dvr_id}', 1)" title="Stream Başlat">
-                                                <i class="fas fa-play"></i>
-                                            </button>
                                             <button class="btn btn-outline-danger" onclick="removeDVRSystem('${dvr.dvr_id}')" title="DVR Sil">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -3867,33 +3864,28 @@
         }
 
         async function updateDVRDetectionStatus(dvrId) {
+            // Status display elementini bul — sabit panel ID'si kullanılır
+            const statusElement = document.getElementById('dvr-status-display');
             try {
                 const status = await getDVRDetectionStatus(dvrId);
-                if (status && status.active_detections) {
-                    const statusElement = document.getElementById(`dvr-status-${dvrId}`);
-                    if (statusElement) {
-                        const activeCount = status.active_detections.length || 0;
-                        const totalViolations = status.total_violations || 0;
+                if (status && status.active_detections && statusElement) {
+                    const activeCount = status.active_detections.length || 0;
+                    const totalViolations = status.total_violations || 0;
 
-                        statusElement.innerHTML = `
-                            <span class="badge bg-success">${activeCount} Aktif Detection</span>
-                            <span class="badge bg-warning">${totalViolations} İhlal</span>
-                        `;
-                    }
-                } else {
-                    const statusElement = document.getElementById(`dvr-status-${dvrId}`);
-                    if (statusElement) {
-                        statusElement.innerHTML = `
-                            <span class="badge bg-secondary">Durum Bekleniyor</span>
-                        `;
-                    }
+                    statusElement.innerHTML = `
+                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>${activeCount} Aktif Detection</span>
+                        <span class="badge bg-warning ms-1"><i class="fas fa-exclamation-triangle me-1"></i>${totalViolations} İhlal</span>
+                    `;
+                } else if (statusElement) {
+                    statusElement.innerHTML = `
+                        <span class="badge bg-secondary">Detection aktif değil</span>
+                    `;
                 }
             } catch (error) {
                 console.error('DVR Detection status update error:', error);
-                const statusElement = document.getElementById(`dvr-status-${dvrId}`);
                 if (statusElement) {
                     statusElement.innerHTML = `
-                        <span class="badge bg-danger">Hata</span>
+                        <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Durum alınamadı</span>
                     `;
                 }
             }
@@ -4021,7 +4013,7 @@
 
                 html += `
                     <div class="col-md-6 col-lg-4" data-channel-card data-channel-active="${isActive}" data-channel-online="${isOnline}">
-                        <div class="card h-100 border-0 shadow-sm hover-shadow" style="transition: all 0.3s;">
+                        <div class="card h-100 border-0 shadow-sm" style="transition: all 0.3s; cursor:default;">
                             <div class="card-body p-3">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
@@ -4040,6 +4032,11 @@
                                 </div>
                                 ${ch.resolution ? `<small class="text-muted d-block">📐 ${ch.resolution}</small>` : ''}
                                 ${ch.fps ? `<small class="text-muted d-block">⚡ ${ch.fps} FPS</small>` : ''}
+                                <div class="mt-2">
+                                    <button class="btn btn-outline-info btn-sm w-100" onclick="showDVRChannelLive(currentActiveDVRId, ${channelNum})">
+                                        <i class="fas fa-eye me-1"></i>Canlı İzle
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -4224,81 +4221,44 @@
 
         // Mevcut kanalları yükle
         async function loadAvailableChannels(dvrId, currentChannel) {
+            const channelSelector = document.getElementById('channelSelector');
+            if (!channelSelector) return;
+
+            // Her durumda kanalları dolduran yardımcı fonksiyon
+            function populateChannels(channels, currentCh) {
+                channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
+                channels.forEach(ch => {
+                    const num = ch.channel_number || ch;
+                    const name = ch.name || 'Kamera';
+                    const option = document.createElement('option');
+                    option.value = num;
+                    option.textContent = typeof ch === 'object' ? `Kanal ${num} - ${name}` : `Kanal ${num}`;
+                    if (num == currentCh) option.selected = true;
+                    channelSelector.appendChild(option);
+                });
+            }
+
             try {
                 console.log(`🔍 Loading available channels for DVR: ${dvrId}`);
-
-                // Get DVR channels from database
                 const response = await fetch(`/api/company/{{ company_id }}/dvr/${dvrId}/channels`);
                 const data = await response.json();
-                console.log('📊 Channels API response:', data);
 
-                const channelSelector = document.getElementById('channelSelector');
-                if (channelSelector && data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
-                    // Clear existing options
-                    channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
-
-                    // Add channel options
-                    data.channels.forEach(channel => {
-                        const option = document.createElement('option');
-                        option.value = channel.channel_number;
-                        option.textContent = `Kanal ${channel.channel_number} - ${channel.name || 'Kamera'}`;
-                        if (channel.channel_number == currentChannel) {
-                            option.selected = true;
-                        }
-                        channelSelector.appendChild(option);
-                    });
-
-                    console.log(`✅ Loaded ${data.channels.length} channels`);
+                if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
+                    populateChannels(data.channels, currentChannel);
+                    console.log(`✅ Loaded ${data.channels.length} channels from API`);
                 } else {
-                    // Fallback: create channels 1-16
-                    console.log('⚠️ Using fallback channel list');
-                    const channelSelector = document.getElementById('channelSelector');
-                    if (channelSelector) {
-                        channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
-                        for (let i = 1; i <= 16; i++) {
-                            const option = document.createElement('option');
-                            option.value = i;
-                            option.textContent = `Kanal ${i}`;
-                            if (i == currentChannel) {
-                                option.selected = true;
-                            }
-                            channelSelector.appendChild(option);
-                        }
-                    }
+                    // API'den kanal gelemediyse 1-16 fallback
+                    console.warn('⚠️ No channels from API, using fallback 1-16');
+                    populateChannels(Array.from({ length: 16 }, (_, i) => ({ channel_number: i + 1, name: `Kamera ${i + 1}` })), currentChannel);
                 }
 
-                // Also refresh previews
+                // Önizlemeleri de yükle
                 await loadChannelPreviews(dvrId);
-
-                // Defensive fallback: if still no options (only placeholder), synthesize 1..16
-                const sel = document.getElementById('channelSelector');
-                if (sel && sel.options.length <= 1) {
-                    console.warn('⚠️ Channel selector empty after API, using hard fallback 1..16');
-                    for (let i = 1; i <= 16; i++) {
-                        const option = document.createElement('option');
-                        option.value = i;
-                        option.textContent = `Kanal ${i}`;
-                        if (i == currentChannel) option.selected = true;
-                        sel.appendChild(option);
-                    }
-                }
 
             } catch (error) {
                 console.error('❌ Load channels error:', error);
-                // Fallback to basic channel list
-                const channelSelector = document.getElementById('channelSelector');
-                if (channelSelector) {
-                    channelSelector.innerHTML = '<option value="">Kanal seçin...</option>';
-                    for (let i = 1; i <= 16; i++) {
-                        const option = document.createElement('option');
-                        option.value = i;
-                        option.textContent = `Kanal ${i}`;
-                        if (i == currentChannel) {
-                            option.selected = true;
-                        }
-                        channelSelector.appendChild(option);
-                    }
-                }
+                // Hata durumunda fallback 1-16
+                populateChannels(Array.from({ length: 16 }, (_, i) => ({ channel_number: i + 1, name: `Kamera ${i + 1}` })), currentChannel);
             }
         }
 

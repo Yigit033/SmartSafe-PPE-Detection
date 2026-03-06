@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartSafe AI — Saha Deployment Kılavuzu v2.0</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: #1e2433;
+    --accent: #00e5a0;
+    --accent2: #0099ff;
+    --accent3: #ff6b35;
+    --accent4: #a855f7;
+    --text: #e8eaf0;
+    --text-dim: #6b7280;
+    --text-muted: #3d4456;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --code-bg: #0d1117;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  .header { background: linear-gradient(135deg, #0a0c10 0%, #0f1520 50%, #0a0c10 100%); border-bottom: 1px solid var(--border); padding: 48px 40px 36px; position: relative; overflow: hidden; }
+  .header::before { content: ''; position: absolute; top: -60px; right: -60px; width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,229,160,0.08) 0%, transparent 70%); pointer-events: none; }
+  .header-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.3); color: var(--accent); padding: 4px 12px; border-radius: 100px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 16px; }
+  .header-badge::before { content: '●'; font-size: 8px; }
+  .header h1 { font-family: 'Syne', sans-serif; font-size: 42px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 10px; }
+  .header h1 span { color: var(--accent); }
+  .header-sub { color: var(--text-dim); font-size: 13px; }
+  .header-tags { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .header-tag { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); padding: 4px 10px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+
+  .layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 160px); }
+
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .sidebar-title { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--text-muted); padding: 0 20px 12px; text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 20px; color: var(--text-dim); text-decoration: none; font-size: 12px; transition: all 0.15s; border-left: 2px solid transparent; cursor: pointer; }
+  .nav-item:hover { color: var(--text); background: var(--surface2); border-left-color: var(--accent); }
+  .nav-num { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); min-width: 18px; }
+
+  .main { padding: 40px; max-width: 860px; }
+  .section { margin-bottom: 52px; }
+
+  .section-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .section-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--accent); background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); padding: 4px 8px; border-radius: 4px; min-width: 32px; text-align: center; }
+  .section-title { font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 700; }
+  .section-icon { margin-left: auto; font-size: 20px; opacity: 0.5; }
+
+  .info-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin-bottom: 14px; font-size: 13px; color: var(--text-dim); line-height: 1.7; }
+  .info-box.accent { border-left: 3px solid var(--accent); background: rgba(0,229,160,0.03); }
+  .info-box.warning { border-left: 3px solid var(--warning); background: rgba(245,158,11,0.04); color: #d4a017; }
+  .info-box.danger { border-left: 3px solid var(--danger); background: rgba(239,68,68,0.04); color: #f87171; }
+  .info-box strong { color: var(--text); }
+
+  .table-wrap { overflow-x: auto; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: var(--surface2); border-bottom: 2px solid var(--border); }
+  th { text-align: left; padding: 9px 13px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; }
+  td { padding: 9px 13px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; }
+  tr:hover td { background: rgba(255,255,255,0.015); }
+  td:first-child { color: var(--text); font-weight: 500; }
+  td code { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--accent2); }
+
+  .checklist { display: flex; flex-direction: column; gap: 3px; }
+  .check-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 13px; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; user-select: none; transition: border-color 0.15s; }
+  .check-item:hover { border-color: rgba(0,229,160,0.3); }
+  .check-item.done { color: var(--text-muted); text-decoration: line-through; border-color: rgba(0,229,160,0.15); }
+  .check-item.done .check-box { background: var(--accent); border-color: var(--accent); }
+  .check-item.done .check-box::after { opacity: 1; }
+  .check-box { width: 15px; height: 15px; border: 1.5px solid var(--border); border-radius: 3px; flex-shrink: 0; margin-top: 2px; position: relative; transition: all 0.15s; }
+  .check-box::after { content: '✓'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; color: var(--bg); font-weight: 700; opacity: 0; transition: opacity 0.15s; }
+  .check-group-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0 5px; }
+
+  .code-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+  .code-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 13px; background: rgba(255,255,255,0.025); border-bottom: 1px solid var(--border); }
+  .code-lang { font-size: 10px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+  .code-copy { font-size: 10px; cursor: pointer; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); transition: all 0.15s; font-family: 'JetBrains Mono', monospace; }
+  .code-copy:hover { border-color: var(--accent); color: var(--accent); }
+  pre { padding: 14px 16px; overflow-x: auto; font-size: 12px; line-height: 1.75; color: #c9d1d9; font-family: 'JetBrains Mono', monospace; }
+  pre::-webkit-scrollbar { height: 4px; }
+  pre::-webkit-scrollbar-thumb { background: var(--border); }
+  .kw { color: #ff7b72; }
+  .str { color: #a5d6ff; }
+  .com { color: #6e7681; font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .val { color: #56d364; }
+
+  .rtsp-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .rtsp-brand { display: flex; align-items: center; gap: 10px; padding: 9px 15px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .rtsp-brand-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); }
+  .rtsp-url { padding: 7px 15px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent2); border-bottom: 1px solid rgba(255,255,255,0.04); line-height: 1.5; }
+  .rtsp-url:last-child { border-bottom: none; }
+  .rtsp-url .note { font-size: 10px; color: var(--text-muted); margin-left: 10px; }
+
+  .scenario-grid { display: grid; gap: 10px; }
+  .scenario-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
+  .scenario-card:hover { border-color: rgba(0,229,160,0.25); }
+  .scenario-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .scenario-num { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .s1 { background: rgba(0,229,160,0.1); color: var(--accent); }
+  .s2 { background: rgba(0,153,255,0.1); color: var(--accent2); }
+  .s3 { background: rgba(168,85,247,0.1); color: var(--accent4); }
+  .s4 { background: rgba(245,158,11,0.1); color: var(--warning); }
+  .s5 { background: rgba(239,68,68,0.1); color: var(--danger); }
+  .scenario-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; }
+  .scenario-tag { margin-left: auto; font-size: 10px; font-family: 'JetBrains Mono', monospace; padding: 2px 7px; border-radius: 3px; background: rgba(0,229,160,0.08); color: var(--accent); border: 1px solid rgba(0,229,160,0.2); }
+  .scenario-body { padding: 12px 16px; font-size: 12.5px; color: var(--text-dim); line-height: 1.7; }
+  .scenario-tip { margin-top: 9px; padding: 7px 11px; background: rgba(0,229,160,0.04); border: 1px solid rgba(0,229,160,0.15); border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); }
+
+  .perf-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 14px; }
+  .perf-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+  .perf-val { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+  .perf-label { font-size: 11px; color: var(--text-muted); }
+
+  .watchdog-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+  .wd-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .wd-key { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .wd-val { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--accent2); }
+  .wd-desc { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+  .arch { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8b949e; line-height: 1.8; margin-bottom: 14px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .badge-green { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.25); }
+  .badge-blue { background: rgba(0,153,255,0.1); color: var(--accent2); border: 1px solid rgba(0,153,255,0.25); }
+  .badge-red { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.25); }
+  .badge-purple { background: rgba(168,85,247,0.1); color: var(--accent4); border: 1px solid rgba(168,85,247,0.25); }
+
+  h4 { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--text); margin: 18px 0 8px; }
+  p { color: var(--text-dim); font-size: 13px; margin-bottom: 12px; }
+
+  .footer { text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 20px; }
+    .perf-grid { grid-template-columns: repeat(2,1fr); }
+    .watchdog-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-badge">ON-PREMISE · REAL-TIME PPE DETECTION</div>
+  <h1>SmartSafe <span>AI</span></h1>
+  <div class="header-sub">Saha Deployment Kılavuzu v2.0 · Windows · Linux · macOS · Docker</div>
+  <div class="header-tags">
+    <span class="header-tag">🪟 Windows</span>
+    <span class="header-tag">🐧 Linux</span>
+    <span class="header-tag">🍎 macOS</span>
+    <span class="header-tag">🐳 Docker</span>
+    <span class="header-tag">📷 DVR/NVR</span>
+    <span class="header-tag">🔍 ONVIF</span>
+    <span class="header-tag">🧠 YOLO PPE</span>
+  </div>
+</div>
+
+<div class="layout">
+<nav class="sidebar">
+  <div class="sidebar-title">İçindekiler</div>
+  <a class="nav-item" href="#s1"><span class="nav-num">01</span> Genel Bakış</a>
+  <a class="nav-item" href="#s2"><span class="nav-num">02</span> Ön Hazırlık</a>
+  <a class="nav-item" href="#s3"><span class="nav-num">03</span> Kurulum</a>
+  <a class="nav-item" href="#s4"><span class="nav-num">04</span> GPU / CUDA</a>
+  <a class="nav-item" href="#s5"><span class="nav-num">05</span> Docker Deployment</a>
+  <a class="nav-item" href="#s6"><span class="nav-num">06</span> Kamera Senaryoları</a>
+  <a class="nav-item" href="#s7"><span class="nav-num">07</span> DVR/NVR Bağlantısı</a>
+  <a class="nav-item" href="#s8"><span class="nav-num">08</span> IP Kamera</a>
+  <a class="nav-item" href="#s9"><span class="nav-num">09</span> ONVIF Keşfi</a>
+  <a class="nav-item" href="#s10"><span class="nav-num">10</span> Toplu IP Ekleme</a>
+  <a class="nav-item" href="#s11"><span class="nav-num">11</span> PPE Detection</a>
+  <a class="nav-item" href="#s12"><span class="nav-num">12</span> Sağlık İzleme</a>
+  <a class="nav-item" href="#s13"><span class="nav-num">13</span> Watchdog</a>
+  <a class="nav-item" href="#s14"><span class="nav-num">14</span> Ağ & Firewall</a>
+  <a class="nav-item" href="#s15"><span class="nav-num">15</span> Güvenlik</a>
+  <a class="nav-item" href="#s16"><span class="nav-num">16</span> Test Kontrol Listesi</a>
+  <a class="nav-item" href="#s17"><span class="nav-num">17</span> Sorun Giderme</a>
+  <a class="nav-item" href="#s18"><span class="nav-num">18</span> Model Dosyaları</a>
+  <a class="nav-item" href="#s19"><span class="nav-num">19</span> Performans</a>
+</nav>
+
+<main class="main">
+
+<section class="section" id="s1">
+  <div class="section-header">
+    <div class="section-num">01</div>
+    <div class="section-title">Genel Bakış</div>
+    <div class="section-icon">🏗️</div>
+  </div>
+  <p>SmartSafe AI, kurumsal tesislerde kamera altyapısına bağlanarak <strong>gerçek zamanlı PPE tespiti</strong> yapar. Sistem <strong>on-premise</strong> çalışır — sunucu müşterinin tesisinde veya sizin taşıdığınız donanımda.</p>
+  <div class="arch">┌─────────────── MÜŞTERİ TESİSİ ───────────────┐
+│  [Kamera 1] ──┐                                │
+│  [Kamera 2] ──┤──► [DVR/NVR] ◄── IP: X.X.X.X  │
+│  [Kamera N] ──┘      │ RTSP                   │
+│                    [Switch]                    │
+│              [SmartSafe Sunucu] (Aynı LAN)     │
+└────────────────────────────────────────────────┘</div>
+  <h4>Desteklenen Kamera Senaryoları</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Senaryo</th><th>Açıklama</th><th>Durum</th></tr></thead>
+    <tbody>
+      <tr><td>DVR/NVR üzerinden</td><td>Tek IP → N kanal RTSP</td><td><span class="badge badge-green">✅ Tam Destek</span></td></tr>
+      <tr><td>Bağımsız IP kamera</td><td>Her kamera ayrı IP</td><td><span class="badge badge-green">✅ Tam Destek</span></td></tr>
+      <tr><td>ONVIF otomatik keşif</td><td>Ağda kamera bulma</td><td><span class="badge badge-green">✅ Tam Destek</span></td></tr>
+      <tr><td>Toplu IP ekleme</td><td>IT'den alınan IP listesi</td><td><span class="badge badge-green">✅ Tam Destek</span></td></tr>
+      <tr><td>MJPEG stream</td><td>Eski kameralar</td><td><span class="badge badge-green">✅ Tam Destek</span></td></tr>
+      <tr><td>Android IP Webcam</td><td>Mobil test cihazı</td><td><span class="badge badge-green">✅ Tam Destek</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="section" id="s2">
+  <div class="section-header">
+    <div class="section-num">02</div>
+    <div class="section-title">Ön Hazırlık — Sahaya Gitmeden Önce</div>
+    <div class="section-icon">📋</div>
+  </div>
+  <h4>Müşteriden / IT ekibinden alınacaklar</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Bilgi</th><th>Neden Gerekli</th><th>Örnek</th></tr></thead>
+    <tbody>
+      <tr><td>DVR/NVR IP adresi</td><td>Bağlanmak için</td><td><code>192.168.1.100</code></td></tr>
+      <tr><td>RTSP Port</td><td>Stream portu</td><td><code>554</code></td></tr>
+      <tr><td>HTTP/Web Port</td><td>Web arayüzü</td><td><code>80</code> / <code>8080</code></td></tr>
+      <tr><td>Kullanıcı adı</td><td>Kimlik doğrulama</td><td><code>admin</code></td></tr>
+      <tr><td>Şifre</td><td>Kimlik doğrulama</td><td><code>Admin123</code></td></tr>
+      <tr><td>DVR/NVR markası</td><td>RTSP URL formatı</td><td>Hikvision, Dahua, XMEye…</td></tr>
+      <tr><td>Toplam kamera sayısı</td><td>Kapasite planlaması</td><td>16, 32, 64…</td></tr>
+      <tr><td>PPE için kameralar</td><td>Seçim yapabilmek</td><td>"Sadece üretim hattı"</td></tr>
+      <tr><td>Ağ bilgisi (VLAN?)</td><td>Bağlantı sorunu önleme</td><td><code>192.168.1.0/24</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="info-box accent">
+    <strong>✅ Laptop</strong> (GPU'lu önerilir — NVIDIA GTX 1060+) &nbsp;·&nbsp; <strong>✅ Ethernet kablosu</strong> (mutlaka!) &nbsp;·&nbsp; <strong>✅ USB bellek</strong> (modeller + kurulum) &nbsp;·&nbsp; <strong>✅ VLC Media Player</strong> (RTSP test) &nbsp;·&nbsp; <strong>✅ Bu doküman</strong>
+  </div>
+</section>
+
+<section class="section" id="s3">
+  <div class="section-header">
+    <div class="section-num">03</div>
+    <div class="section-title">Kurulum (OS Bazlı)</div>
+    <div class="section-icon">💻</div>
+  </div>
+  <h4>🪟 Windows</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">PowerShell</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre><span class="com"># 1. Python 3.11 kur — "Add Python to PATH" işaretle!</span>
+cd C:\SmartSafe
+python -m venv venv
+venv\Scripts\activate
+pip install -r core\requirements.txt
+copy .env.example .env && notepad .env
+python core\run.py   <span class="com"># → http://localhost:5000</span>
+
+<span class="com"># Production (Waitress)</span>
+pip install waitress
+python -c <span class="str">"from waitress import serve; from core.app import create_app; serve(create_app(), host='0.0.0.0', port=5000, threads=8)"</span>
+
+<span class="com"># Windows Servisi (NSSM)</span>
+nssm install SmartSafe <span class="str">"C:\SmartSafe\venv\Scripts\python.exe"</span> <span class="str">"C:\SmartSafe\core\run.py"</span>
+nssm set SmartSafe AppDirectory <span class="str">"C:\SmartSafe"</span>
+nssm start SmartSafe</pre>
+  </div>
+  <h4>🐧 Linux (Ubuntu/Debian)</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Bash</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>sudo apt update && sudo apt install python3.11 python3.11-venv python3-pip -y
+cd /opt/smartsafe
+python3.11 -m venv venv && source venv/bin/activate
+pip install -r core/requirements.txt
+cp .env.example .env && nano .env
+python core/run.py
+
+<span class="com"># systemd servisi</span>
+sudo tee /etc/systemd/system/smartsafe.service &lt;&lt; <span class="str">'EOF'</span>
+[Unit]
+Description=SmartSafe PPE Detection
+After=network.target
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/smartsafe
+ExecStart=/opt/smartsafe/venv/bin/gunicorn -w 2 -b 0.0.0.0:5000 "core.app:create_app()"
+Restart=always
+EnvironmentFile=/opt/smartsafe/.env
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl enable --now smartsafe</pre>
+  </div>
+  <h4>🍎 macOS</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Bash</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>brew install python@3.11
+cd ~/smartsafe && python3.11 -m venv venv && source venv/bin/activate
+pip install -r core/requirements.txt && cp .env.example .env
+python core/run.py</pre>
+  </div>
+</section>
+
+<section class="section" id="s4">
+  <div class="section-header">
+    <div class="section-num">04</div>
+    <div class="section-title">GPU / CUDA Yapılandırması</div>
+    <div class="section-icon">⚡</div>
+  </div>
+  <div class="perf-grid">
+    <div class="perf-card"><div class="perf-val">25</div><div class="perf-label">FPS · RTX 3060</div></div>
+    <div class="perf-card"><div class="perf-val" style="color:var(--accent3)">3-5</div><div class="perf-label">FPS · CPU (i7)</div></div>
+    <div class="perf-card"><div class="perf-val" style="color:var(--accent2)">CUDA</div><div class="perf-label">11.8 veya 12.x</div></div>
+    <div class="perf-card"><div class="perf-val" style="color:var(--accent4)">AUTO</div><div class="perf-label">CPU fallback</div></div>
+  </div>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Bash</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>nvidia-smi   <span class="com"># Sürücü kontrolü</span>
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+python -c <span class="str">"import torch; print('CUDA:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A')"</span></pre>
+  </div>
+  <div class="info-box">GPU yoksa sistem <strong>otomatik CPU moduna</strong> düşer. CPU modunda ~2-4 kamera çalışır.</div>
+</section>
+
+<section class="section" id="s5">
+  <div class="section-header">
+    <div class="section-num">05</div>
+    <div class="section-title">Docker ile Deployment (Önerilen)</div>
+    <div class="section-icon">🐳</div>
+  </div>
+  <div class="info-box accent">Docker kullanıldığında müşteri kaynak kodunu <strong>görmez</strong> ve kurulum tek komuta iner.</div>
+  <h4>Dockerfile</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Dockerfile</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>FROM python:3.11-slim
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY core/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 5000
+HEALTHCHECK --interval=30s --timeout=10s \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/')" || exit 1
+CMD ["python", "core/run.py"]</pre>
+  </div>
+  <h4>docker-compose.yml</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">YAML</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre><span class="kw">version</span>: <span class="str">'3.8'</span>
+<span class="kw">services</span>:
+  <span class="fn">smartsafe</span>:
+    build: .
+    ports: [<span class="str">"5000:5000"</span>]
+    volumes:
+      - ./models:/app/models
+      - smartsafe_data:/app/data
+      - smartsafe_logs:/app/logs
+    env_file: .env
+    restart: unless-stopped
+    networks: [smartsafe_net]
+  <span class="fn">nginx</span>:
+    image: nginx:alpine
+    ports: [<span class="str">"80:80"</span>]
+    volumes: [<span class="str">"./nginx.conf:/etc/nginx/conf.d/default.conf:ro"</span>]
+    depends_on: [smartsafe]
+    restart: unless-stopped
+    networks: [smartsafe_net]</pre>
+  </div>
+  <h4>Tek Komutla Ayağa Kaldır</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Bash</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>docker-compose up -d
+docker-compose ps && docker-compose logs -f smartsafe
+<span class="com"># Güncelleme:</span>
+docker-compose down && docker-compose build --no-cache && docker-compose up -d</pre>
+  </div>
+</section>
+
+<section class="section" id="s6">
+  <div class="section-header">
+    <div class="section-num">06</div>
+    <div class="section-title">Kamera Altyapısı — Tüm Senaryolar</div>
+    <div class="section-icon">📷</div>
+  </div>
+  <div class="scenario-grid">
+    <div class="scenario-card">
+      <div class="scenario-head"><div class="scenario-num s1">1</div><div class="scenario-title">DVR/NVR var</div><div class="scenario-tag">⚡ EN SIK</div></div>
+      <div class="scenario-body">100 kamera, hepsi DVR'a bağlı. Sadece belirli alanlarda PPE istiyor.<div class="scenario-tip">⚡ TEK IP → TÜM KANALLAR · DVR IP = 192.168.1.100 → Kanal 1–64 RTSP</div></div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-head"><div class="scenario-num s2">2</div><div class="scenario-title">Her kameranın ayrı IP'si</div></div>
+      <div class="scenario-body">IP kameralar switch'e direkt bağlı. IT'den IP listesini al → Toplu IP Ekleme kullan.</div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-head"><div class="scenario-num s3">3</div><div class="scenario-title">Birden fazla DVR (Büyük Tesisler)</div></div>
+      <div class="scenario-body">3 bina, her birinde ayrı DVR. Her DVR'ı SmartSafe'e ayrı ayrı ekle.<div class="scenario-tip" style="border-color:rgba(168,85,247,0.3);color:var(--accent4);background:rgba(168,85,247,0.04)">⚠️ SmartSafe TÜM DVR ağlarına erişebilmeli (VLAN routing!)</div></div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-head"><div class="scenario-num s4">4</div><div class="scenario-title">VLAN ile izole kamera ağı</div></div>
+      <div class="scenario-body">Kameralar 10.x.x.x, ofis 192.168.x.x. IT'den routing açtır veya sunucuya 2. NIC tak.</div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-head"><div class="scenario-num s5">5</div><div class="scenario-title">Uzaktan Erişim (VPN)</div></div>
+      <div class="scenario-body">SmartSafe merkezi, kameralar müşteri binasında. Site-to-Site VPN kur (WireGuard / IPsec).<div class="scenario-tip" style="border-color:rgba(239,68,68,0.3);color:var(--danger);background:rgba(239,68,68,0.04)">⚠️ ~2-5 Mbps / kamera · Latency &lt; 100ms</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="s7">
+  <div class="section-header">
+    <div class="section-num">07</div>
+    <div class="section-title">DVR/NVR Bağlantısı — Adım Adım</div>
+    <div class="section-icon">🔌</div>
+  </div>
+  <h4>Adım 1 — Ağ Erişimini Test Et</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Bash / PowerShell</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>ping 192.168.1.100
+Test-NetConnection -ComputerName 192.168.1.100 -Port 554  <span class="com"># Windows</span>
+nc -zv 192.168.1.100 554                                   <span class="com"># Linux</span></pre>
+  </div>
+  <h4>Adım 2 — RTSP URL'leri (Marka Bazlı)</h4>
+  <div class="rtsp-block">
+    <div class="rtsp-brand"><span style="color:var(--accent)">📹</span><div class="rtsp-brand-name">Hikvision</div></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/Streaming/Channels/101<span class="note">← Kanal 1, Ana stream</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/Streaming/Channels/201<span class="note">← Kanal 2, Ana stream</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/Streaming/Channels/102<span class="note">← Kanal 1, Sub stream</span></div>
+  </div>
+  <div class="rtsp-block">
+    <div class="rtsp-brand"><span style="color:var(--accent2)">📹</span><div class="rtsp-brand-name">Dahua / XMEye</div></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/cam/realmonitor?channel=1&subtype=0<span class="note">← Main</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/cam/realmonitor?channel=1&subtype=1<span class="note">← Sub</span></div>
+    <div class="rtsp-url">rtsp://IP:554/user=admin&password=PASS&channel=1&stream=0.sdp<span class="note">← XMEye/Genel Çin DVR</span></div>
+  </div>
+  <div class="rtsp-block">
+    <div class="rtsp-brand"><span style="color:var(--accent3)">📹</span><div class="rtsp-brand-name">Diğer Markalar</div></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/h264Preview_01_main<span class="note">← Reolink</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/stream1<span class="note">← TP-Link (Tapo)</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP/axis-media/media.amp<span class="note">← Axis</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/profile1/media.sst<span class="note">← Hanwha (Samsung)</span></div>
+    <div class="rtsp-url">rtsp://admin:PASS@IP:554/unicast/c1/s0/live<span class="note">← Uniview</span></div>
+  </div>
+  <h4>Python ile Hızlı RTSP Testi</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Python</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>python -c <span class="str">"import cv2; cap=cv2.VideoCapture('rtsp://admin:pass@192.168.1.100:554/Streaming/Channels/101'); print('✅ Başarılı!' if cap.isOpened() else '❌ Bağlanamadı'); cap.release()"</span></pre>
+  </div>
+  <h4>Adım 3 — SmartSafe'e DVR Ekle</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Alan</th><th>Açıklama</th><th>Örnek</th></tr></thead>
+    <tbody>
+      <tr><td>DVR Adı</td><td>İstediğiniz isim</td><td>Merkez DVR</td></tr>
+      <tr><td>IP Adresi</td><td>DVR'ın ağ adresi</td><td><code>192.168.1.100</code></td></tr>
+      <tr><td>Port</td><td>Web/HTTP portu</td><td><code>80</code></td></tr>
+      <tr><td>Kullanıcı Adı</td><td>DVR giriş</td><td><code>admin</code></td></tr>
+      <tr><td>Şifre</td><td>DVR şifresi</td><td><code>Admin123</code></td></tr>
+      <tr><td>DVR Tipi</td><td>Marka seçimi</td><td>Genel DVR</td></tr>
+      <tr><td>Maks. Kanal</td><td>Toplam kanal sayısı</td><td><code>16</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="section" id="s8">
+  <div class="section-header">
+    <div class="section-num">08</div>
+    <div class="section-title">IP Kamera (Bağımsız) Bağlantısı</div>
+    <div class="section-icon">📡</div>
+  </div>
+  <div class="info-box accent">
+    <strong>Tek Kamera:</strong> Kamera Yönetimi → "Kamera Ekleme" → IP, port, kullanıcı/şifre → <strong>"⚡ Hızlı Test"</strong> → Kaydet.<br><br>
+    <strong>Akıllı Tespit:</strong> IP girip <strong>"⚡ Akıllı Tespit"</strong> → Sistem bilinen portları tarar, marka ve RTSP URL'i otomatik tespit eder.
+  </div>
+</section>
+
+<section class="section" id="s9">
+  <div class="section-header">
+    <div class="section-num">09</div>
+    <div class="section-title">ONVIF Keşfi</div>
+    <div class="section-icon">🔍</div>
+  </div>
+  <div class="info-box">Kamera Yönetimi → "ONVIF Keşif" → Ağ aralığı girin (<code>192.168.1.1 → 192.168.1.254</code>) → <strong>"🔍 ONVIF Tarama"</strong> → Bulunanları ekleyin.</div>
+  <div class="info-box warning">
+    <strong>⚠️ Kurumsal ağlarda ONVIF çoğunlukla çalışmaz:</strong> UDP multicast kapalı · VLAN izolasyonu · Bazı markalar varsayılan kapalı<br><br>
+    <strong>Çözüm:</strong> IT'den IP listesini alın → Toplu IP Ekleme kullanın.
+  </div>
+</section>
+
+<section class="section" id="s10">
+  <div class="section-header">
+    <div class="section-num">10</div>
+    <div class="section-title">Toplu IP ile Kamera Ekleme</div>
+    <div class="section-icon">📦</div>
+  </div>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Format: IP, port, kullanıcı, şifre, isim</span></div>
+    <pre><span class="com"># Sadece IP de yeterlidir</span>
+<span class="val">192.168.1.100</span>, 554, admin, pass123, Üretim Sahası K1
+<span class="val">192.168.1.101</span>, 554, admin, pass123, Üretim Sahası K2
+<span class="val">192.168.1.102</span>, 554, admin, pass123, Depo Giriş
+<span class="val">10.0.5.50</span>, 80, , , Ofis Girişi
+<span class="val">10.0.5.51</span></pre>
+  </div>
+  <div class="info-box"><strong>ONVIF ile dene:</strong> Her IP için önce ONVIF, başarısız olursa RTSP probe &nbsp;·&nbsp; <strong>Kanalları otomatik bul:</strong> DVR/NVR ise alt kanalları keşfet</div>
+</section>
+
+<section class="section" id="s11">
+  <div class="section-header">
+    <div class="section-num">11</div>
+    <div class="section-title">PPE Detection Başlatma</div>
+    <div class="section-icon">🧠</div>
+  </div>
+  <div class="info-box accent">
+    <strong>Tek kamera:</strong> Tablo → PPE Detection toggle → 🟢 Aktif<br>
+    <strong>Toplu:</strong> Checkbox → "Seçililerde Detection Başlat" → Tümü aynı anda<br>
+    <strong>DVR kanalları:</strong> Kanalları seç → Detection modu → "▶ Detection Başlat"<br>
+    <strong>Canlı izleme:</strong> 🧠 ikonu → bounding box + label gerçek zamanlı
+  </div>
+</section>
+
+<section class="section" id="s12">
+  <div class="section-header">
+    <div class="section-num">12</div>
+    <div class="section-title">Kamera Sağlık İzleme</div>
+    <div class="section-icon">💓</div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Badge</th><th>Açıklama</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-green">🟢 Online</span></td><td>Aktif bağlantısı olan kameralar</td></tr>
+      <tr><td><span class="badge badge-red">🔴 Offline</span></td><td>Bağlantısı kopmuş kameralar</td></tr>
+      <tr><td><span class="badge badge-blue">🔵 Detection Aktif</span></td><td>PPE detection çalışan kameralar</td></tr>
+      <tr><td><span class="badge badge-purple">🛡️ Watchdog</span></td><td>Otomatik kurtarma durumu</td></tr>
+    </tbody>
+  </table></div>
+  <div class="info-box">Panel <strong>30 saniyede bir</strong> otomatik yenilenir.</div>
+</section>
+
+<section class="section" id="s13">
+  <div class="section-header">
+    <div class="section-num">13</div>
+    <div class="section-title">Stream Watchdog & Otomatik Kurtarma</div>
+    <div class="section-icon">🛡️</div>
+  </div>
+  <div class="watchdog-grid">
+    <div class="wd-card"><div class="wd-key">Stale Threshold</div><div class="wd-val">30s</div><div class="wd-desc">Frame gelmezse "stale" olarak işaretlenir</div></div>
+    <div class="wd-card"><div class="wd-key">Max Restart Attempt</div><div class="wd-val">10</div><div class="wd-desc">Maksimum yeniden başlatma denemesi</div></div>
+    <div class="wd-card"><div class="wd-key">Backoff</div><div class="wd-val" style="font-size:16px">5s→120s</div><div class="wd-desc">Her başarısız denemede bekleme artar</div></div>
+    <div class="wd-card"><div class="wd-key">Check Interval</div><div class="wd-val">15s</div><div class="wd-desc">Stream durumu kontrol periyodu</div></div>
+  </div>
+  <div class="info-box" style="margin-top:12px">Bağlantı kopar → 5 deneme × üstel backoff (1s→16s) → Alternatif URL'leri dener → Tükenenler "dead" olarak işaretlenir</div>
+</section>
+
+<section class="section" id="s14">
+  <div class="section-header">
+    <div class="section-num">14</div>
+    <div class="section-title">Ağ Yapılandırması & Firewall</div>
+    <div class="section-icon">🔧</div>
+  </div>
+  <h4>Port Gereksinimleri</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Port</th><th>Protokol</th><th>Yön</th><th>Açıklama</th></tr></thead>
+    <tbody>
+      <tr><td><code>5000</code></td><td>TCP</td><td>Gelen</td><td>Web arayüzü (HTTP)</td></tr>
+      <tr><td><code>554</code></td><td>TCP</td><td>Giden</td><td>RTSP — kameralara bağlanma</td></tr>
+      <tr><td><code>80/443</code></td><td>TCP</td><td>Giden</td><td>ONVIF / kamera web arayüzü</td></tr>
+      <tr><td><code>3702</code></td><td>UDP</td><td>Gelen+Giden</td><td>ONVIF WS-Discovery (multicast)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Windows</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>netsh advfirewall firewall add rule name=<span class="str">"SmartSafe Web"</span> dir=in action=allow protocol=TCP localport=5000
+netsh advfirewall firewall add rule name=<span class="str">"ONVIF Discovery"</span> dir=in action=allow protocol=UDP localport=3702</pre>
+  </div>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Linux</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre>sudo ufw allow 5000/tcp comment <span class="str">"SmartSafe Web"</span>
+sudo ufw allow 3702/udp comment <span class="str">"ONVIF Discovery"</span></pre>
+  </div>
+  <div class="info-box">
+    Ana stream (1080p): <strong>~4-8 Mbps/kamera</strong> &nbsp;·&nbsp; Alt stream (D1): <strong>~1-2 Mbps/kamera</strong><br>
+    8 kamera × 4 Mbps = 32 Mbps &nbsp;·&nbsp; 64 kamera × 2 Mbps (sub) = 128 Mbps (gigabit gerekli)<br>
+    <strong>💡 Detection için sub stream yeterlidir — bant genişliğini %70 azaltır.</strong>
+  </div>
+</section>
+
+<section class="section" id="s15">
+  <div class="section-header">
+    <div class="section-num">15</div>
+    <div class="section-title">Güvenlik & Kod Koruma</div>
+    <div class="section-icon">🔒</div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Yöntem</th><th>Müşteri Kodu Görür mü?</th><th>Durum</th></tr></thead>
+    <tbody>
+      <tr><td>Kaynak kodu</td><td>✅ Evet</td><td>Sadece geliştirme</td></tr>
+      <tr><td>Docker container</td><td>❌ Hayır</td><td><span class="badge badge-green">⭐ Önerilen</span></td></tr>
+      <tr><td>PyInstaller .exe</td><td>❌ Hayır</td><td>Zor, Windows</td></tr>
+    </tbody>
+  </table></div>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">.env — Asla Git'e Ekleme!</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre><span class="kw">SECRET_KEY</span>=<span class="str">çok-güçlü-rastgele-key</span>
+<span class="kw">FLASK_DEBUG</span>=<span class="val">False</span>
+<span class="kw">MAX_CONCURRENT_CAMERAS</span>=<span class="num">25</span>
+<span class="kw">MAX_INFERENCE_WORKERS</span>=<span class="num">4</span>
+<span class="kw">FRAME_SKIP</span>=<span class="num">2</span></pre>
+  </div>
+</section>
+
+<section class="section" id="s16">
+  <div class="section-header">
+    <div class="section-num">16</div>
+    <div class="section-title">Saha Test Kontrol Listesi</div>
+    <div class="section-icon">✅</div>
+  </div>
+  <div class="checklist">
+    <div class="check-group-title">── KURULUM ──</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Python 3.11 kurulu, PATH'de</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>pip install -r requirements.txt — hatasız</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>.env dosyası oluşturuldu ve düzenlendi</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>models/ klasöründe yolo9e.pt ve food_beverage best.pt mevcut</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>python core/run.py — hatasız çalışıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>GPU kontrol: nvidia-smi (varsa CUDA aktif)</div>
+    <div class="check-group-title">── AĞ ──</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>SmartSafe sunucu ağa bağlandı (ethernet önerilir)</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>DVR/NVR'a ping atılıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>DVR web arayüzü açılıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>RTSP portu (554) erişilebilir</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>VLC ile RTSP stream test edildi — görüntü geliyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Firewall kuralları eklendi (port 5000 açık)</div>
+    <div class="check-group-title">── ADMİN PANELİ ──</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>http://sunucu:5000 açılıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Admin girişi yapıldı</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Şirket oluşturuldu (sektör seçildi)</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Şirket kullanıcısı ile giriş çalışıyor</div>
+    <div class="check-group-title">── DVR/NVR ──</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>DVR/NVR bilgileri girildi (IP, port, kullanıcı, şifre)</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>DVR başarıyla eklendi</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Kanallar keşfedildi / listelendi</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>En az 1 kanalda stream görüntüsü geldi</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Detection modunda bounding box görünüyor</div>
+    <div class="check-group-title">── DETECTION ──</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>PPE tespiti görsel olarak doğrulandı (bbox + label)</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Tekli detection toggle çalışıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Toplu detection (checkbox + başlat) çalışıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>DVR kanallarında detection çalışıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Canlı detection modalı açılıyor</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>İhlal kaydedildi → dashboard'da görünüyor</div>
+    <div class="check-group-title">── DAYANIKLILIK ──</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Kamera bağlantısı kasıtlı kesildi → watchdog yeniden bağlandı</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Çoklu kamera aynı anda çalışıyor (en az 4)</div>
+    <div class="check-item" onclick="toggleCheck(this)"><div class="check-box"></div>Sistem 1+ saat kararlı çalıştı</div>
+  </div>
+</section>
+
+<section class="section" id="s17">
+  <div class="section-header">
+    <div class="section-num">17</div>
+    <div class="section-title">Sorun Giderme</div>
+    <div class="section-icon">🔧</div>
+  </div>
+  <h4>RTSP Bağlantı Sorunları</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Sorun</th><th>Olası Neden</th><th>Çözüm</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--warning)">Bağlanamadı</td><td>Yanlış IP/port</td><td><code>ping</code> ve <code>nc -zv IP 554</code></td></tr>
+      <tr><td style="color:var(--warning)">401 Unauthorized</td><td>Yanlış şifre</td><td>DVR web arayüzünden doğrulayın</td></tr>
+      <tr><td style="color:var(--warning)">Timeout</td><td>Firewall</td><td>IT'den port 554 açtırın</td></tr>
+      <tr><td style="color:var(--warning)">Siyah ekran</td><td>Yanlış URL formatı</td><td>VLC ile doğru RTSP URL'i bulun</td></tr>
+      <tr><td style="color:var(--warning)">Kekeme görüntü</td><td>Bant genişliği yetersiz</td><td>Sub stream kullanın</td></tr>
+      <tr><td style="color:var(--warning)">Stream failed</td><td>DVR eşzamanlı limit</td><td>Sub stream kullanın (genellikle 4-6 limit)</td></tr>
+    </tbody>
+  </table></div>
+  <h4>Performans Sorunları</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Sorun</th><th>Çözüm</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--warning)">Düşük FPS</td><td>GPU kontrolü yapın, CPU modda kamera sayısını azaltın</td></tr>
+      <tr><td style="color:var(--warning)">Yüksek bellek</td><td><code>FRAME_SKIP=3</code> yapın, sub stream kullanın</td></tr>
+      <tr><td style="color:var(--warning)">Sunucu çökmesi</td><td><code>MAX_CONCURRENT_CAMERAS</code> değerini düşürün</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="section" id="s18">
+  <div class="section-header">
+    <div class="section-num">18</div>
+    <div class="section-title">Model Dosyaları</div>
+    <div class="section-icon">🧩</div>
+  </div>
+  <div class="info-box danger">⚠️ Model dosyaları Git'te saklanmaz. Her kurulumda ayrıca kopyalanmalıdır!</div>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">Gerekli Dosyalar</span></div>
+    <pre>models/yolo9e.pt                                   <span class="com">(~140 MB)</span>
+models/sh17_food_beverage/.../weights/best.pt      <span class="com">(~112 MB)</span>
+
+<span class="com">Taşıma yöntemleri:</span>
+  USB bellek    → Sahaya git, elle kopyala
+  scp/rsync     → SSH erişimliyse uzaktan kopyala
+  HTTP sunucu   → python -m http.server 8888
+  Google Drive  → indirip kopyala</pre>
+  </div>
+</section>
+
+<section class="section" id="s19">
+  <div class="section-header">
+    <div class="section-num">19</div>
+    <div class="section-title">Performans & Ölçeklendirme</div>
+    <div class="section-icon">📈</div>
+  </div>
+  <h4>Donanım Önerileri</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kapasite</th><th>CPU</th><th>RAM</th><th>GPU</th><th>Disk</th></tr></thead>
+    <tbody>
+      <tr><td>1-4 kamera</td><td>i5 / Ryzen 5</td><td>8 GB</td><td>Opsiyonel</td><td>100 GB SSD</td></tr>
+      <tr><td>5-16 kamera</td><td>i7 / Ryzen 7</td><td>16 GB</td><td>GTX 1060+</td><td>256 GB SSD</td></tr>
+      <tr><td>17-64 kamera</td><td>i9 / Ryzen 9</td><td>32 GB</td><td>RTX 3060+</td><td>512 GB SSD</td></tr>
+      <tr><td>64+ kamera</td><td>Xeon / Threadripper</td><td>64 GB</td><td>RTX 3090 / A100</td><td>1 TB NVMe</td></tr>
+    </tbody>
+  </table></div>
+  <h4>Yapılandırma Parametreleri</h4>
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">.env</span><button class="code-copy" onclick="copyCode(this)">kopyala</button></div>
+    <pre><span class="kw">MAX_CONCURRENT_CAMERAS</span>=<span class="num">25</span>   <span class="com"># Eşzamanlı kamera limiti</span>
+<span class="kw">MAX_INFERENCE_WORKERS</span>=<span class="num">4</span>     <span class="com"># Inference thread sayısı</span>
+<span class="kw">FRAME_SKIP</span>=<span class="num">2</span>                 <span class="com"># Her N frame'de bir detection</span>
+<span class="kw">STALE_THRESHOLD_SEC</span>=<span class="num">30</span>
+<span class="kw">CHECK_INTERVAL_SEC</span>=<span class="num">15</span>
+<span class="kw">MAX_RESTART_ATTEMPTS</span>=<span class="num">10</span></pre>
+  </div>
+  <div class="info-box accent">
+    <strong>💡 Alt Stream Kullanımı:</strong> Bant genişliğini <strong>%70</strong>, GPU/CPU yükünü <strong>%50</strong> azaltır.<br>
+    Hikvision: <code>...Channels/102</code> &nbsp;·&nbsp; Dahua: <code>...subtype=1</code>
+  </div>
+</section>
+
+</main>
+</div>
+
+<div class="footer">© 2026 SmartSafe AI · Saha Deployment Kılavuzu v2.0 · Tüm hakları saklıdır.</div>
+
+<script>
+function toggleCheck(el) { el.classList.toggle('done'); }
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    btn.textContent = 'kopyalandı ✓';
+    setTimeout(() => btn.textContent = 'kopyala', 2000);
+  });
+}
+document.querySelectorAll('.nav-item').forEach(a => {
+  a.addEventListener('click', e => {
+    const id = a.getAttribute('href');
+    const target = document.querySelector(id);
+    if (target) { e.preventDefault(); target.scrollIntoView({behavior:'smooth', block:'start'}); }
+  });
+});
+</script>
+</body>
+</html>
