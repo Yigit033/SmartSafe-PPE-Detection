@@ -39,6 +39,8 @@ except ImportError:
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+# Ana dizindeki .env dosyasını yükle
+load_dotenv(os.path.join(parent_dir, '.env'))
 from services.multitenant_system import MultiTenantDatabase
 from integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
 from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
