@@ -67,7 +67,7 @@ class DatabaseAdapter:
     def _init_connection_pool(self):
         """Initialize connection pool for PostgreSQL"""
         try:
-            if self.db_type == 'postgresql' and self.secure_connector:
+            if self.db_type == 'postgresql':
                 # Connection pooling for PostgreSQL
                 try:
                     from psycopg2 import pool
@@ -75,35 +75,30 @@ class DatabaseAdapter:
                     logger.warning("⚠️ psycopg2 pool not available, will use direct connections")
                     return
                 
-                database_url = os.getenv('DATABASE_URL')
+                database_url = self.config.database_url
                 if database_url:
                     try:
                         from urllib.parse import urlparse
+                        # Handle potential issues with postgresql:// vs postgres://
+                        if database_url.startswith('postgres://'):
+                            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+                            
                         parsed = urlparse(database_url)
                         
-                        # Validate parsed URL
-                        if not all([parsed.hostname, parsed.username, parsed.password]):
-                            logger.warning("⚠️ Invalid DATABASE_URL format, skipping connection pool")
-                            return
-                        
-                        # Create connection pool
+                        # Create connection pool using credentials from URL
                         self.connection_pool = pool.SimpleConnectionPool(
                             minconn=1,
-                            maxconn=10,  # Max 10 connections
+                            maxconn=20,
                             host=parsed.hostname,
                             port=parsed.port or 5432,
-                            database=parsed.path[1:] if parsed.path else 'postgres',
+                            database=parsed.path[1:],
                             user=parsed.username,
                             password=parsed.password,
-                            connect_timeout=45,  # Match secure connector timeout
-                            keepalives=1,
-                            keepalives_idle=10,
-                            keepalives_interval=5,
-                            keepalives_count=10
+                            connect_timeout=10
                         )
-                        logger.info("✅ PostgreSQL connection pool initialized (min=1, max=10)")
+                        logger.info("✅ PostgreSQL connection pool initialized successfully")
                     except Exception as pool_error:
-                        logger.warning(f"⚠️ Connection pool creation failed: {pool_error}, will use direct connections")
+                        logger.warning(f"⚠️ Connection pool initialization failed: {pool_error}, will use direct connections")
                 else:
                     logger.warning("⚠️ DATABASE_URL not set, skipping connection pool")
         except Exception as e:

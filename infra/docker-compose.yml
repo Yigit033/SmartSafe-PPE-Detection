@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # SmartSafe AI Web Application
@@ -42,7 +42,6 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
-    runtime: nvidia
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-smartsafe2024}
@@ -58,7 +57,6 @@ services:
       - POSTGRES_DB=smartsafe_saas
       - POSTGRES_USER=smartsafe
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-smartsafe2024}
-    runtime: nvidia
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
@@ -97,10 +95,10 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
     networks:
       - smartsafe-network
 
@@ -137,14 +135,27 @@ services:
     networks:
       - smartsafe-network
 
-runtime: nvidia
-    volumes:
+  # Pgweb - Simple PostgreSQL Browser
+  pgweb:
+    image: sosedoff/pgweb
+    container_name: smartsafe-pgweb
+    restart: unless-stopped
+    ports:
+      - "5051:8081"
+    environment:
+      - DATABASE_URL=postgres://smartsafe:smartsafe2024db@postgres:5432/smartsafe_saas?sslmode=disable
+    networks:
+      - smartsafe-network
+    depends_on:
+      - postgres
+
+volumes:
   redis_data:
   postgres_data:
   prometheus_data:
   grafana_data:
-  smartsafe_database:  # KALICI DATABASE VOLUME
+  smartsafe_database: # KALICI DATABASE VOLUME
 
 networks:
   smartsafe-network:
-    driver: bridge 
+    driver: bridge
