@@ -19,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body
-        className={`${inter.className} antialiased bg-slate-950 text-slate-50`}
+        className={`${inter.className} antialiased bg-slate-50 text-slate-900`}
       >
         <div className="flex min-h-screen">
           <Sidebar />

@@ -12,11 +12,21 @@ interface User {
   status: string;
 }
 
-interface AddUserParams {
+interface ListUsersRequest {
+  company_id: string;
+}
+
+interface CreateUserRequest {
+  company_id: string;
   username: string;
   email: string;
   password: string;
   role?: string;
+}
+
+interface RemoveUserRequest {
+  company_id: string;
+  user_id: string;
 }
 
 /**
@@ -24,15 +34,13 @@ interface AddUserParams {
  */
 export const list = api(
   { expose: true, method: "GET", path: "/company/:company_id/users" },
-  async ({
-    company_id,
-  }: {
-    company_id: string;
-  }): Promise<{ success: boolean; users: User[] }> => {
+  async (
+    params: ListUsersRequest,
+  ): Promise<{ success: boolean; users: User[] }> => {
     try {
       const res = await pool.query(
         "SELECT user_id, company_id, username, email, role, status FROM users WHERE company_id = $1 ORDER BY created_at DESC",
-        [company_id],
+        [params.company_id],
       );
       return { success: true, users: res.rows };
     } catch (error) {
@@ -47,10 +55,9 @@ export const list = api(
  */
 export const create = api(
   { expose: true, method: "POST", path: "/company/:company_id/users" },
-  async ({
-    company_id,
-    ...params
-  }: { company_id: string } & AddUserParams): Promise<{
+  async (
+    params: CreateUserRequest,
+  ): Promise<{
     success: boolean;
     user_id?: string;
     error?: string;
@@ -69,7 +76,7 @@ export const create = api(
       `,
         [
           user_id,
-          company_id,
+          params.company_id,
           params.username,
           params.email,
           passwordHash,
@@ -95,17 +102,13 @@ export const remove = api(
     method: "DELETE",
     path: "/company/:company_id/users/:user_id",
   },
-  async ({
-    company_id,
-    user_id,
-  }: {
-    company_id: string;
-    user_id: string;
-  }): Promise<{ success: boolean; error?: string }> => {
+  async (
+    params: RemoveUserRequest,
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       await pool.query(
         "DELETE FROM users WHERE company_id = $1 AND user_id = $2",
-        [company_id, user_id],
+        [params.company_id, params.user_id],
       );
       return { success: true };
     } catch (error: any) {

@@ -13,7 +13,12 @@ interface DVRSystem {
   status: string;
 }
 
-interface AddDVRParams {
+interface ListDVRRequest {
+  company_id: string;
+}
+
+interface CreateDVRRequest {
+  company_id: string;
   name: string;
   ip_address: string;
   port?: number;
@@ -26,20 +31,23 @@ interface AddDVRParams {
   max_channels?: number;
 }
 
+interface RemoveDVRRequest {
+  company_id: string;
+  dvr_id: string;
+}
+
 /**
  * Şirketin DVR sistemlerini listeler
  */
 export const list = api(
   { expose: true, method: "GET", path: "/company/:company_id/dvr" },
-  async ({
-    company_id,
-  }: {
-    company_id: string;
-  }): Promise<{ success: boolean; systems: DVRSystem[] }> => {
+  async (
+    params: ListDVRRequest,
+  ): Promise<{ success: boolean; systems: DVRSystem[] }> => {
     try {
       const res = await pool.query(
         "SELECT dvr_id, company_id, name, ip_address, port, username, dvr_type, status FROM dvr_systems WHERE company_id = $1 ORDER BY created_at DESC",
-        [company_id],
+        [params.company_id],
       );
       return { success: true, systems: res.rows };
     } catch (error) {
@@ -54,10 +62,9 @@ export const list = api(
  */
 export const create = api(
   { expose: true, method: "POST", path: "/company/:company_id/dvr" },
-  async ({
-    company_id,
-    ...params
-  }: { company_id: string } & AddDVRParams): Promise<{
+  async (
+    params: CreateDVRRequest,
+  ): Promise<{
     success: boolean;
     dvr_id?: string;
     error?: string;
@@ -75,7 +82,7 @@ export const create = api(
       `,
         [
           dvr_id,
-          company_id,
+          params.company_id,
           params.name,
           params.ip_address,
           params.port || 80,
@@ -103,17 +110,13 @@ export const create = api(
  */
 export const remove = api(
   { expose: true, method: "DELETE", path: "/company/:company_id/dvr/:dvr_id" },
-  async ({
-    company_id,
-    dvr_id,
-  }: {
-    company_id: string;
-    dvr_id: string;
-  }): Promise<{ success: boolean; error?: string }> => {
+  async (
+    params: RemoveDVRRequest,
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       await pool.query(
         "DELETE FROM dvr_systems WHERE company_id = $1 AND dvr_id = $2",
-        [company_id, dvr_id],
+        [params.company_id, params.dvr_id],
       );
       return { success: true };
     } catch (error: any) {

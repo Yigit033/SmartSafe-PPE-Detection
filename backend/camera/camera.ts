@@ -16,7 +16,8 @@ interface Camera {
   created_at: string;
 }
 
-interface AddCameraParams {
+interface CreateCameraRequest {
+  company_id: string;
   camera_name: string;
   camera_location: string;
   camera_ip: string;
@@ -27,7 +28,9 @@ interface AddCameraParams {
   camera_password?: string;
 }
 
-interface UpdateCameraParams {
+interface UpdateCameraRequest {
+  company_id: string;
+  camera_id: string;
   camera_name?: string;
   location?: string;
   ip_address?: string;
@@ -65,14 +68,15 @@ export const list = api(
  */
 export const create = api(
   { expose: true, method: "POST", path: "/company/:company_id/cameras" },
-  async ({
-    company_id,
-    ...params
-  }: { company_id: string } & AddCameraParams): Promise<{
+  async (
+    params: CreateCameraRequest,
+  ): Promise<{
     success: boolean;
     camera_id?: string;
     error?: string;
   }> => {
+    const { company_id } = params;
+
     // 1. Abonelik/Limit Kontrolü (Basit versiyon)
     const companyRes = await pool.query(
       "SELECT max_cameras FROM companies WHERE company_id = $1",
@@ -137,24 +141,23 @@ export const update = api(
     method: "PATCH",
     path: "/company/:company_id/cameras/:camera_id",
   },
-  async ({
-    company_id,
-    camera_id,
-    ...params
-  }: { company_id: string; camera_id: string } & UpdateCameraParams): Promise<{
+  async (
+    params: UpdateCameraRequest,
+  ): Promise<{
     success: boolean;
     error?: string;
   }> => {
+    const { company_id, camera_id, ...updates } = params;
     try {
-      const keys = Object.keys(params).filter(
-        (k) => (params as any)[k] !== undefined,
+      const keys = Object.keys(updates).filter(
+        (k) => (updates as any)[k] !== undefined,
       );
       if (keys.length === 0) return { success: true };
 
       const setClause = keys
         .map((key, index) => `${key} = $${index + 3}`)
         .join(", ");
-      const values = keys.map((key) => (params as any)[key]);
+      const values = keys.map((key) => (updates as any)[key]);
 
       await pool.query(
         `UPDATE cameras SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND camera_id = $2`,
