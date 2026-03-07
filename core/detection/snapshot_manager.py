@@ -13,7 +13,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 class SnapshotManager:
     """
     İhlal fotoğrafı yönetim sistemi
@@ -22,11 +21,12 @@ class SnapshotManager:
     - Image optimization
     """
     
-    def __init__(self, base_path: str = "violations"):
+    def __init__(self, base_path: str = "/app/storage/violations"):
         """
         Args:
             base_path: Snapshot'ların kaydedileceği ana klasör
         """
+        # Docker ortamında /app/storage/violations kullanılır
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         

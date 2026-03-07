@@ -38,6 +38,7 @@ except ImportError:
     logger.warning("⚠️ SendGrid not installed. Email will use SMTP only.")
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+from dotenv import load_dotenv
 # core klasöründeki .env dosyasını yükle
 load_dotenv(os.path.join(current_dir, '.env'))
 from services.multitenant_system import MultiTenantDatabase

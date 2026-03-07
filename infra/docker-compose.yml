@@ -1,41 +1,111 @@
-version: "3.8"
-
+# SmartSafe AI Ekosistemi - Local Dev Setup
 services:
-  # SmartSafe AI Web Application
-  web:
+  # 🐍 Flask Backend (Core)
+  core:
     build:
-      context: .
-      dockerfile: Dockerfile
-    image: smartsafe-ai:latest
-    container_name: smartsafe-web
-    restart: unless-stopped
+      context: ..
+      dockerfile: infra/Dockerfile.core
+    container_name: smartsafe-core
     ports:
       - "5000:5000"
-    environment:
-      - FLASK_ENV=production
-      - DATABASE_URL=sqlite:///data/smartsafe_saas.db
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
-    runtime: nvidia
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./static/uploads:/app/static/uploads
-      - ./smartsafe_saas.db:/app/smartsafe_saas.db
-      - ./smartsafe_multitenant.db:/app/smartsafe_multitenant.db
-    depends_on:
-      - redis
-      - postgres
-    networks:
-      - smartsafe-network
+      - ../core:/app
+      - ../storage:/app/storage
+    environment:
+      - FLASK_ENV=development
+      - PORT=5000
+      - PYTHONPATH=.
+      - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
+      - YOLO_CONFIG_DIR=/tmp
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  # Redis Cache & Session Store
+  # ⚛️ Next.js Frontend
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.frontend
+    container_name: smartsafe-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend:/app
+      - ../storage:/app/public/storage
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NODE_ENV=development
+    depends_on:
+      core:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  # ⚡ Encore Backend (Microservices)
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    container_name: smartsafe-backend-encore
+    ports:
+      - "4000:4000"
+      - "9400:9400"
+    volumes:
+    volumes:
+      - ../backend:/app
+      - ../storage:/app/storage
+      - /app/node_modules
+    environment:
+      - ENCORE_ENV=local
+      - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
+      - ENCORE_DEVDASH_LISTEN_ADDR=0.0.0.0:9400
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # 🐘 PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartsafe-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=smartsafe_saas
+      - POSTGRES_USER=smartsafe
+      - POSTGRES_PASSWORD=smartsafe2024
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartsafe -d smartsafe_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # 🔍 PgWeb (Database Browser)
+  pgweb:
+    image: sosedoff/pgweb
+    container_name: smartsafe-pgweb
+    restart: unless-stopped
+    ports:
+      - "5051:8081"
+    environment:
+      - PGWEB_DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 🔴 Redis Cache
   redis:
     image: redis:7-alpine
     container_name: smartsafe-redis
@@ -44,118 +114,27 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-smartsafe2024}
-    networks:
-      - smartsafe-network
 
-  # PostgreSQL Database (Production Alternative)
-  postgres:
-    image: postgres:15-alpine
-    container_name: smartsafe-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_DB=smartsafe_saas
-      - POSTGRES_USER=smartsafe
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-smartsafe2024}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
-    ports:
-      - "5432:5432"
-    networks:
-      - smartsafe-network
-
-  # Nginx Reverse Proxy
-  nginx:
+  # 🎯 SmartSafe Developer Hub (Port Hub)
+  hub:
     image: nginx:alpine
-    container_name: smartsafe-nginx
-    restart: unless-stopped
+    container_name: smartsafe-hub
     ports:
-      - "80:80"
-      - "443:443"
-    runtime: nvidia
+      - "8080:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
-      - ./static:/var/www/static
+      - ./hub/index.html:/usr/share/nginx/html/index.html
     depends_on:
-      - web
-    networks:
-      - smartsafe-network
-
-  # Monitoring - Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: smartsafe-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    runtime: nvidia
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.console.templates=/etc/prometheus/consoles"
-    networks:
-      - smartsafe-network
-
-  # Monitoring - Grafana
-  grafana:
-    image: grafana/grafana:latest
-    container_name: smartsafe-grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-smartsafe2024}
-    runtime: nvidia
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - smartsafe-network
-
-  # Backup Service
-  backup:
-    image: alpine:latest
-    container_name: smartsafe-backup
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-      - ./data:/app/data
-      - ./backups:/backups
-      - ./scripts/backup.sh:/backup.sh
-    command: sh -c "chmod +x /backup.sh && crond -f"
-    depends_on:
-      - postgres
-    networks:
-      - smartsafe-network
-
-  # Pgweb - Simple PostgreSQL Browser
-  pgweb:
-    image: sosedoff/pgweb
-    container_name: smartsafe-pgweb
-    restart: unless-stopped
-    ports:
-      - "5051:8081"
-    environment:
-      - DATABASE_URL=postgres://smartsafe:smartsafe2024db@postgres:5432/smartsafe_saas?sslmode=disable
-    networks:
-      - smartsafe-network
-    depends_on:
-      - postgres
+      core:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
 
 volumes:
-  redis_data:
   postgres_data:
-  prometheus_data:
-  grafana_data:
-  smartsafe_database: # KALICI DATABASE VOLUME
+  redis_data:
 
 networks:
-  smartsafe-network:
-    driver: bridge
+  default:
+    name: smartsafe-network

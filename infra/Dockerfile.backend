@@ -1,0 +1,23 @@
+# SmartSafe Backend (Encore) - Local Development (Stable)
+FROM node:20-bookworm-slim
+
+# Gerekli araçları kuralım
+RUN apt-get update && apt-get install -y curl bash binutils && rm -rf /var/lib/apt/lists/*
+
+# Encore'u kuralım
+RUN curl -L https://encore.dev/install.sh | bash
+
+# PATH'e ekleyelim
+ENV PATH="/root/.encore/bin:$PATH"
+
+WORKDIR /app
+
+# Bağımlılıkları kuralım
+COPY backend/package*.json ./
+RUN npm install
+
+EXPOSE 4000
+EXPOSE 9400
+
+# Geliştirme modunda başlat
+CMD ["encore", "run", "--listen", "0.0.0.0:4000"]

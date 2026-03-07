@@ -1,0 +1,22 @@
+# SmartSafe Frontend - Local Development
+FROM node:20-alpine
+
+# Alpine için bazı build tool'lara ihtiyaç olabilir
+RUN apk add --no-cache libc6-compat curl
+
+WORKDIR /app
+
+# Sadece package dosyalarını kopyalayalım
+COPY frontend/package*.json ./
+
+# Sadece npm install yaparak bağımlılıkları kuralım (local node_modules ile çakışmaz)
+RUN npm install
+
+# Next.js dev server portu
+EXPOSE 3000
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=development
+
+# Frontend'i geliştirme modunda başlatıyoruz
+CMD ["npm", "run", "dev"]

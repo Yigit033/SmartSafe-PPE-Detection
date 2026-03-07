@@ -104,7 +104,7 @@ venv.bak/
 .ropeproject
 
 # Violation tracking system files
-violations/
+# violations/ (removed per user request)
 
 # mkdocs documentation
 /site

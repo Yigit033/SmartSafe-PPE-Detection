@@ -86,6 +86,13 @@ class MultiTenantDatabase:
         """Database connection with timeout"""
         return self.db_adapter.get_connection(timeout)
     
+    def close_connection(self, conn):
+        """Close database connection or return to pool"""
+        if self.db_adapter:
+            self.db_adapter.close_connection(conn)
+        elif conn:
+            conn.close()
+    
     def get_placeholder(self):
         """Get appropriate placeholder for database type"""
         if self.db_adapter.db_type == 'postgresql':

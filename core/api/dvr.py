@@ -1022,22 +1022,26 @@ def create_blueprint(api):
             # Detection sat\u0131rlar\u0131
             result_rows = ''
             for r in all_results[:200]:
-                viols = ', '.join(r.get('ppe_violations') or []) or '\u2014'
+                viols = ', '.join(r.get('ppe_violations') or []) or '—'
                 ts = r.get('timestamp', '')
+                violation_class = 'violation' if viols != '—' else ''
                 result_rows += f"""
                 <tr>
                     <td>{ts}</td>
                     <td>Kanal {r.get('channel', '?')}</td>
                     <td>{r.get('people_detected', 0)}</td>
-                    <td class=\"{'violation' if viols != '\u2014' else ''}\">{viols}</td>
+                    <td class="{violation_class}">{viols}</td>
                     <td>{r.get('detection_system', 'Klasik')}</td>
                 </tr>"""
 
+            session_fallback = '<tr><td colspan="5">Oturum bulunamadı</td></tr>'
+            result_fallback = '<tr><td colspan="5">Sonuç bulunamadı</td></tr>'
+            
             html = f"""<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>DVR Raporu \u2014 {dvr_system.get('name', dvr_id)}</title>
+<title>DVR Raporu — {dvr_system.get('name', dvr_id)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -1063,28 +1067,28 @@ def create_blueprint(api):
 </head>
 <body>
 <button class="print-btn" onclick="window.print()">&#128438; Yazdır / PDF Kaydet</button>
-<h1>SmartSafe AI \u2014 DVR Detection Raporu</h1>
+<h1>SmartSafe AI — DVR Detection Raporu</h1>
 <p class="subtitle">Rapor tarihi: {now_str} &nbsp;&bull;&nbsp; {dvr_system.get('name','')} ({dvr_system.get('ip_address','')})</p>
 
 <div class="meta-grid">
   <div class="meta-card"><div class="val">{len(sessions or [])}</div><div class="lbl">Detection Oturumu</div></div>
   <div class="meta-card"><div class="val">{total_detections}</div><div class="lbl">Toplam Tespitler</div></div>
-  <div class="meta-card"><div class="val" style="color:#dc3545">{total_violations}</div><div class="lbl">Toplam \u0130hlaller</div></div>
+  <div class="meta-card"><div class="val" style="color:#dc3545">{total_violations}</div><div class="lbl">Toplam İhlaller</div></div>
 </div>
 
-<h2>Detection Oturumlar\u0131</h2>
+<h2>Detection Oturumları</h2>
 <table>
-  <thead><tr><th>Oturum ID</th><th>Kanal</th><th>Ba\u015flang\u0131\u00e7</th><th>Biti\u015f</th><th>Mod</th></tr></thead>
-  <tbody>{session_rows or '<tr><td colspan="5">Oturum bulunamad\u0131</td></tr>'}</tbody>
+  <thead><tr><th>Oturum ID</th><th>Kanal</th><th>Başlangıç</th><th>Bitiş</th><th>Mod</th></tr></thead>
+  <tbody>{session_rows or session_fallback}</tbody>
 </table>
 
-<h2>Detection Sonu\u00e7lar\u0131 (son 200)</h2>
+<h2>Detection Sonuçları (son 200)</h2>
 <table>
-  <thead><tr><th>Zaman</th><th>Kanal</th><th>Ki\u015fi</th><th>\u0130hlaller</th><th>Sistem</th></tr></thead>
-  <tbody>{result_rows or '<tr><td colspan="5">Sonu\u00e7 bulunamad\u0131</td></tr>'}</tbody>
+  <thead><tr><th>Zaman</th><th>Kanal</th><th>Kişi</th><th>İhlaller</th><th>Sistem</th></tr></thead>
+  <tbody>{result_rows or result_fallback}</tbody>
 </table>
 
-<footer>SmartSafe AI &copy; {_dt.now().year} &nbsp;&bull;&nbsp; Otomatik olu\u015fturuldu: {now_str}</footer>
+<footer>SmartSafe AI &copy; {_dt.now().year} &nbsp;&bull;&nbsp; Otomatik oluşturuldu: {now_str}</footer>
 </body></html>"""
 
             response = make_response(html)

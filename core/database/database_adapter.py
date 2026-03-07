@@ -111,7 +111,7 @@ class DatabaseAdapter:
         try:
             # Check for PostgreSQL configuration first
             database_url = os.getenv('DATABASE_URL')
-            if database_url and database_url.startswith('postgresql://'):
+            if database_url and (database_url.startswith('postgresql://') or database_url.startswith('postgres://')):
                 logger.info("✅ PostgreSQL configuration found")
                 return DatabaseConfig(
                     database_url=database_url,

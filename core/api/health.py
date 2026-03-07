@@ -18,15 +18,26 @@ def create_blueprint(api):
     def health_check():
         """Enhanced health check endpoint for monitoring"""
         try:
+            # Trigger lazy initialization if needed
+            if hasattr(api, 'ensure_database_initialized'):
+                api.ensure_database_initialized()
+                
             db_status = "healthy"
             if not os.environ.get('RENDER'):
                 try:
-                    conn = api.db.get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT 1")
-                    conn.close()
+                    if hasattr(api, 'db') and api.db:
+                        conn = api.db.get_connection()
+                        if conn:
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT 1")
+                            api.db.close_connection(conn)
+                        else:
+                            db_status = "unhealthy: Could not get database connection"
+                    else:
+                        db_status = "initializing: Database adapter not ready"
                 except Exception as e:
                     db_status = f"unhealthy: {str(e)}"
+                    logger.error(f"❌ DB Health Check Error: {e}")
             else:
                 db_status = "healthy"
             

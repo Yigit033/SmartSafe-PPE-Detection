@@ -1,9 +1,10 @@
 import { Pool } from "pg";
 
-// Python Core ile paylaşılan PostgreSQL bağlantı havuzu
+// Shared PostgreSQL connection pool (supports Docker service names)
 export const pool = new Pool({
   connectionString:
-    "postgresql://smartsafe:smartsafe2024db@127.0.0.1:5432/smartsafe_saas",
+    process.env.DATABASE_URL ||
+    "postgresql://smartsafe:smartsafe2024@127.0.0.1:5432/smartsafe_saas",
 });
 
 // Bağlantıyı test et

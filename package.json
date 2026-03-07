@@ -8,7 +8,8 @@
     "test": "cd core && venv\\Scripts\\python test_sector_integration.py",
     "test:offline-video": "cd core && venv\\Scripts\\python scripts/offline_video_ppe_test.py",
     "install": "cd core && if not exist venv (python -m venv venv) && venv\\Scripts\\pip install -r requirements.txt",
-    "dev": "cd frontend && npm run dev",
+    "dev": "docker-compose -f infra/docker-compose.yml up --build",
+    "docker:stop": "docker-compose -f infra/docker-compose.yml down",
     "landing": "cd landing && npm run dev",
     "backend": "cd backend && encore run"
   },
