@@ -46,6 +46,7 @@ class DVRConfig:
     last_test_time: Optional[datetime] = None
     connection_retries: int = 3
     timeout: int = 10
+    auth_method: str = "auto"  # 'auto', 'digest', 'basic'
     
     def get_api_url(self) -> str:
         """Generate API URL for DVR"""
@@ -61,11 +62,54 @@ class DVRConfig:
             return f"rtsp://{self.ip_address}:{self.rtsp_port}"
     
     def get_auth_header(self) -> Dict[str, str]:
-        """Generate authentication header for DVR API"""
+        """Generate authentication header for DVR API (Basic only — legacy)."""
         if self.username and self.password:
             credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
             return {"Authorization": f"Basic {credentials}"}
         return {}
+
+    def make_request(self, url: str, method: str = 'GET',
+                     timeout: int = None, **kwargs) -> Optional[requests.Response]:
+        """
+        Digest-first, Basic-fallback HTTP request helper.
+
+        Kurumsal kameraların %80'i Digest Auth kullanır.
+        Bu method önce Digest dener, 401 alırsa Basic'e geçer.
+        """
+        from requests.auth import HTTPDigestAuth, HTTPBasicAuth
+        _timeout = timeout or self.timeout
+
+        if not self.username:
+            try:
+                return requests.request(method, url, timeout=_timeout, verify=False, **kwargs)
+            except Exception:
+                return None
+
+        # Auth method resolution
+        auth_methods = []
+        if self.auth_method == 'digest':
+            auth_methods = [HTTPDigestAuth(self.username, self.password)]
+        elif self.auth_method == 'basic':
+            auth_methods = [HTTPBasicAuth(self.username, self.password)]
+        else:  # 'auto' — digest first, basic fallback
+            auth_methods = [
+                HTTPDigestAuth(self.username, self.password),
+                HTTPBasicAuth(self.username, self.password),
+            ]
+
+        for auth in auth_methods:
+            try:
+                resp = requests.request(
+                    method, url, auth=auth,
+                    timeout=_timeout, verify=False, **kwargs
+                )
+                if resp.status_code == 401:
+                    continue  # try next auth method
+                return resp
+            except Exception:
+                continue
+
+        return None
 
 @dataclass
 class DVRChannel:
@@ -432,10 +476,9 @@ class DVRManager:
         try:
             # Test basic connectivity
             test_url = f"{dvr_config.protocol}://{dvr_config.ip_address}:{dvr_config.port}"
-            response = requests.get(test_url, headers=dvr_config.get_auth_header(), 
-                                 timeout=dvr_config.timeout, verify=False)
+            response = dvr_config.make_request(test_url)
             
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 result['http_test'] = True
                 logger.info(f"✅ HTTP connection successful to {dvr_config.ip_address}")
                 
@@ -516,79 +559,165 @@ class DVRManager:
         return channels
     
     def _discover_hikvision_channels(self, dvr_config: DVRConfig) -> List[DVRChannel]:
-        """Discover channels on Hikvision DVR"""
+        """
+        Discover channels on Hikvision DVR/NVR via ISAPI.
+        Uses /ISAPI/System/Video/inputs/channels for accurate channel detection.
+        Falls back to /ISAPI/System/deviceInfo if inputs API is unavailable.
+        Supports both Digest and Basic authentication.
+        """
         channels = []
-        
+        base_url = f"{dvr_config.protocol}://{dvr_config.ip_address}:{dvr_config.port}"
+
         try:
-            # Hikvision API endpoint for device info
-            api_url = f"{dvr_config.get_api_url()}/ISAPI/System/deviceInfo"
-            response = requests.get(api_url, headers=dvr_config.get_auth_header(), 
-                                 timeout=dvr_config.timeout, verify=False)
-            
-            if response.status_code == 200:
-                # Parse XML response
-                root = ET.fromstring(response.content)
-                device_info = {}
-                for child in root:
-                    device_info[child.tag] = child.text
-                
-                # Try to get channel count from device info
-                max_channels = int(device_info.get('deviceID', '16'))
-                
-                for channel_num in range(1, min(max_channels + 1, 17)):
+            # ── Step 1: Try /ISAPI/System/Video/inputs/channels (best source) ──
+            inputs_url = f"{base_url}/ISAPI/System/Video/inputs/channels"
+            resp = dvr_config.make_request(inputs_url)
+
+            if resp and resp.status_code == 200:
+                root = ET.fromstring(resp.content)
+                ns = ''
+                # Handle namespace (Hikvision uses hikvision.com namespace)
+                if root.tag.startswith('{'):
+                    ns = root.tag.split('}')[0] + '}'
+
+                for inp in root.findall(f'{ns}VideoInputChannel') or root.findall('VideoInputChannel'):
+                    ch_id_el = inp.find(f'{ns}id') or inp.find('id')
+                    ch_name_el = inp.find(f'{ns}name') or inp.find('name')
+                    res_w_el = inp.find(f'{ns}resWidth') or inp.find('resWidth')
+                    res_h_el = inp.find(f'{ns}resHeight') or inp.find('resHeight')
+
+                    ch_num = int(ch_id_el.text) if (ch_id_el is not None and ch_id_el.text) else len(channels) + 1
+                    ch_name_text = ch_name_el.text if (ch_name_el is not None and ch_name_el.text) else f"Hikvision CH{ch_num}"
+
+                    res_w = int(res_w_el.text) if (res_w_el is not None and res_w_el.text) else 1920
+                    res_h = int(res_h_el.text) if (res_h_el is not None and res_h_el.text) else 1080
+
                     channel = DVRChannel(
-                        channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
-                        name=f"Hikvision Channel {channel_num}",
+                        channel_id=f"{dvr_config.dvr_id}_CH{ch_num:02d}",
+                        name=ch_name_text,
                         dvr_id=dvr_config.dvr_id,
-                        channel_number=channel_num,
-                        rtsp_path=f"/Streaming/Channels/{channel_num:03d}",
-                        http_path=f"/ISAPI/Streaming/channels/{channel_num:03d}/snapshot"
+                        channel_number=ch_num,
+                        resolution=(res_w, res_h),
+                        rtsp_path=f"/Streaming/Channels/{ch_num:03d}01",
+                        http_path=f"/ISAPI/Streaming/channels/{ch_num:03d}01/picture"
                     )
                     channels.append(channel)
-                
-                logger.info(f"📺 Hikvision discovery: {len(channels)} channels found")
-            
+
+                if channels:
+                    logger.info(f"📺 Hikvision ISAPI inputs: {len(channels)} channels discovered")
+                    return channels
+
+            # ── Step 2: Fallback — /ISAPI/System/deviceInfo ──
+            dev_url = f"{base_url}/ISAPI/System/deviceInfo"
+            resp = dvr_config.make_request(dev_url)
+
+            if resp and resp.status_code == 200:
+                root = ET.fromstring(resp.content)
+                ns = ''
+                if root.tag.startswith('{'):
+                    ns = root.tag.split('}')[0] + '}'
+
+                # Try analogChannelNum + digitalChannelNum for real channel count
+                analog = root.find(f'{ns}analogChannelNum') or root.find('analogChannelNum')
+                digital = root.find(f'{ns}digitalChannelNum') or root.find('digitalChannelNum')
+
+                total = 0
+                if analog is not None and analog.text:
+                    total += int(analog.text)
+                if digital is not None and digital.text:
+                    total += int(digital.text)
+
+                if total == 0:
+                    total = dvr_config.max_channels
+
+                total = min(total, 64)  # safety cap
+
+                for ch_num in range(1, total + 1):
+                    channel = DVRChannel(
+                        channel_id=f"{dvr_config.dvr_id}_CH{ch_num:02d}",
+                        name=f"Hikvision Channel {ch_num}",
+                        dvr_id=dvr_config.dvr_id,
+                        channel_number=ch_num,
+                        rtsp_path=f"/Streaming/Channels/{ch_num:03d}01",
+                        http_path=f"/ISAPI/Streaming/channels/{ch_num:03d}01/picture"
+                    )
+                    channels.append(channel)
+
+                logger.info(f"📺 Hikvision deviceInfo: {len(channels)} channels derived")
+
         except Exception as e:
             logger.error(f"❌ Hikvision discovery failed: {e}")
             # Fallback to generic discovery
             channels = self._discover_generic_channels(dvr_config)
-        
+
         return channels
     
     def _discover_dahua_channels(self, dvr_config: DVRConfig) -> List[DVRChannel]:
-        """Discover channels on Dahua DVR"""
+        """
+        Discover channels on Dahua DVR/NVR via CGI API.
+        Uses /cgi-bin/magicBox.cgi?action=getProductDefinition for real channel count.
+        Supports both Digest and Basic authentication.
+        """
         channels = []
-        
+        base_url = f"{dvr_config.protocol}://{dvr_config.ip_address}:{dvr_config.port}"
+
         try:
-            # Dahua API endpoint for device info
-            api_url = f"{dvr_config.get_api_url()}/cgi-bin/global.cgi?action=getCurrentInfo"
-            response = requests.get(api_url, headers=dvr_config.get_auth_header(), 
-                                 timeout=dvr_config.timeout, verify=False)
-            
-            if response.status_code == 200:
-                # Parse response for channel info
-                content = response.text
-                # Look for channel information in response
-                max_channels = 16  # Default for Dahua
-                
-                for channel_num in range(1, max_channels + 1):
-                    channel = DVRChannel(
-                        channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
-                        name=f"Dahua Channel {channel_num}",
-                        dvr_id=dvr_config.dvr_id,
-                        channel_number=channel_num,
-                        rtsp_path=f"/cam/realmonitor?channel={channel_num}&subtype=0",
-                        http_path=f"/cgi-bin/snapshot.cgi?channel={channel_num}"
-                    )
-                    channels.append(channel)
-                
-                logger.info(f"📺 Dahua discovery: {len(channels)} channels found")
-            
+            # ── Step 1: Product definition — gives real channel count ──
+            prod_url = f"{base_url}/cgi-bin/magicBox.cgi?action=getProductDefinition"
+            resp = dvr_config.make_request(prod_url)
+
+            max_channels = dvr_config.max_channels
+
+            if resp and resp.status_code == 200:
+                content = resp.text
+                # Dahua returns key=value pairs, e.g.:
+                # MaxExtraStream=3
+                # VideoInChannel=16
+                for line in content.splitlines():
+                    line = line.strip()
+                    if '=' not in line:
+                        continue
+                    key, _, val = line.partition('=')
+                    key = key.strip()
+                    val = val.strip()
+                    if key in ('VideoInChannel', 'MaxChannel', 'AlarmInputNum'):
+                        try:
+                            parsed = int(val)
+                            if key == 'VideoInChannel':
+                                max_channels = parsed
+                                break  # best source
+                            elif max_channels == dvr_config.max_channels:
+                                max_channels = parsed
+                        except ValueError:
+                            pass
+
+                logger.info(f"📺 Dahua productDef: VideoInChannel={max_channels}")
+            else:
+                # Step 2: Fallback — try system info
+                sys_url = f"{base_url}/cgi-bin/magicBox.cgi?action=getSystemInfo"
+                resp = dvr_config.make_request(sys_url)
+                if resp and resp.status_code == 200:
+                    logger.info(f"📺 Dahua systemInfo reached, using default channels={max_channels}")
+
+            max_channels = min(max_channels, 64)  # safety cap
+
+            for ch_num in range(1, max_channels + 1):
+                channel = DVRChannel(
+                    channel_id=f"{dvr_config.dvr_id}_CH{ch_num:02d}",
+                    name=f"Dahua Channel {ch_num}",
+                    dvr_id=dvr_config.dvr_id,
+                    channel_number=ch_num,
+                    rtsp_path=f"/cam/realmonitor?channel={ch_num}&subtype=0",
+                    http_path=f"/cgi-bin/snapshot.cgi?channel={ch_num}"
+                )
+                channels.append(channel)
+
+            logger.info(f"📺 Dahua discovery: {len(channels)} channels configured")
+
         except Exception as e:
             logger.error(f"❌ Dahua discovery failed: {e}")
-            # Fallback to generic discovery
             channels = self._discover_generic_channels(dvr_config)
-        
+
         return channels
     
     def _test_dvr_rtsp(self, dvr_config: DVRConfig) -> bool:

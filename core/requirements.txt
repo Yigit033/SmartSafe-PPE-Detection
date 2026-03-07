@@ -1,4 +1,5 @@
 # SmartSafe AI PPE Detection - Render.com Memory Optimized
+# [SİSTEM BAĞIMLILIĞI] 🎯 FFmpeg (Subprocess stream okuma için sistemde kurulu olmalıdır)
 # Core Computer Vision
 opencv-python-headless>=4.8.0  # Headless version for server deployment
 numpy>=1.26.0  # Python 3.12 compatible (1.24.x has no wheels for 3.12)

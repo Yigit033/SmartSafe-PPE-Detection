@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # 3.1  RTSP URL TEMPLATES — Marka bazlı doğru format otomatik seçilir
 # ─────────────────────────────────────────────────────────────────────────────
+# MAIN-STREAM URL TEMPLATES
+# ─────────────────────────────────────────────────────────────────────────────
 RTSP_TEMPLATES = {
-    # Büyük NVR/DVR markalar
     'hikvision': 'rtsp://{user}:{pwd}@{ip}:{port}/Streaming/Channels/{ch:03d}01',
     'dahua':     'rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=0',
     'axis':      'rtsp://{user}:{pwd}@{ip}:{port}/axis-media/media.amp',
@@ -35,9 +36,25 @@ RTSP_TEMPLATES = {
     'hanwha':    'rtsp://{user}:{pwd}@{ip}:{port}/profile3/media.smp',
     'reolink':   'rtsp://{user}:{pwd}@{ip}:{port}/h264Preview_0{ch:02d}_main',
     'tp_link':   'rtsp://{user}:{pwd}@{ip}:{port}/stream1',
-    # XM tabanlı ucuz DVR'lar (varsayılan)
+    'uniview':   'rtsp://{user}:{pwd}@{ip}:{port}/media/video{ch}',
     'xm':        'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=0.sdp',
     'generic':   'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=0.sdp',
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUB-STREAM URL TEMPLATES — Detection için önerilir (640x360, düşük FPS)
+# Sub-stream kullanmak CPU yükünü ~4x azaltır.
+# ─────────────────────────────────────────────────────────────────────────────
+RTSP_SUB_TEMPLATES = {
+    'hikvision': 'rtsp://{user}:{pwd}@{ip}:{port}/Streaming/Channels/{ch:03d}02',
+    'dahua':     'rtsp://{user}:{pwd}@{ip}:{port}/cam/realmonitor?channel={ch}&subtype=1',
+    'axis':      'rtsp://{user}:{pwd}@{ip}:{port}/axis-media/media.amp?streamprofile=Quality',
+    'samsung':   'rtsp://{user}:{pwd}@{ip}:{port}/profile5/media.smp',
+    'hanwha':    'rtsp://{user}:{pwd}@{ip}:{port}/profile5/media.smp',
+    'reolink':   'rtsp://{user}:{pwd}@{ip}:{port}/h264Preview_0{ch:02d}_sub',
+    'uniview':   'rtsp://{user}:{pwd}@{ip}:{port}/media/video{ch}/1',
+    'xm':        'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=1.sdp',
+    'generic':   'rtsp://{ip}:{port}/user={user}&password={pwd}&channel={ch}&stream=1.sdp',
 }
 
 # Birden fazla URL formatı denenecek markalar (bazı ürünler karışık firmware kullanır)
@@ -59,23 +76,18 @@ RTSP_FALLBACKS = {
     ],
 }
 
+# ── Exponential backoff ayarları ────────────────────────────────────────────
+BACKOFF_BASE_SEC = 5
+BACKOFF_MAX_SEC = 300
+MAX_RECONNECT_ATTEMPTS = 15
+
 
 def get_rtsp_url_for_brand(
     ip: str, port: int, user: str, pwd: str, channel: int,
     brand: str = 'generic'
 ) -> str:
     """
-    Marka bazlı RTSP URL döndürür.
-
-    Args:
-        ip: IP adresi
-        port: RTSP portu (genellikle 554)
-        user, pwd: Kimlik bilgileri (URL-encode edilmemiş ham değer)
-        channel: Kanal numarası (1-tabanlı)
-        brand: dvr_type alanından gelen marka anahtarı (küçük harf)
-
-    Returns:
-        Hazır RTSP URL string'i
+    Marka bazlı RTSP URL döndürür (main-stream).
     """
     import urllib.parse
     _u = urllib.parse.quote(user, safe='')
@@ -83,6 +95,28 @@ def get_rtsp_url_for_brand(
     brand_key = brand.lower().replace('-', '_').replace(' ', '_')
     template = RTSP_TEMPLATES.get(brand_key, RTSP_TEMPLATES['generic'])
     return template.format(ip=ip, port=port, user=_u, pwd=_p, ch=channel)
+
+
+def get_sub_stream_url(
+    ip: str, port: int, user: str, pwd: str, channel: int,
+    brand: str = 'generic'
+) -> Optional[str]:
+    """
+    Marka bazlı SUB-STREAM URL döndürür.
+    Detection için önerilir — düşük çözünürlük, düşük bandwidth.
+    Sub-stream template yoksa None döner.
+    """
+    import urllib.parse
+    _u = urllib.parse.quote(user, safe='')
+    _p = urllib.parse.quote(pwd, safe='')
+    brand_key = brand.lower().replace('-', '_').replace(' ', '_')
+    template = RTSP_SUB_TEMPLATES.get(brand_key)
+    if not template:
+        return None
+    try:
+        return template.format(ip=ip, port=port, user=_u, pwd=_p, ch=channel)
+    except Exception:
+        return None
 
 
 def get_rtsp_url_fallbacks(
@@ -156,18 +190,22 @@ class DVRStreamProcessor:
             except Exception as onvif_err:
                 logger.debug(f"ℹ️ ONVIF URI alınamadı, XM fallback: {onvif_err}")
 
-            # Fallback: marka bazlı RTSP URL (XM sabit format kaldırıldı)
+            # Fallback: marka bazlı RTSP URL — sub-stream tercih et (detection için yeterli)
             if not rtsp_url:
                 brand = dvr_system.get('dvr_type', 'generic') or 'generic'
-                rtsp_url = get_rtsp_url_for_brand(
-                    ip=dvr_system['ip_address'],
-                    port=int(dvr_system.get('rtsp_port', 554)),
-                    user=dvr_system['username'],
-                    pwd=dvr_system['password'],
-                    channel=channel,
-                    brand=brand
-                )
-                logger.info(f"🏷️ Brand RTSP URL ({brand}): {rtsp_url}")
+                _ip = dvr_system['ip_address']
+                _port = int(dvr_system.get('rtsp_port', 554))
+                _user = dvr_system['username']
+                _pwd = dvr_system['password']
+
+                # Sub-stream önce dene (640x360, CPU tasarrufu)
+                sub_url = get_sub_stream_url(_ip, _port, _user, _pwd, channel, brand)
+                if sub_url:
+                    rtsp_url = sub_url
+                    logger.info(f"📡 Sub-stream URL ({brand}): {rtsp_url}")
+                else:
+                    rtsp_url = get_rtsp_url_for_brand(_ip, _port, _user, _pwd, channel, brand)
+                    logger.info(f"🏷️ Main-stream URL ({brand}): {rtsp_url}")
 
             # Resolve sector/detection_mode from company configuration when not provided
             if not detection_mode:
@@ -214,81 +252,69 @@ class DVRStreamProcessor:
             return {"success": False, "error": str(e)}
     
     def process_dvr_stream(self, stream_id: str, rtsp_url: str, company_id: str, detection_mode: str, use_sh17: bool = False):
-        """RTSP stream'i işler ve PPE detection yapar"""
+        """
+        RTSP stream'i işler ve PPE detection yapar.
+
+        Production-grade: FFmpegStreamReader + exponential backoff reconnect.
+        FFmpeg yoksa cv2 fallback çalışır.
+        """
 
         # sh17 gerçekten kullanılabilir mi kontrol et
         _use_sh17 = use_sh17 and (self.sh17_manager is not None)
         logger.info(f"🔄 Processing DVR stream: {stream_id}")
         logger.info(f"🔧 Detection System: {'SH17' if _use_sh17 else 'Klasik'}")
 
-        ALTERNATIVE_URL_SUFFIXES = [
-            f"/cam/realmonitor?channel={stream_id.split('ch')[-1].lstrip('0') or '1'}&subtype=0",
-        ]
+        from integrations.cameras.ffmpeg_stream_reader import create_stream_reader
 
-        def _open_stream(url: str) -> Optional[cv2.VideoCapture]:
-            """RTSP stream'i açar — başarısızsa fallback URL'leri dener."""
-            cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-            if cap.isOpened():
-                return cap
-            # Fallback URL'leri dene
-            for alt in [
-                url.replace('&', '?'),
-                url.replace('stream=0.sdp', 'stream=1'),
-                url.split('&stream')[0],
-            ]:
-                cap2 = cv2.VideoCapture(alt, cv2.CAP_FFMPEG)
-                if cap2.isOpened():
-                    logger.info(f"✅ Alternatif URL ile bağlandı: {alt}")
-                    return cap2
-                cap2.release()
-            return None
+        retry_count = 0
+        reader = None
 
-        try:
-            cap = _open_stream(rtsp_url)
-            if cap is None:
-                logger.error(f"❌ Tüm RTSP formatları başarısız — detection başlatılamadı: {stream_id}")
-                with self._lock:
-                    self.detection_threads.pop(stream_id, None)
-                return
-
+        while retry_count < MAX_RECONNECT_ATTEMPTS:
+            # Stop sinyali kontrolü
             with self._lock:
-                self.active_streams[stream_id] = cap
+                if stream_id not in self.detection_threads:
+                    logger.info(f"🛑 {stream_id}: Stop sinyali alındı (reconnect döngüsü).")
+                    return
 
-            frame_count = 0
-            detection_count = 0
-            consecutive_failures = 0
-            MAX_CONSECUTIVE_FAILURES = 10  # Bu kadar art arda hata olursa yeniden bağlan
-            start_time = time.time()
+            try:
+                # Stream reader oluştur (FFmpeg pref, cv2 fallback)
+                reader = create_stream_reader(
+                    rtsp_url,
+                    width=640, height=360,  # Sub-stream boyutu — detection için yeterli
+                    fps=self.max_frames_per_second,
+                    prefer_ffmpeg=True,
+                )
 
-            logger.info(f"✅ RTSP stream açıldı: {stream_id}")
+                if not reader.start():
+                    raise ConnectionError(f"Stream açılamadı: {rtsp_url[:60]}")
 
-            while True:
-                # Stop sinyali kontrolü (thread-safe)
-                with self._lock:
-                    running = stream_id in self.detection_threads
-                if not running:
-                    break
+                if retry_count > 0:
+                    logger.info(f"✅ {stream_id}: Reconnect başarılı (deneme {retry_count})")
 
-                try:
-                    ret, frame = cap.read()
-                    if not ret:
-                        consecutive_failures += 1
-                        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                            logger.warning(f"⚠️ {stream_id}: {consecutive_failures} art arda frame hatası — stream yeniden açılıyor...")
-                            cap.release()
-                            cap = _open_stream(rtsp_url)
-                            if cap is None:
-                                logger.error(f"❌ {stream_id}: Yeniden bağlantı başarısız. Detection durduruluyor.")
-                                break
-                            with self._lock:
-                                self.active_streams[stream_id] = cap
-                            consecutive_failures = 0
-                            logger.info(f"✅ {stream_id}: Stream yeniden açıldı.")
-                        else:
-                            time.sleep(0.5)
+                retry_count = 0  # Başarılı bağlantı — sıfırla
+                logger.info(f"✅ RTSP stream açıldı: {stream_id} ({reader.__class__.__name__})")
+
+                frame_count = 0
+                detection_count = 0
+                consecutive_empty = 0
+                start_time = time.time()
+
+                while reader.is_alive():
+                    # Stop sinyali kontrolü (thread-safe)
+                    with self._lock:
+                        running = stream_id in self.detection_threads
+                    if not running:
+                        break
+
+                    frame = reader.read_frame()
+                    if frame is None:
+                        consecutive_empty += 1
+                        if consecutive_empty >= 30:  # ~6 saniye boş frame
+                            raise ConnectionError(f"Stream kesildi: {consecutive_empty} boş frame")
+                        time.sleep(0.2)
                         continue
 
-                    consecutive_failures = 0  # Başarılı okumada sıfırla
+                    consecutive_empty = 0
                     frame_count += 1
 
                     # Frame skip uygula
@@ -452,24 +478,50 @@ class DVRStreamProcessor:
                     
                     # Frame rate control
                     time.sleep(1 / self.max_frames_per_second)
-                    
-                except Exception as e:
-                    logger.error(f"❌ Stream processing error for {stream_id}: {e}")
-                    time.sleep(1)
 
-            # Cleanup
-            cap.release()
-            with self._lock:
-                self.active_streams.pop(stream_id, None)
-                self.detection_threads.pop(stream_id, None)  # Temizlik
+                # İç döngü bitti — eğer stop sinyali geldiyse çık
+                with self._lock:
+                    if stream_id not in self.detection_threads:
+                        break  # Stop sinyali — reconnect yapma
 
-            logger.info(f"🛑 DVR stream processing stopped: {stream_id}")
+                # Döngü bitti ama stop sinyali yoksa stream kopmuştur
+                raise ConnectionError(f"Stream döngüsü bitti — reader artık alive değil")
 
-        except Exception as e:
-            logger.error(f"❌ DVR stream processing fatal error: {e}")
-            with self._lock:
-                self.active_streams.pop(stream_id, None)
-                self.detection_threads.pop(stream_id, None)
+            except Exception as e:
+                # ── Exponential backoff reconnect ──────────────────────
+                retry_count += 1
+                if reader:
+                    try:
+                        reader.stop()
+                    except Exception:
+                        pass
+                    reader = None
+
+                if retry_count >= MAX_RECONNECT_ATTEMPTS:
+                    logger.error(
+                        f"❌ {stream_id}: Max reconnect ({MAX_RECONNECT_ATTEMPTS}) aşıldı. "
+                        f"Detection kalıcı olarak durduruluyor."
+                    )
+                    break
+
+                wait = min(BACKOFF_BASE_SEC * (2 ** (retry_count - 1)), BACKOFF_MAX_SEC)
+                logger.warning(
+                    f"⚠️ {stream_id}: {e} — {wait}s sonra yeniden bağlanılacak "
+                    f"(deneme {retry_count}/{MAX_RECONNECT_ATTEMPTS})"
+                )
+                time.sleep(wait)
+
+        # ── Final cleanup ─────────────────────────────────────────────
+        if reader:
+            try:
+                reader.stop()
+            except Exception:
+                pass
+        with self._lock:
+            self.active_streams.pop(stream_id, None)
+            self.detection_threads.pop(stream_id, None)
+
+        logger.info(f"🛑 DVR stream processing stopped: {stream_id}")
     
     def _convert_sh17_to_classic_format_production(self, sh17_result: List[Dict], detection_mode: str, frame: np.ndarray) -> Dict[str, Any]:
         """🎯 PRODUCTION-GRADE: SH17 sonuçlarını klasik PPE formatına çevirir - Advanced spatial reasoning ile"""

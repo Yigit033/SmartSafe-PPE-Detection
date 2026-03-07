@@ -1044,19 +1044,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Detection Mode -->
-                                <div class="mb-3">
-                                    <label class="form-label">Detection Modu:</label>
-                                    <select class="form-select" id="dvrDetectionMode">
-                                        <option value="construction">İnşaat</option>
-                                        <option value="manufacturing">Üretim</option>
-                                        <option value="warehouse">Depo</option>
-                                        <option value="energy">Enerji</option>
-                                        <option value="petrochemical">Petrokimya</option>
-                                        <option value="marine">Denizcilik</option>
-                                        <option value="aviation">Havacılık</option>
-                                    </select>
-                                </div>
 
                                 <!-- Action Buttons -->
                                 <div class="d-flex gap-2">
@@ -3805,7 +3792,6 @@
         async function startDVRDetection(dvrId) {
             try {
                 const channels = getSelectedChannels();
-                const detectionMode = document.getElementById('dvrDetectionMode').value;
 
                 if (channels.length === 0) {
                     showAlert('Lütfen en az bir kanal seçin!', 'warning');
@@ -3818,8 +3804,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        channels: channels,
-                        detection_mode: detectionMode
+                        channels: channels
                     })
                 });
 
