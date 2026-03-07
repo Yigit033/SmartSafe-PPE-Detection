@@ -32,9 +32,7 @@ export default function RootLayout({
           {/* Sidebar fix: Always use fixed padding to prevent overlap */}
           <div className="flex-1 pl-[280px]">
             <TopBar />
-            <main className="p-8 animate-fade-in max-w-[1600px] mx-auto">
-              {children}
-            </main>
+            <main className="p-8 animate-fade-in w-full">{children}</main>
           </div>
         </div>
       </body>

@@ -7,7 +7,7 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string, Response, render_template
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string, Response, render_template, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -38,9 +38,8 @@ except ImportError:
     logger.warning("⚠️ SendGrid not installed. Email will use SMTP only.")
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from dotenv import load_dotenv
-# Ana dizindeki .env dosyasını yükle
-load_dotenv(os.path.join(parent_dir, '.env'))
+# core klasöründeki .env dosyasını yükle
+load_dotenv(os.path.join(current_dir, '.env'))
 from services.multitenant_system import MultiTenantDatabase
 from integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
 from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
@@ -1060,18 +1059,24 @@ class SmartSafeSaaSAPI:
         return len(errors) == 0, errors
 
     def setup_routes(self):
-        """API rotalarını ayarla - Blueprint modüllerinden yükle"""
-        from blueprints import register_all_blueprints
+        """API rotalarini ayarla - Blueprint modüllerinden yükle"""
+        from api import register_all_blueprints
         register_all_blueprints(self)
-        logger.info("✅ All API blueprints registered successfully")
+        
+        # 📸 Serve violation snapshots
+        @self.app.route('/static/violations/<path:filename>')
+        def serve_violation_snapshot(filename):
+            return send_from_directory('violations', filename)
+            
+        logger.info("✅ All API routes registered successfully")
 
 
-    # --- Legacy setup_routes code moved to src/smartsafe/api/blueprints/ ---
+    # --- Legacy setup_routes code moved to core/api/ ---
     # The following marker exists so that the rest of the class methods
     # (validate_session, template getters, etc.) remain untouched.
 
     def _require_db_decorator(self):
-        """Decorator factory for database initialization (available to blueprints via api)"""
+        """Decorator factory for database initialization (available to routes via api)"""
         from functools import wraps
         def require_db(f):
             @wraps(f)
@@ -2260,7 +2265,7 @@ smartsafe_requests_total 100
         """API server'ı çalıştır"""
         logger.info("🚀 Starting SmartSafe AI SaaS API Server")
         
-        # Health check and metrics are now registered via blueprints (health.py)
+        # Health check and metrics are now registered via api (health.py)
         
         # Get port from environment (Render.com compatibility)
         port = int(os.environ.get('PORT', 10000))

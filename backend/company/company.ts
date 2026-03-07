@@ -42,6 +42,109 @@ interface UpdateNotificationsRequest {
   push_notifications: boolean;
 }
 
+interface CompanyStats {
+  active_cameras: number;
+  today_violations: number;
+  monthly_violations: number;
+  avg_compliance_rate: number;
+  active_workers: number;
+  trends: {
+    cameras: number;
+    violations: number;
+    compliance: number;
+  };
+}
+
+/**
+ * Şirket istatistiklerini getirir (Dashboard için)
+ */
+export const getStats = api(
+  { expose: true, method: "GET", path: "/company/:company_id/stats" },
+  async ({ company_id }: { company_id: string }): Promise<CompanyStats> => {
+    try {
+      // 1. Aktif Kamera Sayısı
+      const camerasRes = await pool.query(
+        "SELECT COUNT(*) as count FROM cameras WHERE company_id = $1 AND status = 'active'",
+        [company_id],
+      );
+      const active_cameras = parseInt(camerasRes.rows[0].count);
+
+      // 2. Geçen haftaki kamera sayısı (trend için)
+      const lastWeekCamerasRes = await pool.query(
+        "SELECT COUNT(*) as count FROM cameras WHERE company_id = $1 AND created_at < CURRENT_DATE - INTERVAL '7 days'",
+        [company_id],
+      );
+      const last_week_cameras = parseInt(lastWeekCamerasRes.rows[0].count);
+
+      // 3. Bugünkü İhlaller (violation_events tablosundan)
+      const todayViolationsRes = await pool.query(
+        "SELECT COUNT(*) as count FROM violation_events WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE",
+        [company_id],
+      );
+      const today_violations = parseInt(todayViolationsRes.rows[0].count);
+
+      // 4. Dünkü İhlaller
+      const yesterdayViolationsRes = await pool.query(
+        "SELECT COUNT(*) as count FROM violation_events WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE - INTERVAL '1 day'",
+        [company_id],
+      );
+      const yesterday_violations = parseInt(
+        yesterdayViolationsRes.rows[0].count,
+      );
+
+      // 5. Aylık İhlaller
+      const monthlyViolationsRes = await pool.query(
+        "SELECT COUNT(*) as count FROM violation_events WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days'",
+        [company_id],
+      );
+      const monthly_violations = parseInt(monthlyViolationsRes.rows[0].count);
+
+      // 6. Aktif Çalışan Sayısı (Unique track_id)
+      const activeWorkersRes = await pool.query(
+        "SELECT COUNT(DISTINCT track_id) as count FROM detections WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE AND track_id IS NOT NULL",
+        [company_id],
+      );
+      const active_workers = parseInt(activeWorkersRes.rows[0].count);
+
+      // 7. Compliance Rate (Uyum Oranı)
+      const complianceRes = await pool.query(
+        `SELECT 
+          CASE 
+            WHEN SUM(people_detected) > 0 
+            THEN (SUM(ppe_compliant)::FLOAT / NULLIF(SUM(people_detected), 0)::FLOAT * 100.0)
+            ELSE 0 
+          END as avg_compliance
+        FROM detections 
+        WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
+        [company_id],
+      );
+      const avg_compliance_rate = parseFloat(
+        complianceRes.rows[0].avg_compliance || "0",
+      );
+
+      // Trend hesaplamaları
+      const cameras_trend = active_cameras - last_week_cameras;
+      const violations_trend = today_violations - yesterday_violations;
+
+      return {
+        active_cameras,
+        today_violations,
+        monthly_violations,
+        avg_compliance_rate,
+        active_workers,
+        trends: {
+          cameras: cameras_trend,
+          violations: violations_trend,
+          compliance: 0, // Şimdilik statik
+        },
+      };
+    } catch (error) {
+      console.error("Error fetching company stats:", error);
+      throw error;
+    }
+  },
+);
+
 /**
  * Yeni bir şirket ve bu şirkete bağlı bir Admin kullanıcısı oluşturur.
  */

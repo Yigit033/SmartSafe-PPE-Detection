@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-# Lazy import to avoid circular import: smartsafe_saas_api -> blueprints -> detection -> smartsafe_saas_api
+# Lazy import to avoid circular import: core/app.py -> api -> detection -> core/app.py
 def _get_detection_state():
     from core.app import (
         active_detectors,

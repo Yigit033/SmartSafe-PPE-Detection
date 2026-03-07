@@ -34,8 +34,53 @@ interface ResolveAlertRequest {
   alert_id: number;
 }
 
+interface ViolationEvent {
+  event_id: string;
+  company_id: string;
+  camera_id: string;
+  camera_name?: string;
+  violation_type: string;
+  start_time: number;
+  end_time: number;
+  snapshot_path: string;
+  count: number;
+  status: string;
+}
+
 /**
- * Şirketin ihlal raporlarını getirir
+ * Şirketin ihlal olaylarını (Event-based) getirir
+ */
+export const getEvents = api(
+  {
+    expose: true,
+    method: "GET",
+    path: "/company/:company_id/violation-events",
+  },
+  async ({
+    company_id,
+  }: {
+    company_id: string;
+  }): Promise<{ success: boolean; events: ViolationEvent[] }> => {
+    try {
+      const res = await pool.query(
+        `SELECT ve.*, c.camera_name 
+         FROM violation_events ve
+         LEFT JOIN cameras c ON ve.camera_id = c.camera_id
+         WHERE ve.company_id = $1 
+         ORDER BY ve.start_time DESC 
+         LIMIT 200`,
+        [company_id],
+      );
+      return { success: true, events: res.rows };
+    } catch (error) {
+      console.error("Error fetching violation events:", error);
+      return { success: false, events: [] };
+    }
+  },
+);
+
+/**
+ * Şirketin ihlal raporlarını getirir (Eski sistem uyumluluk için)
  */
 export const getViolations = api(
   { expose: true, method: "GET", path: "/company/:company_id/violations" },

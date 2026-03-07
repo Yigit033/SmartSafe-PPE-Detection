@@ -1944,7 +1944,7 @@ class MultiTenantDatabase:
                 return 0
                 
         except Exception as e:
-            logger.error(f"❌ Get active camera count error: {e}")
+            logger.error(f"❌ Get active camera count er    ror: {e}")
             return 0
         finally:
             if 'conn' in locals():
@@ -2119,16 +2119,16 @@ class MultiTenantDatabase:
             else:  # Liste formatı (SQLite için)
                 active_cameras = active_cameras_result[0] if active_cameras_result else 0
             
-            # Bugünkü ihlal sayısı
+            # Bugünkü ihlal sayısı - violation_events tablosundan (AI motoru buraya yazıyor)
             if self.db_adapter.db_type == 'postgresql':
                 cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE
+                    SELECT COUNT(*) FROM violation_events 
+                    WHERE company_id = {placeholder} AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE
                 ''', (company_id,))
             else:
                 cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND date(timestamp) = date('now')
+                    SELECT COUNT(*) FROM violation_events 
+                    WHERE company_id = {placeholder} AND date(start_time) = date('now')
                 ''', (company_id,))
             
             today_violations_result = cursor.fetchone()
@@ -2137,16 +2137,16 @@ class MultiTenantDatabase:
             else:  # Liste formatı (SQLite için)
                 today_violations = today_violations_result[0] if today_violations_result else 0
             
-            # Dünkü istatistikler (trend hesaplama için)
+            # Dünkü istatistikler (trend hesaplama için) - violation_events tablosundan
             if self.db_adapter.db_type == 'postgresql':
                 cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND DATE(timestamp) = CURRENT_DATE - INTERVAL '1 day'
+                    SELECT COUNT(*) FROM violation_events 
+                    WHERE company_id = {placeholder} AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE - INTERVAL '1 day'
                 ''', (company_id,))
             else:
                 cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND date(timestamp) = date('now', '-1 day')
+                    SELECT COUNT(*) FROM violation_events 
+                    WHERE company_id = {placeholder} AND date(start_time) = date('now', '-1 day')
                 ''', (company_id,))
             
             yesterday_violations_result = cursor.fetchone()
@@ -2353,16 +2353,16 @@ class MultiTenantDatabase:
                 logger.warning(f"⚠️ Active workers query hatası, varsayılan değer kullanılıyor: {e}")
                 active_workers = 0
             
-            # Aylık ihlal sayısı
+            # Aylık ihlal sayısı - violation_events tablosundan
             if self.db_adapter.db_type == 'postgresql':
                 cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND DATE(timestamp) > CURRENT_DATE - INTERVAL '30 days'
+                    SELECT COUNT(*) FROM violation_events 
+                    WHERE company_id = {placeholder} AND (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days'
                 ''', (company_id,))
             else:
                 cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} AND date(timestamp) > date('now', '-30 days')
+                    SELECT COUNT(*) FROM violation_events 
+                    WHERE company_id = {placeholder} AND date(start_time) > date('now', '-30 days')
                 ''', (company_id,))
             
             monthly_violations_result = cursor.fetchone()

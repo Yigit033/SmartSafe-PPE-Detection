@@ -76,12 +76,6 @@ class DatabaseAdapter:
         try:
             if self.db_type == 'postgresql':
                 # Connection pooling for PostgreSQL
-                try:
-                    from psycopg2 import pool
-                except ImportError:
-                    logger.warning("⚠️ psycopg2 pool not available, will use direct connections")
-                    return
-                
                 database_url = self.config.database_url
                 if database_url:
                     try:
@@ -92,10 +86,11 @@ class DatabaseAdapter:
                             
                         parsed = urlparse(database_url)
                         
-                        # Create connection pool using credentials from URL
-                        self.connection_pool = pool.SimpleConnectionPool(
-                            minconn=1,
-                            maxconn=20,
+                        from psycopg2 import pool
+                        # Thread-safe connection pool
+                        self.connection_pool = pool.ThreadedConnectionPool(
+                            minconn=5,
+                            maxconn=100,  # Kapasite artırıldı
                             host=parsed.hostname,
                             port=parsed.port or 5432,
                             database=parsed.path[1:],
@@ -103,7 +98,7 @@ class DatabaseAdapter:
                             password=parsed.password,
                             connect_timeout=10
                         )
-                        logger.info("✅ PostgreSQL connection pool initialized successfully")
+                        logger.info("✅ PostgreSQL threaded connection pool initialized (5-100)")
                     except Exception as pool_error:
                         logger.warning(f"⚠️ Connection pool initialization failed: {pool_error}, will use direct connections")
                 else:
@@ -131,11 +126,11 @@ class DatabaseAdapter:
             return self._get_sqlite_config()
     
     def _get_sqlite_config(self) -> DatabaseConfig:
-        """Get SQLite configuration - Pointing to project root"""
-        # Get the root directory (parent of core)
+        """Get SQLite configuration - Pointing to core directory"""
         # __file__ is core/database/database_adapter.py
-        root_dir = Path(__file__).resolve().parents[2]
-        default_db_path = str(root_dir / 'smartsafe_saas.db')
+        # root_dir should now be core
+        core_dir = Path(__file__).resolve().parents[1]
+        default_db_path = str(core_dir / 'smartsafe_saas.db')
         
         db_path = os.getenv('SQLITE_DB_PATH', default_db_path)
         return DatabaseConfig(
@@ -152,16 +147,23 @@ class DatabaseAdapter:
             
             if self.db_type == 'sqlite':
                 conn.close()
-            elif self.connection_pool and hasattr(conn, 'close'):
-                # Return connection to pool
+            elif self.connection_pool:
+                # Havuzdan gelip gelmediğini kontrol et
                 try:
+                    # ThreadedConnectionPool için putconn
                     self.connection_pool.putconn(conn)
                     logger.debug("✅ Connection returned to pool")
-                except Exception as e:
-                    logger.warning(f"⚠️ Error returning connection to pool: {e}")
-                    conn.close()
+                except Exception:
+                    # Havuz dışı (direct) bir bağlantıysa veya hata varsa kapat
+                    try:
+                        conn.close()
+                    except:
+                        pass
             else:
-                conn.close()
+                try:
+                    conn.close()
+                except:
+                    pass
         except Exception as e:
             logger.warning(f"⚠️ Error closing connection: {e}")
     
