@@ -8,6 +8,9 @@ interface CreateCompanyParams {
   sector: string;
   contact_person: string;
   email: string;
+  phone?: string;
+  address?: string;
+  subscription_type?: string;
   password?: string; // Admin kullanıcısı için şifre
 }
 
@@ -169,9 +172,10 @@ export const create = api(
         `
         INSERT INTO companies (
           company_id, company_name, sector, contact_person, email, 
-          api_key, status, subscription_type, max_cameras, created_at, updated_at
+          phone, address, subscription_type, api_key, status, 
+          max_cameras, created_at, updated_at
         ) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `,
         [
           company_id,
@@ -179,9 +183,11 @@ export const create = api(
           params.sector,
           params.contact_person,
           params.email,
+          params.phone || null,
+          params.address || null,
+          params.subscription_type || "professional",
           apiKey,
           "active",
-          "professional",
           25,
         ],
       );

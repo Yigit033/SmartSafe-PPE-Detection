@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { getUser } from "@/lib/session";
 
 export default function TopBar() {
   const pathname = usePathname();
@@ -55,15 +56,15 @@ export default function TopBar() {
         <div className="flex items-center gap-4 pl-6 border-l border-slate-200">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              SmartSafe Demo
+              {getUser()?.username || "Kullanıcı"}
             </p>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">
-              Administrator
+              {getUser()?.role || "user"}
             </p>
           </div>
           <div className="h-9 w-9 overflow-hidden rounded-xl bg-brand-teal p-[1px] shadow-sm">
             <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-white text-xs font-black text-brand-teal">
-              SD
+              {(getUser()?.username || "KU").substring(0, 2).toUpperCase()}
             </div>
           </div>
         </div>

@@ -22,7 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 3s
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,6 +43,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:5000
       - NODE_ENV=development
+      - WATCHPACK_POLLING=1000
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       core:
         condition: service_healthy
@@ -58,7 +60,6 @@ services:
     ports:
       - "4000:4000"
       - "9400:9400"
-    volumes:
     volumes:
       - ../backend:/app
       - ../storage:/app/storage

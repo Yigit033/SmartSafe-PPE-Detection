@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getCompanyId } from "@/lib/session";
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
   const [company, setCompany] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const companyId = "COMP_EE37F274";
+  const companyId = getCompanyId();
 
   useEffect(() => {
     fetchCompanyData();

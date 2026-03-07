@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCompanyId } from "@/lib/session";
 
 interface ViolationEvent {
   event_id: string;
@@ -23,7 +24,8 @@ export default function ViolationsPage() {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const companyId = "COMP_EE37F274";
+        const companyId = getCompanyId();
+        if (!companyId) return;
         const response = await fetch(
           `http://localhost:4000/company/${companyId}/violation-events`,
         );

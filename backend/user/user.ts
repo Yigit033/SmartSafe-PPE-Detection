@@ -29,6 +29,17 @@ interface RemoveUserRequest {
   user_id: string;
 }
 
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+interface LoginResponse {
+  success: boolean;
+  user?: User;
+  error?: string;
+}
+
 /**
  * Şirketin tüm kullanıcılarını listeler
  */
@@ -89,6 +100,52 @@ export const create = api(
     } catch (error: any) {
       console.error("Error creating user:", error);
       return { success: false, error: error.message };
+    }
+  },
+);
+
+/**
+ * Kullanıcı girişi yapar
+ */
+export const login = api(
+  { expose: true, method: "POST", path: "/auth/login" },
+  async (params: LoginRequest): Promise<LoginResponse> => {
+    try {
+      // Önce kullanıcıyı email ile bulalım
+      const res = await pool.query(
+        "SELECT user_id, company_id, username, email, password_hash, role, status FROM users WHERE email = $1",
+        [params.email],
+      );
+
+      if (res.rows.length === 0) {
+        return { success: false, error: "Kullanıcı bulunamadı" };
+      }
+
+      const userRow = res.rows[0];
+
+      // Şifre kontrolü
+      const passwordMatch = await bcrypt.compare(
+        params.password,
+        userRow.password_hash,
+      );
+
+      if (!passwordMatch) {
+        return { success: false, error: "Geçersiz şifre" };
+      }
+
+      if (userRow.status !== "active") {
+        return { success: false, error: "Hesabınız askıya alınmış" };
+      }
+
+      const { password_hash, ...user } = userRow;
+
+      return {
+        success: true,
+        user: user as User,
+      };
+    } catch (error: any) {
+      console.error("Login error:", error);
+      return { success: false, error: "Sunucu hatası oluştu" };
     }
   },
 );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const menuItems = [
   {
@@ -38,6 +38,12 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    router.push("/login");
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-[280px] border-r border-slate-200 bg-slate-50 p-6 transition-colors duration-300">
@@ -99,7 +105,10 @@ export default function Sidebar() {
 
         {/* Bottom Menu */}
         <div className="mt-auto border-t border-slate-200 pt-6" lang="tr">
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer">
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer"
+          >
             <svg
               className="h-5 w-5"
               fill="none"

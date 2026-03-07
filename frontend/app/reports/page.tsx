@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getCompanyId } from "@/lib/session";
 
 export default function ReportsPage() {
   const [violations, setViolations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const companyId = "COMP_EE37F274";
+  const companyId = getCompanyId();
 
   useEffect(() => {
     fetchReports();

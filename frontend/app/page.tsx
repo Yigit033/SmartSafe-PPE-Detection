@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCompanyId, getUser } from "@/lib/session";
 
 interface StatsData {
   active_cameras: number;
@@ -23,7 +24,8 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const companyId = "COMP_EE37F274";
+        const companyId = getCompanyId();
+        if (!companyId) return;
         // Stats ve Events'i paralel çekelim
         const [statsRes, eventsRes] = await Promise.all([
           fetch(`http://localhost:4000/company/${companyId}/stats`),
@@ -96,7 +98,10 @@ export default function Home() {
           </div>
         )}
         <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">
-          Hoş Geldiniz, <span className="text-brand-teal">SmartSafe Demo</span>
+          Hoş Geldiniz,{" "}
+          <span className="text-brand-teal">
+            {getUser()?.username || "Kullanıcı"}
+          </span>
         </h2>
         <p className="text-slate-500 font-medium text-lg">
           Bugün tesisinizdeki güvenlik durumu{" "}
