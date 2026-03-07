@@ -12,11 +12,14 @@ interface Camera {
   port: number;
   protocol: string;
   stream_path: string;
+  username?: string;
+  password?: string;
   status: string;
   created_at: string;
 }
 
-interface AddCameraParams {
+interface CreateCameraRequest {
+  company_id: string;
   camera_name: string;
   camera_location: string;
   camera_ip: string;
@@ -27,7 +30,9 @@ interface AddCameraParams {
   camera_password?: string;
 }
 
-interface UpdateCameraParams {
+interface UpdateCameraRequest {
+  company_id: string;
+  camera_id: string;
   camera_name?: string;
   location?: string;
   ip_address?: string;
@@ -65,14 +70,15 @@ export const list = api(
  */
 export const create = api(
   { expose: true, method: "POST", path: "/company/:company_id/cameras" },
-  async ({
-    company_id,
-    ...params
-  }: { company_id: string } & AddCameraParams): Promise<{
+  async (
+    params: CreateCameraRequest,
+  ): Promise<{
     success: boolean;
     camera_id?: string;
     error?: string;
   }> => {
+    const { company_id } = params;
+
     // 1. Abonelik/Limit Kontrolü (Basit versiyon)
     const companyRes = await pool.query(
       "SELECT max_cameras FROM companies WHERE company_id = $1",
@@ -137,24 +143,23 @@ export const update = api(
     method: "PATCH",
     path: "/company/:company_id/cameras/:camera_id",
   },
-  async ({
-    company_id,
-    camera_id,
-    ...params
-  }: { company_id: string; camera_id: string } & UpdateCameraParams): Promise<{
+  async (
+    params: UpdateCameraRequest,
+  ): Promise<{
     success: boolean;
     error?: string;
   }> => {
+    const { company_id, camera_id, ...updates } = params;
     try {
-      const keys = Object.keys(params).filter(
-        (k) => (params as any)[k] !== undefined,
+      const keys = Object.keys(updates).filter(
+        (k) => (updates as any)[k] !== undefined,
       );
       if (keys.length === 0) return { success: true };
 
       const setClause = keys
         .map((key, index) => `${key} = $${index + 3}`)
         .join(", ");
-      const values = keys.map((key) => (params as any)[key]);
+      const values = keys.map((key) => (updates as any)[key]);
 
       await pool.query(
         `UPDATE cameras SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND camera_id = $2`,
@@ -193,6 +198,90 @@ export const remove = api(
       return { success: true };
     } catch (error: any) {
       console.error("Error deleting camera:", error);
+      return { success: false, error: error.message };
+    }
+  },
+);
+
+/**
+ * Kameradan anlık görüntü (snapshot) alır
+ */
+export const getSnapshot = api(
+  {
+    expose: true,
+    method: "GET",
+    path: "/company/:company_id/cameras/:camera_id/snapshot",
+  },
+  async ({
+    company_id,
+    camera_id,
+  }: {
+    company_id: string;
+    camera_id: string;
+  }): Promise<{ success: boolean; image?: string; error?: string }> => {
+    try {
+      const res = await pool.query(
+        "SELECT * FROM cameras WHERE company_id = $1 AND camera_id = $2",
+        [company_id, camera_id],
+      );
+
+      if (res.rows.length === 0) {
+        return { success: false, error: "Kamera bulunamadı" };
+      }
+
+      const camera: Camera = res.rows[0];
+      const { protocol, ip_address, port, username, password } = camera;
+
+      // Snapshot URL'lerini dene (IP Webcam ve genel path'ler)
+      const snapshotPaths = [
+        "/shot.jpg",
+        "/photoaf.jpg",
+        "/photo.jpg",
+        "/snapshot.jpg",
+        "/image.jpg",
+      ];
+
+      let lastError = "";
+
+      for (const path of snapshotPaths) {
+        const url = `${protocol}://${ip_address}:${port}${path}`;
+        try {
+          const headers: Record<string, string> = {};
+          if (username && password) {
+            const auth = Buffer.from(`${username}:${password}`).toString(
+              "base64",
+            );
+            headers["Authorization"] = `Basic ${auth}`;
+          }
+
+          const response = await fetch(url, {
+            headers,
+            // @ts-ignore - Encore fetch might have slight differences
+            signal: AbortSignal.timeout(5000),
+          });
+
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer();
+            const base64 = Buffer.from(arrayBuffer).toString("base64");
+            const contentType =
+              response.headers.get("content-type") || "image/jpeg";
+            return {
+              success: true,
+              image: `data:${contentType};base64,${base64}`,
+            };
+          }
+        } catch (e: any) {
+          lastError = e.message;
+          continue;
+        }
+      }
+
+      return {
+        success: false,
+        error: `Kameradan görüntü alınamadı: ${lastError}`,
+      };
+    } catch (error: any) {
+      console.error("Error getting snapshot:", error);
       return { success: false, error: error.message };
     }
   },

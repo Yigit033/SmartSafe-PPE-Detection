@@ -18,6 +18,30 @@ interface CompanyResponse {
   admin_email: string;
 }
 
+interface Company {
+  company_id: string;
+  company_name: string;
+  email: string;
+  api_key: string;
+  created_at: string;
+  user_count: number;
+}
+
+interface UpdateProfileRequest {
+  company_id: string;
+  company_name?: string;
+  sector?: string;
+  contact_person?: string;
+  email?: string;
+}
+
+interface UpdateNotificationsRequest {
+  company_id: string;
+  email_notifications: boolean;
+  sms_notifications: boolean;
+  push_notifications: boolean;
+}
+
 /**
  * Yeni bir şirket ve bu şirkete bağlı bir Admin kullanıcısı oluşturur.
  */
@@ -102,11 +126,11 @@ export const create = api(
  */
 export const list = api(
   { expose: true, method: "GET", path: "/company" },
-  async (): Promise<{ companies: any[] }> => {
+  async (): Promise<{ companies: Company[] }> => {
     try {
       const res = await pool.query(`
         SELECT c.company_id, c.company_name, c.email, c.api_key, c.created_at,
-        (SELECT COUNT(*) FROM users u WHERE u.company_id = c.company_id) as user_count
+        (SELECT COUNT(*) FROM users u WHERE u.company_id = c.company_id)::int as user_count
         FROM companies c
         ORDER BY c.created_at DESC
       `);
@@ -118,23 +142,55 @@ export const list = api(
   },
 );
 
+interface GetCompanyResponse {
+  success: boolean;
+  company?: any; // We can use 'any' here or define a full Company interface
+  error?: string;
+}
+
+/**
+ * Belirli bir şirketin tüm detaylarını getirir
+ */
+export const getById = api(
+  { expose: true, method: "GET", path: "/company/:company_id" },
+  async ({
+    company_id,
+  }: {
+    company_id: string;
+  }): Promise<GetCompanyResponse> => {
+    try {
+      const res = await pool.query(
+        "SELECT * FROM companies WHERE company_id = $1",
+        [company_id],
+      );
+      if (res.rows.length === 0) {
+        return { success: false, error: "Şirket bulunamadı" };
+      }
+      return { success: true, company: res.rows[0] };
+    } catch (error) {
+      console.error("Error getting company by id:", error);
+      return { success: false, error: "Sunucu hatası" };
+    }
+  },
+);
+
 /**
  * Şirket profil bilgilerini günceller
  */
 export const updateProfile = api(
   { expose: true, method: "PATCH", path: "/company/:company_id" },
-  async ({
-    company_id,
-    ...params
-  }: { company_id: string } & any): Promise<{ success: boolean }> => {
+  async (params: UpdateProfileRequest): Promise<{ success: boolean }> => {
+    const { company_id, ...updates } = params;
     try {
-      const keys = Object.keys(params).filter((k) => params[k] !== undefined);
+      const keys = Object.keys(updates).filter(
+        (k) => (updates as any)[k] !== undefined,
+      );
       if (keys.length === 0) return { success: true };
 
       const setClause = keys
         .map((key, index) => `${key} = $${index + 2}`)
         .join(", ");
-      const values = keys.map((key) => params[key]);
+      const values = keys.map((key) => (updates as any)[key]);
 
       await pool.query(
         `UPDATE companies SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1`,
@@ -153,13 +209,14 @@ export const updateProfile = api(
  */
 export const updateNotifications = api(
   { expose: true, method: "PATCH", path: "/company/:company_id/notifications" },
-  async ({
-    company_id,
-    ...params
-  }: { company_id: string } & any): Promise<{ success: boolean }> => {
+  async (params: UpdateNotificationsRequest): Promise<{ success: boolean }> => {
+    const {
+      company_id,
+      email_notifications,
+      sms_notifications,
+      push_notifications,
+    } = params;
     try {
-      const { email_notifications, sms_notifications, push_notifications } =
-        params;
       await pool.query(
         `
         UPDATE companies SET 

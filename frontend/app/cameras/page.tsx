@@ -3,481 +3,654 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
-const cameras = [
+// Mock data for initial state
+const INITIAL_CAMERAS = [
   {
-    id: "CAM-01",
-    name: "Ana Giriş",
-    ip: "192.168.1.45",
+    camera_id: "CAM-01",
+    camera_name: "Ana Giriş",
+    ip_address: "161.9.13.92",
     location: "A Kapısı",
-    status: "Aktif",
-    detection: "Running",
-    lastActivity: "2 dk önce",
-  },
-  {
-    id: "CAM-02",
-    name: "Depo-1",
-    ip: "192.168.1.46",
-    location: "Lojistik Bölgesi",
-    status: "Aktif",
-    detection: "Stopped",
-    lastActivity: "5 dk önce",
-  },
-  {
-    id: "CAM-03",
-    name: "Üretim Hattı A",
-    ip: "192.168.1.47",
-    location: "Hangar-2",
-    status: "Pasif",
-    detection: "Disabled",
-    lastActivity: "1 saat önce",
-  },
-  {
-    id: "CAM-04",
-    name: "Yükleme Alanı",
-    ip: "192.168.1.48",
-    location: "Dış Saha",
-    status: "Hata",
-    detection: "Disabled",
-    lastActivity: "N/A",
+    status: "active",
+    created_at: new Date().toISOString(),
   },
 ];
 
 export default function CamerasPage() {
+  const [cameras, setCameras] = useState<any[]>(INITIAL_CAMERAS);
   const [searchTerm, setSearchTerm] = useState("");
-  const [formData, setFormData] = useState({
-    name: "deneme",
-    ip_address: "161.9.103.100",
-    location: "med",
-    port: 8080,
-    protocol: "HTTP",
-    stream_path: "/video",
-    username: "dilsadselim@gmail.com",
-    password: "",
-    model: "Otomatik Tespit",
-  });
-
-  const [testResult, setTestResult] = useState<any>(null);
-  const [isTesting, setIsTesting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("smart");
   const [mounted, setMounted] = useState(false);
 
+  const [formData, setFormData] = useState({
+    camera_name: "",
+    camera_location: "",
+    camera_ip: "",
+    camera_port: 80,
+    camera_protocol: "http",
+    camera_path: "/video",
+    camera_username: "",
+    camera_password: "",
+  });
+
+  const [editingCamera, setEditingCamera] = useState<any>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [cameraToDelete, setCameraToDelete] = useState<any>(null);
+  const [enabledAiCameras, setEnabledAiCameras] = useState<string[]>([]);
+
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewCamera, setPreviewCamera] = useState<any>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  const companyId = "COMP_EE37F274";
+
   useEffect(() => {
     setMounted(true);
+    setRefreshKey(Date.now());
+    fetchCameras();
   }, []);
 
-  const handleTestConnection = async () => {
-    setIsTesting(true);
-    setTestResult(null);
+  const fetchCameras = async () => {
+    setIsLoading(true);
     try {
       const response = await fetch(
-        "http://localhost:4000/cameras/manual-test",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        },
+        `http://localhost:4000/company/${companyId}/cameras`,
       );
       const data = await response.json();
-      setTestResult(data);
+      if (data.success) {
+        setCameras(data.cameras);
+
+        // --- 🎯 AUTO-START AI DETECTION ---
+        // Varsayılan olarak kapalı gelmesi istendiği için otomatik başlatma kaldırıldı.
+        // Kullanıcı 'AI VIEW' butonuna bastığında ilgili kamera için başlatılacak.
+      }
     } catch (error) {
-      setTestResult({
-        success: false,
-        message: "Bağlantı hatası: Backend'e ulaşılamadı.",
-      });
+      console.error("Error fetching cameras:", error);
     } finally {
-      setIsTesting(false);
+      setIsLoading(false);
     }
   };
 
-  const ModalPortal = () => {
-    if (!mounted) return null;
+  const openAddModal = () => {
+    setEditingCamera(null);
+    setFormData({
+      camera_name: "",
+      camera_location: "",
+      camera_ip: "",
+      camera_port: 80,
+      camera_protocol: "http",
+      camera_path: "/video",
+      camera_username: "",
+      camera_password: "",
+    });
+    setStreamUrl(null);
+    setIsModalOpen(true);
+  };
 
-    return createPortal(
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div
-          className="absolute inset-0 bg-black/90 backdrop-blur-md"
-          onClick={() => setIsModalOpen(false)}
-        ></div>
-        <div className="relative w-full max-w-3xl rounded-[32px] border border-slate-800 bg-slate-950 p-8 shadow-2xl animate-fade-in card-glow overflow-y-auto max-h-[90vh]">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-white uppercase tracking-tighter italic">
-              Yeni Kamera Kaydı
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="text-slate-500 hover:text-white transition-all"
-            >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
+  const toggleCameraAi = async (id: string, currentStatus: boolean) => {
+    // UI'daki durumu anında güncelle (optimistic update)
+    setEnabledAiCameras((prev) =>
+      prev.includes(id) ? prev.filter((cid) => cid !== id) : [...prev, id],
+    );
 
-          <div className="mb-8 flex gap-2 rounded-2xl bg-slate-900/50 p-1 border border-slate-800">
-            <button
-              onClick={() => setActiveTab("smart")}
-              className={`flex-1 rounded-xl py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === "smart" ? "bg-primary-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
-            >
-              Akıllı Kurulum
-            </button>
-            <button
-              onClick={() => setActiveTab("manual")}
-              className={`flex-1 rounded-xl py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === "manual" ? "bg-primary-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
-            >
-              Manuel Kurulum
-            </button>
-          </div>
+    // Backend'e haber ver (Yeni durum currentStatus'un tersi olacak)
+    const newAiStatus = !currentStatus;
+    const endpoint = newAiStatus ? "start-detection" : "stop-detection";
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Form Side */}
-            <div className="space-y-6">
-              {activeTab === "smart" ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                        IP Aralığı (CIDR)
-                      </label>
-                      <input
-                        type="text"
-                        defaultValue="192.168.1.0/24"
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
-                      />
-                    </div>
-                    <button className="w-full rounded-xl bg-primary-600/10 border border-primary-500/20 py-4 text-[10px] font-black text-primary-400 hover:bg-primary-600/20 transition-all uppercase tracking-widest">
-                      Ağı Tara
-                    </button>
-                  </div>
+    try {
+      await fetch(
+        `http://127.0.0.1:5000/api/company/${companyId}/${endpoint}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ camera_id: id }),
+        },
+      );
+      // Görüntüleri tazelemek için refreshKey'i güncelle
+      setRefreshKey(Date.now());
+    } catch (error) {
+      console.error(`Error toggling AI ${endpoint}:`, error);
+    }
+  };
+
+  const isCameraAiEnabled = (item: any) => {
+    return enabledAiCameras.includes(item.camera_id);
+  };
+
+  const startStream = (id: string) => {
+    setStreamError(null);
+    const camera = cameras.find((c) => c.camera_id === id);
+    const isAi = camera && isCameraAiEnabled(camera);
+    const streamUrl = isAi
+      ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${id}?t=${Date.now()}`
+      : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
+
+    setStreamUrl(streamUrl);
+  };
+
+  const openPreviewModal = (camera: any) => {
+    setPreviewCamera(camera);
+    startStream(camera.camera_id);
+    setIsPreviewModalOpen(true);
+  };
+
+  const openEditModal = (camera: any) => {
+    setEditingCamera(camera);
+    setFormData({
+      camera_name: camera.camera_name || "",
+      camera_location: camera.location || "",
+      camera_ip: camera.ip_address || "",
+      camera_port: camera.port || 80,
+      camera_protocol: camera.protocol || "http",
+      camera_path: camera.stream_path || "/video",
+      camera_username: "",
+      camera_password: "",
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = editingCamera
+      ? `http://localhost:4000/company/${companyId}/cameras/${editingCamera.camera_id}`
+      : `http://localhost:4000/company/${companyId}/cameras`;
+
+    const method = editingCamera ? "PATCH" : "POST";
+    const bodyData = editingCamera
+      ? {
+          camera_name: formData.camera_name,
+          location: formData.camera_location,
+          ip_address: formData.camera_ip,
+          port: formData.camera_port,
+          protocol: formData.camera_protocol,
+          stream_path: formData.camera_path,
+        }
+      : formData;
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyData),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIsModalOpen(false);
+        fetchCameras();
+      }
+    } catch (error) {
+      console.error("Error submitting camera:", error);
+    }
+  };
+
+  const handleDeleteCamera = (camera: any) => {
+    setCameraToDelete(camera);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteCamera = async () => {
+    if (!cameraToDelete) return;
+    try {
+      const response = await fetch(
+        `http://localhost:4000/company/${companyId}/cameras/${cameraToDelete.camera_id}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const data = await response.json();
+      if (data.success) {
+        setIsDeleteModalOpen(false);
+        setCameraToDelete(null);
+        fetchCameras();
+      }
+    } catch (error) {
+      console.error("Error deleting camera:", error);
+    }
+  };
+
+  const filteredCameras = cameras.filter(
+    (cam) =>
+      cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[130] flex items-center justify-center p-4"
+            lang="tr"
+          >
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => setIsDeleteModalOpen(false)}
+            ></div>
+            <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-scale-in flex flex-col p-8">
+              <div className="text-center">
+                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+                  <span className="material-symbols-rounded text-4xl">
+                    delete
+                  </span>
                 </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">
+                  KAYDI SİLİYORUZ
+                </h3>
+                <p className="mt-4 text-sm font-semibold text-slate-500 leading-relaxed">
+                  <span className="text-brand-teal font-black">
+                    {cameraToDelete?.camera_name}
+                  </span>{" "}
+                  isimli kamerayı silmek istediğinize emin misiniz?
+                </p>
+              </div>
+              <div className="flex gap-4 mt-8">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="flex-1 rounded-xl bg-slate-100 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-200 transition-all cursor-pointer"
+                >
+                  VAZGEÇ
+                </button>
+                <button
+                  onClick={confirmDeleteCamera}
+                  className="flex-1 rounded-xl bg-red-500 py-4 text-[10px] font-black text-white uppercase tracking-widest hover:bg-red-600 transition-all cursor-pointer"
+                >
+                  EVET, SİL
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Add/Edit Modal */}
+      {isModalOpen &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+            lang="tr"
+          >
+            <div
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => setIsModalOpen(false)}
+            ></div>
+            <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-fade-in flex flex-col max-h-[90vh]">
+              <div className="bg-brand-teal p-5 flex items-center justify-between text-white">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-rounded">settings</span>
+                  <h3 className="text-sm font-black tracking-widest uppercase italic">
+                    {editingCamera ? "KAMERA AYARLARI" : "YENİ KAMERA EKLE"}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-rounded">close</span>
+                </button>
+              </div>
+              <div className="p-8 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     {[
-                      { label: "Kamera Adı *", key: "name" },
-                      { label: "IP Adresi *", key: "ip_address" },
-                      { label: "Konum *", key: "location" },
-                      { label: "Port", key: "port", type: "number" },
-                      { label: "Protokol", key: "protocol" },
-                      { label: "Stream Path", key: "stream_path" },
-                      { label: "Kullanıcı Adı", key: "username" },
-                      { label: "Parola", key: "password", type: "password" },
-                      { label: "Model", key: "model" },
+                      {
+                        label: "Kamera Adı",
+                        key: "camera_name",
+                        placeholder: "Örn: Ana Giriş",
+                      },
+                      {
+                        label: "Lokasyon",
+                        key: "camera_location",
+                        placeholder: "Örn: A Blok",
+                      },
+                      {
+                        label: "IP Adresi",
+                        key: "camera_ip",
+                        placeholder: "192.168.1.100",
+                      },
+                      {
+                        label: "Port",
+                        key: "camera_port",
+                        type: "number",
+                        placeholder: "80",
+                      },
+                      {
+                        label: "Protokol",
+                        key: "camera_protocol",
+                        placeholder: "http/rtsp",
+                      },
+                      {
+                        label: "Kanal / Path",
+                        key: "camera_path",
+                        placeholder: "/video",
+                      },
                     ].map((f) => (
                       <div key={f.key} className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                           {f.label}
                         </label>
                         <input
                           type={f.type || "text"}
+                          placeholder={f.placeholder}
                           value={(formData as any)[f.key]}
                           onChange={(e) =>
                             setFormData({
                               ...formData,
                               [f.key]:
-                                e.target.type === "number"
-                                  ? parseInt(e.target.value)
+                                f.type === "number"
+                                  ? parseInt(e.target.value) || 0
                                   : e.target.value,
                             })
                           }
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-white focus:border-primary-500/50 outline-none transition-all"
+                          className="w-full rounded-xl bg-white border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 focus:border-brand-teal/50 outline-none transition-all shadow-sm"
+                          required
                         />
                       </div>
                     ))}
                   </div>
-
-                  <div className="flex gap-4 pt-4 border-t border-slate-900">
+                  <div className="pt-6 border-t border-slate-100 flex gap-4">
                     <button
-                      onClick={handleTestConnection}
-                      disabled={isTesting}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-2xl bg-amber-500/5 border border-amber-500/20 py-4 text-[10px] font-black text-amber-500 hover:bg-amber-500/10 transition-all uppercase tracking-[0.2em] ${isTesting ? "opacity-50 cursor-not-allowed" : ""}`}
+                      type="button"
+                      className="flex-1 rounded-xl bg-slate-50 border-2 border-slate-100 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-100"
+                      onClick={() => setIsModalOpen(false)}
                     >
-                      {isTesting ? "BAĞLANILIYOR..." : "Bağlantıyı Test Et"}
+                      VAZGEÇ
                     </button>
-                    <button className="flex-1 rounded-2xl bg-primary-600 py-4 text-[10px] font-black text-white shadow-xl shadow-primary-500/20 uppercase tracking-[0.2em] hover:bg-primary-500 transition-all">
-                      Kamera Kaydet
+                    <button
+                      type="submit"
+                      className="flex-1 rounded-xl bg-brand-teal py-4 text-[10px] font-black text-white uppercase tracking-widest hover:bg-brand-teal/90"
+                    >
+                      {editingCamera ? "GÜNCELLE" : "KAYDET"}
                     </button>
                   </div>
-                </div>
-              )}
+                </form>
+              </div>
             </div>
+          </div>,
+          document.body,
+        )}
 
-            {/* Preview Side */}
-            <div className="flex flex-col gap-4">
-              <div className="flex-1 min-h-[300px] rounded-3xl border border-slate-800 bg-slate-950 overflow-hidden relative flex items-center justify-center group card-glow">
-                {testResult?.image_base64 ? (
+      {/* Preview Modal */}
+      {isPreviewModalOpen &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[150] flex items-center justify-center p-0 md:p-12 animate-fade-in"
+            lang="tr"
+          >
+            <div
+              className="absolute inset-0 bg-slate-950/95 backdrop-blur-2xl"
+              onClick={() => setIsPreviewModalOpen(false)}
+            ></div>
+            <div className="relative w-full h-full max-w-6xl max-h-[90vh] overflow-hidden rounded-none md:rounded-[3rem] border border-white/10 bg-black shadow-2xl flex flex-col">
+              <div className="absolute top-8 left-8 right-8 z-10 flex items-center justify-between pointer-events-none">
+                <div className="flex flex-col gap-1 pointer-events-auto">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-red-500 px-3 py-1 rounded-full text-white flex items-center gap-2 shadow-xl">
+                      <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                      <span className="text-[10px] font-black uppercase tracking-wider">
+                        CANLI
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-black text-white italic drop-shadow-lg uppercase tracking-tight">
+                      {previewCamera?.camera_name}
+                    </h3>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 pointer-events-auto">
+                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
+                    <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
+                      AI ANALİZ
+                    </span>
+                    <button
+                      onClick={async () => {
+                        const isAi = isCameraAiEnabled(previewCamera);
+                        await toggleCameraAi(previewCamera.camera_id, isAi);
+
+                        // Force refresh the specific stream with the corrected route
+                        const nextAiEnabled = !isAi;
+                        const streamUrl = nextAiEnabled
+                          ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${previewCamera.camera_id}?t=${Date.now()}`
+                          : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${previewCamera.camera_id}/proxy-stream?t=${Date.now()}`;
+
+                        setStreamUrl(streamUrl);
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCameraAiEnabled(previewCamera) ? "bg-brand-teal" : "bg-white/20"}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCameraAiEnabled(previewCamera) ? "translate-x-6" : "translate-x-1"}`}
+                      />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setIsPreviewModalOpen(false)}
+                    className="p-4 rounded-2xl bg-white/10 text-white hover:bg-red-500 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-rounded text-3xl">
+                      close
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center bg-black">
+                {streamUrl ? (
                   <img
-                    src={`data:image/jpeg;base64,${testResult.image_base64}`}
-                    alt="Kamera Önizleme"
-                    className="w-full h-full object-cover"
+                    src={streamUrl}
+                    alt="Canlı Yayın"
+                    className="w-full h-full object-contain"
+                    onError={() => setStreamUrl(null)}
                   />
                 ) : (
-                  <div className="text-center space-y-4 p-8">
-                    <div className="w-16 h-16 rounded-full bg-slate-900/50 border border-slate-800 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-500">
-                      <svg
-                        className={`h-8 w-8 ${isTesting ? "text-amber-500 animate-pulse" : "text-slate-700"}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">
-                      {isTesting ? "GÖRÜNTÜ ALINIYOR..." : "TEST BAŞLATILMADI"}
+                  <div className="text-white/20 text-center">
+                    <span className="material-symbols-rounded text-[120px] animate-pulse">
+                      videocam_off
+                    </span>
+                    <p className="mt-4 font-black tracking-widest uppercase italic">
+                      SİNYAL YOK
                     </p>
                   </div>
                 )}
-
-                {/* Overlay for status */}
-                {testResult && (
-                  <div
-                    className={`absolute top-4 left-4 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest backdrop-blur-md shadow-2xl ${testResult.success ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" : "bg-red-500/20 border-red-500/40 text-red-400"}`}
-                  >
-                    {testResult.success ? "BAĞLANTI TAMAM" : "HATA"}
-                  </div>
-                )}
               </div>
-
-              {/* Test Log Details */}
-              {testResult && (
-                <div className="rounded-2xl bg-slate-900/30 border border-slate-800/50 p-4 font-mono text-[9px] text-slate-500 overflow-y-auto max-h-[200px] shadow-inner">
-                  <div className="flex justify-between mb-2 pb-1 border-b border-white/5">
-                    <span className="text-white font-black italic tracking-widest">
-                      SİSTEM GÜNLÜĞÜ
-                    </span>
-                    <span className="text-primary-500 font-bold tracking-tighter uppercase">
-                      status: {testResult.success ? "ok" : "err"}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 border-t border-slate-900 pt-3">
-                    {testResult.message && (
-                      <div className="text-white/80 italic tracking-tight">
-                        {">"} {testResult.message}
-                      </div>
-                    )}
-                    {testResult.test_results &&
-                      Object.entries(testResult.test_results).map(
-                        ([k, v]: any) => (
-                          <div
-                            key={k}
-                            className="flex justify-between items-center group/log"
-                          >
-                            <span className="group-hover/log:text-white transition-colors uppercase tracking-tighter">
-                              {k.replace("_", " ")}
-                            </span>
-                            <span
-                              className={`font-bold ${v.status === "success" ? "text-emerald-500" : "text-red-500"}`}
-                            >
-                              {v.status
-                                ? v.status.toUpperCase()
-                                : typeof v === "object"
-                                  ? "..."
-                                  : String(v).toUpperCase()}
-                            </span>
-                          </div>
-                        ),
-                      )}
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
-        </div>
-      </div>,
-      document.body,
-    );
-  };
-
-  return (
-    <div className="space-y-8 animate-fade-in">
-      {isModalOpen && <ModalPortal />}
+          </div>,
+          document.body,
+        )}
 
       {/* Header Info */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">
-            Kamera Yönetimi
+        <div className="flex flex-col gap-2">
+          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">
+            Kamera Panoraması
           </h2>
-          <p className="text-slate-400">
-            Tesisinizdeki tüm kameraları ve DVR sistemlerini yönetin.
+          <p className="text-slate-500 font-medium">
+            Tesisinizdeki tüm sistemleri tek bir merkezden izleyin ve yönetin.
           </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary-500/20 transition-all hover:bg-primary-500 hover:scale-[1.02]"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-4">
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 hover:bg-brand-teal/90 transition-all cursor-pointer"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          YENİ KAMERA EKLE
-        </button>
+            <span className="material-symbols-rounded">add</span> YENİ KAMERA
+            EKLE
+          </button>
+        </div>
       </section>
 
-      {/* Stats Grid */}
+      {/* Stats */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-        <div className="group card-glow overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-6 transition-all duration-300">
-          <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">
-            Toplam Kamera
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Kayıtlı Cihaz
           </p>
-          <h3 className="mt-2 text-3xl font-bold text-white tracking-tight">
-            24 / 25
+          <h3 className="mt-3 text-3xl font-black text-slate-900">
+            {cameras.length}
           </h3>
         </div>
-        <div className="group card-glow overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-6 transition-all duration-300">
-          <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Aktif Analiz
           </p>
-          <h3 className="mt-2 text-3xl font-bold text-emerald-400 tracking-tight">
-            18{" "}
-            <span className="text-sm font-medium text-slate-500 uppercase">
-              Aygıt
-            </span>
+          <h3 className="mt-3 text-3xl font-black text-emerald-600">
+            {enabledAiCameras.length}
           </h3>
         </div>
-        <div className="group card-glow overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-6 transition-all duration-300">
-          <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">
-            Bağlantı Sorunu
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Sistem Durumu
           </p>
-          <h3 className="mt-2 text-3xl font-bold text-red-400 tracking-tight">
-            2{" "}
-            <span className="text-sm font-medium text-slate-500 uppercase">
-              Hata
-            </span>
-          </h3>
+          <h3 className="mt-3 text-3xl font-black text-brand-teal">GÜVENLİ</h3>
         </div>
       </div>
 
-      {/* Main Table Content */}
-      <section className="rounded-3xl border border-slate-800 bg-slate-900/50 p-8 card-glow">
-        <div className="mb-8 flex flex-col md:flex-row gap-6 items-center justify-between">
-          <h4 className="text-lg font-bold text-white italic tracking-wide uppercase">
-            Mevcut Kameralar
-          </h4>
-          <div className="relative w-full md:w-80">
+      <section className="space-y-6">
+        <div className="flex items-center justify-between bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-rounded text-brand-teal">
+              grid_view
+            </span>
+            <h4 className="text-sm font-black tracking-widest uppercase italic text-slate-800">
+              MONİTÖR PANORAMASI
+            </h4>
+          </div>
+          <div className="relative">
             <input
               type="text"
-              placeholder="Kamera ara..."
-              className="w-full rounded-xl bg-slate-950 px-10 py-2.5 text-sm font-medium text-white border border-slate-800 focus:border-primary-500/50 outline-none transition-all"
+              placeholder="Kamera Ara..."
+              className="w-64 bg-slate-50 border border-slate-200 rounded-xl px-10 py-2 text-xs font-bold"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <svg
-              className="absolute left-3.5 top-3 h-4 w-4 text-slate-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+            <span className="material-symbols-rounded absolute left-3 top-2 text-sm text-slate-400">
+              search
+            </span>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[11px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800">
-                <th className="px-6 py-4">SİSTEM BİLGİSİ</th>
-                <th className="px-6 py-4">LOKASYON</th>
-                <th className="px-6 py-4">BAĞLANTI</th>
-                <th className="px-6 py-4 text-right">İŞLEMLER</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {cameras.map((camera) => (
-                <tr key={camera.id} className="group hover:bg-white/[0.01]">
-                  <td className="px-6 py-6 font-bold text-white">
-                    {camera.name}
-                  </td>
-                  <td className="px-6 py-6 text-slate-400 text-xs font-semibold uppercase">
-                    {camera.location}
-                  </td>
-                  <td className="px-6 py-6">
-                    <span
-                      className={`inline-flex items-center gap-2 text-[11px] font-black uppercase ${camera.status === "Aktif" ? "text-emerald-500" : "text-red-500"}`}
-                    >
-                      <span
-                        className={`h-2 w-2 rounded-full ${camera.status === "Aktif" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500"}`}
-                      ></span>
-                      {camera.status}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCameras.map((camera) => (
+            <div
+              key={camera.camera_id}
+              className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg hover:shadow-2xl transition-all duration-500"
+            >
+              <div className="relative aspect-video bg-slate-900 overflow-hidden group-hover:ring-4 ring-brand-teal/10 transition-all duration-500">
+                <img
+                  src={
+                    isCameraAiEnabled(camera)
+                      ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
+                      : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
+                  }
+                  alt={camera.camera_name}
+                  className="w-full h-full object-contain bg-slate-950 transition-transform duration-700 group-hover:scale-105"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop";
+                    (e.target as HTMLImageElement).className =
+                      "w-full h-full object-cover opacity-20 grayscale";
+                  }}
+                />
+
+                <div className="absolute top-4 left-4 flex gap-2">
+                  <div className="flex items-center gap-1.5 bg-red-500 px-2.5 py-1 rounded-lg text-white shadow-lg">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                    <span className="text-[8px] font-black uppercase tracking-tighter">
+                      CANLI
                     </span>
-                  </td>
-                  <td className="px-6 py-6 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-500 hover:text-white transition-all shadow-sm">
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                          />
-                        </svg>
-                      </button>
-                      <button className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-500 hover:text-red-400 transition-all shadow-sm">
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
+                  </div>
+                  {isCameraAiEnabled(camera) && (
+                    <div className="bg-brand-teal px-2.5 py-1 rounded-lg text-white shadow-lg animate-pulse">
+                      <span className="text-[8px] font-black uppercase tracking-tighter italic">
+                        AI ANALİZ AKTİF
+                      </span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCameraAi(camera.camera_id, isCameraAiEnabled(camera));
+                  }}
+                  className={`absolute top-4 right-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all duration-500 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 shadow-xl cursor-pointer ${isCameraAiEnabled(camera) ? "bg-emerald-500/90 border-emerald-400 text-white" : "bg-slate-900/60 border-white/10 text-white/50"}`}
+                >
+                  <span className="material-symbols-rounded text-sm">
+                    {isCameraAiEnabled(camera)
+                      ? "visibility"
+                      : "visibility_off"}
+                  </span>
+                  <span className="text-[9px] font-black uppercase tracking-widest">
+                    AI VIEW
+                  </span>
+                </button>
+
+                <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                  <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-xl">
+                    <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">
+                      IP ADDRESS
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-900">
+                      {camera.ip_address}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openPreviewModal(camera)}
+                      className="p-2.5 rounded-xl bg-brand-teal text-white shadow-xl cursor-pointer"
+                    >
+                      <span className="material-symbols-rounded text-lg">
+                        fullscreen
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => openEditModal(camera)}
+                      className="p-2.5 rounded-xl bg-white text-slate-600 border border-slate-200 cursor-pointer"
+                    >
+                      <span className="material-symbols-rounded text-lg">
+                        edit
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCamera(camera)}
+                      className="p-2.5 rounded-xl bg-white text-red-500 border border-slate-200 cursor-pointer"
+                    >
+                      <span className="material-symbols-rounded text-lg">
+                        delete
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tight group-hover:text-brand-teal transition-colors">
+                  {camera.camera_name}
+                </h3>
+                <div className="flex items-center gap-1.5 mt-1 text-slate-400">
+                  <span className="material-symbols-rounded text-xs">
+                    location_on
+                  </span>
+                  <span className="text-[10px] font-black uppercase italic tracking-widest">
+                    {camera.location}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
+
+      <div className="flex items-center justify-between py-8 border-t border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+        <p>SmartSafe AI v2.5 • Enterprise VMS</p>
+        <div className="flex gap-2">
+          <span className="text-brand-teal bg-white border px-3 py-1 rounded-lg">
+            STATUS: SECURE
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

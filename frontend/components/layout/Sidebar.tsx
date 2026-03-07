@@ -16,7 +16,7 @@ const menuItems = [
   },
   {
     name: "Kullanıcılar",
-    icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.732 11c.996.608 2.268.608 3.268 0",
+    icon: "M12 11c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z",
     path: "/users",
   },
   {
@@ -35,11 +35,11 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-[--sidebar-width] border-r border-slate-800 bg-slate-950 p-6 sidebar-transition transition-colors duration-300">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-[280px] border-r border-slate-200 bg-slate-50 p-6 transition-colors duration-300">
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="mb-10 flex items-center gap-3 px-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600 text-white shadow-lg shadow-primary-500/30">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal text-white shadow-lg shadow-brand-teal/30">
             <svg
               className="h-6 w-6"
               fill="none"
@@ -54,7 +54,7 @@ export default function Sidebar() {
               />
             </svg>
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">
+          <span className="text-xl font-bold tracking-tight text-slate-900">
             SmartSafe AI
           </span>
         </div>
@@ -67,14 +67,14 @@ export default function Sidebar() {
               <Link
                 key={item.path}
                 href={item.path}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
                   isActive
-                    ? "bg-primary-900/20 text-primary-400"
-                    : "text-slate-400 hover:bg-slate-900/50 hover:text-slate-100"
+                    ? "bg-brand-teal/10 text-brand-teal"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
                 <svg
-                  className={`h-5 w-5 ${isActive ? "text-primary-400" : "text-slate-500"}`}
+                  className={`h-5 w-5 ${isActive ? "text-brand-teal" : "text-slate-400"}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -93,8 +93,8 @@ export default function Sidebar() {
         </nav>
 
         {/* Bottom Menu */}
-        <div className="mt-auto border-t border-slate-800 pt-6">
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-red-900/10 hover:text-red-400 transition-all">
+        <div className="mt-auto border-t border-slate-200 pt-6" lang="tr">
+          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer">
             <svg
               className="h-5 w-5"
               fill="none"

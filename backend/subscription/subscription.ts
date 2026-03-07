@@ -9,20 +9,33 @@ interface SubscriptionInfo {
   subscription_end?: string;
 }
 
+interface GetSubscriptionRequest {
+  company_id: string;
+}
+
+interface UpdatePlanRequest {
+  company_id: string;
+  plan: string;
+  max_cameras: number;
+}
+
+interface ToggleAutoRenewalRequest {
+  company_id: string;
+  enabled: boolean;
+}
+
 /**
  * Şirketin abonelik bilgilerini getirir
  */
 export const getInfo = api(
   { expose: true, method: "GET", path: "/company/:company_id/subscription" },
-  async ({
-    company_id,
-  }: {
-    company_id: string;
-  }): Promise<{ success: boolean; subscription?: SubscriptionInfo }> => {
+  async (
+    params: GetSubscriptionRequest,
+  ): Promise<{ success: boolean; subscription?: SubscriptionInfo }> => {
     try {
       const res = await pool.query(
         "SELECT subscription_type, max_cameras, status, auto_renewal, subscription_end FROM companies WHERE company_id = $1",
-        [company_id],
+        [params.company_id],
       );
       return { success: true, subscription: res.rows[0] };
     } catch (error) {
@@ -41,19 +54,11 @@ export const updatePlan = api(
     method: "POST",
     path: "/company/:company_id/subscription/plan",
   },
-  async ({
-    company_id,
-    plan,
-    max_cameras,
-  }: {
-    company_id: string;
-    plan: string;
-    max_cameras: number;
-  }): Promise<{ success: boolean }> => {
+  async (params: UpdatePlanRequest): Promise<{ success: boolean }> => {
     try {
       await pool.query(
         "UPDATE companies SET subscription_type = $1, max_cameras = $2, updated_at = CURRENT_TIMESTAMP WHERE company_id = $3",
-        [plan, max_cameras, company_id],
+        [params.plan, params.max_cameras, params.company_id],
       );
       return { success: true };
     } catch (error) {
@@ -72,17 +77,11 @@ export const toggleAutoRenewal = api(
     method: "POST",
     path: "/company/:company_id/subscription/auto-renewal",
   },
-  async ({
-    company_id,
-    enabled,
-  }: {
-    company_id: string;
-    enabled: boolean;
-  }): Promise<{ success: boolean }> => {
+  async (params: ToggleAutoRenewalRequest): Promise<{ success: boolean }> => {
     try {
       await pool.query(
         "UPDATE companies SET auto_renewal = $1, updated_at = CURRENT_TIMESTAMP WHERE company_id = $2",
-        [enabled, company_id],
+        [params.enabled, params.company_id],
       );
       return { success: true };
     } catch (error) {

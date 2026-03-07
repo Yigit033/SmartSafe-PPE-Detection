@@ -1,27 +1,26 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-primary-50: #0ea5e9;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
+  --color-brand-teal: #00b1d1;
+  --color-brand-orange: #ffb300;
 
-  --color-slate-50: #f8fafc;
-  --color-slate-400: #94a3b8;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
-  --color-slate-950: #020617;
+  --color-primary-50: #ecfeff;
+  --color-primary-100: #cffafe;
+  --color-primary-500: #06b6d4;
+  --color-primary-600: #0891b2;
+  --color-primary-700: #0e7490;
+
+  --color-accent-50: #fffbeb;
+  --color-accent-100: #fef3c7;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+
+  --sidebar-width: 280px;
 }
 
 :root {
-  --background: #020617;
-  --foreground: #f8fafc;
-  --sidebar-width: 280px;
-  --glass-bg: rgba(15, 23, 42, 0.9);
-  --glass-border: rgba(255, 255, 255, 0.05);
-}
-
-* {
-  border-color: var(--glass-border);
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
 body {
@@ -31,40 +30,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.glass-effect {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.sidebar-bg {
-  background-color: #010409;
-  border-right: 1px solid var(--glass-border);
-}
-
-.card-bg {
-  background: #0d1117;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.3s ease;
-}
-
-.card-bg:hover {
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
-}
-
-::-webkit-scrollbar {
-  width: 5px;
-}
-::-webkit-scrollbar-thumb {
-  background: #30363d;
-  border-radius: 10px;
-}
-
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;

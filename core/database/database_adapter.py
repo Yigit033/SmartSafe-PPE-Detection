@@ -23,15 +23,22 @@ def get_secure_db_connector():
     try:
         # Try multiple import paths for flexibility
         try:
-            from utils.secure_database_connector import get_secure_db_connector as get_connector
+            # Try core relative path first
+            from core.utils.secure_database_connector import get_secure_db_connector as get_connector
             return get_connector()
         except ImportError:
             try:
-                from utils.secure_database_connector import get_secure_db_connector as get_connector
+                # Try legacy path (from find_by_name)
+                from legacy.utils.secure_database_connector import get_secure_db_connector as get_connector
                 return get_connector()
             except ImportError:
-                logger.warning("⚠️ Could not import secure_database_connector from any path")
-                return None
+                try:
+                    # Try direct utils import
+                    from utils.secure_database_connector import get_secure_db_connector as get_connector
+                    return get_connector()
+                except ImportError:
+                    logger.warning("⚠️ Could not import secure_database_connector from any path")
+                    return None
     except Exception as e:
         logger.warning(f"⚠️ Error getting secure DB connector: {e}")
         return None
@@ -186,6 +193,16 @@ class DatabaseAdapter:
                     if secure_connector:
                         return secure_connector.get_connection()
                     else:
+                        # Direct PostgreSQL attempt before failing to SQLite
+                        database_url = self.config.database_url
+                        if database_url and database_url.startswith('postgresql://'):
+                            try:
+                                logger.info("🔌 Attempting direct psycopg2 connection as fallback")
+                                conn = psycopg2.connect(database_url)
+                                return conn
+                            except Exception as direct_err:
+                                logger.warning(f"⚠️ Direct PostgreSQL connection failed: {direct_err}")
+
                         logger.warning("⚠️ Secure connector not available, falling back to SQLite")
                         # Force fallback to SQLite
                         self.config = self._get_sqlite_config()
@@ -1221,12 +1238,12 @@ class DatabaseAdapter:
                 logger.error(f"❌ Query traceback: {traceback.format_exc()}")
                 return None
             finally:
-                # Always close SQLite connections
-                if conn and self.db_type == 'sqlite':
+                # RELEASE CONNECTION TO POOL OR CLOSE IT
+                if conn:
                     try:
-                        conn.close()
+                        self.close_connection(conn)
                     except Exception as e:
-                        logger.warning(f"⚠️ Error closing SQLite connection: {e}")
+                        logger.warning(f"⚠️ Error releasing connection: {e}")
 
         logger.error(f"❌ Database query failed after {max_retries} attempts")
         return None
