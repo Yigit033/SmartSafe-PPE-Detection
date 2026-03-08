@@ -24,7 +24,7 @@ def get_secure_db_connector():
         # Try multiple import paths for flexibility
         try:
             # Try core relative path first
-            from core.utils.secure_database_connector import get_secure_db_connector as get_connector
+            from utils.secure_database_connector import get_secure_db_connector as get_connector
             return get_connector()
         except ImportError:
             try:
@@ -2315,57 +2315,64 @@ class DatabaseAdapter:
     # ========================================
     
     def update_person_violation_stats(self, person_id: str, company_id: str, violation_type: str, duration_seconds: int) -> bool:
-        """Kişi ihlal istatistiklerini güncelle"""
+        """Kişi ihlal istatistiklerini güncelle (Çoklu ihlal destekli)"""
         try:
             from datetime import datetime
             month = datetime.now().strftime('%Y-%m')
             
-            if self.db_type == 'sqlite':
-                # Önce mevcut kaydı kontrol et
-                check_query = '''
-                    SELECT id, violation_count, total_duration_seconds 
-                    FROM person_violations 
-                    WHERE person_id = ? AND company_id = ? AND month = ? AND violation_type = ?
-                '''
-                existing = self.execute_query(check_query, (person_id, company_id, month, violation_type), fetch_one=True)
+            # Çoklu ihlal desteği: Virgülle ayrılmış tipleri tek tek işle
+            v_types = [v.strip() for v in violation_type.split(',')] if ',' in violation_type else [violation_type]
+            
+            success = True
+            for v_type in v_types:
+                if not v_type: continue
                 
-                if existing:
-                    # Güncelle
-                    update_query = '''
-                        UPDATE person_violations 
-                        SET violation_count = violation_count + 1,
-                            total_duration_seconds = total_duration_seconds + ?,
-                            last_violation_date = CURRENT_TIMESTAMP,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
+                if self.db_type == 'sqlite':
+                    # Önce mevcut kaydı kontrol et
+                    check_query = '''
+                        SELECT id, violation_count, total_duration_seconds 
+                        FROM person_violations 
+                        WHERE person_id = ? AND company_id = ? AND month = ? AND violation_type = ?
                     '''
-                    self.execute_query(update_query, (duration_seconds, existing[0]))
-                else:
-                    # Yeni kayıt
-                    insert_query = '''
+                    existing = self.execute_query(check_query, (person_id, company_id, month, v_type), fetch_one=True)
+                    
+                    if existing:
+                        # Güncelle
+                        update_query = '''
+                            UPDATE person_violations 
+                            SET violation_count = violation_count + 1,
+                                total_duration_seconds = total_duration_seconds + ?,
+                                last_violation_date = CURRENT_TIMESTAMP,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        '''
+                        self.execute_query(update_query, (duration_seconds, existing[0]))
+                    else:
+                        # Yeni kayıt
+                        insert_query = '''
+                            INSERT INTO person_violations (
+                                person_id, company_id, month, violation_type,
+                                violation_count, total_duration_seconds, last_violation_date
+                            ) VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+                        '''
+                        self.execute_query(insert_query, (person_id, company_id, month, v_type, duration_seconds))
+                else:  # PostgreSQL
+                    # UPSERT kullan
+                    query = '''
                         INSERT INTO person_violations (
                             person_id, company_id, month, violation_type,
                             violation_count, total_duration_seconds, last_violation_date
-                        ) VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+                        ) VALUES (%s, %s, %s, %s, 1, %s, CURRENT_TIMESTAMP)
+                        ON CONFLICT (person_id, company_id, month, violation_type)
+                        DO UPDATE SET
+                            violation_count = person_violations.violation_count + 1,
+                            total_duration_seconds = person_violations.total_duration_seconds + EXCLUDED.total_duration_seconds,
+                            last_violation_date = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
                     '''
-                    self.execute_query(insert_query, (person_id, company_id, month, violation_type, duration_seconds))
-            else:  # PostgreSQL
-                # UPSERT kullan
-                query = '''
-                    INSERT INTO person_violations (
-                        person_id, company_id, month, violation_type,
-                        violation_count, total_duration_seconds, last_violation_date
-                    ) VALUES (%s, %s, %s, %s, 1, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (person_id, company_id, month, violation_type)
-                    DO UPDATE SET
-                        violation_count = person_violations.violation_count + 1,
-                        total_duration_seconds = person_violations.total_duration_seconds + EXCLUDED.total_duration_seconds,
-                        last_violation_date = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
-                '''
-                self.execute_query(query, (person_id, company_id, month, violation_type, duration_seconds))
+                    self.execute_query(query, (person_id, company_id, month, v_type, duration_seconds))
             
-            return True
+            return success
             
         except Exception as e:
             logger.error(f"❌ Update person violation stats error: {e}")
@@ -2551,7 +2558,7 @@ class CameraDiscoveryManager:
             import uuid
             
             # Yeni kamera ID'si oluştur
-            camera_id = str(uuid.uuid4())
+            camera_id = f"CAM_{uuid.uuid4().hex[:8].upper()}"
             
             # RTSP URL oluştur eğer yoksa
             if not camera_data['rtsp_url']:
@@ -2728,7 +2735,7 @@ class CameraDiscoveryManager:
             import uuid
             
             # Config camera ID'sini kullan veya yeni oluştur
-            camera_id = config_camera_id if config_camera_id.startswith('CAM_') else str(uuid.uuid4())
+            camera_id = config_camera_id if config_camera_id.startswith('CAM_') else f"CAM_{uuid.uuid4().hex[:8].upper()}"
             
             query = '''
                 INSERT INTO cameras (

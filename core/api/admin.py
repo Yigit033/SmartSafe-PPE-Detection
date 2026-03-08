@@ -103,7 +103,7 @@ def create_blueprint(api):
                 import hashlib
                 pw_hash = hashlib.sha256(data['password'].encode()).hexdigest()
 
-            company_id = str(uuid.uuid4())
+            company_id = f"COMP_{uuid.uuid4().hex[:8].upper()}"
             api_key    = str(uuid.uuid4()).replace('-', '')
             ph = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
 
@@ -131,7 +131,7 @@ def create_blueprint(api):
             ))
 
             # Default admin user oluştur
-            user_id = str(uuid.uuid4())
+            user_id = f"USER_{uuid.uuid4().hex[:8].upper()}"
             username = data['email'].split('@')[0]
             cursor.execute(f'''
                 INSERT INTO users (user_id, company_id, username, email, password_hash, role, status, created_at)

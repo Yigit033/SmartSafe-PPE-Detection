@@ -73,7 +73,7 @@ export const create = api(
     user_id?: string;
     error?: string;
   }> => {
-    const user_id = uuidv4();
+    const user_id = `USER_${uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
     const passwordHash = await bcrypt.hash(params.password, 12);
 
     try {

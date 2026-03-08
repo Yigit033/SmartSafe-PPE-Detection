@@ -68,24 +68,53 @@ export default function ViolationsPage() {
     });
   };
 
-  const getViolationBadge = (type: string) => {
-    const t = type.toLowerCase();
-    if (t.includes("hardhat") || t.includes("baret") || t.includes("helmet"))
-      return (
-        <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border border-orange-200">
-          BARET İHLALİ
-        </span>
-      );
-    if (t.includes("vest") || t.includes("yelek"))
-      return (
-        <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border border-blue-200">
-          YELEK İHLALİ
-        </span>
-      );
+  const getViolationBadges = (type: string) => {
+    const types = type.toLowerCase().split(",");
+
     return (
-      <span className="bg-red-100 text-red-600 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border border-red-200">
-        GENEL İHLAL
-      </span>
+      <div className="flex flex-col gap-1 items-start">
+        {types.map((t, idx) => {
+          if (
+            t.includes("hardhat") ||
+            t.includes("baret") ||
+            t.includes("helmet")
+          )
+            return (
+              <span
+                key={idx}
+                className="bg-orange-100/90 backdrop-blur-sm text-orange-600 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border border-orange-200 shadow-sm leading-none"
+              >
+                BARET İHLALİ
+              </span>
+            );
+          if (t.includes("vest") || t.includes("yelek"))
+            return (
+              <span
+                key={idx}
+                className="bg-blue-100/90 backdrop-blur-sm text-blue-600 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border border-blue-200 shadow-sm leading-none"
+              >
+                YELEK İHLALİ
+              </span>
+            );
+          if (t.includes("shoes") || t.includes("ayakkabı"))
+            return (
+              <span
+                key={idx}
+                className="bg-purple-100/90 backdrop-blur-sm text-purple-600 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border border-purple-200 shadow-sm leading-none"
+              >
+                AYAKKABI İHLALİ
+              </span>
+            );
+          return (
+            <span
+              key={idx}
+              className="bg-red-100/90 backdrop-blur-sm text-red-600 px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border border-red-200 shadow-sm leading-none"
+            >
+              GENEL İHLAL
+            </span>
+          );
+        })}
+      </div>
     );
   };
 
@@ -185,8 +214,8 @@ export default function ViolationsPage() {
                       "https://via.placeholder.com/400x300?text=Görsel+Bulunamadı";
                   }}
                 />
-                <div className="absolute top-2 left-2 scale-75 origin-top-left">
-                  {getViolationBadge(event.violation_type)}
+                <div className="absolute top-2 left-2 origin-top-left">
+                  {getViolationBadges(event.violation_type)}
                 </div>
                 {event.count > 1 && (
                   <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded text-[8px] font-black italic">

@@ -69,7 +69,7 @@ export const create = api(
     dvr_id?: string;
     error?: string;
   }> => {
-    const dvr_id = uuidv4();
+    const dvr_id = `DVR_${uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
     try {
       await pool.query(
         `

@@ -99,7 +99,7 @@ export const create = api(
       };
     }
 
-    const camera_id = uuidv4();
+    const camera_id = `CAM_${uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
 
     try {
       await pool.query(

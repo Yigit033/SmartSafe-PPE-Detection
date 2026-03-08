@@ -264,56 +264,72 @@ class ViolationTracker:
         camera_violations = self.active_violations[camera_id]
         person_violations = camera_violations[person_id]
         
-        # YENİ İHLALLERİ KONTROL ET
-        for violation_type in current_violations:
-            if violation_type not in person_violations:
-                # ✅ YENİ İHLAL BAŞLADI
-                event_id = f"VIO_{camera_id}_{person_id}_{violation_type}_{int(current_time)}"
-                
-                event_data = {
-                    'event_id': event_id,
-                    'company_id': company_id,
-                    'camera_id': camera_id,
-                    'person_id': person_id,
-                    'violation_type': violation_type,
-                    'start_time': current_time,
-                    'start_timestamp': datetime.fromtimestamp(current_time).isoformat(),
-                    'person_bbox': person_bbox,
-                    'status': 'active',
-                    'severity': self._calculate_severity(violation_type)
-                }
-                
-                person_violations[violation_type] = current_time
-                self.violation_history[event_id] = event_data
-                new_violations.append(event_data)
-                
-                logger.info(f"🚨 NEW VIOLATION: {violation_type} for {person_id} on {camera_id}")
+        # ── YENİ İHLALLERİ GRUPLAYARAK KONTROL ET ──
+        newly_detected_types = []
+        for v_type in current_violations:
+            if v_type not in person_violations:
+                newly_detected_types.append(v_type)
+                person_violations[v_type] = current_time
+
+        if newly_detected_types:
+            # Tespit edilen tüm YENİ ihlalleri tek bir event olarak kaydet
+            # Eğer kişi zaten bir ihlal içindeyse (person_violations'da eskiler varsa), 
+            # kullanıcı hepsini birden mi görmek istiyor yoksa sadece yeni başlayanları mı?
+            # Kullanıcı "1 tane screenshot" dediği için tüm AKTİF (yeni+eski) ihlalleri birleştiriyoruz.
+            all_active_types = sorted(list(person_violations.keys()))
+            combined_type = ",".join(all_active_types)
+            
+            # Event ID: VIO_CAM_PERSON_TIMESTAMP
+            event_id = f"VIO_{camera_id}_{person_id}_{int(current_time)}"
+            
+            # Şiddeti belirle (içlerindeki en yükseği)
+            top_severity = 'info'
+            for t in all_active_types:
+                s = self._calculate_severity(t)
+                if s == 'critical': top_severity = 'critical'; break
+                if s == 'warning': top_severity = 'warning'
+
+            event_data = {
+                'event_id': event_id,
+                'company_id': company_id,
+                'camera_id': camera_id,
+                'person_id': person_id,
+                'violation_type': combined_type, # Virgülle birleştirilmiş
+                'start_time': current_time,
+                'start_timestamp': datetime.fromtimestamp(current_time).isoformat(),
+                'person_bbox': person_bbox,
+                'status': 'active',
+                'severity': top_severity
+            }
+            
+            self.violation_history[event_id] = event_data
+            new_violations.append(event_data)
+            logger.info(f"🚨 GROUPED VIOLATION: {combined_type} for {person_id} on {camera_id}")
         
-        # BİTEN İHLALLERİ KONTROL ET
+        # ── BİTEN İHLALLERİ KONTROL ET ──
+        # Bu kısımda her bir ihlal tipinin ayrı ayrı bitmesini takip ediyoruz.
+        # Eğer hepsi biterse event 'resolved' olur gibi bir mantık kurabiliriz 
+        # ama şimdilik mevcut bitiş mantığını minimum değişiklikle koruyorum.
         for violation_type in list(person_violations.keys()):
             if violation_type not in current_violations:
-                # ✅ İHLAL BİTTİ
                 start_time = person_violations[violation_type]
                 duration = current_time - start_time
                 
-                # Event ID'yi bul
-                event_id = None
+                # Bu tipe ait aktif event'i bul (artık combined_type içinde olabilir)
                 for eid, event in self.violation_history.items():
                     if (event['person_id'] == person_id and 
-                        event['violation_type'] == violation_type and
+                        violation_type in event['violation_type'].split(',') and
                         event['status'] == 'active'):
-                        event_id = eid
-                        break
-                
-                if event_id:
-                    event_data = self.violation_history[event_id]
-                    event_data['end_time'] = current_time
-                    event_data['end_timestamp'] = datetime.fromtimestamp(current_time).isoformat()
-                    event_data['duration_seconds'] = int(duration)
-                    event_data['status'] = 'resolved'
-                    
-                    ended_violations.append(event_data)
-                    logger.info(f"✅ VIOLATION RESOLVED: {violation_type} for {person_id} (duration: {int(duration)}s)")
+                        
+                        # Eğer bu event içindeki TÜM tipler bittiyse kapat
+                        remaining_types = [t for t in event['violation_type'].split(',') if t in current_violations]
+                        if not remaining_types:
+                            event['end_time'] = current_time
+                            event['end_timestamp'] = datetime.fromtimestamp(current_time).isoformat()
+                            event['duration_seconds'] = int(current_time - event['start_time'])
+                            event['status'] = 'resolved'
+                            ended_violations.append(event)
+                            logger.info(f"✅ GROUPED VIOLATION RESOLVED: {event['violation_type']} for {person_id}")
                 
                 del person_violations[violation_type]
         

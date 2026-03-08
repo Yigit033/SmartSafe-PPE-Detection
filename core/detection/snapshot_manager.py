@@ -92,28 +92,8 @@ class SnapshotManager:
                 logger.warning("⚠️ Invalid crop region")
                 return None
             
-            # İhlal tipini frame'e yaz
-            violation_text = self._get_violation_text(violation_type)
-            timestamp_text = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # Üst kısma bilgi paneli ekle
-            panel_height = 60
-            panel = np.zeros((panel_height, person_img.shape[1], 3), dtype=np.uint8)
-            
-            # Arka plan rengi (kırmızı - ihlal)
-            panel[:] = (0, 0, 180)
-            
-            # Metin ekle
-            cv2.putText(panel, violation_text, (10, 25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            cv2.putText(panel, timestamp_text, (10, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            
-            # Panel + person image birleştir
-            final_img = np.vstack([panel, person_img])
-            
             # Kaydet (JPEG quality: 85)
-            cv2.imwrite(str(filepath), final_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            cv2.imwrite(str(filepath), person_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
             
             # Relative path döndür
             relative_path = str(filepath.relative_to(self.base_path))
@@ -149,16 +129,7 @@ class SnapshotManager:
             filename = f"full_{tag}_{timestamp}.jpg"
             filepath = snapshot_dir / filename
 
-            # Bilgi paneli ekle
-            panel_height = 40
-            panel = np.zeros((panel_height, frame.shape[1], 3), dtype=np.uint8)
-            panel[:] = (0, 0, 180)
-            cv2.putText(panel, f"{tag.upper()} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", (10, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-
-            final_img = np.vstack([panel, frame])
-
-            cv2.imwrite(str(filepath), final_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             relative_path = str(filepath.relative_to(self.base_path))
             logger.info(f"📸 Full snapshot saved: {relative_path}")
             return relative_path
@@ -166,14 +137,6 @@ class SnapshotManager:
             logger.error(f"❌ Full snapshot capture error: {e}")
             return None
     
-    def _get_violation_text(self, violation_type: str) -> str:
-        """İhlal tipini Türkçe metne çevir"""
-        violation_texts = {
-            'no_helmet': '⚠️ BARET EKSİK',
-            'no_vest': '⚠️ YELEK EKSİK',
-            'no_shoes': '⚠️ GÜVENLİK AYAKKABISI EKSİK'
-        }
-        return violation_texts.get(violation_type, f'⚠️ {violation_type.upper()}')
     
     def get_snapshot_path(self, relative_path: str) -> Path:
         """Relative path'ten absolute path oluştur"""

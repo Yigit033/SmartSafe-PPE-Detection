@@ -154,8 +154,8 @@ export const getStats = api(
 export const create = api(
   { expose: true, method: "POST", path: "/company" },
   async (params: CreateCompanyParams): Promise<CompanyResponse> => {
-    const company_id = uuidv4();
-    const user_id = uuidv4();
+    const company_id = `COMP_${uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
+    const user_id = `USER_${uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
     const apiKey = uuidv4().replace(/-/g, "");
 
     // Şifre belirtilmemişse varsayılan bir şifre ata (Güvenlik için frontend'den gelmesi önerilir)
