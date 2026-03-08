@@ -282,3 +282,6 @@ static/uploads/logos/
 
 # Note: vercel-frontend/static/videos/ is NOT ignored
 # Those files are needed for landing page deployment
+
+# Test Videos
+tests/Videos/*
