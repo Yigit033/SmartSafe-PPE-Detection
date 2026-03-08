@@ -161,9 +161,14 @@ class PoseAwarePPEDetector:
                 self.pose_model = YOLO(model_path)
                 logger.info(f"✅ Loaded custom pose model: {model_path}")
             else:
-                # Download YOLOv8n-Pose (lightweight, fast)
-                self.pose_model = YOLO('yolov8n-pose.pt')
-                logger.info("✅ Loaded YOLOv8n-Pose (auto-downloaded)")
+                # Download or load YOLOv8n-Pose from 'core' directory
+                pose_fallback = os.path.join('core', 'yolov8n-pose.pt')
+                if not os.path.exists(pose_fallback) and not os.path.exists('yolov8n-pose.pt'):
+                    # Ensure it downloads to core if not present
+                    self.pose_model = YOLO(pose_fallback)
+                else:
+                    self.pose_model = YOLO(pose_fallback if os.path.exists(pose_fallback) else 'yolov8n-pose.pt')
+                logger.info("✅ Loaded YOLOv8n-Pose")
             
             # Prefer GPU if available, but fall back safely to CPU if any CUDA/NMS issue occurs.
             target_device = 'cpu'

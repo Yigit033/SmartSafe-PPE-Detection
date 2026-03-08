@@ -93,7 +93,20 @@ services:
     ports:
       - "5432:5432"
 
-  # 🔍 PgWeb (Database Browser)
+  # 🌐 CloudBeaver (Modern Database Dashboard)
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: smartsafe-cloudbeaver
+    restart: unless-stopped
+    ports:
+      - "5052:8978"
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 🔍 PgWeb (Database Browser) - Opsiyonel olarak tutuyoruz, istenirse tamamen silinebilir
   pgweb:
     image: sosedoff/pgweb
     container_name: smartsafe-pgweb
@@ -135,6 +148,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  cloudbeaver_data:
 
 networks:
   default:

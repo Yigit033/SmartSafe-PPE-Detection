@@ -294,9 +294,28 @@ class FoodSectorDetector(BaseSectorDetector):
     def load_model(self):
         """Gıda sektörü modeli yükle"""
         try:
-            # Gıda sektörü için YOLOv8 modeli
+            # Gıda sektörü için özel eğitilmiş SH17 modeli
+            import os
             from ultralytics import YOLO
-            self.model = YOLO('yolov8n.pt')
+            
+            model_path = os.path.join('core', 'models', 'sh17_food_beverage', 'sh17_food_beverage_model', 'weights', 'best.pt')
+            
+            # Eğer dosya yoksa (farklı dizinden çalıştırma durumları için)
+            if not os.path.exists(model_path):
+                # Proje kök dizininden deneme
+                model_path = os.path.join('models', 'sh17_food_beverage', 'sh17_food_beverage_model', 'weights', 'best.pt')
+            
+            if os.path.exists(model_path):
+                self.model = YOLO(model_path)
+                logger.info(f"✅ Özel Gıda Sektörü modeli yüklendi: {model_path}")
+            else:
+                logger.warning(f"⚠️ Özel gıda modeli bulunamadı ({model_path}), standart model kullanılıyor")
+                # Look for fallback model in 'core' directory
+                fallback_path = os.path.join('core', 'yolov8n.pt')
+                if not os.path.exists(fallback_path):
+                    fallback_path = 'yolov8n.pt'
+                self.model = YOLO(fallback_path)
+                
             logger.info("✅ Gıda sektörü detector yüklendi")
         except Exception as e:
             logger.error(f"❌ Gıda detector yüklenemedi: {e}")
