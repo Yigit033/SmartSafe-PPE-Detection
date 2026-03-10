@@ -152,17 +152,61 @@ export default function ViolationsPage() {
     return (
       <div className="flex flex-col gap-2 items-end">
         {types.map((t, idx) => {
-          // BARET / HARDHAT / HELMET
+          let label = "";
+          let iconColor = "";
+          let iconSvg = null;
+
           if (
             t.includes("hardhat") ||
             t.includes("baret") ||
             t.includes("helmet")
-          )
-            return (
+          ) {
+            label = "BARET EKSİK";
+            iconColor = "bg-orange-500";
+            iconSvg = (
+              <path
+                d="M4 11C4 7 7 4 12 4C17 4 20 7 20 11H21V13C21 14 20 15 19 15H5C4 15 3 14 3 13V11H4Z"
+                fill="currentColor"
+                fillOpacity="0.2"
+              />
+            );
+          } else if (t.includes("vest") || t.includes("yelek")) {
+            label = "YELEK EKSİK";
+            iconColor = "bg-blue-500";
+            iconSvg = (
+              <path
+                d="M6 3L4 6V21H20V6L18 3H14V8L12 6L10 8V3H6Z"
+                fill="currentColor"
+                fillOpacity="0.2"
+              />
+            );
+          } else if (t.includes("shoes") || t.includes("ayakkabı")) {
+            label = "BOT EKSİK";
+            iconColor = "bg-purple-500";
+            iconSvg = (
+              <path
+                d="M4 14L3 17V20H21V18L17 14H13V16H10V14H4Z"
+                fill="currentColor"
+                fillOpacity="0.2"
+              />
+            );
+          }
+
+          if (!label) return null;
+
+          return (
+            <div key={idx} className="group/icon relative flex items-center">
+              {/* Tooltip Box */}
+              <div className="absolute right-full mr-3 whitespace-nowrap px-3 py-1.5 bg-slate-900/90 backdrop-blur-sm text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 translate-x-2 invisible group-hover/icon:opacity-100 group-hover/icon:translate-x-0 group-hover/icon:visible transition-all duration-300 shadow-2xl z-50 pointer-events-none border border-white/10">
+                {label}
+                {/* Tooltip Arrow */}
+                <div className="absolute top-1/2 -right-1 -translate-y-1/2 border-l-4 border-l-slate-900/90 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+              </div>
+
+              {/* Icon Circle */}
               <div
-                key={idx}
-                title="BARET EKSİK"
-                className="bg-orange-500 text-white p-1.5 rounded-lg shadow-lg border border-white/30 flex items-center justify-center transform hover:scale-110 transition-transform"
+                title={label}
+                className={`${iconColor} text-white p-1.5 rounded-lg shadow-lg border border-white/30 flex items-center justify-center transform hover:scale-110 transition-transform cursor-help`}
               >
                 <svg
                   className="w-3.5 h-3.5"
@@ -171,77 +215,26 @@ export default function ViolationsPage() {
                   stroke="currentColor"
                   strokeWidth="2.5"
                 >
-                  <path
-                    d="M4 11C4 7 7 4 12 4C17 4 20 7 20 11H21V13C21 14 20 15 19 15H5C4 15 3 14 3 13V11H4Z"
-                    fill="currentColor"
-                    fillOpacity="0.2"
-                  />
-                  <path
-                    d="M3 13H21M5 15V16C5 17 6 18 7 18H17C18 18 19 17 19 16V15"
-                    strokeLinecap="round"
-                  />
-                  <path d="M12 4V7M8 5V7M16 5V7" strokeLinecap="round" />
+                  {iconSvg}
+                  {t.includes("hardhat") ||
+                  t.includes("baret") ||
+                  t.includes("helmet") ? (
+                    <>
+                      <path d="M3 13H21M5 15V16C5 17 6 18 7 18H17C18 18 19 17 19 16V15" />
+                      <path d="M12 4V7M8 5V7M16 5V7" />
+                    </>
+                  ) : t.includes("vest") || t.includes("yelek") ? (
+                    <>
+                      <path d="M12 3V21M8 8H16M8 14H16" />
+                      <path d="M4 6H20" />
+                    </>
+                  ) : (
+                    <path d="M4 14C4 14 6 11 10 11C14 11 17 14 17 14M7 11V8M13 11V8" />
+                  )}
                 </svg>
               </div>
-            );
-          // YELEK / VEST
-          if (t.includes("vest") || t.includes("yelek"))
-            return (
-              <div
-                key={idx}
-                title="YELEK EKSİK"
-                className="bg-blue-500 text-white p-1.5 rounded-lg shadow-lg border border-white/30 flex items-center justify-center transform hover:scale-110 transition-transform"
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    d="M6 3L4 6V21H20V6L18 3H14V8L12 6L10 8V3H6Z"
-                    fill="currentColor"
-                    fillOpacity="0.2"
-                  />
-                  <path
-                    d="M12 3V21M8 8H16M8 14H16"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M4 6H20" strokeLinecap="round" />
-                </svg>
-              </div>
-            );
-          // AYAKKABI / SHOES
-          if (t.includes("shoes") || t.includes("ayakkabı"))
-            return (
-              <div
-                key={idx}
-                title="AYAKKABI EKSİK"
-                className="bg-purple-500 text-white p-1.5 rounded-lg shadow-lg border border-white/30 flex items-center justify-center transform hover:scale-110 transition-transform"
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    d="M4 14L3 17V20H21V18L17 14H13V16H10V14H4Z"
-                    fill="currentColor"
-                    fillOpacity="0.2"
-                  />
-                  <path
-                    d="M4 14C4 14 6 11 10 11C14 11 17 14 17 14M7 11V8M13 11V8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            );
-          return null;
+            </div>
+          );
         })}
       </div>
     );
@@ -313,7 +306,7 @@ export default function ViolationsPage() {
 
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Left Side: Calendar & Quick Info */}
-        <aside className="lg:w-80 shrink-0 space-y-6">
+        <aside className="lg:w-80 shrink-0 space-y-6 lg:sticky lg:top-24 self-start">
           <div className="bg-white rounded-[2rem] border border-slate-200 p-6 shadow-sm">
             {/* Calendar Header */}
             <div className="flex items-center justify-between mb-6">

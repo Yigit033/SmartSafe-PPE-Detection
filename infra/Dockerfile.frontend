@@ -13,10 +13,10 @@ COPY frontend/package*.json ./
 RUN npm install
 
 # Next.js dev server portu
-EXPOSE 3000
+EXPOSE 3377
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=development
 
 # Frontend'i geliştirme modunda başlatıyoruz (webpack modu - Docker hot-reload için)
-CMD ["npx", "next", "dev", "--webpack", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["npx", "next", "dev", "--webpack", "--hostname", "0.0.0.0", "--port", "3377"]

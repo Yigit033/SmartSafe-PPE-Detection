@@ -38,6 +38,26 @@ export default function CamerasPage() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [activeGroupFilter, setActiveGroupFilter] = useState<string>("all");
+  const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
+  const [groupFormData, setGroupFormData] = useState({ 
+    name: "", 
+    location: "", 
+    group_type: "general",
+    ppe_config: {
+      helmet: { is_required: true, confidence_threshold: 0.3 },
+      safety_vest: { is_required: true, confidence_threshold: 0.3 },
+      gloves: { is_required: false, confidence_threshold: 0.3 },
+      glasses: { is_required: false, confidence_threshold: 0.3 },
+      face_mask: { is_required: false, confidence_threshold: 0.3 },
+      safety_shoes: { is_required: false, confidence_threshold: 0.3 },
+      ear_protection: { is_required: false, confidence_threshold: 0.3 },
+      harness: { is_required: false, confidence_threshold: 0.3 }
+    }
+  });
+  const [editingGroup, setEditingGroup] = useState<any>(null);
 
   const companyId = getCompanyId();
 
@@ -45,21 +65,40 @@ export default function CamerasPage() {
     setMounted(true);
     setRefreshKey(Date.now());
     fetchCameras();
+    fetchGroups();
   }, []);
 
+  const fetchGroups = async () => {
+    const cid = getCompanyId();
+    if (!cid) return;
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:4000/company/${cid}/cameras/groups`,
+      );
+      const data = await response.json();
+      if (data.success) {
+        setGroups(data.groups);
+      } else {
+        console.error("Groups fetch failed:", data.error);
+      }
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+    }
+  };
+
   const fetchCameras = async () => {
+    const cid = getCompanyId();
+    if (!cid) return;
     setIsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:4000/company/${companyId}/cameras`,
+        `http://127.0.0.1:4000/company/${cid}/cameras`,
       );
       const data = await response.json();
       if (data.success) {
         setCameras(data.cameras);
-
-        // --- 🎯 AUTO-START AI DETECTION ---
-        // Varsayılan olarak kapalı gelmesi istendiği için otomatik başlatma kaldırıldı.
-        // Kullanıcı 'AI VIEW' butonuna bastığında ilgili kamera için başlatılacak.
+      } else {
+        console.error("Cameras fetch failed:", data.error);
       }
     } catch (error) {
       console.error("Error fetching cameras:", error);
@@ -146,6 +185,112 @@ export default function CamerasPage() {
     setIsModalOpen(true);
   };
 
+  const handleAssignToGroup = async (camera_id: string, group_id: string | null) => {
+    const cid = getCompanyId();
+    if (!cid) return;
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:4000/company/${cid}/cameras/${camera_id}/assign-group`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ group_id }),
+        },
+      );
+      const data = await response.json();
+      if (data.success) {
+        fetchCameras();
+        fetchGroups();
+      } else {
+        alert("Atama başarısız: " + (data.error || "Bilinmeyen hata"));
+      }
+    } catch (error: any) {
+      console.error("Error assigning to group:", error);
+      alert("Atama sırasında ağ hatası oluştu.");
+    }
+  };
+
+  const handleSaveGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cid = getCompanyId();
+    
+    if (!cid) {
+      alert("Hata: Şirket kimliği bulunamadı. Lütfen tekrar giriş yapın.");
+      return;
+    }
+
+    const url = editingGroup
+      ? `http://127.0.0.1:4000/company/${cid}/cameras/groups/${editingGroup.group_id}`
+      : `http://127.0.0.1:4000/company/${cid}/cameras/groups`;
+    
+    const method = editingGroup ? "PATCH" : "POST";
+    
+    console.log("Saving group to:", url, method, groupFormData);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(groupFormData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Sunucu hatası (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setIsGroupModalOpen(false);
+        fetchGroups();
+        // Reset form
+        setGroupFormData({ 
+          name: "", 
+          location: "", 
+          group_type: "general",
+          ppe_config: {
+            helmet: { is_required: true, confidence_threshold: 0.3 },
+            safety_vest: { is_required: true, confidence_threshold: 0.3 },
+            gloves: { is_required: false, confidence_threshold: 0.3 },
+            glasses: { is_required: false, confidence_threshold: 0.3 },
+            face_mask: { is_required: false, confidence_threshold: 0.3 },
+            safety_shoes: { is_required: false, confidence_threshold: 0.3 },
+            ear_protection: { is_required: false, confidence_threshold: 0.3 },
+            harness: { is_required: false, confidence_threshold: 0.3 }
+          }
+        });
+        setEditingGroup(null);
+      } else {
+        alert("Grup kaydedilemedi: " + (data.error || "Bilinmeyen hata"));
+      }
+    } catch (error: any) {
+      console.error("Error saving group:", error);
+      alert("Ağ hatası veya sunucuya erişilemedi: " + error.message);
+    }
+  };
+
+  const handleDeleteGroup = async (group_id: string) => {
+    const cid = getCompanyId();
+    if (!cid) return;
+    if (!confirm("Bu grubu silmek istediğinizden emin misiniz? Kameralar gruptan çıkarılacaktır.")) return;
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:4000/company/${cid}/cameras/groups/${group_id}`,
+        { method: "DELETE" }
+      );
+      const data = await response.json();
+      if (data.success) {
+        fetchGroups();
+        fetchCameras();
+      } else {
+        alert("Grup silinemedi: " + (data.error || "Bilinmeyen hata"));
+      }
+    } catch (error: any) {
+      console.error("Error deleting group:", error);
+      alert("Silme işlemi sırasında ağ hatası oluştu.");
+    }
+  };
+
   const handleSaveZones = async (zones: any[][]) => {
     if (!previewCamera) return;
 
@@ -227,11 +372,12 @@ export default function CamerasPage() {
     }
   };
 
-  const filteredCameras = cameras.filter(
-    (cam) =>
-      cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredCameras = cameras.filter((cam) => {
+    const matchesSearch = cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesGroup = activeGroupFilter === "all" || cam.group_id === activeGroupFilter;
+    return matchesSearch && matchesGroup;
+  });
 
   return (
     <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">
@@ -548,6 +694,12 @@ export default function CamerasPage() {
         </div>
         <div className="flex items-center gap-4">
           <button
+            onClick={() => setIsManageGroupsOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+          >
+            <span className="material-symbols-rounded">folder_open</span> GRUP YÖNETİMİ
+          </button>
+          <button
             onClick={() => router.push("/cameras/setup")}
             className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 hover:bg-brand-teal/90 transition-all cursor-pointer"
           >
@@ -556,6 +708,27 @@ export default function CamerasPage() {
           </button>
         </div>
       </section>
+
+      {/* Group Quick Filter */}
+      {groups.length > 0 && (
+        <section className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+          <button
+            onClick={() => setActiveGroupFilter("all")}
+            className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeGroupFilter === "all" ? "bg-slate-900 text-white shadow-lg" : "bg-white border text-slate-400 hover:border-slate-300"}`}
+          >
+            TÜMÜ ({cameras.length})
+          </button>
+          {groups.map(group => (
+            <button
+              key={group.group_id}
+              onClick={() => setActiveGroupFilter(group.group_id)}
+              className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeGroupFilter === group.group_id ? "bg-brand-teal text-white shadow-lg" : "bg-white border text-slate-400 hover:border-slate-300"}`}
+            >
+              {group.name} ({group.camera_count})
+            </button>
+          ))}
+        </section>
+      )}
 
       {filteredCameras.length === 0 && !isLoading ? (
         <div className="mt-12 flex flex-col items-center justify-center p-24 bg-white/40 rounded-[3rem] border-2 border-dashed border-slate-100 animate-fade-in min-h-[450px]">
@@ -734,6 +907,23 @@ export default function CamerasPage() {
                     {camera.location}
                   </span>
                 </div>
+                
+                {/* Group Selector */}
+                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="material-symbols-rounded text-slate-300 text-sm flex-shrink-0">folder</span>
+                    <select 
+                      value={camera.group_id || ""}
+                      onChange={(e) => handleAssignToGroup(camera.camera_id, e.target.value === "" ? null : e.target.value)}
+                      className="bg-transparent text-[10px] font-bold text-slate-500 uppercase tracking-tight outline-none cursor-pointer hover:text-brand-teal transition-colors w-full"
+                    >
+                      <option value="">Grup Yok</option>
+                      {groups.map(g => (
+                        <option key={g.group_id} value={g.group_id}>{g.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -748,6 +938,206 @@ export default function CamerasPage() {
           </span>
         </div>
       </div>
+
+      {/* Group Management Modal */}
+      {isManageGroupsOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsManageGroupsOpen(false)}></div>
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-rounded">folder_managed</span>
+                <h3 className="font-black tracking-widest uppercase italic text-sm">KAMERA GRUP YÖNETİMİ</h3>
+              </div>
+              <button onClick={() => setIsManageGroupsOpen(false)} className="p-2 hover:bg-white/10 rounded-xl">
+                <span className="material-symbols-rounded">close</span>
+              </button>
+            </div>
+            
+            <div className="p-8 overflow-y-auto">
+              <div className="flex items-center justify-between mb-8">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">MEVCUT GRUPLAR ({groups.length})</p>
+                <button 
+                  onClick={() => {
+                    setEditingGroup(null);
+                    setGroupFormData({ 
+                      name: "", 
+                      location: "", 
+                      group_type: "general",
+                      ppe_config: {
+                        helmet: { is_required: true, confidence_threshold: 0.3 },
+                        safety_vest: { is_required: true, confidence_threshold: 0.3 },
+                        gloves: { is_required: false, confidence_threshold: 0.3 },
+                        glasses: { is_required: false, confidence_threshold: 0.3 },
+                        face_mask: { is_required: false, confidence_threshold: 0.3 },
+                        safety_shoes: { is_required: false, confidence_threshold: 0.3 },
+                        ear_protection: { is_required: false, confidence_threshold: 0.3 },
+                        harness: { is_required: false, confidence_threshold: 0.3 }
+                      }
+                    });
+                    setIsGroupModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+                >
+                  <span className="material-symbols-rounded text-sm">add</span> YENİ GRUP
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {groups.length === 0 ? (
+                  <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Henüz grup oluşturulmadı</p>
+                  </div>
+                ) : (
+                  groups.map(group => (
+                    <div key={group.group_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                          <span className="material-symbols-rounded">folder</span>
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">{group.name}</h4>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{group.location || "Lokasyon Belirtilmemiş"} • {group.camera_count} Kamera</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => {
+                            setEditingGroup(group);
+                            setGroupFormData({ 
+                              name: group.name, 
+                              location: group.location || "", 
+                              group_type: group.group_type || "general",
+                              ppe_config: group.ppe_config || {
+                                helmet: { is_required: true, confidence_threshold: 0.3 },
+                                safety_vest: { is_required: true, confidence_threshold: 0.3 },
+                                gloves: { is_required: false, confidence_threshold: 0.3 },
+                                glasses: { is_required: false, confidence_threshold: 0.3 },
+                                face_mask: { is_required: false, confidence_threshold: 0.3 },
+                                safety_shoes: { is_required: false, confidence_threshold: 0.3 },
+                                ear_protection: { is_required: false, confidence_threshold: 0.3 },
+                                harness: { is_required: false, confidence_threshold: 0.3 }
+                              }
+                            });
+                            setIsGroupModalOpen(true);
+                          }}
+                          className="p-2 text-slate-400 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
+                        >
+                          <span className="material-symbols-rounded text-lg">edit</span>
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteGroup(group.group_id)}
+                          className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all"
+                        >
+                          <span className="material-symbols-rounded text-lg">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Create/Edit Group Modal */}
+      {isGroupModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setIsGroupModalOpen(false)}></div>
+          <div className="relative w-full max-w-lg bg-white rounded-[2rem] overflow-hidden shadow-2xl animate-scale-in flex flex-col max-h-[90vh]">
+            <div className="bg-brand-teal p-6 flex items-center justify-between text-white shrink-0">
+              <h3 className="font-black tracking-widest uppercase italic text-xs">{editingGroup ? "GRUBU DÜZENLE" : "YENİ GRUP OLUŞTUR"}</h3>
+              <button onClick={() => setIsGroupModalOpen(false)} className="p-1 hover:bg-white/20 rounded-lg">
+                <span className="material-symbols-rounded">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleSaveGroup} className="p-8 space-y-6 overflow-y-auto">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Grup Adı</label>
+                  <input 
+                    type="text" 
+                    value={groupFormData.name}
+                    onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
+                    placeholder="Örn: Kuzey Cephe"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-teal"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Lokasyon</label>
+                  <input 
+                    type="text" 
+                    value={groupFormData.location}
+                    onChange={(e) => setGroupFormData({...groupFormData, location: e.target.value})}
+                    placeholder="Örn: Ana Fabrika"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-teal"
+                  />
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block border-b border-slate-100 pb-2">KGİ TESPİT AYARLARI</label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {Object.entries(groupFormData.ppe_config || {}).map(([key, config]: [string, any]) => (
+                      <div key={key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${config.is_required ? "bg-brand-teal/10 text-brand-teal" : "bg-slate-200 text-slate-400"}`}>
+                            <span className="material-symbols-rounded text-sm">
+                              {key === 'helmet' ? 'engineering' : 
+                               key === 'safety_vest' ? 'checkroom' : 
+                               key === 'gloves' ? 'back_hand' : 
+                               key === 'glasses' ? 'visibility' : 
+                               key === 'face_mask' ? 'masks' :
+                               key === 'safety_shoes' ? 'ice_skating' :
+                               key === 'ear_protection' ? 'hearing' : 'accessibility_new'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">
+                              {key === 'helmet' ? 'KASK' : 
+                               key === 'safety_vest' ? 'YELEK' : 
+                               key === 'gloves' ? 'ELDİVEN' : 
+                               key === 'glasses' ? 'GÖZLÜK' : 
+                               key === 'face_mask' ? 'MASKE' :
+                               key === 'safety_shoes' ? 'AYAKKABI' :
+                               key === 'ear_protection' ? 'KULAKLIK' : 'EMNİYET KEMERİ'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">
+                              {config.is_required ? "ZORUNLU" : "PASİF"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newPpeConfig = { ...groupFormData.ppe_config } as any;
+                                newPpeConfig[key] = { ...config, is_required: !config.is_required };
+                                setGroupFormData({ ...groupFormData, ppe_config: newPpeConfig });
+                              }}
+                              className={`relative w-10 h-5 rounded-full transition-all duration-300 ${config.is_required ? "bg-brand-teal" : "bg-slate-200"}`}
+                            >
+                              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${config.is_required ? "left-6" : "left-1"}`}></div>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setIsGroupModalOpen(false)} className="flex-1 py-4 text-[10px] font-black uppercase text-slate-400 rounded-xl bg-slate-50 hover:bg-slate-100">VAZGEÇ</button>
+                <button type="submit" className="flex-1 py-4 text-[10px] font-black uppercase text-white rounded-xl bg-brand-teal hover:bg-brand-teal/90 shadow-lg shadow-brand-teal/20">KAYDET</button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
