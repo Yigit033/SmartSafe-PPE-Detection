@@ -1103,15 +1103,52 @@ class SmartSafeSaaSAPI:
                 return None
             
             session_id = session.get('session_id')
+            
+            # 🚀 DEVELOPMENT BYPASS: Local ortamda oturum yoksa veya geçersizse varsayılan bir oturum döndür
+            # Bu, geliştiricinin her seferinde login olmak zorunda kalmasını engeller.
+            is_local = os.getenv('ENV') == 'local' or os.getenv('FLASK_ENV') == 'development'
+            
+            if not session_id and is_local:
+                # Path'den veya request args'dan company_id çekmeye çalış
+                company_id = None
+                if request.view_args and 'company_id' in request.view_args:
+                    company_id = request.view_args['company_id']
+                elif request.args and 'company_id' in request.args:
+                    company_id = request.args['company_id']
+                
+                if company_id:
+                    logger.debug(f"🚀 Dev Bypass: Auto-validating session for local dev (Company: {company_id})")
+                    return {
+                        'company_id': company_id,
+                        'user_id': 'dev_user',
+                        'username': 'Geliştirici',
+                        'email': 'dev@smartsafe.ai',
+                        'role': 'admin',
+                        'permissions': ['all'],
+                        'is_dev': True
+                    }
+
             # Reduced logging - only log on errors or debug mode
             if not session_id:
                 logger.debug("⚠️ Session ID bulunamadı")
                 return None
             
             result = self.db.validate_session(session_id)
-            # Only log if validation fails or in debug mode
-            if not result:
-                logger.debug(f"⚠️ Session validation failed for: {session_id[:20]}...")
+            
+            # Dev bypass: Eğer session_id var ama DB'de yoksa ve local isek yine de izin ver
+            if not result and is_local:
+                 company_id = session.get('company_id') or (request.view_args.get('company_id') if request.view_args else None)
+                 if company_id:
+                     logger.debug(f"🚀 Dev Bypass (Invalid Session): Allowing local dev access for Company: {company_id}")
+                     return {
+                        'company_id': company_id,
+                        'user_id': 'dev_user',
+                        'username': 'Geliştirici',
+                        'email': 'dev@smartsafe.ai',
+                        'role': 'admin',
+                        'permissions': ['all'],
+                        'is_dev': True
+                    }
             
             # Backward compatibility check
             if result and isinstance(result, dict):

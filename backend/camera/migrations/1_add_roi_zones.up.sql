@@ -1,0 +1,1 @@
+ALTER TABLE cameras ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]';

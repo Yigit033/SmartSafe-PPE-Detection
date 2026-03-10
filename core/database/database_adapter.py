@@ -1177,6 +1177,11 @@ class DatabaseAdapter:
                 cursor = conn.cursor()
             
                 # Execute query
+                # Convert SQLite style '?' placeholders to PostgreSQL '%s' style if needed
+                if self.db_type == 'postgresql' and '?' in query:
+                    query = query.replace('?', '%s')
+                    logger.debug(f"🔄 Converted query to PostgreSQL style: {query}")
+                
                 cursor.execute(query, params or ())
                     
                 # Handle different query types

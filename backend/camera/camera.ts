@@ -15,6 +15,10 @@ interface Camera {
   username?: string;
   password?: string;
   status: string;
+  camera_type?: "ip_camera" | "dvr_channel";
+  channel_number?: number;
+  dvr_id?: string;
+  detection_zones?: any;
   created_at: string;
 }
 
@@ -54,7 +58,24 @@ export const list = api(
   }): Promise<{ success: boolean; cameras: Camera[] }> => {
     try {
       const res = await pool.query(
-        "SELECT * FROM cameras WHERE company_id = $1 ORDER BY created_at DESC",
+        `
+        SELECT 
+          camera_id, company_id, camera_name, location, ip_address, 
+          port, protocol, stream_path, username, password, 
+          status, NULL as channel_number, NULL as dvr_id, 'ip_camera' as camera_type, created_at
+        FROM cameras 
+        WHERE company_id = $1
+        UNION ALL
+        SELECT 
+          dc.channel_id as camera_id, dc.company_id, dc.name as camera_name, 
+          'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
+          'rtsp' as protocol, '/channel=' || dc.channel_number as stream_path, 
+          ds.username, ds.password, dc.status, dc.channel_number, ds.dvr_id, 'dvr_channel' as camera_type, dc.created_at
+        FROM dvr_channels dc
+        JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+        WHERE dc.company_id = $1
+        ORDER BY created_at DESC
+        `,
         [company_id],
       );
       return { success: true, cameras: res.rows };
@@ -220,10 +241,28 @@ export const getSnapshot = api(
     camera_id: string;
   }): Promise<{ success: boolean; image?: string; error?: string }> => {
     try {
-      const res = await pool.query(
-        "SELECT * FROM cameras WHERE company_id = $1 AND camera_id = $2",
+      // Önce normal kameralarda ara
+      let res = await pool.query(
+        "SELECT *, 'ip_camera' as camera_type FROM cameras WHERE company_id = $1 AND camera_id = $2",
         [company_id, camera_id],
       );
+
+      // Bulunamazsa DVR kanallarında ara
+      if (res.rows.length === 0) {
+        res = await pool.query(
+          `
+          SELECT 
+            dc.channel_id as camera_id, dc.company_id, dc.name as camera_name, 
+            'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
+            'rtsp' as protocol, '/channel=' || dc.channel_number as stream_path, 
+            ds.username, ds.password, dc.status, dc.created_at, 'dvr_channel' as camera_type
+          FROM dvr_channels dc
+          JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+          WHERE dc.company_id = $1 AND dc.channel_id = $2
+          `,
+          [company_id, camera_id],
+        );
+      }
 
       if (res.rows.length === 0) {
         return { success: false, error: "Kamera bulunamadı" };
@@ -282,6 +321,37 @@ export const getSnapshot = api(
       };
     } catch (error: any) {
       console.error("Error getting snapshot:", error);
+      return { success: false, error: error.message };
+    }
+  },
+);
+
+/**
+ * Kameranın ROI (Region of Interest) bölgelerini kaydeder
+ */
+export const saveROI = api(
+  {
+    expose: true,
+    method: "POST",
+    path: "/company/:company_id/cameras/:camera_id/roi",
+  },
+  async ({
+    company_id,
+    camera_id,
+    zones,
+  }: {
+    company_id: string;
+    camera_id: string;
+    zones: any[];
+  }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await pool.query(
+        "UPDATE cameras SET detection_zones = $1, updated_at = CURRENT_TIMESTAMP WHERE company_id = $2 AND camera_id = $3",
+        [JSON.stringify(zones), company_id, camera_id],
+      );
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error saving ROI:", error);
       return { success: false, error: error.message };
     }
   },

@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
+import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
 
 export default function CamerasPage() {
   const [cameras, setCameras] = useState<any[]>([]);
@@ -11,6 +13,7 @@ export default function CamerasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("smart");
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
   const [formData, setFormData] = useState({
     camera_name: "",
@@ -34,6 +37,7 @@ export default function CamerasPage() {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
 
   const companyId = getCompanyId();
 
@@ -140,6 +144,28 @@ export default function CamerasPage() {
       camera_password: "",
     });
     setIsModalOpen(true);
+  };
+
+  const handleSaveZones = async (zones: any[][]) => {
+    if (!previewCamera) return;
+
+    try {
+      const response = await fetch(
+        `http://localhost:4000/company/${companyId}/cameras/${previewCamera.camera_id}/roi`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zones }),
+        },
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setIsZoneModalOpen(false);
+      }
+    } catch (error) {
+      console.error("Error saving zones:", error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -395,6 +421,20 @@ export default function CamerasPage() {
                 <div className="flex items-center gap-4 pointer-events-auto">
                   <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
                     <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
+                      ANALİZ BÖLGESİ
+                    </span>
+                    <button
+                      onClick={() => setIsZoneModalOpen(true)}
+                      className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 text-white hover:bg-white text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer border border-white/10"
+                    >
+                      <span className="material-symbols-rounded text-sm">
+                        polyline
+                      </span>
+                      GÜNCELLE
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
+                    <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
                       AI ANALİZ
                     </span>
                     <button
@@ -427,14 +467,59 @@ export default function CamerasPage() {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 flex items-center justify-center bg-black">
-                {streamUrl ? (
-                  <img
-                    src={streamUrl}
-                    alt="Canlı Yayın"
-                    className="w-full h-full object-contain"
-                    onError={() => setStreamUrl(null)}
-                  />
+              <div className="flex-1 flex items-center justify-center bg-black relative">
+                {isZoneModalOpen && streamUrl ? (
+                  <div className="absolute inset-0 z-50 p-8 md:p-12">
+                    <ZoneDesigner
+                      imageUrl={streamUrl}
+                      initialZones={previewCamera?.detection_zones || []}
+                      onSave={handleSaveZones}
+                      onClose={() => setIsZoneModalOpen(false)}
+                    />
+                  </div>
+                ) : streamUrl ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-black">
+                    <img
+                      src={streamUrl}
+                      alt="Canlı Yayın"
+                      className="w-full h-full object-contain"
+                      onError={() => setStreamUrl(null)}
+                    />
+
+                    {/* 🎯 Analiz Bölgesi Overlay (Sadece AI kapalıyken gösterelim ki AI çizimleriyle çakışmasın) */}
+                    {previewCamera?.detection_zones &&
+                      previewCamera.detection_zones.length > 0 &&
+                      previewCamera.detection_zones[0].length > 0 &&
+                      !isCameraAiEnabled(previewCamera) && (
+                        <svg
+                          className="absolute inset-0 w-full h-full pointer-events-none z-10 opacity-60"
+                          viewBox="0 0 1 1"
+                          preserveAspectRatio="none"
+                        >
+                          <polygon
+                            points={previewCamera.detection_zones[0]
+                              .map((p: any) => `${p.x},${p.y}`)
+                              .join(" ")}
+                            fill="rgba(20, 184, 166, 0.15)"
+                            stroke="#14b8a6"
+                            strokeWidth="0.01"
+                            strokeDasharray="0.02 0.01"
+                            className="drop-shadow-[0_0_10px_rgba(20,184,166,0.5)]"
+                          />
+                          {previewCamera.detection_zones[0].map(
+                            (p: any, idx: number) => (
+                              <circle
+                                key={idx}
+                                cx={p.x}
+                                cy={p.y}
+                                r="0.005"
+                                fill="#14b8a6"
+                              />
+                            ),
+                          )}
+                        </svg>
+                      )}
+                  </div>
                 ) : (
                   <div className="text-white/20 text-center">
                     <span className="material-symbols-rounded text-[120px] animate-pulse">
@@ -463,7 +548,7 @@ export default function CamerasPage() {
         </div>
         <div className="flex items-center gap-4">
           <button
-            onClick={openAddModal}
+            onClick={() => router.push("/cameras/setup")}
             className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 hover:bg-brand-teal/90 transition-all cursor-pointer"
           >
             <span className="material-symbols-rounded">add</span> YENİ KAMERA
@@ -517,6 +602,38 @@ export default function CamerasPage() {
                     );
                   }}
                 />
+
+                {/* 🎯 Analiz Bölgesi Overlay */}
+                {camera.detection_zones &&
+                  camera.detection_zones.length > 0 &&
+                  camera.detection_zones[0].length > 0 &&
+                  !failedCameras.includes(camera.camera_id) && (
+                    <svg
+                      className="absolute inset-0 w-full h-full pointer-events-none z-10 opacity-70 group-hover:opacity-100 transition-opacity duration-500"
+                      viewBox="0 0 1 1"
+                      preserveAspectRatio="none"
+                    >
+                      <polygon
+                        points={camera.detection_zones[0]
+                          .map((p: any) => `${p.x},${p.y}`)
+                          .join(" ")}
+                        fill="rgba(20, 184, 166, 0.25)"
+                        stroke="#14b8a6"
+                        strokeWidth="0.015"
+                        strokeDasharray="0.04 0.02"
+                        className="drop-shadow-[0_0_12px_rgba(20,184,166,0.6)]"
+                      />
+                      {camera.detection_zones[0].map((p: any, idx: number) => (
+                        <circle
+                          key={idx}
+                          cx={p.x}
+                          cy={p.y}
+                          r="0.008"
+                          fill="#14b8a6"
+                        />
+                      ))}
+                    </svg>
+                  )}
 
                 {failedCameras.includes(camera.camera_id) && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm">
