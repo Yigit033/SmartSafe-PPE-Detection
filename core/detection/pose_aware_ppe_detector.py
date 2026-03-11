@@ -73,7 +73,7 @@ PPE_CONFIG = {
         'default_critical': False,
     },
     'safety_glasses': {
-        'model_classes': ['safety_glasses', 'glasses'],
+        'model_classes': ['safety_glasses', 'glasses', 'googles', 'goggles', 'gozluk'],
         'region': 'head',
         'pos_label': 'Safety Glasses',
         'neg_label': 'NO-Glasses',
@@ -95,6 +95,14 @@ PPE_CONFIG = {
         'neg_label': 'NO-Suit',
         'violation_tr': 'Koruyucu tulum eksik',
         'default_critical': False,
+    },
+    'haircap': {
+        'model_classes': ['haircap', 'bone', 'file', 'kep'],
+        'region': 'head',
+        'pos_label': 'Haircap',
+        'neg_label': 'NO-Haircap',
+        'violation_tr': 'Saç filesi/Bone eksik',
+        'default_critical': True,
     },
 }
 
@@ -829,6 +837,7 @@ class PoseAwarePPEDetector:
         # Type-specific thresholds (shoes need lower threshold due to occlusion)
         iou_threshold = {
             'helmet': 0.03,        # slightly more tolerant for helmets
+            'haircap': 0.03,       # bone/file de kask gibi başın üstünde
             'safety_vest': 0.05,
             'safety_shoes': 0.02,  # Lower for shoes - often partially visible
             'gloves': 0.05,
@@ -840,6 +849,7 @@ class PoseAwarePPEDetector:
         
         person_iou_threshold = {
             'helmet': 0.08,        # allow slightly weaker overlap with person
+            'haircap': 0.08,       # bone/file de kask gibi
             'safety_vest': 0.1,
             'safety_shoes': 0.05,  # Lower for shoes
             'gloves': 0.1,
@@ -874,9 +884,8 @@ class PoseAwarePPEDetector:
         if best_match is not None and best_iou > iou_threshold:
             return best_match
         
-        # Ek güvenli fallback: Özellikle kask için, baş bölgesine IoU düşük olsa bile
-        # kask kutusu kişinin üst kısmında ve kişi ile makul IoU'ya sahipse kabul et.
-        if ppe_type == 'helmet' and best_match is not None and best_person_iou > 0:
+        # ── Fallback 1: Kask ve bone/haircap → kişinin üst kısmında mı? ──
+        if ppe_type in ('helmet', 'haircap') and best_match is not None and best_person_iou > 0:
             try:
                 px1, py1, px2, py2 = person_bbox
                 person_height = max(float(py2) - float(py1), 1.0)
@@ -884,13 +893,37 @@ class PoseAwarePPEDetector:
                 
                 if best_center_y is not None and best_person_iou >= 0.20 and best_center_y <= top_fraction:
                     logger.debug(
-                        f"✅ Helmet fallback match accepted: best_iou={best_iou:.3f}, "
+                        f"✅ Helmet/haircap fallback match accepted: best_iou={best_iou:.3f}, "
                         f"person_iou={best_person_iou:.3f}, center_y={best_center_y:.1f}, "
                         f"person_top_limit={top_fraction:.1f}"
                     )
                     return best_match
             except Exception:
-                # Fallback teşhis amaçlı; hata durumunda sadece normal kurala geri döneriz.
+                pass
+        
+        # ── Fallback 2: Genel center-containment kontrolü ──
+        # Küçük PPE öğelerinin (gözlük, maske, eldiven) IoU değeri düşük olabilir
+        # çünkü anatomik bölge dar tanımlı. Eğer PPE'nin merkezi bölgenin
+        # içindeyse ve kişiyle bir miktar örtüşüyorsa, kabul et.
+        if best_match is not None and best_person_iou > 0:
+            try:
+                ppe_bbox = best_match.get('bbox', [])
+                if len(ppe_bbox) == 4 and region is not None and len(region) == 4:
+                    ppe_cx = (float(ppe_bbox[0]) + float(ppe_bbox[2])) / 2.0
+                    ppe_cy = (float(ppe_bbox[1]) + float(ppe_bbox[3])) / 2.0
+                    rx1, ry1, rx2, ry2 = [float(v) for v in region]
+                    
+                    center_inside = (rx1 <= ppe_cx <= rx2) and (ry1 <= ppe_cy <= ry2)
+                    
+                    if center_inside:
+                        logger.debug(
+                            f"✅ Center-containment fallback for {ppe_type}: "
+                            f"ppe_center=({ppe_cx:.0f},{ppe_cy:.0f}), "
+                            f"region=[{rx1:.0f},{ry1:.0f},{rx2:.0f},{ry2:.0f}], "
+                            f"IoU_region={best_iou:.3f}, IoU_person={best_person_iou:.3f}"
+                        )
+                        return best_match
+            except Exception:
                 pass
         
         return None

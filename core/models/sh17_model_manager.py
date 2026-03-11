@@ -285,23 +285,46 @@ class SH17ModelManager:
 
     def _load_food_ppe_model(self):
         """Gıda sektörü için local food_ppe modelini yükle (lazy, bir kez)."""
-        if hasattr(self, '_food_ppe_model'):
+        if hasattr(self, '_food_ppe_model') and self._food_ppe_model is not None:
             return self._food_ppe_model  # Zaten yüklü
 
-        local_path = os.environ.get(
+        env_path = os.environ.get(
             'FOOD_PPE_LOCAL_MODEL',
-            os.path.join(self.models_dir, 'sh17_food_beverage',
+            os.path.join('models', 'sh17_food_beverage',
                          'sh17_food_beverage_model', 'weights', 'best.pt')
         )
-        if os.path.exists(local_path):
+
+        # Birden fazla olası base dizine göre çözümleme yap.
+        # .env dosyası genelde core/ dizinine göreli yol içerir,
+        # ama script proje kökünden çalışabilir.
+        candidates = [
+            env_path,                                              # Olduğu gibi (mutlak veya CWD'ye göreli)
+            os.path.join(self.models_dir, '..', env_path),         # core/ dizinine göreli
+            os.path.join(os.path.dirname(__file__), '..', env_path),  # Bu dosyanın bulunduğu dizine göreli
+            os.path.join(self.models_dir,                          # models_dir altında doğrudan
+                         'sh17_food_beverage', 'sh17_food_beverage_model', 'weights', 'best.pt'),
+        ]
+
+        local_path = None
+        for candidate in candidates:
+            resolved = os.path.abspath(candidate)
+            if os.path.exists(resolved):
+                local_path = resolved
+                break
+
+        if local_path is not None:
             try:
                 model = YOLO(local_path)
                 model.to(self.device)
                 self._food_ppe_model = model
                 logger.info(f"✅ Food PPE local model yüklendi: {local_path}")
+                logger.info(f"   Sınıflar: {getattr(model, 'names', {})}")
                 return model
             except Exception as e:
                 logger.warning(f"⚠️ Food PPE local model yüklenemedi: {e}")
+        else:
+            logger.warning(f"⚠️ Food PPE model bulunamadı. Denenen yollar: {candidates}")
+
         self._food_ppe_model = None
         return None
 
@@ -309,8 +332,8 @@ class SH17ModelManager:
     _FOOD_PPE_NAME_MAP = {
         'Apron':    'medical_suit',   # Önlük → medical_suit surrogate
         'apron':    'medical_suit',
-        'Haircap':  'head',           # Saç filesi/bone → head surrogate
-        'haircap':  'head',
+        'Haircap':  'haircap',        # Saç filesi/bone
+        'haircap':  'haircap',
         'Mask':     'face_mask_medical',
         'mask':     'face_mask_medical',
         'Googles':  'glasses',        # Roboflow typo: Googles = Goggles
@@ -376,12 +399,12 @@ class SH17ModelManager:
             if is_food:
                 food_results = self._detect_with_food_model(image, confidence)
                 if food_results:
-                    # Merge: food sonuçları ekle (duplicate class_name'leri SH17 öncelikli)
-                    existing_classes = {d['class_name'] for d in sh17_results}
-                    for det in food_results:
-                        if det['class_name'] not in existing_classes:
-                            sh17_results.append(det)
-                    logger.debug(f"🍽️ Food merge: toplam {len(sh17_results)} tespit")
+                    # Tüm food tespitlerini ekle — aynı class_name olsa bile.
+                    # Pose-aware association aşamasında her kişi için en iyi
+                    # IoU eşleşmesi seçilecek; burada filtreleme yapmak
+                    # food modelin kişiye-özel tespitlerini kaybettiriyor.
+                    sh17_results.extend(food_results)
+                    logger.debug(f"🍽️ Food merge: +{len(food_results)} food tespit → toplam {len(sh17_results)}")
 
             return sh17_results
 

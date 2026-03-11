@@ -7,6 +7,7 @@
     "core": "cd core && venv\\Scripts\\python app.py",
     "test": "cd core && venv\\Scripts\\python test_sector_integration.py",
     "test:offline-video": "cd core && venv\\Scripts\\python scripts/offline_video_ppe_test.py",
+    "test:food": "cd core && venv\\Scripts\\python scripts/food_sector_video_test.py",
     "install": "cd core && if not exist venv (python -m venv venv) && venv\\Scripts\\pip install -r requirements.txt",
     "dev": "docker-compose -f infra/docker-compose.yml up --build",
     "docker:stop": "docker-compose -f infra/docker-compose.yml down",
