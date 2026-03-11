@@ -663,6 +663,7 @@ class DatabaseAdapter:
                 CREATE TABLE IF NOT EXISTS cameras (
                     camera_id TEXT PRIMARY KEY,
                     company_id TEXT NOT NULL,
+                    group_id TEXT,
                     camera_name TEXT NOT NULL,
                     location TEXT NOT NULL,
                     ip_address TEXT,
@@ -692,6 +693,26 @@ class DatabaseAdapter:
                     UNIQUE(company_id, camera_name)
                 )
             ''')
+            
+            # Camera Groups table - Added for specific PPE configurations
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS camera_groups (
+                    group_id TEXT PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    ppe_config JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies (company_id)
+                )
+            ''')
+            
+            # Ensure group_id exists in cameras table
+            try:
+                cursor.execute('ALTER TABLE cameras ADD COLUMN group_id TEXT')
+            except Exception:
+                pass
             
             # Sessions table
             cursor.execute('''
@@ -1933,6 +1954,50 @@ class DatabaseAdapter:
             logger.error(f"❌ Get latest camera detection error: {e}")
             return None
     
+    def get_camera_group_config(self, group_id: str, company_id: str) -> Optional[Dict[str, Any]]:
+        """Get PPE configuration for a specific camera group"""
+        try:
+            if self.db_type == 'sqlite':
+                query = "SELECT ppe_config FROM camera_groups WHERE group_id = ? AND company_id = ?"
+            else:  # PostgreSQL
+                query = "SELECT ppe_config FROM camera_groups WHERE group_id = %s AND company_id = %s"
+            
+            result = self.execute_query(query, (group_id, company_id), fetch_one=True)
+            
+            if result:
+                if isinstance(result, dict):
+                    ppe_config = result.get('ppe_config')
+                else:
+                    ppe_config = result[0]
+                
+                if isinstance(ppe_config, str):
+                    try:
+                        import json
+                        return json.loads(ppe_config)
+                    except:
+                        return None
+                return ppe_config
+            return None
+        except Exception as e:
+            logger.error(f"❌ Get camera group config error: {e}")
+            return None
+
+    def update_camera_group_id(self, camera_id: str, company_id: str, group_id: str) -> bool:
+        """Update camera's group ID"""
+        try:
+            if self.db_type == 'sqlite':
+                query = "UPDATE cameras SET group_id = ?, updated_at = datetime('now') WHERE camera_id = ? AND company_id = ?"
+            else:  # PostgreSQL
+                query = "UPDATE cameras SET group_id = %s, updated_at = NOW() WHERE camera_id = %s AND company_id = %s"
+            
+            params = (group_id, camera_id, company_id)
+            self.execute_query(query, params, fetch_all=False)
+            logger.info(f"✅ Camera group ID updated for camera: {camera_id} to group: {group_id}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Update camera group ID error: {e}")
+            return False
+
     def get_camera_by_id(self, camera_id: str, company_id: str) -> Optional[Dict[str, Any]]:
         """
         Get camera by ID and company ID
@@ -1947,7 +2012,7 @@ class DatabaseAdapter:
         try:
             if self.db_type == 'sqlite':
                 query = '''
-                    SELECT camera_id, company_id, camera_name, location, ip_address, 
+                    SELECT camera_id, company_id, group_id, camera_name, location, ip_address, 
                            port, rtsp_url, username, password, protocol, stream_path,
                            auth_type, resolution, fps, quality, audio_enabled,
                            night_vision, motion_detection, recording_enabled,
@@ -1958,7 +2023,7 @@ class DatabaseAdapter:
                 '''
             else:  # PostgreSQL
                 query = '''
-                    SELECT camera_id, company_id, camera_name, location, ip_address, 
+                    SELECT camera_id, company_id, group_id, camera_name, location, ip_address, 
                            port, rtsp_url, username, password, protocol, stream_path,
                            auth_type, resolution, fps, quality, audio_enabled,
                            night_vision, motion_detection, recording_enabled,
@@ -1978,12 +2043,13 @@ class DatabaseAdapter:
                         return {
                             'camera_id': result[0],
                             'company_id': result[1],
-                            'camera_name': result[2] if len(result) > 2 else None,
-                            'location': result[3] if len(result) > 3 else None,
-                            'ip_address': result[4] if len(result) > 4 else None,
-                            'port': result[5] if len(result) > 5 else 8080,
-                            'rtsp_url': result[6] if len(result) > 6 else None,
-                            'username': result[7] if len(result) > 7 else None,
+                            'group_id': result[2] if len(result) > 2 else None,
+                            'camera_name': result[3] if len(result) > 3 else None,
+                            'location': result[4] if len(result) > 4 else None,
+                            'ip_address': result[5] if len(result) > 5 else None,
+                            'port': result[6] if len(result) > 6 else 8080,
+                            'rtsp_url': result[7] if len(result) > 7 else None,
+                            'username': result[8] if len(result) > 8 else None,
                             'password': result[8] if len(result) > 8 else None,
                             'protocol': result[9] if len(result) > 9 else 'http',
                             'stream_path': result[10] if len(result) > 10 else '/video',

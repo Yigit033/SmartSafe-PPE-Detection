@@ -34,7 +34,7 @@ services:
       dockerfile: infra/Dockerfile.frontend
     container_name: smartsafe-frontend
     ports:
-      - "3000:3000"
+      - "3377:3377"
     volumes:
       - ../frontend:/app
       - ../storage:/app/public/storage

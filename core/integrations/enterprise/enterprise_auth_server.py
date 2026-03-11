@@ -101,7 +101,7 @@ class EnterpriseAuthServer:
                 },
                 'database': {'path': 'data/enterprise_auth.db'},
                 'security': {
-                    'allowed_origins': ['http://localhost:3000', 'http://localhost:8080'],
+                    'allowed_origins': ['http://localhost:3377', 'http://localhost:3000', 'http://localhost:8080'],
                     'max_login_attempts': 5,
                     'lockout_duration_minutes': 30,
                     'password_min_length': 8,

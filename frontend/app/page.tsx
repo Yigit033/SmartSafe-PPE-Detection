@@ -314,49 +314,93 @@ export default function Home() {
                 </p>
               </div>
             ) : (
-              events.map((event, idx) => (
-                <div key={event.event_id} className="group relative flex gap-6">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`h-4 w-4 shrink-0 rounded-full border-2 border-white ring-4 ring-offset-2 ring-opacity-10 ${
-                        event.status === "active"
-                          ? "bg-red-500 ring-red-500 shadow-md shadow-red-500/20"
-                          : "bg-brand-teal ring-brand-teal shadow-md shadow-brand-teal/20"
-                      }`}
-                    ></div>
-                    {idx < events.length - 1 && (
-                      <div className="mt-2 h-full w-0.5 bg-slate-100 group-hover:bg-slate-200 transition-colors"></div>
-                    )}
-                  </div>
-                  <div className="space-y-2 pb-6">
-                    <p className="text-sm font-bold text-slate-900 leading-none">
-                      {event.violation_type.includes("hardhat")
-                        ? "Baret İhlali Tespit Edildi"
-                        : event.violation_type.includes("vest")
-                          ? "Yelek İhlali Tespit Edildi"
-                          : "KKD İhlali Tespit Edildi"}
-                    </p>
-                    <p className="text-xs font-semibold text-slate-500 leading-relaxed">
-                      {event.camera_name || event.camera_id} - İhlal durumu
-                      kaydedildi. Sistem üzerinden takip ediliyor.
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        {new Date(event.start_time * 1000).toLocaleTimeString(
-                          "tr-TR",
-                          { hour: "2-digit", minute: "2-digit" },
-                        )}
-                      </span>
-                      <span className="h-1.5 w-1.5 rounded-full bg-slate-200"></span>
-                      <span className="text-[10px] font-black text-brand-teal uppercase italic">
-                        {event.event_id.slice(0, 10)}
-                      </span>
+              events
+                .sort((a, b) => b.start_time - a.start_time)
+                .slice(0, 5)
+                .map((violation, idx) => (
+                  <div
+                    key={violation.event_id}
+                    className="group relative flex gap-6"
+                  >
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`h-4 w-4 shrink-0 rounded-full border-2 border-white ring-4 ring-offset-2 ring-opacity-10 transition-all duration-500 group-hover:scale-125 ${
+                          violation.violation_type
+                            .toLowerCase()
+                            .includes("hardhat") ||
+                          violation.violation_type
+                            .toLowerCase()
+                            .includes("baret")
+                            ? "bg-orange-500 ring-orange-500 shadow-md shadow-orange-500/20"
+                            : violation.violation_type
+                                  .toLowerCase()
+                                  .includes("vest") ||
+                                violation.violation_type
+                                  .toLowerCase()
+                                  .includes("yelek")
+                              ? "bg-blue-500 ring-blue-500 shadow-md shadow-blue-500/20"
+                              : "bg-purple-500 ring-purple-500 shadow-md shadow-purple-500/20"
+                        }`}
+                      ></div>
+                      {idx < Math.min(events.length, 5) - 1 && (
+                        <div className="mt-2 h-full w-0.5 bg-slate-100 group-hover:bg-slate-200 transition-colors"></div>
+                      )}
+                    </div>
+                    <div className="space-y-2 pb-6 flex-1">
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-sm font-black text-slate-900 leading-none italic uppercase">
+                          {violation.violation_type
+                            .toLowerCase()
+                            .includes("hardhat") ||
+                          violation.violation_type
+                            .toLowerCase()
+                            .includes("baret")
+                            ? "Baret İhlali Tespit Edildi"
+                            : violation.violation_type
+                                  .toLowerCase()
+                                  .includes("vest") ||
+                                violation.violation_type
+                                  .toLowerCase()
+                                  .includes("yelek")
+                              ? "Yelek İhlali Tespit Edildi"
+                              : violation.violation_type
+                                    .toLowerCase()
+                                    .includes("shoes") ||
+                                  violation.violation_type
+                                    .toLowerCase()
+                                    .includes("ayakkabı")
+                                ? "Ayakkabı İhlali Tespit Edildi"
+                                : "Güvenlik İhlali Tespit Edildi"}
+                        </p>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                          {new Date(
+                            violation.start_time * 1000,
+                          ).toLocaleTimeString("tr-TR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-slate-500 leading-relaxed uppercase">
+                        <span className="text-brand-teal">
+                          {violation.camera_name || violation.camera_id}
+                        </span>{" "}
+                        noktasında ihlal kaydedildi. Sistem üzerinden takip
+                        ediliyor.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black text-slate-300 uppercase italic">
+                          ID: {violation.event_id.slice(0, 8)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))
             )}
-            <button className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-slate-50 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-800 hover:border-slate-200 group cursor-pointer">
+            <a
+              href="/violations"
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-slate-50 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-slate-900 hover:text-white hover:border-slate-900 group cursor-pointer"
+            >
               TÜMÜNÜ GÖRÜNTÜLE
               <svg
                 className="h-4 w-4 transform group-hover:translate-x-1 transition-transform"
@@ -371,7 +415,7 @@ export default function Home() {
                   d="M17 8l4 4m0 0l-4 4m4-4H3"
                 />
               </svg>
-            </button>
+            </a>
           </div>
         </section>
       </div>

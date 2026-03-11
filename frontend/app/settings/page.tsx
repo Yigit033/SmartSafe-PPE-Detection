@@ -60,8 +60,8 @@ export default function SettingsPage() {
   };
 
   const ppeOptions = [
-    { id: "helmet", name: "Kask", icon: "hard_hat" },
-    { id: "vest", name: "Yelek", icon: "vest" },
+    { id: "helmet", name: "Kask", icon: "engineering" },
+    { id: "vest", name: "Yelek", icon: "checkroom" },
     { id: "gloves", name: "Eldiven", icon: "back_hand" },
     { id: "glasses", name: "Gözlük", icon: "visibility" },
     { id: "boots", name: "Bot", icon: "ice_skating" },
@@ -69,7 +69,7 @@ export default function SettingsPage() {
 
   const sections = [
     { id: "profile", name: "Şirket Profili", icon: "domain" },
-    { id: "ppe", name: "PPF Konfigürasyonu", icon: "construction" },
+    { id: "ppe", name: "PPE Konfigürasyonu", icon: "construction" },
     { id: "notifications", name: "Bildirimler", icon: "notifications" },
     { id: "subscription", name: "Abonelik", icon: "payments" },
     { id: "security", name: "Güvenlik", icon: "security" },
@@ -96,22 +96,28 @@ export default function SettingsPage() {
 
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Navigation */}
-        <aside className="w-full lg:w-72 flex-shrink-0">
-          <nav className="flex flex-col gap-2 p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
+        <aside className="w-full lg:w-80 flex-shrink-0">
+          <nav className="flex flex-col gap-2 p-3 rounded-3xl bg-white border border-slate-200 shadow-sm">
             {sections.map((section) => (
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
-                className={`flex items-center gap-3 px-6 py-4 rounded-2xl text-sm font-black transition-all cursor-pointer ${
+                className={`flex items-center gap-3 px-4 py-4 rounded-2xl text-xs font-black transition-all cursor-pointer text-left group ${
                   activeSection === section.id
                     ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/20 translate-x-1"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
-                <span className="material-symbols-rounded text-xl opacity-80">
+                <span
+                  className={`material-symbols-rounded text-xl transition-transform ${
+                    activeSection === section.id
+                      ? "scale-110"
+                      : "opacity-80 group-hover:scale-110 group-hover:opacity-100"
+                  }`}
+                >
                   {section.icon}
                 </span>
-                <span className="uppercase tracking-widest">
+                <span className="uppercase tracking-widest leading-tight flex-1">
                   {section.name}
                 </span>
               </button>
@@ -240,11 +246,11 @@ export default function SettingsPage() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                         Sektör
                       </label>
-                      <div className="relative">
+                      <div className="relative group overflow-hidden rounded-2xl">
                         <select
                           name="sector"
                           defaultValue={company?.sector || "manufacturing"}
-                          className="w-full appearance-none rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all"
+                          className="w-full appearance-none rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all cursor-pointer relative z-10"
                         >
                           <option value="construction">🏗️ İnşaat</option>
                           <option value="manufacturing">🏭 İmalat</option>
@@ -253,8 +259,11 @@ export default function SettingsPage() {
                           <option value="warehouse">📦 Depo/Lojistik</option>
                           <option value="energy">⚡ Enerji</option>
                         </select>
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg">
-                          industry
+                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg z-20 pointer-events-none">
+                          factory
+                        </span>
+                        <span className="material-symbols-rounded absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg z-20 pointer-events-none group-hover:text-brand-teal transition-colors font-black">
+                          expand_more
                         </span>
                       </div>
                     </div>
@@ -356,7 +365,7 @@ export default function SettingsPage() {
                     {ppeOptions.map((option) => (
                       <label
                         key={option.id}
-                        className="group relative bg-white border border-slate-200 p-6 rounded-2xl cursor-pointer hover:border-brand-teal transition-all"
+                        className="group relative bg-white border border-slate-200 p-6 rounded-[2rem] cursor-pointer hover:border-brand-teal transition-all overflow-hidden"
                       >
                         <input
                           type="checkbox"
@@ -365,8 +374,15 @@ export default function SettingsPage() {
                             option.id === "helmet" || option.id === "vest"
                           }
                         />
-                        <div className="flex items-center gap-4">
-                          <div className="h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-brand-teal group-hover:bg-brand-teal/5 transition-all peer-checked:bg-brand-teal peer-checked:text-white peer-checked:border-brand-teal">
+                        {/* Background Decoration */}
+                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
+                          <span className="material-symbols-rounded text-8xl font-black">
+                            {option.icon}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-4 relative z-10">
+                          <div className="h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-brand-teal group-hover:bg-brand-teal/5 transition-all peer-checked:bg-brand-teal peer-checked:text-white peer-checked:border-brand-teal shadow-sm">
                             <span className="material-symbols-rounded text-2xl">
                               {option.icon}
                             </span>
@@ -380,8 +396,8 @@ export default function SettingsPage() {
                             </p>
                           </div>
                         </div>
-                        <div className="absolute top-4 right-4 h-6 w-6 rounded-full border-2 border-slate-200 peer-checked:bg-brand-teal peer-checked:border-brand-teal flex items-center justify-center transition-all">
-                          <span className="material-symbols-rounded text-white text-xs scale-0 peer-checked:scale-100 transition-all">
+                        <div className="absolute top-6 right-6 h-6 w-6 rounded-full border-2 border-slate-200 peer-checked:bg-brand-teal peer-checked:border-brand-teal flex items-center justify-center transition-all z-10 shadow-sm">
+                          <span className="material-symbols-rounded text-white text-xs scale-0 peer-checked:scale-100 transition-all font-black">
                             check
                           </span>
                         </div>
