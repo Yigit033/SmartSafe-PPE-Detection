@@ -170,7 +170,7 @@ export default function CameraSetupPage() {
     setTestResult(null);
     try {
       const resp = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/cameras/manual-test`,
+        `http://localhost:5000/api/company/${companyId}/cameras/manual-test`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -234,7 +234,7 @@ export default function CameraSetupPage() {
       }));
 
       const resp = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/cameras/batch-provision`,
+        `http://localhost:5000/api/company/${companyId}/cameras/batch-provision`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -393,7 +393,7 @@ export default function CameraSetupPage() {
         </div>
 
         {/* Content Area */}
-        <div className="lg:col-span-9 bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden min-h-[650px] flex flex-col relative group">
+        <div className="lg:col-span-9 bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden min-h-[650px] flex flex-col relative">
           {/* Main Select Mode */}
           {mode === "select" && (
             <div className="p-16 flex-1 flex flex-col justify-center animate-fade-in">
@@ -412,9 +412,9 @@ export default function CameraSetupPage() {
                 {/* 1. Discovery */}
                 <button
                   onClick={startDiscovery}
-                  className="group flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 cursor-pointer"
+                  className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
-                  <div className="h-20 w-20 bg-brand-teal/5 text-brand-teal rounded-[2rem] flex items-center justify-center group-hover:bg-brand-teal group-hover:text-white transition-all duration-500 shadow-xl mb-6">
+                  <div className="h-20 w-20 bg-brand-teal text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
                     <span className="material-symbols-rounded text-4xl">
                       travel_explore
                     </span>
@@ -430,9 +430,9 @@ export default function CameraSetupPage() {
                 {/* 2. Single */}
                 <button
                   onClick={() => setMode("single")}
-                  className="group flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-slate-800 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 cursor-pointer"
+                  className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-slate-800 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
-                  <div className="h-20 w-20 bg-slate-200 text-slate-400 rounded-[2rem] flex items-center justify-center group-hover:bg-slate-800 group-hover:text-white transition-all duration-500 shadow-xl mb-6">
+                  <div className="h-20 w-20 bg-slate-800 text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
                     <span className="material-symbols-rounded text-4xl">
                       add_a_photo
                     </span>
@@ -448,9 +448,9 @@ export default function CameraSetupPage() {
                 {/* 3. Batch */}
                 <button
                   onClick={() => setMode("batch")}
-                  className="group flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-blue-600 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 cursor-pointer"
+                  className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-blue-600 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
-                  <div className="h-20 w-20 bg-blue-50 text-blue-500 rounded-[2rem] flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-500 shadow-xl mb-6">
+                  <div className="h-20 w-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
                     <span className="material-symbols-rounded text-4xl">
                       view_module
                     </span>
@@ -466,9 +466,9 @@ export default function CameraSetupPage() {
                 {/* 4. DVR/NVR */}
                 <button
                   onClick={() => setMode("dvr")}
-                  className="group flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 cursor-pointer"
+                  className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
-                  <div className="h-20 w-20 bg-indigo-50 text-indigo-500 rounded-[2rem] flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shadow-xl mb-6">
+                  <div className="h-20 w-20 bg-indigo-600 text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
                     <span className="material-symbols-rounded text-4xl">
                       dns
                     </span>

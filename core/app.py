@@ -245,8 +245,12 @@ class SmartSafeSaaSAPI:
         # Production'da Vercel domain'inizi ekleyin
         allowed_origins = [
             'http://localhost:3000',
+            'http://localhost:3377',    # New frontend port
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3377',
             'http://localhost:8000',
             'http://localhost:5000',
+            'http://127.0.0.1:5000',
             'https://getsmartsafeai.com',  # Production frontend domain
             'https://www.getsmartsafeai.com',  # WWW variant
             'https://app.getsmartsafeai.com',  # Backend custom domain
