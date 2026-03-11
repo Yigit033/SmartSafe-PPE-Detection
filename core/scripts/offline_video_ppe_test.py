@@ -18,7 +18,7 @@ from detection.utils.visual_overlay import draw_styled_box, get_class_color  # t
 
 
 # Varsayılan test videosu (proje köküne göre göreli yol)
-DEFAULT_VIDEO_PATH = os.path.join("tests", "Videos", "video001.mp4")
+DEFAULT_VIDEO_PATH = os.path.join(PROJECT_ROOT, "tests", "Videos", "food.mp4")
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,6 +71,18 @@ def parse_args() -> argparse.Namespace:
         "--no-window",
         action="store_true",
         help="Disable OpenCV window display (only logs).",
+    )
+    parser.add_argument(
+        "--sector",
+        type=str,
+        default=None,
+        help="Override company sector (e.g., food, construction)",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Force device (cpu or cuda). If None, automatic.",
     )
     return parser.parse_args()
 
@@ -143,11 +155,27 @@ def main() -> None:
 
     # Initialize SaaS API (without starting the Flask server) to reuse models and config
     api = SmartSafeSaaSAPI()
+    
+    # Device Override
+    if args.device:
+        print(f"🖥️  Forcing device: {args.device}")
+        api.sh17_manager.device = args.device
+        if hasattr(api.sh17_manager, 'models'):
+            for m in api.sh17_manager.models.values():
+                m.to(args.device)
+    
     api.ensure_database_initialized()
     pose_detector = get_pose_aware_detector(ppe_detector=api.sh17_manager)
+    
+    if args.device and hasattr(pose_detector, 'pose_model'):
+        pose_detector.pose_model.to(args.device)
 
     # Resolve sector and required PPE from company config (same logic as SaaS worker)
-    if api.db is not None:
+    # Sector Override Logic
+    if args.sector:
+        sector = args.sector
+        print(f"📌 Sector overridden by command line: {sector}")
+    elif api.db is not None:
         company_data = api.db.get_company_info(args.company_id)
         sector = (
             company_data.get("sector", "construction")
@@ -158,6 +186,16 @@ def main() -> None:
         sector = "construction"
 
     required_ppe = get_required_ppe_for_company(api, args.company_id)
+    
+    # Gıda Sektörü İçin Gerekli PPE Varsayılanları
+    if sector in ('food', 'food_beverage') and not required_ppe:
+        # Food modelinin tespit edebildiği sınıflar
+        required_ppe = ['apron', 'haircap', 'gloves', 'face_mask_medical', 'glasses']
+        print(f"🍽️  Food sector detected. Using default food PPE requirements: {required_ppe}")
+
+    print(f"🚀 Starting test for Sector: {sector}")
+    if required_ppe:
+        print(f"📋 Required PPE: {required_ppe}")
 
     frame_idx = 0
     start_time = time.time()
