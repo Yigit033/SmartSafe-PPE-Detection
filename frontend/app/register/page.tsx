@@ -252,11 +252,14 @@ export default function RegisterPage() {
                 >
                   <option value="">Sektör Seçiniz</option>
                   <option value="construction">İnşaat</option>
-                  <option value="manufacturing">Üretim / Fabrika</option>
-                  <option value="mining">Madencilik</option>
-                  <option value="logistics">Lojistik / Depolama</option>
+                  <option value="manufacturing">İmalat</option>
+                  <option value="chemical">Kimya</option>
+                  <option value="food">Gıda</option>
+                  <option value="warehouse">Lojistik / Depolama</option>
                   <option value="energy">Enerji</option>
-                  <option value="healthcare">Sağlık</option>
+                  <option value="petrochemical">Petrokimya</option>
+                  <option value="marine">Denizcilik / Tersane</option>
+                  <option value="aviation">Havacılık</option>
                 </select>
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-500 pointer-events-none">
                   expand_more

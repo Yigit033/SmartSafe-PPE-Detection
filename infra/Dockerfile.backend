@@ -16,8 +16,12 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm install
 
+# Encore CLI'ı encore.dev paket sürümüne senkronize et
+RUN encore version update || true
+
 EXPOSE 4000
 EXPOSE 9400
 
-# Geliştirme modunda başlat
-CMD ["encore", "run", "--listen", "0.0.0.0:4000"]
+# Container başlarken CLI'ı tekrar senkronize et (volume mount güncellemeleri için)
+# sonra geliştirme modunda başlat
+CMD bash -c "encore version update 2>/dev/null; encore run --listen 0.0.0.0:4000"

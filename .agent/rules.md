@@ -22,8 +22,10 @@ Agent, çalışmaya başladığında kullanıcının hangi rolde olduğunu kontr
 
 ## 🛠 Genel Operasyonel Kurallar
 
-1. **Backend Restart:** `/backend` altındaki `.ts` kodları değiştiğinde Encore'u şu komutla yeniden başlatmak zorunludur:
-   `docker restart smartsafe-backend-encore`
+1. **Otomatik Backend Senkronizasyonu (KRİTİK):** `/backend` altındaki herhangi bir dosya değiştiğinde, agent KULLANICIYA SORMADAN otomatik olarak aşağıdaki adımları (ve `.agent/workflows/backend-sync.md` akışını) sırasıyla çalıştırmak ZORUNDADIR:
+   - `docker restart smartsafe-backend-encore`
+   - `docker logs smartsafe-backend-encore --tail 20`
+   - Bu işlem tamamlanmadan "görev bitti" denilemez.
 2. **Hata Yakalama:** Core ve Backend arasındaki veri uyumsuzluklarında her zaman `database_adapter.py` üzerindeki şemaya güvenilmelidir.
 3. **Senkronizasyon:** Bir rol işini bitirdiğinde, diğer rolün agent'ına hitaben teknik detayları içeren bir özet hazırlar.
 

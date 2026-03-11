@@ -6,6 +6,7 @@ import { getCompanyId } from "@/lib/session";
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
   const [company, setCompany] = useState<any>(null);
+  const [ppeRequirements, setPpeRequirements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const companyId = getCompanyId();
@@ -23,6 +24,15 @@ export default function SettingsPage() {
       const data = await response.json();
       if (data.success) {
         setCompany(data.company);
+        // PPE gereksinimlerini ayıkla
+        try {
+          const reqs = typeof data.company.ppe_requirements === 'string' 
+            ? JSON.parse(data.company.ppe_requirements) 
+            : data.company.ppe_requirements;
+          setPpeRequirements(reqs || []);
+        } catch (e) {
+          setPpeRequirements([]);
+        }
       }
     } catch (error) {
       console.error("Error fetching company data:", error);
@@ -37,20 +47,25 @@ export default function SettingsPage() {
     try {
       const formData = new FormData(e.currentTarget as HTMLFormElement);
       const updates = Object.fromEntries(formData.entries());
-
+      
+      // PPE seçimlerini de her ihtimale karşı pakete dahil et
       const response = await fetch(
         `http://localhost:4000/company/${companyId}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updates),
+          body: JSON.stringify({ 
+            ...updates, 
+            ppe_requirements: ppeRequirements 
+          }),
         },
       );
 
       const data = await response.json();
       if (data.success) {
         alert("Profil başarıyla güncellendi!");
-        fetchCompanyData();
+        // Sektör değişmişse PPE de değişeceği için hepsini yenile
+        await fetchCompanyData();
       }
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -59,13 +74,153 @@ export default function SettingsPage() {
     }
   };
 
-  const ppeOptions = [
-    { id: "helmet", name: "Kask", icon: "engineering" },
-    { id: "vest", name: "Yelek", icon: "checkroom" },
-    { id: "gloves", name: "Eldiven", icon: "back_hand" },
-    { id: "glasses", name: "Gözlük", icon: "visibility" },
-    { id: "boots", name: "Bot", icon: "ice_skating" },
-  ];
+  const SECTOR_DEFAULTS: Record<string, any[]> = {
+    construction: [
+      { id: "helmet", name: "Baret/Kask", mandatory: true, priority: 1 },
+      { id: "safety_vest", name: "Güvenlik Yeleği", mandatory: true, priority: 2 },
+      { id: "safety_shoes", name: "Güvenlik Ayakkabısı", mandatory: true, priority: 3 },
+      { id: "gloves", name: "Güvenlik Eldiveni", mandatory: false, priority: 2 },
+    ],
+    manufacturing: [
+      { id: "helmet", name: "Endüstriyel Kask", mandatory: true, priority: 1 },
+      { id: "safety_vest", name: "Reflektörlü Yelek", mandatory: true, priority: 2 },
+      { id: "gloves", name: "İş Eldiveni", mandatory: true, priority: 2 },
+      { id: "safety_shoes", name: "Çelik Burunlu Ayakkabı", mandatory: true, priority: 3 },
+    ],
+    chemical: [
+      { id: "gloves", name: "Kimyasal Eldiven", mandatory: true, priority: 1 },
+      { id: "glasses", name: "Koruyucu Gözlük", mandatory: true, priority: 1 },
+      { id: "face_mask", name: "Solunum Maskesi", mandatory: true, priority: 1 },
+      { id: "safety_suit", name: "Kimyasal Tulum", mandatory: true, priority: 2 },
+    ],
+    food: [
+      { id: "hairnet", name: "Bone/Başlık", mandatory: true, priority: 1 },
+      { id: "face_mask", name: "Hijyen Maskesi", mandatory: true, priority: 1 },
+      { id: "apron", name: "Hijyen Önlüğü", mandatory: true, priority: 2 },
+      { id: "gloves", name: "Hijyen Eldiveni", mandatory: false, priority: 2 },
+    ],
+    maritime: [
+      { id: "life_jacket", name: "Can Yeleği", mandatory: true, priority: 1 },
+      { id: "helmet", name: "Gemi Kaskı", mandatory: true, priority: 1 },
+      { id: "shoes", name: "Kaymaz Gemi Botu", mandatory: true, priority: 2 },
+      { id: "gloves", name: "Çalışma Eldiveni", mandatory: false, priority: 2 },
+    ],
+    energy: [
+      { id: "helmet", name: "Dielektrik Baret", mandatory: true, priority: 1 },
+      { id: "insulated_gloves", name: "İzole Eldiven", mandatory: true, priority: 1 },
+      { id: "safety_helmet", name: "Güvenlik Kaskı", mandatory: true, priority: 2 },
+    ],
+    petrochemical: [
+      { id: "gas_mask", name: "Gaz Maskesi", mandatory: true, priority: 1 },
+      { id: "safety_suit", name: "Kimyasal Tulum", mandatory: true, priority: 1 },
+      { id: "face_mask", name: "Maske", mandatory: true, priority: 1 },
+      { id: "gloves", name: "Kimyasal Eldiven", mandatory: true, priority: 2 },
+    ],
+    marine: [
+      { id: "life_jacket", name: "Can Yeleği", mandatory: true, priority: 1 },
+      { id: "safety_suit", name: "Su Geçirmez Tulum", mandatory: true, priority: 1 },
+      { id: "helmet", name: "Güvenlik Kaskı", mandatory: true, priority: 2 },
+      { id: "shoes", name: "Güvenlik Ayakkabısı", mandatory: true, priority: 2 },
+    ],
+    aviation: [
+      { id: "headset", name: "Koruyucu Kulaklık", mandatory: true, priority: 1 },
+      { id: "safety_suit", name: "Antistatik Tulum", mandatory: true, priority: 1 },
+      { id: "shoes", name: "Güvenlik Ayakkabısı", mandatory: true, priority: 2 },
+      { id: "glasses", name: "Güvenlik Gözlüğü", mandatory: true, priority: 2 },
+    ]
+  };
+
+  const handleSectorChange = (newSector: string) => {
+    // 1. ANLIK GÜNCELLEME (Frontend State)
+    // Sadece state'i güncelleyerek kullanıcının seçimine hazırlık yapıyoruz.
+    // Backend'e asıl kayıt "Ayarları Kaydet" butonunda yapılacak.
+    const defaults = SECTOR_DEFAULTS[newSector] || [];
+    setPpeRequirements(defaults);
+    setCompany((prev: any) => prev ? { ...prev, sector: newSector } : null);
+  };
+
+  const handleUpdatePPE = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(
+        `http://localhost:4000/company/${companyId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            sector: company?.sector,
+            ppe_requirements: ppeRequirements 
+          }),
+        },
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        alert("PPE konfigürasyonu ve sektör başarıyla güncellendi!");
+        fetchCompanyData();
+      }
+    } catch (error) {
+      console.error("Error updating PPE config:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const togglePPE = (id: string) => {
+    setPpeRequirements(prev => {
+      const exists = prev.find((p: any) => p.id === id);
+      if (exists) {
+        return prev.map((p: any) => p.id === id ? { ...p, mandatory: !p.mandatory } : p);
+      } else {
+        const option = ppeOptionsMap[id];
+        return [...prev, { id, name: option?.name || id, mandatory: true, priority: 2 }];
+      }
+    });
+  };
+
+  const ppeOptionsMap: Record<string, { name: string; icon: string }> = {
+    helmet: { name: "Kask/Baret", icon: "engineering" },
+    safety_helmet: { name: "Güvenlik Kaskı", icon: "engineering" },
+    vest: { name: "Güvenlik Yeleği", icon: "checkroom" },
+    safety_vest: { name: "Yelek", icon: "checkroom" },
+    gloves: { name: "Koruyucu Eldiven", icon: "back_hand" },
+    glasses: { name: "Güvenlik Gözlüğü", icon: "visibility" },
+    safety_glasses: { name: "Gözlük", icon: "visibility" },
+    shoes: { name: "Emniyet Ayakkabısı", icon: "ice_skating" },
+    boots: { name: "Emniyet Botu", icon: "ice_skating" },
+    safety_shoes: { name: "İş Ayakkabısı", icon: "ice_skating" },
+    mask: { name: "Maske", icon: "medical_mask" },
+    face_mask: { name: "Maske", icon: "medical_mask" },
+    hairnet: { name: "Bone", icon: "face_6" },
+    apron: { name: "Önlük", icon: "accessibility_new" },
+    safety_suit: { name: "İş Tulumu", icon: "settings_accessibility" },
+    headset: { name: "Koruyucu Kulaklık", icon: "headset" },
+    earmuffs: { name: "Kulaklık", icon: "headset" },
+    gas_mask: { name: "Gaz Maskesi", icon: "masks" },
+    life_jacket: { name: "Can Yeleği", icon: "water_lux" },
+    insulated_gloves: { name: "İzole Eldiven", icon: "back_hand" },
+    dielectric_boots: { name: "Dielektrik Bot", icon: "ice_skating" },
+  };
+
+  const getDisplayPpes = () => {
+    // Şirketin mevcut PPE gereksinimlerini ve temel PPE havuzunu birleştir
+    const currentIds = ppeRequirements.map((p: any) => p.id);
+    const baseIds = ["helmet", "vest", "gloves", "shoes"];
+    const allIds = Array.from(new Set([...currentIds, ...baseIds]));
+
+    return allIds.map(id => {
+      const defined = ppeOptionsMap[id];
+      const req = ppeRequirements.find((p: any) => p.id === id);
+      
+      return {
+        id,
+        // Önce sektörden gelen ismi (Gemi Kaskı vb.) kullan, yoksa genel havuzdan al
+        name: req?.name || defined?.name || id.charAt(0).toUpperCase() + id.slice(1),
+        icon: defined?.icon || "inventory_2",
+        mandatory: !!req?.mandatory
+      };
+    });
+  };
 
   const sections = [
     { id: "profile", name: "Şirket Profili", icon: "domain" },
@@ -242,31 +397,6 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                        Sektör
-                      </label>
-                      <div className="relative group overflow-hidden rounded-2xl">
-                        <select
-                          name="sector"
-                          defaultValue={company?.sector || "manufacturing"}
-                          className="w-full appearance-none rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all cursor-pointer relative z-10"
-                        >
-                          <option value="construction">🏗️ İnşaat</option>
-                          <option value="manufacturing">🏭 İmalat</option>
-                          <option value="chemical">🧪 Kimya</option>
-                          <option value="food">🍽️ Gıda</option>
-                          <option value="warehouse">📦 Depo/Lojistik</option>
-                          <option value="energy">⚡ Enerji</option>
-                        </select>
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg z-20 pointer-events-none">
-                          factory
-                        </span>
-                        <span className="material-symbols-rounded absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg z-20 pointer-events-none group-hover:text-brand-teal transition-colors font-black">
-                          expand_more
-                        </span>
-                      </div>
-                    </div>
 
                     <div className="col-span-full space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -345,7 +475,7 @@ export default function SettingsPage() {
               )}
 
               {activeSection === "ppe" && (
-                <div className="space-y-8 max-w-4xl">
+                <div className="space-y-10 max-w-4xl">
                   <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex gap-4">
                     <span className="material-symbols-rounded text-amber-500 text-3xl">
                       warning
@@ -360,76 +490,106 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {ppeOptions.map((option) => (
-                      <label
-                        key={option.id}
-                        className="group relative bg-white border border-slate-200 p-6 rounded-[2rem] cursor-pointer hover:border-brand-teal transition-all overflow-hidden"
-                      >
-                        <input
-                          type="checkbox"
-                          className="hidden peer"
-                          defaultChecked={
-                            option.id === "helmet" || option.id === "vest"
-                          }
-                        />
-                        {/* Background Decoration */}
-                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
-                          <span className="material-symbols-rounded text-8xl font-black">
-                            {option.icon}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-4 relative z-10">
-                          <div className="h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-brand-teal group-hover:bg-brand-teal/5 transition-all peer-checked:bg-brand-teal peer-checked:text-white peer-checked:border-brand-teal shadow-sm">
-                            <span className="material-symbols-rounded text-2xl">
-                              {option.icon}
-                            </span>
-                          </div>
-                          <div>
-                            <h6 className="text-sm font-black text-slate-900 uppercase italic">
-                              {option.name}
-                            </h6>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                              Tespit Aktif
-                            </p>
-                          </div>
-                        </div>
-                        <div className="absolute top-6 right-6 h-6 w-6 rounded-full border-2 border-slate-200 peer-checked:bg-brand-teal peer-checked:border-brand-teal flex items-center justify-center transition-all z-10 shadow-sm">
-                          <span className="material-symbols-rounded text-white text-xs scale-0 peer-checked:scale-100 transition-all font-black">
-                            check
-                          </span>
-                        </div>
+                  {/* Yeni Sektör Seçimi Alanı */}
+                  <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 flex flex-col md:flex-row items-center gap-8 mb-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="flex-1 space-y-3 w-full">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Tesis Çalışma Sektörü
                       </label>
-                    ))}
-                  </div>
-
-                  <div className="pt-8 border-t border-slate-100">
-                    <div className="space-y-4">
-                      <h5 className="text-sm font-black text-slate-900 uppercase italic">
-                        Başarı Eşiği (%)
-                      </h5>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          className="flex-1 accent-brand-teal h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                          defaultValue={85}
-                        />
-                        <span className="bg-brand-teal text-white font-black px-4 py-2 rounded-xl text-sm italic">
-                          %85
+                      <div className="relative group overflow-hidden rounded-2xl shadow-sm">
+                        <select
+                          value={company?.sector || ""}
+                          onChange={(e) => handleSectorChange(e.target.value)}
+                          className="w-full appearance-none rounded-2xl bg-white border border-slate-200 px-12 py-5 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all cursor-pointer relative z-10"
+                        >
+                          <option value="">Sektör Seçiniz...</option>
+                          <option value="construction">🏗️ İnşaat</option>
+                          <option value="manufacturing">🏭 İmalat</option>
+                          <option value="chemical">🧪 Kimya</option>
+                          <option value="food">🍽️ Gıda</option>
+                          <option value="warehouse">📦 Lojistik / Depolama</option>
+                          <option value="energy">⚡ Enerji</option>
+                          <option value="petrochemical">🛢️ Petrokimya</option>
+                          <option value="marine">🚢 Denizcilik / Tersane</option>
+                          <option value="aviation">✈️ Havacılık</option>
+                        </select>
+                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-xl z-20 pointer-events-none">
+                          factory
+                        </span>
+                        <span className="material-symbols-rounded absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl z-20 pointer-events-none group-hover:text-brand-teal transition-colors font-black">
+                          expand_more
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 font-bold leading-relaxed">
-                        Bu değerin altındaki doğruluk oranları düşük güvenli
-                        tespit olarak işaretlenir.
+                    </div>
+                    <div className="flex-[1.5] text-slate-500">
+                      <p className="text-sm font-medium leading-relaxed">
+                        Sektör değişikliği, tesisiniz için <span className="text-brand-teal font-black">varsayılan PPE kurallarını</span> ve <span className="text-brand-teal font-black">uyumluluk ayarlarını</span> otomatik olarak günceller.
                       </p>
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {getDisplayPpes().map((option) => {
+                      const isMandatory = option.mandatory;
+                      return (
+                        <label
+                          key={option.id}
+                          className="group relative bg-white border border-slate-200 p-6 rounded-[2rem] cursor-pointer hover:border-brand-teal transition-all overflow-hidden"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!isMandatory}
+                            onChange={() => togglePPE(option.id)}
+                            className="hidden"
+                          />
+                          {/* Background Decoration */}
+                          <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
+                            <span className="material-symbols-rounded text-8xl font-black">
+                              {option.icon}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-4 relative z-10 w-full">
+                            <div className={`h-14 w-14 rounded-2xl border flex-shrink-0 flex items-center justify-center transition-all shadow-sm ${
+                              isMandatory 
+                                ? "bg-brand-teal text-white border-brand-teal" 
+                                : "bg-slate-50 text-slate-400 border-slate-200 group-hover:text-brand-teal group-hover:bg-brand-teal/5"
+                            }`}>
+                              <span className="material-symbols-rounded text-2xl">
+                                {option.icon}
+                              </span>
+                            </div>
+                            <div className="flex-1 pr-8">
+                              <h6 className="text-[12px] leading-tight font-black text-slate-900 uppercase italic break-words">
+                                {option.name}
+                              </h6>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">
+                                {isMandatory ? "ZORUNLU" : "OPSİYONEL"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className={`absolute top-1/2 -translate-y-1/2 right-6 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all z-20 shadow-sm ${
+                            isMandatory ? "bg-brand-teal border-brand-teal" : "border-slate-200"
+                          }`}>
+                            <span className={`material-symbols-rounded text-white text-[10px] transition-all font-black ${
+                              isMandatory ? "scale-100" : "scale-0"
+                            }`}>
+                              check
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+
                   <div className="flex justify-end pt-8">
-                    <button className="bg-brand-teal text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-brand-teal/20 transition-all hover:bg-brand-teal/90 hover:-translate-y-0.5 cursor-pointer">
-                      AYARLARI KAYDET
+                    <button 
+                      onClick={handleUpdatePPE}
+                      disabled={isSaving}
+                      className="bg-brand-teal text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-brand-teal/20 transition-all hover:bg-brand-teal/90 hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSaving ? "KAYDEDİLİYOR..." : "AYARLARI KAYDET"}
                     </button>
                   </div>
                 </div>

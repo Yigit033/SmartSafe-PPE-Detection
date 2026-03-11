@@ -2,6 +2,7 @@ import { api } from "encore.dev/api";
 import { v4 as uuidv4 } from "uuid";
 import * as bcrypt from "bcrypt";
 import { pool } from "../db";
+import { SECTOR_PPE_CONFIGS } from "./sector_config";
 
 interface CreateCompanyParams {
   company_name: string;
@@ -36,6 +37,10 @@ interface UpdateProfileRequest {
   sector?: string;
   contact_person?: string;
   email?: string;
+  phone?: string;
+  address?: string;
+  ppe_requirements?: any[];
+  compliance_settings?: any;
 }
 
 interface UpdateNotificationsRequest {
@@ -168,14 +173,18 @@ export const create = api(
       await client.query("BEGIN");
 
       // 1. Şirketi oluştur
+      // Sektöre göre varsayılan PPE kurallarını al
+      const sectorConfig = SECTOR_PPE_CONFIGS[params.sector] || SECTOR_PPE_CONFIGS.manufacturing;
+
       await client.query(
         `
         INSERT INTO companies (
           company_id, company_name, sector, contact_person, email, 
           phone, address, subscription_type, api_key, status, 
-          max_cameras, created_at, updated_at
+          max_cameras, created_at, updated_at,
+          ppe_requirements, compliance_settings
         ) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $12, $13)
       `,
         [
           company_id,
@@ -189,6 +198,8 @@ export const create = api(
           apiKey,
           "active",
           25,
+          JSON.stringify(sectorConfig.ppe_requirements),
+          JSON.stringify(sectorConfig.compliance_settings),
         ],
       );
 
@@ -299,7 +310,15 @@ export const updateProfile = api(
       const setClause = keys
         .map((key, index) => `${key} = $${index + 2}`)
         .join(", ");
-      const values = keys.map((key) => (updates as any)[key]);
+
+      // JSON alanlarını stringify et, diğerlerini direkt gönder
+      const values = keys.map((key) => {
+        const val = (updates as any)[key];
+        if (key === "ppe_requirements" || key === "compliance_settings") {
+          return typeof val === "string" ? val : JSON.stringify(val);
+        }
+        return val;
+      });
 
       await pool.query(
         `UPDATE companies SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1`,
