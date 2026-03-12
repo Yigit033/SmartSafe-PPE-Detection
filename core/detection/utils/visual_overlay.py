@@ -81,26 +81,47 @@ def get_class_color(class_name: str, is_missing: bool = False) -> Tuple[int, int
     """
     class_name_lower = class_name.lower()
 
-    # Eksik PPE: kırmızı tonları
+    # Eksik PPE: kırmızı tonları (yüksek uyarı)
     if is_missing:
         if "helmet" in class_name_lower or "baret" in class_name_lower:
-            return (0, 0, 255)      # vivid red
+            return (0, 0, 255)          # vivid red
         elif "vest" in class_name_lower or "yelek" in class_name_lower:
-            return (0, 60, 255)     # orange-red
+            return (0, 60, 255)         # orange-red
         elif "shoes" in class_name_lower or "ayakkabı" in class_name_lower:
-            return (20, 20, 200)    # dark red-blue
-        return (0, 0, 255)
+            return (20, 20, 200)        # dark red-blue
+        elif "gloves" in class_name_lower or "eldiven" in class_name_lower:
+            return (0, 0, 220)          # deep red
+        elif "mask" in class_name_lower:
+            return (0, 0, 230)          # red-ish for missing mask
+        elif "haircap" in class_name_lower or "bone" in class_name_lower or "file" in class_name_lower or "kep" in class_name_lower:
+            return (40, 0, 220)         # magenta‑red for missing haircap
+        elif "suit" in class_name_lower or "apron" in class_name_lower:
+            return (0, 40, 220)         # red‑orange for missing apron/tulum
+        elif "glasses" in class_name_lower or "goggles" in class_name_lower or "googles" in class_name_lower or "gozluk" in class_name_lower:
+            return (0, 0, 255)          # vivid red
+        return (0, 0, 255)              # default missing
 
-    # Mevcut PPE
+    # Mevcut PPE (pozitif durumlar)
     if "helmet" in class_name_lower or "baret" in class_name_lower:
-        return (0, 255, 0)          # bright green
+        return (0, 255, 0)              # bright green
     elif "vest" in class_name_lower or "yelek" in class_name_lower:
-        return (0, 215, 255)        # amber
+        return (0, 215, 255)            # amber
     elif "shoes" in class_name_lower or "ayakkabı" in class_name_lower:
-        return (255, 50, 255)       # magenta
+        return (255, 50, 255)           # magenta
     elif "gloves" in class_name_lower or "eldiven" in class_name_lower:
-        return (255, 255, 0)        # cyan
+        return (255, 255, 0)            # yellow (yüksek kontrast)
+    elif "mask" in class_name_lower:
+        # FACE MASK → açık mavi / cyan
+        return (255, 255, 0)            # BGR: (mavi=255, yeşil=255, kırmızı=0) → cyan
+    elif "haircap" in class_name_lower or "bone" in class_name_lower or "file" in class_name_lower or "kep" in class_name_lower:
+        # HAIRCAP → mor tonları
+        return (255, 0, 180)            # purple
+    elif "suit" in class_name_lower or "apron" in class_name_lower:
+        # Önlük / tulum → sakin yeşilimsi mavi
+        return (180, 255, 180)
+    elif "glasses" in class_name_lower or "goggles" in class_name_lower or "googles" in class_name_lower or "gozluk" in class_name_lower:
+        return (255, 200, 0)            # sıcak sarı
     elif "person" in class_name_lower:
-        return (50, 160, 255)       # vivid blue
+        return (50, 160, 255)           # vivid blue
     else:
-        return (180, 180, 180)
+        return (180, 180, 180)          # nötr gri (diğer sınıflar)

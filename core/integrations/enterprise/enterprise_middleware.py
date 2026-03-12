@@ -12,7 +12,6 @@ Advanced middleware system with:
 - IP whitelist/blacklist
 
 Author: Industrial PPE Detection Team
-Date: January 2025
 """
 
 import os

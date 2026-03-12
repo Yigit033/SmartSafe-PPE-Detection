@@ -183,7 +183,7 @@ class SH17ModelManager:
         Tek SH17 modeli yükle (yolo9e.pt) ve tüm sektörlere paylaştır.
 
         NEDEN TEK MODEL:
-          Tüm sektör-özel best.pt dosyaları aynı yolo9e.pt ağırlıklarıdır
+          Tüm sektör-özel best.pt dosyaları(gıda sektörü hariç) aynı yolo9e.pt ağırlıklarıdır
           (MD5 doğrulandı). 10 kopyayı ayrı ayrı yüklemek 10× bellek harcar.
           Sektör farklılığı PPE gereksinimleri (sector_mapping) üzerinden yapılır.
         """

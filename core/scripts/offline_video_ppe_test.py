@@ -5,6 +5,7 @@ import time
 from typing import List, Optional
 
 import cv2
+import logging
 
 # Ensure project root (one level above scripts/) is on sys.path so that `src.*` imports work
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -155,6 +156,10 @@ def main() -> None:
 
     # Initialize SaaS API (without starting the Flask server) to reuse models and config
     api = SmartSafeSaaSAPI()
+
+    # Eğer debug-raw açıksa, pose-aware dedektör için DEBUG loglarını aç
+    if args.debug_raw:
+        logging.getLogger("detection.pose_aware_ppe_detector").setLevel(logging.DEBUG)
     
     # Device Override
     if args.device:
@@ -185,13 +190,23 @@ def main() -> None:
     else:
         sector = "construction"
 
+    # Video adı "food" içeriyorsa ve sektör verilmemişse gıda sektörü kullan (food model + bone/önlük/eldiven)
+    video_basename = os.path.basename(args.video).lower()
+    if not args.sector and "food" in video_basename:
+        sector = "food"
+        print(f"🍽️  Video adı 'food' içerdiği için sektör otomatik: {sector} (food model kullanılacak)")
+
     required_ppe = get_required_ppe_for_company(api, args.company_id)
     
-    # Gıda Sektörü İçin Gerekli PPE Varsayılanları
-    if sector in ('food', 'food_beverage') and not required_ppe:
-        # Food modelinin tespit edebildiği sınıflar
-        required_ppe = ['apron', 'haircap', 'gloves', 'face_mask_medical', 'glasses']
-        print(f"🍽️  Food sector detected. Using default food PPE requirements: {required_ppe}")
+    # Gıda Sektörü İçin Gerekli PPE Varsayılanları (PPE_CONFIG anahtarlarıyla uyumlu)
+    # Not: Food videolarında genelde gözlük takılmıyor; safety_glasses'ı zorunlu yaparsak
+    # herkes için sürekli NO-GLASSES üretiyor ve compliance oranını gereksiz yere düşürüyor.
+    # Bu yüzden varsayılan listeden safety_glasses'ı çıkarıyoruz. Eğer bir şirket
+    # gerçekten gözlüğü zorunlu yapmak isterse, bunu DB'deki required_ppe ile override edebilir.
+    if sector in ('food', 'food_beverage'):
+        if not required_ppe or (not args.sector and "food" in video_basename):
+            required_ppe = ['safety_suit', 'haircap', 'face_mask', 'gloves']
+            print(f"🍽️  Food sector. Using default food PPE requirements: {required_ppe}")
 
     print(f"🚀 Starting test for Sector: {sector}")
     if required_ppe:

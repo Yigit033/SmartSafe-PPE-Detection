@@ -12,7 +12,6 @@ Advanced user management system with:
 - Department management
 
 Author: Industrial PPE Detection Team
-Date: January 2025
 """
 
 import os

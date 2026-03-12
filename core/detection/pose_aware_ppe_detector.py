@@ -776,10 +776,20 @@ class PoseAwarePPEDetector:
 
         for det in ppe_detections:
             class_name = str(det.get('class_name', '')).lower()
+            sector = str(det.get('sector', '')).lower()
             if class_name.startswith('no-'):
                 # Sistem tarafından üretilen negatif kutuları dikkate alma
                 continue
             for ppe_type, cfg in PPE_CONFIG.items():
+                # Özel kural: Gıda sektöründe SH17 'head' → haircap surrogate
+                if (
+                    ppe_type == 'haircap'
+                    and sector in ('food', 'food_beverage')
+                    and class_name == 'head'
+                ):
+                    ppe_by_type[ppe_type].append(det)
+                    break
+
                 if any(cls in class_name for cls in cfg['model_classes']):
                     ppe_by_type[ppe_type].append(det)
                     break
@@ -791,12 +801,15 @@ class PoseAwarePPEDetector:
 
         enhanced_persons: List[Dict] = []
 
-        for person in persons:
+        for idx, person in enumerate(persons):
             regions = person['anatomical_regions']
             person_bbox = person['bbox']
 
             person_ppe: Dict[str, Optional[Dict]] = {}
             compliance: Dict[str, bool] = {}
+            # Eldivenler için eldeki kapsamı ayrı ayrı takip et (sol / sağ)
+            ppe_meta: Dict[str, Dict[str, bool]] = {}
+            glove_hands = {'left': False, 'right': False}
 
             for ppe_type, cfg in PPE_CONFIG.items():
                 region_name = cfg['region']
@@ -815,12 +828,74 @@ class PoseAwarePPEDetector:
                 person_ppe[ppe_type] = best_match
                 compliance[ppe_type] = best_match is not None
 
+                # Eldiven için: hangi ellerde eldiven var (left/right) onu da çıkart.
+                if ppe_type == 'gloves':
+                    try:
+                        glove_candidates = ppe_by_type.get('gloves', []) or []
+                        hands_region = regions.get('hands') or regions.get('full_body') or person_bbox
+                        if hands_region is not None and person_bbox is not None:
+                            # Eşikler: genel gloves IoU mantığıyla tutarlı kalsın
+                            iou_thr = 0.05
+                            person_iou_thr = 0.02
+                            px1, py1, px2, py2 = [float(v) for v in person_bbox]
+                            person_center_x = (px1 + px2) / 2.0
+                            for cand in glove_candidates:
+                                cb = cand.get('bbox', [])
+                                if len(cb) != 4:
+                                    continue
+                                iou_region = self._calculate_iou(cb, hands_region)
+                                iou_person = self._calculate_iou(cb, person_bbox)
+                                if iou_region >= iou_thr and iou_person >= person_iou_thr:
+                                    cx = (float(cb[0]) + float(cb[2])) / 2.0
+                                    if cx <= person_center_x:
+                                        glove_hands['left'] = True
+                                    if cx >= person_center_x:
+                                        glove_hands['right'] = True
+                        ppe_meta['gloves_hands'] = glove_hands
+                    except Exception:
+                        # Eldiven meta hesabı hiçbir zaman ana akışı bozmamalı
+                        pass
+
+                # 🔎 Detailed debug for food PPE (mask, apron, haircap)
+                # Amaç: kişi bazında neden atanmadığını görmek.
+                if logger.isEnabledFor(logging.DEBUG) and ppe_type in ('face_mask', 'safety_suit', 'haircap'):
+                    candidates = ppe_by_type.get(ppe_type, [])
+                    debug_rows = []
+                    for cand in candidates:
+                        cbbox = cand.get('bbox', [])
+                        if len(cbbox) != 4:
+                            continue
+                        try:
+                            iou_region = self._calculate_iou(cbbox, region_bbox)
+                            iou_person = self._calculate_iou(cbbox, person_bbox)
+                            debug_rows.append(
+                                {
+                                    'cls': cand.get('class_name'),
+                                    'conf': round(float(cand.get('confidence', 0.0)), 3),
+                                    'iou_region': round(iou_region, 4),
+                                    'iou_person': round(iou_person, 4),
+                                }
+                            )
+                        except Exception:
+                            continue
+
+                    logger.debug(
+                        "🧪 PPE IoU debug person=%s type=%s has_match=%s region=%s person_bbox=%s candidates=%s",
+                        idx,
+                        ppe_type,
+                        bool(best_match),
+                        [round(float(v), 1) for v in (region_bbox or [])] if region_bbox else None,
+                        [round(float(v), 1) for v in (person_bbox or [])] if person_bbox else None,
+                        debug_rows,
+                    )
+
             enhanced_persons.append(
                 {
                     'person': person,
                     'ppe': person_ppe,
                     'regions': regions,
                     'compliance': compliance,
+                    'ppe_meta': ppe_meta,
                 }
             )
 
@@ -843,19 +918,23 @@ class PoseAwarePPEDetector:
             'gloves': 0.05,
             'safety_glasses': 0.05,
             'face_mask': 0.05,
-            'safety_suit': 0.05,
+            # Gıda önlüğü için: bölge IoU düşük olsa bile kişiyle örtüşmesi yeterli,
+            # bu yüzden safety_suit için bölge eşiğini 0.0 yapıyoruz.
+            'safety_suit': 0.0,
             'general': 0.05
         }.get(ppe_type, 0.05)
         
+        # Küçük PPE (bone, eldiven, maske, önlük, gözlük) kişi kutusuyla çok az örtüşür;
+        # person_iou 0.02+ yeterli (aksi halde best_match hiç set edilmez, fallback'ler devreye girmez).
         person_iou_threshold = {
             'helmet': 0.08,        # allow slightly weaker overlap with person
-            'haircap': 0.08,       # bone/file de kask gibi
+            'haircap': 0.02,       # bone/kep küçük bbox → düşük person IoU
             'safety_vest': 0.1,
             'safety_shoes': 0.05,  # Lower for shoes
-            'gloves': 0.1,
-            'safety_glasses': 0.1,
-            'face_mask': 0.1,
-            'safety_suit': 0.1,
+            'gloves': 0.02,        # eldiven küçük
+            'safety_glasses': 0.02,# gözlük küçük
+            'face_mask': 0.02,     # maske küçük
+            'safety_suit': 0.02,   # önlük bazen küçük tespit
             'general': 0.1
         }.get(ppe_type, 0.1)
         
@@ -890,8 +969,9 @@ class PoseAwarePPEDetector:
                 px1, py1, px2, py2 = person_bbox
                 person_height = max(float(py2) - float(py1), 1.0)
                 top_fraction = py1 + person_height * 0.45  # üst ~%45'lik dilim "baş" kabul
-                
-                if best_center_y is not None and best_person_iou >= 0.20 and best_center_y <= top_fraction:
+                # Küçük bone/helmet bbox'larda person_iou çok düşük olabilir; 0.01 yeterli
+                min_person_iou = 0.01
+                if best_center_y is not None and best_person_iou >= min_person_iou and best_center_y <= top_fraction:
                     logger.debug(
                         f"✅ Helmet/haircap fallback match accepted: best_iou={best_iou:.3f}, "
                         f"person_iou={best_person_iou:.3f}, center_y={best_center_y:.1f}, "
@@ -921,6 +1001,26 @@ class PoseAwarePPEDetector:
                             f"ppe_center=({ppe_cx:.0f},{ppe_cy:.0f}), "
                             f"region=[{rx1:.0f},{ry1:.0f},{rx2:.0f},{ry2:.0f}], "
                             f"IoU_region={best_iou:.3f}, IoU_person={best_person_iou:.3f}"
+                        )
+                        return best_match
+            except Exception:
+                pass
+
+        # ── Fallback 3: Küçük PPE → merkez kişi kutusu içindeyse kabul et ──
+        # Bölge (head/hands) dar hesaplandıysa Fallback 2 yetmeyebilir; kişi kutusu daha geniş.
+        small_ppe_types = ('haircap', 'helmet', 'gloves', 'face_mask', 'safety_glasses', 'safety_suit')
+        if best_match is not None and ppe_type in small_ppe_types and best_person_iou > 0:
+            try:
+                ppe_bbox = best_match.get('bbox', [])
+                if len(ppe_bbox) == 4 and len(person_bbox) == 4:
+                    ppe_cx = (float(ppe_bbox[0]) + float(ppe_bbox[2])) / 2.0
+                    ppe_cy = (float(ppe_bbox[1]) + float(ppe_bbox[3])) / 2.0
+                    px1, py1, px2, py2 = [float(v) for v in person_bbox]
+                    center_in_person = (px1 <= ppe_cx <= px2) and (py1 <= ppe_cy <= py2)
+                    if center_in_person:
+                        logger.debug(
+                            f"✅ Person-bbox containment fallback for {ppe_type}: "
+                            f"IoU_person={best_person_iou:.3f}"
                         )
                         return best_match
             except Exception:
@@ -1001,6 +1101,7 @@ class PoseAwarePPEDetector:
             ppe = person_data['ppe']
             regions = person_data['regions']
             compliance = person_data['compliance']
+            ppe_meta = person_data.get('ppe_meta', {})
             
             # Add person detection
             all_detections.append(person)
@@ -1014,9 +1115,14 @@ class PoseAwarePPEDetector:
 
                 item = ppe.get(ppe_type)
                 if item:
+                    # Pozitif PPE için mümkünse orijinal model bbox'unu kullan,
+                    # aksi halde anatomik bölge bbox'una geri düş.
+                    bbox_to_use = item.get('bbox', region_bbox)
+                    if not bbox_to_use or len(bbox_to_use) != 4:
+                        bbox_to_use = region_bbox
                     all_detections.append(
                         {
-                            'bbox': region_bbox,
+                            'bbox': bbox_to_use,
                             'class_name': cfg['pos_label'],
                             'confidence': float(item.get('confidence', 0.9)),
                             'missing': False,
@@ -1044,13 +1150,30 @@ class PoseAwarePPEDetector:
                 else:
                     is_compliant = True
                     for ppe_type in supported_required:
-                        if not compliance.get(ppe_type, False):
-                            is_compliant = False
-                            break
+                        if ppe_type == 'gloves':
+                            # Eldiven: iki el de zorunlu → hem left hem right True olmalı
+                            gh = ppe_meta.get('gloves_hands') or {}
+                            if not (gh.get('left') and gh.get('right')):
+                                is_compliant = False
+                                break
+                        else:
+                            if not compliance.get(ppe_type, False):
+                                is_compliant = False
+                                break
             else:
                 # Geriye uyumlu davranış: default_critical=True olan PPE'ler gereklidir (kask+yelek+ayakkabı).
                 critical_types = [t for t, cfg in PPE_CONFIG.items() if cfg.get('default_critical', False)]
-                is_compliant = all(compliance.get(t, False) for t in critical_types)
+                is_compliant = True
+                for ppe_type in critical_types:
+                    if ppe_type == 'gloves':
+                        gh = ppe_meta.get('gloves_hands') or {}
+                        if not (gh.get('left') and gh.get('right')):
+                            is_compliant = False
+                            break
+                    else:
+                        if not compliance.get(ppe_type, False):
+                            is_compliant = False
+                            break
 
             # Temporal voting using track_id when available
             temporal_compliant = is_compliant
