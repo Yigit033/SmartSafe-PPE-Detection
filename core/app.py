@@ -42,8 +42,6 @@ from dotenv import load_dotenv
 # core klasöründeki .env dosyasını yükle
 load_dotenv(os.path.join(current_dir, '.env'))
 from services.multitenant_system import MultiTenantDatabase
-from integrations.construction.construction_ppe_system import ConstructionPPEDetector, ConstructionPPEConfig
-from sector.smartsafe_sector_detector_factory import SectorDetectorFactory
 from database.database_adapter import get_db_adapter
 from integrations.cameras.camera_integration_manager import DVRConfig
 from detection.snapshot_manager import get_snapshot_manager
@@ -56,7 +54,7 @@ import queue
 from io import BytesIO
 import bcrypt
 from pathlib import Path
-from detection.utils.visual_overlay import draw_styled_box, get_class_color
+from detection.utils.visual_overlay import draw_styled_box, get_class_color, draw_hud_bar, reset_label_registry
 
 # Load environment variables
 load_dotenv()
@@ -2036,9 +2034,6 @@ class SmartSafeSaaSAPI:
                     class_name = detection.get('class_name', 'unknown')
                     confidence = detection.get('confidence', 0)
                     
-                    # Sınıfa göre renk belirle
-                    from detection.utils.visual_overlay import draw_styled_box, get_class_color
-                    
                     color = get_class_color(class_name, is_missing=False)
                     
                     # Label
@@ -2363,40 +2358,66 @@ smartsafe_requests_total 100
         # PPE Detection Model - SH17 or PoseAware fallback
         pose_detector = None
         device = 'cpu'
+        # Sektöre göre varsayılan required_ppe (DB'de konfig yoksa kullanılır)
+        SECTOR_DEFAULT_PPE = {
+            'food': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
+            'food_beverage': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
+            'construction': ['helmet', 'safety_vest', 'safety_shoes'],
+            'manufacturing': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
+            'warehouse_logistics': ['helmet', 'safety_vest', 'safety_shoes'],
+            'chemical': ['helmet', 'safety_vest', 'safety_glasses', 'gloves'],
+            'energy': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
+            'petrochemical': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
+            'marine_shipyard': ['helmet', 'safety_vest', 'safety_shoes'],
+            'aviation': ['helmet', 'safety_vest', 'safety_shoes'],
+        }
+        def _normalize_sector(s: Optional[str]) -> str:
+            if not s or not isinstance(s, str):
+                return 'construction'
+            k = s.strip().lower()
+            if k in ('gıda', 'gida', 'food', 'food_beverage'):
+                return 'food'
+            if k in ('inşaat', 'insaat', 'construction'):
+                return 'construction'
+            if k in ('manufacturing', 'warehouse_logistics', 'chemical', 'energy',
+                     'petrochemical', 'marine_shipyard', 'aviation'):
+                return k
+            if 'gıda' in k or 'gida' in k or 'food' in k:
+                return 'food'
+            if 'inşaat' in k or 'insaat' in k or 'construction' in k:
+                return 'construction'
+            return k
+
         try:
             self.ensure_database_initialized()
             if self.db is not None:
                 company_data = self.db.get_company_info(company_id)
-                sector = company_data.get('sector', 'construction') if company_data and isinstance(company_data, dict) else 'construction'
+                sector_raw = company_data.get('sector', 'construction') if company_data and isinstance(company_data, dict) else 'construction'
+                sector = _normalize_sector(sector_raw)
             else:
                 sector = 'construction'
                 logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
             
-            # Şirket bazlı zorunlu PPE konfigürasyonunu al (varsa)
-            # None  => konfig yok / bilinmiyor → eski davranış (helmet+vest zorunlu)
-            # []    => kullanıcı "hiçbir PPE zorunlu değil" seçmiş → herkes uyumlu, violation yok
+            # Şirket bazlı zorunlu PPE: multitenant_system.get_company_ppe_requirements (kullanıcı şirket/ayarlardan belirlediği liste)
             required_ppe = None
-            if self.db is not None:
+            if self.db is not None and hasattr(self.db, 'get_company_ppe_requirements'):
                 try:
-                    company_ppe_config = self.db.get_company_ppe_config(company_id)
-                    if isinstance(company_ppe_config, dict) and 'required' in company_ppe_config:
-                        raw_required = company_ppe_config.get('required')
-                        # Normalize isimler (lowercase, trim) - SH17 ve pose-aware tarafı için güvenli
-                        if isinstance(raw_required, list):
-                            normalized = []
-                            for item in raw_required:
-                                if item is None:
-                                    continue
-                                try:
-                                    normalized.append(str(item).strip().lower())
-                                except Exception:
-                                    continue
-                            required_ppe = normalized
-                        else:
-                            required_ppe = None
+                    raw_list = self.db.get_company_ppe_requirements(company_id)
+                    if isinstance(raw_list, list) and raw_list:
+                        normalized = []
+                        for item in raw_list:
+                            if item is None:
+                                continue
+                            try:
+                                normalized.append(str(item).strip().lower())
+                            except Exception:
+                                continue
+                        required_ppe = normalized if normalized else None
                 except Exception as cfg_err:
-                    logger.warning(f"⚠️ PPE config okunamadı, varsayılan kullanılacak: {cfg_err}")
-                    required_ppe = None
+                    logger.warning(f"⚠️ PPE gereksinimleri okunamadı, sektör varsayılanı kullanılacak: {cfg_err}")
+            if required_ppe is None:
+                required_ppe = SECTOR_DEFAULT_PPE.get(sector) or SECTOR_DEFAULT_PPE.get('construction')
+                logger.info(f"📋 Sektör varsayılan PPE kullanılıyor (şirkette PPE tanımlı değil): {sector} -> {required_ppe}")
             
             if self.sh17_manager:
                 logger.info(f"🎯 SH17 PPE Detection - Sektör: {sector}")
@@ -2468,10 +2489,10 @@ smartsafe_requests_total 100
                         ppe_violations = []
                         ppe_compliant = 0
                         
+                        pose_aware_handled = False
                         try:
                             with _inference_semaphore:  # Max N thread aynı anda inference
                                 if pose_detector is not None:
-                                    # PoseAwarePPEDetector: person pose + PPE region analysis
                                     pose_result = pose_detector.detect_with_pose(
                                         frame, sector, optimized_confidence, required_ppe=required_ppe
                                     )
@@ -2482,6 +2503,7 @@ smartsafe_requests_total 100
                                         raw_violations = pose_result.get('ppe_violations', [])
                                         ppe_violations = raw_violations if isinstance(raw_violations, list) else []
                                         results = pose_result.get('detections', [])
+                                        pose_aware_handled = True
                                         logger.debug(
                                             f"🎯 PoseAware: {people_detected} kişi, "
                                             f"{pose_result.get('compliance_rate', 0)}% uyum"
@@ -2495,7 +2517,6 @@ smartsafe_requests_total 100
                                         results = []
 
                                 elif use_sh17 and model_manager:
-                                    # SH17 direkt PPE tespiti
                                     results = model_manager.detect_ppe(frame, sector, optimized_confidence)
                                     people_detected = sum(
                                         1 for d in results if d.get('class_name') == 'person'
@@ -2503,8 +2524,7 @@ smartsafe_requests_total 100
                                 else:
                                     results = []
                             
-                            # SH17 compliance analizi (sadece SH17 yolu ve required_ppe varsa)
-                            if people_detected > 0 and required_ppe and use_sh17 and model_manager:
+                            if not pose_aware_handled and people_detected > 0 and required_ppe and use_sh17 and model_manager:
                                 try:
                                     compliance_result = model_manager.analyze_compliance(results, required_ppe)
                                     ppe_compliant = compliance_result.get('total_detected', 0)
@@ -3053,39 +3073,55 @@ smartsafe_requests_total 100
     def _analyze_sh17_ppe_compliance(self, detections: List[Dict], sector: str) -> Dict[str, Any]:
         """SH17 detection sonuçlarından PPE compliance analizi"""
         try:
-            # Sektör bazlı gerekli PPE'ler
+            # Sektör bazlı gerekli PPE'ler — SECTOR_DEFAULT_PPE ile tutarlı canonical isimler
             sector_requirements = {
-                'construction': ['helmet', 'safety_vest'],
-                'manufacturing': ['helmet', 'safety_vest', 'gloves'],
-                'chemical': ['helmet', 'respirator', 'gloves', 'safety_glasses'],
-                'food_beverage': ['hair_net', 'gloves', 'apron'],
+                'construction': ['helmet', 'safety_vest', 'safety_shoes'],
+                'manufacturing': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
+                'chemical': ['helmet', 'safety_vest', 'safety_glasses', 'gloves'],
+                'food': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
+                'food_beverage': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
                 'warehouse_logistics': ['helmet', 'safety_vest', 'safety_shoes'],
-                'energy': ['helmet', 'safety_vest', 'safety_shoes', 'gloves'],
-                'petrochemical': ['helmet', 'respirator', 'safety_vest', 'gloves'],
-                'marine_shipyard': ['helmet', 'life_vest', 'safety_shoes'],
-                'aviation': ['aviation_helmet', 'reflective_vest', 'ear_protection']
+                'energy': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
+                'petrochemical': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
+                'marine_shipyard': ['helmet', 'safety_vest', 'safety_shoes'],
+                'aviation': ['helmet', 'safety_vest', 'safety_shoes'],
             }
-            
-            required_ppe = sector_requirements.get(sector, ['helmet', 'safety_vest'])
-            detected_ppe = []
-            
-            # Tespit edilen PPE'leri topla
+
+            # Canonical alias eşlemesi: model class_name → PPE requirement name
+            _COMPLIANCE_ALIASES = {
+                'face_mask_medical': 'face_mask',
+                'medical_suit': 'safety_suit',
+                'safety_suit': 'safety_suit',
+                'haircap': 'haircap',
+                'hair_net': 'haircap',
+                'hairnet': 'haircap',
+            }
+
+            required_ppe = sector_requirements.get(sector, ['helmet', 'safety_vest', 'safety_shoes'])
+            detected_ppe = set()
+
+            # Tespit edilen PPE'leri topla — alias eşlemesiyle
             for detection in detections:
                 class_name = detection.get('class_name', '')
-                if class_name in ['helmet', 'safety_vest', 'gloves', 'safety_shoes', 'safety_glasses', 'face_mask_medical']:
-                    detected_ppe.append(class_name)
-            
+                # Doğrudan eşleşme
+                if class_name in required_ppe:
+                    detected_ppe.add(class_name)
+                # Alias eşlemesi
+                alias = _COMPLIANCE_ALIASES.get(class_name)
+                if alias and alias in required_ppe:
+                    detected_ppe.add(alias)
+
             # Compliance kontrolü
             missing_ppe = [item for item in required_ppe if item not in detected_ppe]
             compliant = len(missing_ppe) == 0
-            
+
             return {
                 'compliant': compliant,
                 'missing_ppe': missing_ppe,
-                'detected_ppe': detected_ppe,
+                'detected_ppe': list(detected_ppe),
                 'required_ppe': required_ppe
             }
-            
+
         except Exception as e:
             logger.error(f"❌ SH17 compliance analysis error: {e}")
             return {'compliant': False, 'missing_ppe': ['Analysis Error']}
@@ -3653,11 +3689,18 @@ smartsafe_requests_total 100
                 'required_ppe': ['helmet', 'safety_vest', 'gloves', 'respirator']
             },
             'food': {
-                'has_hairnet': 'hairnet' not in missing_ppe,
+                'has_haircap': 'haircap' not in missing_ppe,
                 'has_gloves': 'gloves' not in missing_ppe,
-                'has_apron': 'apron' not in missing_ppe,
+                'has_safety_suit': 'safety_suit' not in missing_ppe,
                 'has_mask': 'face_mask' not in missing_ppe,
-                'required_ppe': ['hairnet', 'gloves', 'apron', 'face_mask']
+                'required_ppe': ['haircap', 'gloves', 'safety_suit', 'face_mask']
+            },
+            'food_beverage': {
+                'has_haircap': 'haircap' not in missing_ppe,
+                'has_gloves': 'gloves' not in missing_ppe,
+                'has_safety_suit': 'safety_suit' not in missing_ppe,
+                'has_mask': 'face_mask' not in missing_ppe,
+                'required_ppe': ['haircap', 'gloves', 'safety_suit', 'face_mask']
             },
             'warehouse': {
                 'has_helmet': 'helmet' not in missing_ppe,
@@ -4245,82 +4288,86 @@ smartsafe_requests_total 100
                 logger.warning(f"⚠️ Detection data string olarak geldi: {type(detection_data)}")
                 return frame
             
-            # Üst bilgi paneli
-            cv2.rectangle(frame, (0, 0), (640, 80), (0, 0, 0), -1)
-            cv2.rectangle(frame, (0, 0), (640, 80), (255, 255, 255), 2)
-            
-            # Başlık
-            cv2.putText(frame, 'SmartSafe AI - Live Detection', (10, 25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            # İstatistikler
             people_count = detection_data.get('people_detected', 0)
             compliance_rate = detection_data.get('compliance_rate', 0)
             violations = detection_data.get('ppe_violations', [])
-            
-            cv2.putText(frame, f'People: {people_count}', (10, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            cv2.putText(frame, f'Compliance: {compliance_rate}%', (120, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            cv2.putText(frame, f'Violations: {len(violations)}', (280, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            # Uyum durumu göstergesi
-            color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
-            cv2.circle(frame, (600, 40), 15, color, -1)
-            
+            sector = detection_data.get('sector')
+
+            compliant_count = max(0, people_count - len(violations)) if people_count > 0 else 0
+            if compliance_rate > 0 and people_count > 0:
+                compliant_count = int(round(compliance_rate * people_count / 100))
+
+            frame = draw_hud_bar(
+                frame,
+                people=people_count,
+                compliant=compliant_count,
+                compliance_rate=compliance_rate,
+                violations_count=len(violations),
+                sector=sector,
+            )
+
+            reset_label_registry()
+
             # 🎯 BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
+            # Draw order: persons first, then positive PPE, then missing PPE
+            # so that label deconfliction stacks missing labels above positive ones.
             detections = detection_data.get('detections', [])
             if detections and isinstance(detections, list):
-                for detection in detections:
-                    if not isinstance(detection, dict):
+                persons = []
+                positives = []
+                negatives = []
+                for det in detections:
+                    if not isinstance(det, dict):
                         continue
-                        
+                    cn = str(det.get('class_name', '')).lower()
+                    if cn in ('person', 'kisi', 'insan'):
+                        persons.append(det)
+                    elif det.get('missing', False):
+                        negatives.append(det)
+                    else:
+                        positives.append(det)
+
+                for detection in persons + positives + negatives:
                     bbox = detection.get('bbox', [])
                     class_name = detection.get('class_name', 'unknown')
                     confidence = detection.get('confidence', 0.0)
+                    is_missing = bool(detection.get('missing', False))
+                    is_person = class_name.lower() in ('person', 'kisi', 'insan')
                     
-                    if len(bbox) == 4:  # x1, y1, x2, y2
+                    if len(bbox) == 4:
                         try:
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
                             
-                            # PPE türüne göre renk belirle
-                            color = get_class_color(class_name, is_missing=False)
+                            color = get_class_color(class_name, is_missing=is_missing)
                             
-                            # Etiket hazırla
                             label = f"{class_name} {confidence:.2f}"
                             
-                            # Profesyonel bounding box çiz
-                            frame = draw_styled_box(frame, x1, y1, x2, y2, label, color)
+                            frame = draw_styled_box(
+                                frame, x1, y1, x2, y2, label, color,
+                                confidence=confidence,
+                                is_person=is_person,
+                                is_missing=is_missing,
+                            )
                         except Exception as bbox_error:
                             logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
                             continue
             
-            # İhlal detayları
-            if violations and isinstance(violations, list):
-                y_offset = 100
-                for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
-                    if isinstance(violation, dict):
-                        missing_ppe = ', '.join(violation.get('missing_ppe', []))
-                        cv2.putText(frame, f'Violation {i+1}: {missing_ppe}', (10, y_offset), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
-                        y_offset += 20
-            
-            # Zaman damgası
+            # Zaman damgası (sağ alt köşe)
             timestamp = detection_data.get('timestamp', '')
             if timestamp:
                 try:
                     if isinstance(timestamp, (int, float)):
-                        # Unix timestamp'i string'e çevir
                         from datetime import datetime as dt
-                        timestamp_str = dt.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                        timestamp_str = dt.fromtimestamp(timestamp).strftime('%H:%M:%S')
                     else:
-                        timestamp_str = str(timestamp)[:19]
+                        timestamp_str = str(timestamp)[:8]
                     
-                    cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                    fh, fw = frame.shape[:2]
+                    ts_font = cv2.FONT_HERSHEY_DUPLEX
+                    ts_scale = max(0.35, 0.40 * max(0.45, min(fh / 720.0, 2.0)))
+                    (tsw, tsh), _ = cv2.getTextSize(timestamp_str, ts_font, ts_scale, 1)
+                    cv2.putText(frame, timestamp_str, (fw - tsw - 10, fh - 10),
+                                ts_font, ts_scale, (200, 200, 200), 1, cv2.LINE_AA)
                 except Exception as ts_error:
                     logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
             

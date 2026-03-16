@@ -15,7 +15,7 @@ if PROJECT_ROOT not in sys.path:
 
 from app import SmartSafeSaaSAPI  # type: ignore
 from detection.pose_aware_ppe_detector import get_pose_aware_detector  # type: ignore
-from detection.utils.visual_overlay import draw_styled_box, get_class_color  # type: ignore
+from detection.utils.visual_overlay import draw_styled_box, get_class_color, draw_hud_bar, reset_label_registry  # type: ignore
 
 
 # Varsayılan test videosu (proje köküne göre göreli yol)
@@ -227,11 +227,15 @@ def main() -> None:
         if args.skip > 1 and frame_idx % args.skip != 0:
             continue
 
-        # Downscale frame for faster inference; bbox'ları sonra orijinale map edeceğiz.
         orig_h, orig_w = frame.shape[:2]
-        scale = 0.5
-        small_w, small_h = int(orig_w * scale), int(orig_h * scale)
-        frame_small = cv2.resize(frame, (small_w, small_h))
+        target_h = 720
+        if orig_h > target_h:
+            scale = target_h / orig_h
+            small_w, small_h = int(orig_w * scale), target_h
+            frame_small = cv2.resize(frame, (small_w, small_h))
+        else:
+            scale = 1.0
+            frame_small = frame
 
         # Optional: inspect raw SH17 detections for the first few frames
         if args.debug_raw and frame_idx <= args.debug_frames:
@@ -240,10 +244,12 @@ def main() -> None:
                 "helmet",
                 "safety_vest",
                 "safety_suit",
+                "medical_suit",
                 "shoes",
                 "gloves",
                 "glasses",
                 "face_mask_medical",
+                "haircap",
             ]
             interesting = [
                 {
@@ -274,7 +280,7 @@ def main() -> None:
             pass
 
         result = pose_detector.detect_with_pose(
-            frame_small,
+            frame,
             sector=sector,
             confidence=args.confidence,
             required_ppe=required_ppe,
@@ -310,45 +316,41 @@ def main() -> None:
                     )
                     break
 
-        # Draw persons and PPE boxes using the same visual style utilities
+        # Draw persons and PPE boxes using the shared visual overlay module
         annotated = frame.copy()
+        reset_label_registry()
         for det in detections:
             bbox = det.get("bbox")
             if not bbox or len(bbox) != 4:
                 continue
-            # Bbox'lar küçük çözünürlükte; orijinal frame'e çizmek için tekrar ölçekle
-            x1, y1, x2, y2 = bbox
-            x1 = int(x1 / scale)
-            y1 = int(y1 / scale)
-            x2 = int(x2 / scale)
-            y2 = int(y2 / scale)
+            x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
             class_name = str(det.get("class_name", ""))
+            conf = float(det.get("confidence", 0.0))
             is_missing = bool(det.get("missing", False))
+            is_person = "person" in class_name.lower()
             color = get_class_color(class_name, is_missing=is_missing)
+            label = f"{class_name.upper()} {conf:.2f}"
             annotated = draw_styled_box(
-                annotated,
-                int(x1),
-                int(y1),
-                int(x2),
-                int(y2),
-                f"{class_name}",
-                color,
+                annotated, x1, y1, x2, y2,
+                label, color,
+                confidence=conf,
+                is_person=is_person,
+                is_missing=is_missing,
             )
 
-        # Small HUD with summary
-        text = f"People: {people} | Compliant: {compliant} | Compliance: {compliance_rate:.1f}%"
-        cv2.putText(
+        annotated = draw_hud_bar(
             annotated,
-            text,
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),
-            2,
-            cv2.LINE_AA,
+            people=people,
+            compliant=compliant,
+            compliance_rate=compliance_rate,
+            sector=sector,
         )
 
         if not args.no_window:
+            disp_h, disp_w = annotated.shape[:2]
+            if disp_h > 720:
+                disp_scale = 720 / disp_h
+                annotated = cv2.resize(annotated, (int(disp_w * disp_scale), 720))
             cv2.imshow(window_name, annotated)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break

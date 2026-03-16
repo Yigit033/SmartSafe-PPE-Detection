@@ -134,6 +134,17 @@ class SH17ModelManager:
         SH17ModelManager._initialized = True
         logger.info("✅ SH17ModelManager initialization complete (Singleton)")
         
+    # ── GPU memory management ────────────────────────────────────────────
+    @staticmethod
+    def _clear_gpu_cache():
+        """Best-effort GPU cache flush after an OOM event."""
+        if torch is not None and torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            except Exception:
+                pass
+
     # ─── Canonical SH17 class-name normalisation ───────────────────────────────
     # Model output names  →  our internal names used in sector_mapping & PPE_CONFIG
     #
@@ -317,8 +328,23 @@ class SH17ModelManager:
                 model = YOLO(local_path)
                 model.to(self.device)
                 self._food_ppe_model = model
+                actual_names = getattr(model, 'names', {})
                 logger.info(f"✅ Food PPE local model yüklendi: {local_path}")
-                logger.info(f"   Sınıflar: {getattr(model, 'names', {})}")
+                logger.info(f"   Sınıflar (model.names): {actual_names}")
+                # Haircap sınıfının model.names'de mevcut olup olmadığını kontrol et
+                haircap_in_model = [f"{k}:{v}" for k, v in actual_names.items()
+                                    if v in self._FOOD_PPE_NAME_MAP and
+                                    self._FOOD_PPE_NAME_MAP[v] == 'haircap']
+                if haircap_in_model:
+                    logger.info(f"   ✅ Haircap sınıf(lar)ı model'de mevcut: {haircap_in_model}")
+                else:
+                    # Haircap sınıfı bulunamadı — olası isim uyuşmazlığı
+                    logger.warning(
+                        f"   ⚠️ Haircap sınıfı model.names'de bulunamadı! "
+                        f"Bilinen varyantlar (_FOOD_PPE_NAME_MAP) ile eşleşen yok. "
+                        f"Model sınıfları: {actual_names}. "
+                        f"Rescue pass dışlama stratejisi devreye girecek."
+                    )
                 return model
             except Exception as e:
                 logger.warning(f"⚠️ Food PPE local model yüklenemedi: {e}")
@@ -329,11 +355,25 @@ class SH17ModelManager:
         return None
 
     # Food PPE sınıf adı → canonical iç isim
+    # NOT: Roboflow eğitim datasında typo'lar var (Googles, Appron).
+    # Model ağırlıklarındaki sınıf adları data.yaml'dan farklı olabilir;
+    # bu yüzden olası tüm varyantları ekliyoruz.
     _FOOD_PPE_NAME_MAP = {
         'Apron':    'medical_suit',   # Önlük → medical_suit surrogate
         'apron':    'medical_suit',
+        'Appron':   'medical_suit',   # Model ağırlıklarındaki typo varyantı
+        'appron':   'medical_suit',
         'Haircap':  'haircap',        # Saç filesi/bone
         'haircap':  'haircap',
+        'Hair_cap': 'haircap',        # Olası model varyantları
+        'hair_cap': 'haircap',
+        'HairCap':  'haircap',
+        'Hairnet':  'haircap',
+        'hairnet':  'haircap',
+        'Hair_net': 'haircap',
+        'hair_net': 'haircap',
+        'Bonnet':   'haircap',
+        'bonnet':   'haircap',
         'Mask':     'face_mask_medical',
         'mask':     'face_mask_medical',
         'Googles':  'glasses',        # Roboflow typo: Googles = Goggles
@@ -343,52 +383,354 @@ class SH17ModelManager:
         'Gloves':   'gloves',
     }
 
+    # Food model confidence cap — configurable via env var FOOD_PPE_CONFIDENCE
+    _FOOD_PPE_CONFIDENCE: float = float(os.environ.get('FOOD_PPE_CONFIDENCE', '0.10'))
+
+    # Haircap is notoriously hard for the food model; use a separate lower threshold
+    _HAIRCAP_RESCUE_CONF: float = float(os.environ.get('HAIRCAP_RESCUE_CONF', '0.005'))
+
     def _detect_with_food_model(self, image, confidence):
         """Local food PPE model ile detection — SH17'ye ek sınıfları döndürür."""
         model = self._load_food_ppe_model()
         if model is None:
             return []
         try:
-            results = model(image, conf=confidence, device=self.device, verbose=False)
+            food_conf = min(confidence, self._FOOD_PPE_CONFIDENCE)
+            img_h, img_w = image.shape[:2]
+            food_imgsz = max(960, min(1280, max(img_h, img_w)))
+            results = model(image, conf=food_conf, device=self.device, verbose=False, imgsz=food_imgsz)
             detections = []
             model_names = getattr(model, 'names', {})
+            frame_area = max(img_h * img_w, 1)
+
+            # Collect ALL raw detections for diagnostic logging
+            all_raw = []
             for result in results:
                 if result.boxes is None:
                     continue
                 for box in result.boxes:
                     try:
-                        raw_name = model_names.get(int(box.cls[0].item()), 'unknown')
-                        canonical = self._FOOD_PPE_NAME_MAP.get(raw_name, raw_name.lower())
-                        detections.append({
-                            'class_id': int(box.cls[0].item()),
-                            'class_name': canonical,
-                            'confidence': float(box.conf[0].item()),
-                            'bbox': box.xyxy[0].cpu().numpy().tolist(),
-                            'sector': 'food',
-                            'model_type': 'FoodPPE-Local',
-                            'raw_name': raw_name,
-                        })
+                        rn = model_names.get(int(box.cls[0].item()), '?')
+                        rc = float(box.conf[0].item())
+                        rb = box.xyxy[0].cpu().numpy().tolist()
+                        bw = rb[2] - rb[0]
+                        bh = rb[3] - rb[1]
+                        cov = (bw * bh) / frame_area * 100 if frame_area > 0 else 0
+                        all_raw.append((rn, rc, cov, rb, int(box.cls[0].item())))
                     except Exception:
-                        continue
-            logger.debug(f"🍽️ Food PPE local: {len(detections)} tespit")
+                        pass
+
+            for rn, rc, cov, rb, cls_id in all_raw:
+                canonical = self._FOOD_PPE_NAME_MAP.get(rn, rn.lower())
+                if cov > 60:
+                    logger.debug(f"🍽️ Food PPE: {rn} rejected — oversized ({cov:.0f}%)")
+                    continue
+                detections.append({
+                    'class_id': cls_id,
+                    'class_name': canonical,
+                    'confidence': rc,
+                    'bbox': rb,
+                    'sector': 'food',
+                    'model_type': 'FoodPPE-Local',
+                    'raw_name': rn,
+                })
+
+            # ── Haircap rescue pass ──────────────────────────────────────────
+            # If no haircap was found in the primary pass, run a second
+            # inference at a much lower confidence to catch faint detections.
+            # CRITICAL: canonical class_name kullan (raw_name model-specific olabilir)
+            haircap_found = any(d.get('class_name') == 'haircap' for d in detections)
+            if not haircap_found:
+                # Rescue her zaman _HAIRCAP_RESCUE_CONF ile çalışır (primary conf'tan bağımsız)
+                rescue_conf = self._HAIRCAP_RESCUE_CONF
+                try:
+                    rescue_results = model(image, conf=rescue_conf, device=self.device,
+                                           verbose=False, imgsz=food_imgsz)
+
+                    # ── Haircap class ID tespiti — model adlarına bağımlı olmayan yaklaşım ──
+                    # Model sınıf adları eğitim datasındaki typo'lar yüzünden beklenenden
+                    # farklı olabilir (örn: Appron vs Apron). İki strateji:
+                    # 1. İsim tabanlı: bilinen haircap varyantlarını eşle
+                    # 2. Dışlama tabanlı: bilinen non-haircap sınıflarını çıkar, kalanı haircap say
+                    _HAIRCAP_NAME_TOKENS = ('haircap', 'hair_cap', 'hairnet', 'hair_net',
+                                            'bonnet', 'bone', 'kep', 'cap')
+                    _NON_HAIRCAP_CANONICAL = {'medical_suit', 'glasses', 'face_mask_medical', 'gloves'}
+
+                    haircap_cls_ids = set()
+                    # Strateji 1: _FOOD_PPE_NAME_MAP üzerinden canonical eşleme
+                    # Bu en güvenilir yöntem — tüm bilinen isim varyantlarını kapsar
+                    for k, v in model_names.items():
+                        canonical = self._FOOD_PPE_NAME_MAP.get(v, self._FOOD_PPE_NAME_MAP.get(v.lower(), ''))
+                        if canonical == 'haircap':
+                            haircap_cls_ids.add(k)
+                    if haircap_cls_ids:
+                        logger.info(f"🍽️ Haircap rescue (canonical match): cls_ids={haircap_cls_ids}")
+
+                    # Strateji 2: isim tabanlı token eşleme (fallback)
+                    if not haircap_cls_ids:
+                        for k, v in model_names.items():
+                            vl = v.lower().replace(' ', '_')
+                            if any(token in vl for token in _HAIRCAP_NAME_TOKENS):
+                                haircap_cls_ids.add(k)
+                        if haircap_cls_ids:
+                            logger.info(f"🍽️ Haircap rescue (token match): cls_ids={haircap_cls_ids}")
+
+                    # Strateji 3: dışlama — bilinen non-haircap sınıfları çıkar
+                    if not haircap_cls_ids:
+                        for k, v in model_names.items():
+                            canonical_check = self._FOOD_PPE_NAME_MAP.get(
+                                v, self._FOOD_PPE_NAME_MAP.get(v.lower(), ''))
+                            if canonical_check in _NON_HAIRCAP_CANONICAL:
+                                continue
+                            haircap_cls_ids.add(k)
+                        if haircap_cls_ids:
+                            logger.info(f"🍽️ Haircap rescue (exclusion strategy): candidate class_ids={haircap_cls_ids}, "
+                                       f"model_names={{ k: model_names[k] for k in haircap_cls_ids }}")
+
+                    # Sanity check: class ID'lerin model'in gerçek sınıf aralığında olduğunu doğrula
+                    valid_ids = set(model_names.keys())
+                    invalid_ids = haircap_cls_ids - valid_ids
+                    if invalid_ids:
+                        logger.warning(f"🍽️ Haircap rescue: geçersiz class_ids tespit edildi ve çıkarıldı: {invalid_ids} "
+                                      f"(geçerli aralık: {valid_ids})")
+                        haircap_cls_ids -= invalid_ids
+
+                    if not haircap_cls_ids:
+                        logger.warning(
+                            f"🍽️ Haircap rescue: model sınıflarında haircap bulunamadı! "
+                            f"model.names={model_names}"
+                        )
+
+                    # Diagnostik: rescue inference'ın TÜM sınıf dağılımını logla
+                    rescue_all_classes: Dict[int, int] = {}
+                    rescue_raw = []
+                    for rr in rescue_results:
+                        if rr.boxes is None:
+                            continue
+                        for box in rr.boxes:
+                            try:
+                                cls_id = int(box.cls[0].item())
+                                rescue_all_classes[cls_id] = rescue_all_classes.get(cls_id, 0) + 1
+                                if cls_id not in haircap_cls_ids:
+                                    continue
+                                rn = model_names.get(cls_id, '?')
+                                rc = float(box.conf[0].item())
+                                rb = box.xyxy[0].cpu().numpy().tolist()
+                                bw = rb[2] - rb[0]
+                                bh = rb[3] - rb[1]
+                                cov = (bw * bh) / frame_area * 100
+                                rescue_raw.append((rn, rc, cov, rb, cls_id))
+                            except Exception:
+                                pass
+                    # Tüm sınıfların dağılımını göster — model'in class_id=2'yi üretip üretmediğini doğrulamak için
+                    rescue_class_summary = {model_names.get(k, f'?{k}'): v for k, v in rescue_all_classes.items()}
+                    if rescue_raw:
+                        logger.info(f"🍽️ Haircap rescue: {len(rescue_raw)} raw at conf>={rescue_conf}")
+                    else:
+                        logger.info(f"🍽️ Haircap rescue: 0 haircap at conf>={rescue_conf}, "
+                                   f"target_cls_ids={haircap_cls_ids}, "
+                                   f"all_classes_in_rescue={rescue_class_summary}, "
+                                   f"model.names={model_names}")
+                    for rn, rc, cov, rb, cls_id in rescue_raw:
+                        if cov > 60:
+                            logger.debug(f"🍽️ Haircap rescue: {rn} rejected — oversized ({cov:.0f}%)")
+                            continue
+                        canonical = self._FOOD_PPE_NAME_MAP.get(rn, rn.lower())
+                        # Eğer canonical hâlâ haircap değilse, zorla haircap yap
+                        # (exclusion strategy ile bulunan sınıflar için)
+                        if canonical not in ('haircap',):
+                            canonical = 'haircap'
+                        detections.append({
+                            'class_id': cls_id,
+                            'class_name': canonical,
+                            'confidence': rc,
+                            'bbox': rb,
+                            'sector': 'food',
+                            'model_type': 'FoodPPE-Local-Rescue',
+                            'raw_name': rn,
+                        })
+                except Exception as rescue_err:
+                    logger.debug(f"🍽️ Haircap rescue failed: {rescue_err}")
+
+            # ── Logging ──────────────────────────────────────────────────────
+            raw_str = ', '.join(f"{rn}({rc:.2f},{cov:.0f}%)" for rn, rc, cov, *_ in all_raw)
+            if detections:
+                summary = {}
+                for d in detections:
+                    key = d.get('raw_name', d.get('class_name', '?'))
+                    summary[key] = summary.get(key, 0) + 1
+                logger.info(f"🍽️ Food PPE local: {len(detections)} tespit (conf>={food_conf}, imgsz={food_imgsz}, img={img_w}x{img_h}) → {summary}")
+            else:
+                logger.info(f"🍽️ Food PPE local: 0 tespit (conf>={food_conf}, imgsz={food_imgsz}, img={img_w}x{img_h}, raw=[{raw_str}])")
             return detections
+        except RuntimeError as e:
+            if 'out of memory' in str(e).lower() or 'CUDA' in str(e):
+                logger.warning(f"🔴 Food PPE CUDA OOM — clearing cache")
+                self._clear_gpu_cache()
+            else:
+                logger.warning(f"⚠️ Food PPE detection hatası: {e}")
+            return []
         except Exception as e:
             logger.warning(f"⚠️ Food PPE detection hatası: {e}")
             return []
+
+    def _detect_haircap_by_head_crop(self, image, sh17_detections):
+        """Fallback haircap detection: SH17 head tespitlerini crop'layıp food model'e yakınlaştırılmış gönder.
+
+        SAHI (Slicing Aided Hyper Inference) mantığı: küçük nesneler (bone/haircap) tam
+        frame'de tespit edilemeyebilir ama baş bölgesi kesilip büyütülünce
+        model daha iyi görebilir.
+
+        Eğer food model yine haircap bulamazsa, basit renk analizi ile
+        beyaz/açık mavi bone varlığını kontrol eder (gıda fabrikasında boneler
+        genelde beyaz veya açık mavi olur).
+        """
+        model = self._load_food_ppe_model()
+        if model is None:
+            return []
+
+        head_dets = [d for d in sh17_detections
+                     if d.get('class_name') == 'head' and d.get('bbox') and len(d.get('bbox', [])) == 4]
+        if not head_dets:
+            return []
+
+        img_h, img_w = image.shape[:2]
+        model_names = getattr(model, 'names', {})
+
+        # Haircap class ID bul
+        haircap_cls_id = None
+        for k, v in model_names.items():
+            canonical = self._FOOD_PPE_NAME_MAP.get(v, self._FOOD_PPE_NAME_MAP.get(v.lower(), ''))
+            if canonical == 'haircap':
+                haircap_cls_id = k
+                break
+        if haircap_cls_id is None:
+            return []
+
+        haircap_detections = []
+
+        for head in head_dets:
+            bbox = head['bbox']
+            x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+            w, h = x2 - x1, y2 - y1
+            if w < 5 or h < 5:
+                continue
+
+            # Crop'u %50 genişlet (bağlam için)
+            pad_x, pad_y = int(w * 0.5), int(h * 0.5)
+            cx1 = max(0, x1 - pad_x)
+            cy1 = max(0, y1 - pad_y)
+            cx2 = min(img_w, x2 + pad_x)
+            cy2 = min(img_h, y2 + pad_y)
+
+            crop = image[cy1:cy2, cx1:cx2]
+            if crop.size == 0:
+                continue
+
+            # ── Strateji 1: Food model'i crop üzerinde çalıştır ──
+            try:
+                crop_results = model(crop, conf=0.01, device=self.device,
+                                     verbose=False, imgsz=640)
+                for cr in crop_results:
+                    if cr.boxes is None:
+                        continue
+                    for box in cr.boxes:
+                        cls_id = int(box.cls[0].item())
+                        if cls_id != haircap_cls_id:
+                            continue
+                        rc = float(box.conf[0].item())
+                        rb = box.xyxy[0].cpu().numpy().tolist()
+                        # Bbox'ı orijinal frame koordinatlarına geri dönüştür
+                        rb = [rb[0] + cx1, rb[1] + cy1, rb[2] + cx1, rb[3] + cy1]
+                        haircap_detections.append({
+                            'class_id': cls_id,
+                            'class_name': 'haircap',
+                            'confidence': rc,
+                            'bbox': rb,
+                            'sector': 'food',
+                            'model_type': 'FoodPPE-HeadCrop',
+                            'raw_name': model_names.get(cls_id, '?'),
+                        })
+            except Exception as e:
+                logger.debug(f"🍽️ Head-crop inference failed: {e}")
+
+        # ── Strateji 2: Renk analizi fallback ──
+        # Eğer head-crop da haircap bulamadıysa, baş bölgesinin üst yarısında
+        # beyaz/açık mavi renk analizi yap. Gıda fabrikasında boneler genelde
+        # beyaz veya açık mavi tek-renkli olur.
+        if not haircap_detections:
+            for head in head_dets:
+                bbox = head['bbox']
+                x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+                x1 = max(0, x1)
+                y1 = max(0, y1)
+                x2 = min(img_w, x2)
+                y2 = min(img_h, y2)
+                head_h = y2 - y1
+                if head_h < 10 or (x2 - x1) < 10:
+                    continue
+
+                # Başın üst %50'sini al (bone bölgesi)
+                crop_top = image[y1:y1 + int(head_h * 0.5), x1:x2]
+                if crop_top.size == 0:
+                    continue
+
+                try:
+                    import cv2 as _cv2
+                    hsv = _cv2.cvtColor(crop_top, _cv2.COLOR_BGR2HSV)
+                    h_ch, s_ch, v_ch = _cv2.split(hsv)
+                    total_px = max(crop_top.shape[0] * crop_top.shape[1], 1)
+
+                    # Beyaz bone: düşük satürasyon, yüksek parlaklık
+                    white_mask = (s_ch < 60) & (v_ch > 150)
+                    white_ratio = float(np.sum(white_mask)) / total_px
+
+                    # Açık mavi bone: H 90-130, orta satürasyon, yüksek parlaklık
+                    blue_mask = (h_ch >= 85) & (h_ch <= 135) & (s_ch >= 25) & (s_ch <= 160) & (v_ch > 110)
+                    blue_ratio = float(np.sum(blue_mask)) / total_px
+
+                    cap_ratio = white_ratio + blue_ratio
+
+                    if cap_ratio > 0.35:  # Üst baş piksellerinin %35+ bone rengi
+                        conf = min(0.70, 0.3 + cap_ratio * 0.5)
+                        haircap_detections.append({
+                            'class_id': -1,
+                            'class_name': 'haircap',
+                            'confidence': conf,
+                            'bbox': [float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])],
+                            'sector': 'food',
+                            'model_type': 'ColorAnalysis-Fallback',
+                            'raw_name': 'haircap_color',
+                        })
+                        logger.info(f"🍽️ Color haircap: white={white_ratio:.0%} blue={blue_ratio:.0%} "
+                                   f"total={cap_ratio:.0%} → conf={conf:.2f}")
+                except ImportError:
+                    logger.debug("cv2 not available for color analysis fallback")
+                    break
+                except Exception as e:
+                    logger.debug(f"Color analysis failed: {e}")
+
+        if haircap_detections:
+            logger.info(f"🍽️ Head-crop/color haircap rescue: {len(haircap_detections)} detections "
+                       f"(types: {[d['model_type'] for d in haircap_detections]})")
+        return haircap_detections
 
     def detect_ppe(self, image, sector='base', confidence=0.5):
         """PPE tespiti — SH17 + food sektörü için dual-model desteği."""
         is_food = sector in ('food', 'food_beverage')
         try:
             # ── Adım 1: SH17 (genel PPE) ──────────────────────────────────
+            # Food sektöründe safety_suit/apron genelde 0.35-0.45 aralığında
+            # tespit ediliyor; 0.5 threshold çok yüksek. Food için conf düşür.
+            sh17_conf = min(confidence, 0.30) if is_food else confidence
             if sector in self.models and self.models[sector] is not None:
-                logger.debug(f"🎯 SH17 {sector} modeli ile detection")
-                sh17_results = self._detect_with_sh17(image, sector, confidence)
+                logger.debug(f"🎯 SH17 {sector} modeli ile detection (conf={sh17_conf})")
+                sh17_results = self._detect_with_sh17(image, sector, sh17_conf)
             elif self.models:
-                sh17_results = self._detect_with_sh17(image, sector, confidence)
+                sh17_results = self._detect_with_sh17(image, sector, sh17_conf)
             elif self.fallback_model is not None:
                 logger.debug(f"🔄 Fallback model ile detection (sector: {sector})")
-                sh17_results = self._detect_with_fallback(image, sector, confidence)
+                sh17_results = self._detect_with_fallback(image, sector, sh17_conf)
             else:
                 logger.error("❌ Hiçbir model yüklü değil!")
                 sh17_results = []
@@ -397,17 +739,30 @@ class SH17ModelManager:
 
             # ── Adım 2: Gıda sektörü → food PPE local model ekle ──────────
             if is_food:
+                self._clear_gpu_cache()
                 food_results = self._detect_with_food_model(image, confidence)
                 if food_results:
-                    # Tüm food tespitlerini ekle — aynı class_name olsa bile.
-                    # Pose-aware association aşamasında her kişi için en iyi
-                    # IoU eşleşmesi seçilecek; burada filtreleme yapmak
-                    # food modelin kişiye-özel tespitlerini kaybettiriyor.
                     sh17_results.extend(food_results)
                     logger.debug(f"🍽️ Food merge: +{len(food_results)} food tespit → toplam {len(sh17_results)}")
 
+                # ── Adım 3: Haircap head-crop rescue ──────────────────────
+                # Food model haircap bulamadıysa, SH17 head tespitlerini
+                # crop'layıp yakınlaştırarak tekrar dene + renk analizi fallback
+                has_haircap = any(d.get('class_name') == 'haircap' for d in sh17_results)
+                if not has_haircap:
+                    head_crop_results = self._detect_haircap_by_head_crop(image, sh17_results)
+                    if head_crop_results:
+                        sh17_results.extend(head_crop_results)
+
             return sh17_results
 
+        except RuntimeError as e:
+            if 'out of memory' in str(e).lower() or 'CUDA' in str(e):
+                logger.error(f"🔴 detect_ppe CUDA OOM — clearing cache")
+                self._clear_gpu_cache()
+            else:
+                logger.error(f"❌ Detection hatası: {e}")
+            return []
         except Exception as e:
             logger.error(f"❌ Detection hatası: {e}")
             try:
@@ -479,6 +834,13 @@ class SH17ModelManager:
 
             return detections
 
+        except RuntimeError as e:
+            if 'out of memory' in str(e).lower() or 'CUDA' in str(e):
+                logger.error(f"🔴 SH17 CUDA OOM — clearing cache")
+                self._clear_gpu_cache()
+            else:
+                logger.error(f"❌ SH17 detection hatası: {e}")
+            return []
         except Exception as e:
             logger.error(f"❌ SH17 detection hatası: {e}")
             return []
@@ -539,16 +901,36 @@ class SH17ModelManager:
         """Sektör için gerekli PPE listesi"""
         return self.sector_mapping.get(sector, self.sector_mapping['construction'])
     
+    _COMPLIANCE_ALIASES = {
+        'hairnet': ['haircap', 'Haircap', 'bone', 'hair_net'],
+        'hair_net': ['haircap', 'Haircap', 'bone', 'hairnet'],
+        'apron': ['safety_suit', 'Safety Suit', 'medical_suit', 'Apron'],
+        'face_mask': ['Face Mask', 'face_mask_medical', 'Mask'],
+        'gloves': ['Gloves'],
+        'helmet': ['Helmet', 'hard_hat', 'hardhat'],
+        'safety_vest': ['Safety Vest', 'vest'],
+    }
+
     def analyze_compliance(self, detections, required_ppe):
-        """PPE uyumluluk analizi"""
+        """PPE uyumluluk analizi — alias mapping ile."""
         if not detections:
             return {'compliant': False, 'missing': required_ppe, 'score': 0.0}
-        
-        detected_ppe = [d['class_name'] for d in detections if d['class_name'] in required_ppe]
-        missing_ppe = [ppe for ppe in required_ppe if ppe not in detected_ppe]
-        
+
+        det_names = {d.get('class_name', '') for d in detections if isinstance(d, dict)}
+
+        def _is_detected(ppe_name):
+            if ppe_name in det_names:
+                return True
+            for alias in self._COMPLIANCE_ALIASES.get(ppe_name, []):
+                if alias in det_names:
+                    return True
+            return False
+
+        detected_ppe = [ppe for ppe in required_ppe if _is_detected(ppe)]
+        missing_ppe = [ppe for ppe in required_ppe if not _is_detected(ppe)]
+
         compliance_score = len(detected_ppe) / len(required_ppe) if required_ppe else 0.0
-        
+
         return {
             'compliant': len(missing_ppe) == 0,
             'detected': detected_ppe,

@@ -15,7 +15,6 @@ from datetime import datetime
 import numpy as np
 
 # Import existing modules
-from integrations.cameras.ppe_detection_manager import PPEDetectionManager
 from database.database_adapter import get_db_adapter
 from detection.violation_tracker import get_violation_tracker
 from detection.snapshot_manager import get_snapshot_manager
@@ -139,7 +138,6 @@ class DVRStreamProcessor:
         self.active_streams = {}  # {stream_id: cv2.VideoCapture}
         self.detection_threads = {}  # {stream_id: Thread}
         self.results_queue = queue.Queue(maxsize=200)  # Bounded queue — bellek dolmasını önler
-        self.ppe_manager = PPEDetectionManager()
         self.db_adapter = get_db_adapter()
         self._lock = threading.Lock()  # Thread-safe dict operasyonları için
         self.sh17_manager = None  # EnhancedPPEDetectionManager tarafından set edilir
@@ -791,7 +789,6 @@ class EnhancedPPEDetectionManager:
     """DVR ve normal kameralar için gelişmiş PPE detection"""
     
     def __init__(self):
-        self.ppe_manager = PPEDetectionManager()
         self.dvr_processor = DVRStreamProcessor()
         self.sh17_manager = None
         self.sh17_available = False

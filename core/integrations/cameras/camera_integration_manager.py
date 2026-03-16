@@ -23,6 +23,7 @@ import xml.etree.ElementTree as ET
 # Violation tracking imports
 from detection.violation_tracker import get_violation_tracker
 from detection.snapshot_manager import get_snapshot_manager
+from integrations.cameras.ffmpeg_stream_reader import create_stream_reader
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1654,7 +1655,8 @@ class ProfessionalCameraManager:
     """Enterprise-grade camera management system"""
     
     def __init__(self):
-        self.active_cameras: Dict[str, cv2.VideoCapture] = {}
+        # Generic reader interface (FFmpegStreamReader or CV2StreamReader)
+        self.active_cameras: Dict[str, Any] = {}
         self.camera_configs: Dict[str, CameraSource] = {}
         self.connection_threads: Dict[str, threading.Thread] = {}
         self.frame_buffers: Dict[str, np.ndarray] = {}
@@ -1965,25 +1967,26 @@ class ProfessionalCameraManager:
                 logger.error(f"❌ Connection test failed: {camera_config.name}")
                 return False
             
-            # Create video capture
+            # Create stream reader (FFmpeg preferred, cv2 fallback)
             if camera_config.source_type == 'ip_webcam':
                 video_url = camera_config.connection_url.replace('/shot.jpg', '/video')
-                cap = cv2.VideoCapture(video_url)
             else:
-                cap = cv2.VideoCapture(camera_config.connection_url)
-            
-            if not cap.isOpened():
-                logger.error(f"❌ Failed to open camera: {camera_config.name}")
+                video_url = camera_config.connection_url
+
+            reader = create_stream_reader(
+                video_url,
+                width=camera_config.resolution[0],
+                height=camera_config.resolution[1],
+                fps=int(camera_config.fps),
+                prefer_ffmpeg=True,
+            )
+
+            if not reader.start():
+                logger.error(f"❌ Failed to start stream reader: {camera_config.name}")
                 return False
             
-            # Configure camera settings
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config.resolution[0])
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config.resolution[1])
-            cap.set(cv2.CAP_PROP_FPS, camera_config.fps)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
-            
             # Store camera
-            self.active_cameras[camera_config.camera_id] = cap
+            self.active_cameras[camera_config.camera_id] = reader
             self.camera_configs[camera_config.camera_id] = camera_config
             
             # Initialize tracking
@@ -2017,7 +2020,7 @@ class ProfessionalCameraManager:
         """Professional frame capture with performance monitoring"""
         logger.info(f"📹 Starting frame capture: {camera_id}")
         
-        cap = self.active_cameras[camera_id]
+        reader = self.active_cameras[camera_id]
         config = self.camera_configs[camera_id]
         stats = self.connection_stats[camera_id]
         
@@ -2029,9 +2032,9 @@ class ProfessionalCameraManager:
             try:
                 frame_start = time.time()
                 
-                ret, frame = cap.read()
+                frame = reader.read_frame()
                 
-                if ret and frame is not None:
+                if frame is not None:
                     # Store frame
                     self.frame_buffers[camera_id] = frame.copy()
                     self.last_frames[camera_id] = datetime.now()
@@ -2062,17 +2065,27 @@ class ProfessionalCameraManager:
                         logger.info(f"🔄 Attempting reconnection: {camera_id} ({reconnect_attempts + 1}/{max_reconnect_attempts})")
                         
                         # Try to reconnect
-                        cap.release()
+                        try:
+                            reader.stop()
+                        except Exception:
+                            pass
                         time.sleep(2)
                         
                         if config.source_type == 'ip_webcam':
                             video_url = config.connection_url.replace('/shot.jpg', '/video')
-                            cap = cv2.VideoCapture(video_url)
                         else:
-                            cap = cv2.VideoCapture(config.connection_url)
-                        
-                        if cap.isOpened():
-                            self.active_cameras[camera_id] = cap
+                            video_url = config.connection_url
+
+                        reader = create_stream_reader(
+                            video_url,
+                            width=config.resolution[0],
+                            height=config.resolution[1],
+                            fps=int(config.fps),
+                            prefer_ffmpeg=True,
+                        )
+
+                        if reader.start():
+                            self.active_cameras[camera_id] = reader
                             logger.info(f"✅ Reconnection successful: {camera_id}")
                         else:
                             reconnect_attempts += 1
@@ -2093,8 +2106,11 @@ class ProfessionalCameraManager:
                     break
         
         # Cleanup
-        if cap:
-            cap.release()
+        try:
+            if reader:
+                reader.stop()
+        except Exception:
+            pass
         
         if camera_id in self.active_cameras:
             del self.active_cameras[camera_id]
@@ -2112,9 +2128,16 @@ class ProfessionalCameraManager:
                 self.camera_configs[camera_id].enabled = False
                 self.camera_configs[camera_id].connection_status = 'disconnected'
             
-            # Release video capture
+            # Release stream reader
             if camera_id in self.active_cameras:
-                self.active_cameras[camera_id].release()
+                reader = self.active_cameras[camera_id]
+                try:
+                    if hasattr(reader, "stop"):
+                        reader.stop()
+                    elif hasattr(reader, "release"):
+                        reader.release()
+                except Exception:
+                    pass
                 del self.active_cameras[camera_id]
             
             # Clean up buffers
@@ -3331,171 +3354,59 @@ class ProfessionalCameraManager:
             return frame
 
     def _draw_ppe_overlay(self, frame: np.ndarray, detection_data: Dict) -> np.ndarray:
-        """PPE Detection overlay'ini frame'e çiz - PRODUCTION GRADE"""
+        """PPE Detection overlay - delegates to the shared visual_overlay module."""
         try:
-            import cv2
-            
-            logger.info(f"🎨 Drawing overlay - Detections: {len(detection_data.get('detections', []))}")
-            
-            # Frame boyutunu al
-            frame_height, frame_width = frame.shape[:2]
-            
-            # Üst bilgi paneli - frame boyutuna göre ayarla
-            panel_width = min(640, frame_width)
-            cv2.rectangle(frame, (0, 0), (panel_width, 80), (0, 0, 0), -1)
-            cv2.rectangle(frame, (0, 0), (panel_width, 80), (255, 255, 255), 2)
-            
-            # Başlık
-            cv2.putText(frame, 'SmartSafe AI - PPE Detection', (10, 25), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            # İstatistikler
+            from detection.utils.visual_overlay import draw_styled_box, get_class_color, draw_hud_bar
+
             people_count = detection_data.get('people_detected', 0)
+            compliant_count = detection_data.get('compliant_people', people_count)
             compliance_rate = detection_data.get('compliance_rate', 0)
             violations = detection_data.get('ppe_violations', [])
-            
-            cv2.putText(frame, f'People: {people_count}', (10, 50), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            cv2.putText(frame, f'Compliance: {compliance_rate}%', (120, 50), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            cv2.putText(frame, f'Violations: {len(violations)}', (280, 50), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            # Uyum durumu göstergesi - frame boyutuna göre ayarla
-            indicator_x = min(600, frame_width - 20)
-            color = (0, 255, 0) if compliance_rate >= 80 else (0, 165, 255) if compliance_rate >= 60 else (0, 0, 255)
-            cv2.circle(frame, (indicator_x, 40), 15, color, -1)
-            
-            # 🎯 BOUNDING BOX ÇİZİMİ - TÜM DETECTION'LARI ÇİZ (PERSON + PPE)
+            sector = detection_data.get('sector')
+
             detections = detection_data.get('detections', [])
-            logger.info(f"🔍 Processing {len(detections)} detections for overlay")
-            
+
             if detections and isinstance(detections, list):
-                for idx, detection in enumerate(detections):
+                for detection in detections:
                     if not isinstance(detection, dict):
-                        logger.warning(f"⚠️ Detection {idx} is not a dict: {type(detection)}")
                         continue
-                        
+
                     bbox = detection.get('bbox', [])
                     class_name = detection.get('class_name', 'unknown')
-                    confidence = detection.get('confidence', 0.0)
-                    
-                    logger.debug(f"📦 Detection {idx}: {class_name} @ {confidence:.2f} - bbox: {bbox}")
-                    
-                    if len(bbox) == 4:  # x1, y1, x2, y2
-                        try:
-                            x1, y1, x2, y2 = [int(coord) for coord in bbox]
-                            
-                            # 🔧 STRICT BBOX CLIPPING - Ensure bbox never exceeds frame boundaries
-                            x1 = max(0, min(x1, frame_width - 1))
-                            x2 = max(x1 + 1, min(x2, frame_width))
-                            y1 = max(0, min(y1, frame_height - 1))
-                            y2 = max(y1 + 1, min(y2, frame_height))
-                            
-                            logger.debug(f"📦 Clipped bbox: ({x1},{y1})-({x2},{y2}) [frame: {frame_width}x{frame_height}]")
-                            
-                            # 🎨 RENK BELİRLEME - CLASS'A GÖRE
-                            is_missing = detection.get('missing', False) or class_name.startswith('NO-')
-                            
-                            # Renk mapping
-                            color_map = {
-                                'person': (255, 165, 0),      # Turuncu
-                                'helmet': (0, 255, 0),        # Yeşil
-                                'safety_vest': (0, 255, 255), # Sarı
-                                'vest': (0, 255, 255),        # Sarı
-                                'shoes': (255, 0, 255),       # Mor
-                                'gloves': (255, 255, 0),      # Cyan
-                                'goggles': (0, 128, 255),     # Turuncu-Kırmızı
-                                'mask': (128, 0, 255),        # Pembe
-                            }
-                            
-                            # Class name'i normalize et
-                            class_lower = class_name.lower()
-                            color = (0, 0, 255)  # Default: Kırmızı
-                            
-                            for key, col in color_map.items():
-                                if key in class_lower:
-                                    color = col if not is_missing else (0, 0, 255)
-                                    break
-                            
-                            # Eksik PPE için kırmızı
-                            if is_missing:
-                                color = (0, 0, 255)
-                            
-                            # 📝 ETİKET HAZIRLA
-                            if is_missing:
-                                # Eksik PPE için Türkçe etiket
-                                if 'helmet' in class_lower or 'baret' in class_lower:
-                                    label = "BARET EKSIK"
-                                elif 'vest' in class_lower or 'yelek' in class_lower:
-                                    label = "YELEK EKSIK"
-                                elif 'shoes' in class_lower or 'ayakkabı' in class_lower:
-                                    label = "AYAKKABI EKSIK"
-                                else:
-                                    label = f"{class_name} EKSIK"
-                            else:
-                                label = f"{class_name.upper()} {confidence:.2f}"
-                            
-                            # 🎨 BOUNDING BOX ÇİZ
-                            # Ana dikdörtgen
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                            
-                            # Etiket arka planı
-                            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
-                            label_y = max(y1 - 10, label_size[1] + 10)
-                            cv2.rectangle(frame, 
-                                        (x1, label_y - label_size[1] - 5), 
-                                        (x1 + label_size[0] + 5, label_y + 5), 
-                                        color, -1)
-                            
-                            # Etiket metni
-                            cv2.putText(frame, label, (x1 + 2, label_y), 
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                            
-                            logger.debug(f"✅ Drew box for {class_name} at ({x1},{y1})-({x2},{y2})")
-                            
-                        except Exception as bbox_error:
-                            logger.error(f"❌ Bounding box çizim hatası: {bbox_error}")
-                            import traceback
-                            logger.error(traceback.format_exc())
-                            continue
-                
-                logger.info(f"✅ Overlay complete - Drew {len(detections)} boxes")
-                
-                # İhlal detayları
-                if violations and isinstance(violations, list):
-                    y_offset = 100
-                    for i, violation in enumerate(violations[:3]):  # Sadece ilk 3'ü göster
-                        if isinstance(violation, str):
-                            cv2.putText(frame, f'Violation {i+1}: {violation}', (10, y_offset), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
-                            y_offset += 20
-                
-                # Zaman damgası
-                timestamp = detection_data.get('timestamp', '')
-                if timestamp:
-                    try:
-                        if isinstance(timestamp, (int, float)):
-                            # Unix timestamp'i string'e çevir
-                            import datetime
-                            timestamp_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                        else:
-                            timestamp_str = str(timestamp)[:19]
-                        
-                        cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-                    except Exception as ts_error:
-                        logger.warning(f"⚠️ Timestamp çizim hatası: {ts_error}")
-            else:
-                logger.warning(f"⚠️ No detections to draw")
-                
+                    confidence = float(detection.get('confidence', 0.0))
+
+                    if len(bbox) != 4:
+                        continue
+
+                    x1, y1, x2, y2 = [int(c) for c in bbox]
+                    is_missing = bool(detection.get('missing', False)) or class_name.lower().startswith('no')
+                    is_person = 'person' in class_name.lower()
+
+                    color = get_class_color(class_name, is_missing=is_missing)
+                    label = f"{class_name.upper()} {confidence:.2f}"
+
+                    frame = draw_styled_box(
+                        frame, x1, y1, x2, y2,
+                        label, color,
+                        confidence=confidence,
+                        is_person=is_person,
+                        is_missing=is_missing,
+                    )
+
+            frame = draw_hud_bar(
+                frame,
+                people=people_count,
+                compliant=compliant_count,
+                compliance_rate=compliance_rate,
+                violations_count=len(violations),
+                sector=sector,
+            )
+
         except Exception as e:
             logger.error(f"❌ PPE Overlay çizim hatası: {e}")
             import traceback
             logger.error(traceback.format_exc())
-        
+
         return frame
 
 # Global camera manager instance
