@@ -2665,104 +2665,70 @@ class MultiTenantDatabase:
             return False
 
     def get_company_info(self, company_id: str) -> Optional[Dict[str, Any]]:
-        """Şirket bilgilerini getir (cache'lenmiş)"""
-        # Cache kontrolü - her frame'de DB sorgusu yapmamak için
-        if not hasattr(self, '_company_info_cache'):
-            self._company_info_cache = {}
-            self._company_info_cache_time = {}
-        
-        cache_key = company_id
-        cache_ttl = 60  # 60 saniye cache
-        
-        # Cache'den kontrol et
-        if cache_key in self._company_info_cache:
-            cache_time = self._company_info_cache_time.get(cache_key, 0)
-            if (datetime.now().timestamp() - cache_time) < cache_ttl:
-                logger.debug(f"🔍 Company info cache hit: {company_id}")
-                return self._company_info_cache[cache_key]
-        
+        """Şirket bilgilerini getir (Geliştirilmiş ve Hata Ayıklamalı)"""
         try:
-            logger.debug(f"🔍 MultiTenantDatabase - get_company_info çağrıldı: {company_id}")
+            # 1. Önce Cache Kontrolü
+            if not hasattr(self, '_company_info_cache'):
+                self._company_info_cache = {}
+                self._company_info_cache_time = {}
             
+            cache_ttl = 60
+            if company_id in self._company_info_cache:
+                cache_time = self._company_info_cache_time.get(company_id, 0)
+                if (datetime.now().timestamp() - cache_time) < cache_ttl:
+                    return self._company_info_cache[company_id]
+
+            # 2. Veritabanı Sorgusu
             conn = self.get_connection()
+            if not conn:
+                return None
             cursor = conn.cursor()
-            
             placeholder = self.get_placeholder()
             
+            logger.debug(f"🔍 DB Sorgusu Başlıyor: {company_id} (Format: {self.db_adapter.db_type})")
+            
             query = f'''
-                SELECT company_name, sector, contact_person, email, phone, address,
+                SELECT company_id, company_name, sector, contact_person, email, phone, address,
                        subscription_type, subscription_start, subscription_end, max_cameras, logo_url
                 FROM companies 
                 WHERE company_id = {placeholder}
             '''
             
             cursor.execute(query, (company_id,))
-            result = cursor.fetchone()
-            
+            result = cursor.fetchone()  
             conn.close()
             
-            if result:
-                # SQLite Row vs PostgreSQL RealDictRow tespiti
-                if isinstance(result, sqlite3.Row):
-                    # SQLite Row - dict-like ama tuple gibi de erişilebilir
-                    logger.debug(f"🔍 MultiTenantDatabase - SQLite Row formatı")
-                    company_info = {
-                        'company_name': result['company_name'],
-                        'sector': result['sector'],
-                        'contact_person': result['contact_person'],
-                        'email': result['email'],
-                        'phone': result['phone'],
-                        'address': result['address'],
-                        'subscription_type': result['subscription_type'],
-                        'subscription_start': result['subscription_start'],
-                        'subscription_end': result['subscription_end'],
-                        'max_cameras': result['max_cameras'],
-                        'logo_url': result['logo_url'] if len(result) > 10 else None
-                    }
-                elif hasattr(result, 'keys') and not isinstance(result, (tuple, list)):
-                    # PostgreSQL RealDictRow
-                    logger.debug(f"🔍 MultiTenantDatabase - PostgreSQL RealDictRow formatı")
-                    company_info = {
-                        'company_name': result['company_name'],
-                        'sector': result['sector'],
-                        'contact_person': result['contact_person'],
-                        'email': result['email'],
-                        'phone': result['phone'],
-                        'address': result['address'],
-                        'subscription_type': result['subscription_type'],
-                        'subscription_start': result['subscription_start'],
-                        'subscription_end': result['subscription_end'],
-                        'max_cameras': result['max_cameras'],
-                        'logo_url': result['logo_url']
-                    }
-                else:  # SQLite tuple
-                    logger.debug(f"🔍 MultiTenantDatabase - SQLite tuple formatı")
-                    company_info = {
-                        'company_name': result[0],
-                        'sector': result[1],
-                        'contact_person': result[2],
-                        'email': result[3],
-                        'phone': result[4],
-                        'address': result[5],
-                        'subscription_type': result[6],
-                        'subscription_start': result[7],
-                        'subscription_end': result[8],
-                        'max_cameras': result[9],
-                        'logo_url': result[10] if len(result) > 10 else None
-                    }
-                
-                # Cache'e kaydet
-                self._company_info_cache[cache_key] = company_info
-                self._company_info_cache_time[cache_key] = datetime.now().timestamp()
-                
-                logger.debug(f"🔍 MultiTenantDatabase - Company info cached: {company_id}")
-                return company_info
-            else:
-                logger.debug(f"🔍 MultiTenantDatabase - Query sonucu bulunamadı")
+            if not result:
+                logger.warning(f"⚠️ Şirket bulunamadı (DB'de kayıt yok): '{company_id}'")
                 return None
             
+            # 3. Zırhlı Parse Mantığı
+            company_data = {}
+            
+            # Eğer bir dictionary-like obje ise (PostgreSQL RealDictRow veya SQLite Row)
+            if hasattr(result, 'keys'):
+                try:
+                    for key in result.keys():
+                        company_data[key] = result[key]
+                except:
+                    pass
+            
+            # Eğer üstteki parse başarısız olduysa veya tuple ise
+            if not company_data:
+                cols = ['company_id', 'company_name', 'sector', 'contact_person', 'email', 'phone', 'address',
+                        'subscription_type', 'subscription_start', 'subscription_end', 'max_cameras', 'logo_url']
+                for i, col in enumerate(cols):
+                    if i < len(result):
+                        company_data[col] = result[i]
+
+            # Cache'e kaydet
+            self._company_info_cache[company_id] = company_data
+            self._company_info_cache_time[company_id] = datetime.now().timestamp()
+            
+            return company_data
+            
         except Exception as e:
-            logger.error(f"❌ Failed to get company info: {e}")
+            logger.error(f"❌ get_company_info hatası: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             return None

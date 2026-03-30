@@ -40,14 +40,14 @@ export default function CameraSetupPage() {
 
   // Single / Manual Form Data
   const [formData, setFormData] = useState({
-    camera_name: "",
-    camera_location: "",
-    camera_ip: "",
-    camera_port: 80,
+    camera_name: "Smart Camera",
+    camera_location: "Genel",
+    camera_ip: "160.75.85.3",
+    camera_port: 8000,
     camera_protocol: "http",
     camera_path: "/video",
-    camera_username: "",
-    camera_password: "",
+    camera_username: "admin",
+    camera_password: "Opsn810710.",
   });
 
   // Batch Form Data
@@ -64,11 +64,11 @@ export default function CameraSetupPage() {
   // DVR Form Data
   const [dvrData, setDvrData] = useState({
     dvr_id: `dvr_${Date.now()}`,
-    name: "",
-    ip_address: "",
-    port: 80,
+    name: "Merkezi Kayıt Cihazı",
+    ip_address: "160.75.85.3",
+    port: 8000,
     username: "admin",
-    password: "",
+    password: "Opsn810710.",
     dvr_type: "hikvision",
     max_channels: 16,
     rtsp_port: 554,
