@@ -29,6 +29,9 @@ def create_blueprint(api):
         if not user_data:
             return jsonify({'error': 'Unauthorized'}), 401
         
+        # Debug logging
+        logger.info(f"🔍 DVR Ekleme isteği alındı. Gelen Company ID: '{company_id}'")
+        
         # Demo hesabı kamera limiti kontrolü
         company_info = api.db.get_company_info(company_id)
         if not company_info:
