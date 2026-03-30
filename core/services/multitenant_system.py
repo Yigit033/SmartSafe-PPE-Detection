@@ -84,7 +84,10 @@ class MultiTenantDatabase:
     
     def get_connection(self, timeout: int = 30):
         """Database connection with timeout"""
-        return self.db_adapter.get_connection(timeout)
+        conn = self.db_adapter.get_connection(timeout)
+        if conn is None:
+            raise ConnectionError("❌ Veritabanı bağlantısı kurulamadı (PostgreSQL/SQLite erişilemiyor)")
+        return conn
     
     def close_connection(self, conn):
         """Close database connection or return to pool"""
@@ -930,7 +933,7 @@ class MultiTenantDatabase:
             ))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             
             logger.info(f"✅ Şirket kaydedildi: {company_id}")
             return True, company_id
@@ -958,7 +961,7 @@ class MultiTenantDatabase:
             ''', (email,))
             
             result = cursor.fetchone()
-            conn.close()
+            self.close_connection(conn)
             
             # Debug logging
             logger.info(f"🔍 Auth debug - Email: {email}")
@@ -1053,7 +1056,7 @@ class MultiTenantDatabase:
                 ''', (email, demo_id))
             
             result = cursor.fetchone()
-            conn.close()
+            self.close_connection(conn)
             
             if result:
                 # Demo hesap süresi kontrolü - PostgreSQL ve SQLite uyumlu
@@ -1165,7 +1168,7 @@ class MultiTenantDatabase:
                 ''', (user_id,))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             
             return session_id
             
@@ -1204,7 +1207,7 @@ class MultiTenantDatabase:
                 ''', (session_id,))
             
             result = cursor.fetchone()
-            conn.close()
+            self.close_connection(conn)
             
             if result:
                 # PostgreSQL RealDictRow için sözlük erişimi kullan
@@ -1332,7 +1335,7 @@ class MultiTenantDatabase:
                 existing_camera_id, existing_status = existing_camera
                 if existing_status == 'active':
                     logger.warning(f"⚠️ Active camera with name '{camera_name}' already exists")
-                    conn.close()
+                    self.close_connection(conn)
                     return False, f"'{camera_name}' isimli kamera zaten mevcut. Farklı bir isim kullanın."
                 elif existing_status == 'deleted':
                     logger.info(f"🔄 Found deleted camera with same name '{camera_name}', will reuse the record")
@@ -1397,7 +1400,7 @@ class MultiTenantDatabase:
                         ))
                     
                     conn.commit()
-                    conn.close()
+                    self.close_connection(conn)
                     logger.info(f"✅ Successfully reactivated deleted camera: {existing_camera_id}")
                     return True, existing_camera_id
             
@@ -1510,7 +1513,7 @@ class MultiTenantDatabase:
             conn.commit()
             
             # Başarılı sonuç
-            conn.close()
+            self.close_connection(conn)
             logger.info(f"✅ Camera added successfully: {camera_id}")
             return True, camera_id
             
@@ -1518,7 +1521,7 @@ class MultiTenantDatabase:
             logger.error(f"❌ Camera addition failed: {e}")
             if conn:
                 conn.rollback()
-                conn.close()
+                self.close_connection(conn)
             return False, f"Kamera eklenirken hata oluştu: {str(e)}"
     
     def get_company_cameras(self, company_id: str) -> List[Dict]:
@@ -1580,12 +1583,12 @@ class MultiTenantDatabase:
                     }
                 cameras.append(camera)
             
-            conn.close()
+            self.close_connection(conn)
             return cameras
             
         except Exception as e:
             logger.error(f"ERROR: Kamera listesi getirme hatasi: {e}")
-            return []
+            raise e
     
     def get_camera_by_id(self, camera_id: str, company_id: str) -> Optional[Dict]:
         """ID ile kamerayı getir"""
@@ -2461,7 +2464,7 @@ class MultiTenantDatabase:
             ''', (company_id,))
             
             result = cursor.fetchone()
-            conn.close()
+            self.close_connection(conn)
             
             if result:
                 # PostgreSQL RealDictRow için sözlük erişimi kullan
@@ -2665,9 +2668,9 @@ class MultiTenantDatabase:
             return False
 
     def get_company_info(self, company_id: str) -> Optional[Dict[str, Any]]:
-        """Şirket bilgilerini getir (Geliştirilmiş ve Hata Ayıklamalı)"""
+        """Şirket bilgilerini getir — Connection pool safe"""
         try:
-            # 1. Önce Cache Kontrolü
+            # 1. Cache Kontrolü
             if not hasattr(self, '_company_info_cache'):
                 self._company_info_cache = {}
                 self._company_info_cache_time = {}
@@ -2679,33 +2682,38 @@ class MultiTenantDatabase:
                     return self._company_info_cache[company_id]
 
             # 2. Veritabanı Sorgusu
+            logger.info(f"🔍 get_company_info çağrıldı: '{company_id}' (db_type: {self.db_adapter.db_type})")
+            
             conn = self.get_connection()
             if not conn:
+                logger.error(f"❌ get_company_info: Veritabanı bağlantısı alınamadı!")
                 return None
-            cursor = conn.cursor()
-            placeholder = self.get_placeholder()
             
-            logger.debug(f"🔍 DB Sorgusu Başlıyor: {company_id} (Format: {self.db_adapter.db_type})")
-            
-            query = f'''
-                SELECT company_id, company_name, sector, contact_person, email, phone, address,
-                       subscription_type, subscription_start, subscription_end, max_cameras, logo_url
-                FROM companies 
-                WHERE company_id = {placeholder}
-            '''
-            
-            cursor.execute(query, (company_id,))
-            result = cursor.fetchone()  
-            conn.close()
+            try:
+                cursor = conn.cursor()
+                placeholder = self.get_placeholder()
+                
+                query = f'''
+                    SELECT company_id, company_name, sector, contact_person, email, phone, address,
+                           subscription_type, subscription_start, subscription_end, max_cameras, logo_url
+                    FROM companies 
+                    WHERE company_id = {placeholder}
+                '''
+                
+                cursor.execute(query, (company_id,))
+                result = cursor.fetchone()
+            finally:
+                # KRİTİK: conn.close() değil, close_connection kullan!
+                # conn.close() pooled bağlantıyı yok eder, havuz tükenir, sistem SQLite'a düşer.
+                self.close_connection(conn)
             
             if not result:
-                logger.warning(f"⚠️ Şirket bulunamadı (DB'de kayıt yok): '{company_id}'")
+                logger.warning(f"⚠️ Şirket bulunamadı (DB'de kayıt yok): '{company_id}' (db_type: {self.db_adapter.db_type})")
                 return None
             
-            # 3. Zırhlı Parse Mantığı
+            # 3. Parse
             company_data = {}
             
-            # Eğer bir dictionary-like obje ise (PostgreSQL RealDictRow veya SQLite Row)
             if hasattr(result, 'keys'):
                 try:
                     for key in result.keys():
@@ -2713,7 +2721,6 @@ class MultiTenantDatabase:
                 except:
                     pass
             
-            # Eğer üstteki parse başarısız olduysa veya tuple ise
             if not company_data:
                 cols = ['company_id', 'company_name', 'sector', 'contact_person', 'email', 'phone', 'address',
                         'subscription_type', 'subscription_start', 'subscription_end', 'max_cameras', 'logo_url']
@@ -2725,6 +2732,7 @@ class MultiTenantDatabase:
             self._company_info_cache[company_id] = company_data
             self._company_info_cache_time[company_id] = datetime.now().timestamp()
             
+            logger.info(f"✅ get_company_info başarılı: '{company_id}' -> {company_data.get('company_name', '?')}")
             return company_data
             
         except Exception as e:

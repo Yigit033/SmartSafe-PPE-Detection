@@ -290,12 +290,41 @@ class DVRManager:
     
     def discover_cameras(self, dvr_id: str, company_id: str) -> List[Dict[str, Any]]:
         """Discover cameras on DVR system with database persistence"""
+        # 1. Bellekte yoksa DB'den yükle (Ecritical fix!)
         if dvr_id not in self.dvr_systems:
-            return []
+            logger.info(f"🔍 DVR {dvr_id} memory cache'de yok, DB'den yükleniyor...")
+            system = self.db_adapter.get_dvr_system(company_id, dvr_id)
+            if system:
+                dvr_config = DVRConfig(
+                    dvr_id=system['dvr_id'],
+                    name=system['name'],
+                    ip_address=system['ip_address'],
+                    port=system['port'],
+                    username=system['username'],
+                    password=system['password'],
+                    dvr_type=system.get('dvr_type', 'generic'),
+                    protocol=system.get('protocol', 'http'),
+                    api_path=system.get('api_path', '/api'),
+                    rtsp_port=system.get('rtsp_port', 554),
+                    max_channels=system.get('max_channels', 16),
+                    status=system.get('status', 'active')
+                )
+                self.dvr_systems[dvr_id] = dvr_config
+            else:
+                logger.error(f"❌ DVR {dvr_id} bulunamadı (Ne Cache ne DB)")
+                return []
         
         dvr_config = self.dvr_systems[dvr_id]
+        logger.info(f"📡 {dvr_config.name} ({dvr_config.ip_address}) için kanal keşfi başlıyor...")
+        
         channels = self._discover_dvr_channels(dvr_config)
         
+        # Eğer otomatik keşif başarısız olduysa veya az kanal bulduysa, 
+        # max_channels kadar zorla (brute-force) kanal oluşturmayı dene
+        if not channels:
+            logger.warning(f"⚠️ Otomatik keşif sonuç vermedi, {dvr_config.max_channels} kanal zorlanıyor...")
+            channels = self._discover_generic_channels(dvr_config)
+
         # Save channels to database
         for channel in channels:
             # Fix channel_id format to match expected format
@@ -318,7 +347,8 @@ class DVRManager:
             if success:
                 logger.info(f"✅ Channel {channel_id} added to database")
             else:
-                logger.error(f"❌ Failed to add channel {channel_id} to database")
+                # Zaten varsa error değil info log basıyoruz
+                logger.info(f"ℹ️ Channel {channel_id} already in database or error")
         
         # Update memory cache
         self.dvr_channels[dvr_id] = channels
@@ -545,16 +575,16 @@ class DVRManager:
         
         # Try common channel numbers (1-16)
         for channel_num in range(1, dvr_config.max_channels + 1):
-                channel = DVRChannel(
+            channel = DVRChannel(
                 channel_id=f"{dvr_config.dvr_id}_CH{channel_num:02d}",
                 name=f"Channel {channel_num}",
                 dvr_id=dvr_config.dvr_id,
                 channel_number=channel_num,
-                    # Prefer proven working patterns
-                    rtsp_path=f"/user={dvr_config.username}&password={dvr_config.password}&channel={channel_num}&stream=0.sdp",
+                # Prefer proven working patterns
+                rtsp_path=f"/user={dvr_config.username}&password={dvr_config.password}&channel={channel_num}&stream=0.sdp",
                 http_path=f"/ch{channel_num:02d}/snapshot"
             )
-        channels.append(channel)
+            channels.append(channel)
     
         logger.info(f"📺 Generic discovery: {len(channels)} channels configured")
         return channels
@@ -2492,9 +2522,11 @@ class ProfessionalCameraManager:
             discovery_result = self.discover_and_sync_cameras(company_id, network_range)
             result['discovery_result'] = discovery_result
             
-            # 2. Config kameralarını sync et
-            config_sync_result = self.sync_config_cameras_to_db(company_id)
-            result['config_sync_result'] = config_sync_result
+            # 2. Config kameralarını sync et - Sadece kritik durumlarda veya açıkça istendiğinde
+            # Kullanıcı isteği: Varsayılan (mock) kameralar otomatik eklenmemeli
+            # config_sync_result = self.sync_config_cameras_to_db(company_id)
+            # result['config_sync_result'] = config_sync_result
+            result['config_sync_result'] = {'message': 'Mock camera sync disabled by default'}
             
             # 3. Final kamera sayısını al
             final_cameras = self.get_database_cameras(company_id)

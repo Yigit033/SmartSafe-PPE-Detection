@@ -139,6 +139,31 @@ class DatabaseAdapter:
             connection_params={'database_path': db_path}
         )
     
+    def health_check(self) -> bool:
+        """Lightweight health check (SELECT 1) to verify DB connectivity.
+
+        Used by ensure_database_initialized() to detect dead connections after long idle periods.
+        """
+        conn = None
+        try:
+            conn = self.get_connection(timeout=5)
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('SELECT 1')
+            else:
+                cursor.execute('SELECT 1')
+            cursor.fetchone()
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Database health check failed: {e}")
+            return False
+        finally:
+            try:
+                if conn is not None:
+                    self.close_connection(conn)
+            except Exception:
+                pass
+    
     def close_connection(self, conn):
         """Close database connection and return to pool if applicable"""
         try:
@@ -205,17 +230,12 @@ class DatabaseAdapter:
                             except Exception as direct_err:
                                 logger.warning(f"⚠️ Direct PostgreSQL connection failed: {direct_err}")
 
-                        logger.warning("⚠️ Secure connector not available, falling back to SQLite")
-                        # Force fallback to SQLite
-                        self.config = self._get_sqlite_config()
-                        self.db_type = self.config.database_type
-                        return self.get_connection(timeout)
+                        logger.warning("⚠️ Secure connector not available")
+                        # Return None instead of permanent SQLite switch to allow for error reporting
+                        return None
                 except Exception as e:
-                    logger.warning(f"⚠️ PostgreSQL connection failed: {e}, falling back to SQLite")
-                    # Force fallback to SQLite
-                    self.config = self._get_sqlite_config()
-                    self.db_type = self.config.database_type
-                    return self.get_connection(timeout)
+                    logger.warning(f"⚠️ PostgreSQL connection failed: {e}")
+                    return None
         except Exception as e:
             logger.error(f"❌ Database connection error: {e}")
             return None

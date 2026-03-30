@@ -42,6 +42,10 @@ export default function CamerasPage() {
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>("all");
   const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
+  const [isManageDvrsOpen, setIsManageDvrsOpen] = useState(false);
+  const [dvrs, setDvrs] = useState<any[]>([]);
+  const [isDeletingDvr, setIsDeletingDvr] = useState(false);
+  const [isDiscoveringDvr, setIsDiscoveringDvr] = useState<string | null>(null);
   const [groupFormData, setGroupFormData] = useState({ 
     name: "", 
     location: "", 
@@ -313,6 +317,65 @@ export default function CamerasPage() {
     }
   };
 
+  const fetchDvrs = async () => {
+    if (!companyId) return;
+    try {
+      const response = await fetch(`http://localhost:4000/company/${companyId}/dvr`);
+      const data = await response.json();
+      if (data.success) {
+        setDvrs(data.systems || []);
+      }
+    } catch (error) {
+      console.error("Error fetching DVRs:", error);
+    }
+  };
+
+  const discoverChannels = async (dvrId: string) => {
+    setIsDiscoveringDvr(dvrId);
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/company/${companyId}/dvr/${dvrId}/discover`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`${data.count} yeni kanal başarıyla sisteminize eklendi!`);
+        fetchCameras(); // Kamera listesini yenile
+      } else {
+        alert(`Hata: ${data.error || 'Kanallar keşfedilemedi.'}`);
+      }
+    } catch (error) {
+      console.error("Error discovering channels:", error);
+      alert("Sunucuyla bağlantı kurulamadı.");
+    } finally {
+      setIsDiscoveringDvr(null);
+    }
+  };
+
+  const deleteDvr = async (dvrId: string) => {
+    if (!confirm("Bu DVR sistemini ve bağlı tüm kanalları silmek istediğinize emin misiniz?")) return;
+    setIsDeletingDvr(true);
+    try {
+      const response = await fetch(`http://localhost:4000/company/${companyId}/dvr/${dvrId}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchDvrs();
+        fetchCameras();
+      }
+    } catch (error) {
+      console.error("Error deleting DVR:", error);
+    } finally {
+      setIsDeletingDvr(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isManageDvrsOpen) {
+      fetchDvrs();
+    }
+  }, [isManageDvrsOpen]);
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = editingCamera
@@ -693,6 +756,12 @@ export default function CamerasPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsManageDvrsOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+          >
+            <span className="material-symbols-rounded">router</span> DVR YÖNETİMİ
+          </button>
           <button
             onClick={() => setIsManageGroupsOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
@@ -1138,6 +1207,80 @@ export default function CamerasPage() {
         </div>,
         document.body
       )}
+      {/* DVR Management Modal */}
+      {isManageDvrsOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsManageDvrsOpen(false)}></div>
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-rounded">router</span>
+                <h3 className="font-black tracking-widest uppercase italic text-sm">DVR SİSTEM YÖNETİMİ</h3>
+              </div>
+              <button onClick={() => setIsManageDvrsOpen(false)} className="p-2 hover:bg-white/10 rounded-xl">
+                <span className="material-symbols-rounded">close</span>
+              </button>
+            </div>
+            
+            <div className="p-8 overflow-y-auto">
+              <div className="flex items-center justify-between mb-8">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">KAYITLI CİHAZLAR ({dvrs.length})</p>
+                <button 
+                  onClick={() => router.push("/cameras/setup")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+                >
+                  <span className="material-symbols-rounded text-sm">add</span> CİHAZ EKLE
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {dvrs.length === 0 ? (
+                  <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase text-center w-full">Henüz DVR sistemi eklenmedi</p>
+                  </div>
+                ) : (
+                  dvrs.map(dvr => (
+                    <div key={dvr.dvr_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                          <span className="material-symbols-rounded">dns</span>
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">{dvr.name}</h4>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{dvr.ip_address} • {dvr.max_channels} KANAL • {dvr.dvr_type}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => discoverChannels(dvr.dvr_id)}
+                          disabled={isDiscoveringDvr === dvr.dvr_id}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all disabled:opacity-50"
+                        >
+                          {isDiscoveringDvr === dvr.dvr_id ? (
+                            <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <span className="material-symbols-rounded text-sm">search</span>
+                          )}
+                          KEŞFET
+                        </button>
+                        <button 
+                          onClick={() => deleteDvr(dvr.dvr_id)}
+                          disabled={isDeletingDvr}
+                          className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all disabled:opacity-50"
+                        >
+                          <span className="material-symbols-rounded text-lg">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }

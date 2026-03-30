@@ -28,6 +28,28 @@ log_level = logging.WARNING if os.environ.get('RENDER') else logging.INFO
 logging.basicConfig(level=log_level, format='%(levelname)s:%(name)s:%(message)s')
 logger = logging.getLogger(__name__)
 
+# Keep request logs, but suppress ultra-noisy polling endpoints (200 OK spam).
+# You can still reduce all request logs with REQUEST_LOG_LEVEL=WARNING/ERROR.
+_req_log_level = os.getenv("REQUEST_LOG_LEVEL", "INFO").upper()
+_req_level = getattr(logging, _req_log_level, logging.INFO)
+_werkzeug_logger = logging.getLogger("werkzeug")
+_werkzeug_logger.setLevel(_req_level)
+
+class _WerkzeugPollingNoiseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+
+        # Only drop successful access logs for polling endpoints.
+        if ' 200 ' in msg and '"GET ' in msg:
+            if '/detection-status/' in msg or '/detection/latest' in msg:
+                return False
+        return True
+
+_werkzeug_logger.addFilter(_WerkzeugPollingNoiseFilter())
+
 # SendGrid imports (conditional - graceful fallback if not available)
 try:
     from sendgrid import SendGridAPIClient
@@ -276,12 +298,24 @@ class SmartSafeSaaSAPI:
             'GATEWAY_PATH_TEMPLATE',
             'dvr/{dvr_id}/ch{channel:02d}'
         )
+
+        # Production database schema handler
+        self.is_production = (os.environ.get('RENDER') or
+                             os.environ.get('SUPABASE_URL') or
+                             os.environ.get('FLASK_ENV') == 'production')
         
         # İYİLEŞTİRİLDİ: Rate limiting with better configuration
+        # Dev ortamında (kapalı devre) polling kaynaklı patlamaları engellemek için
+        # daha yüksek bir default limit kullan.
+        default_limits = ["200 per minute", "1000 per hour"] if self.is_production else ["2000 per minute", "20000 per hour"]
+        # Optional override via env (e.g. RATE_LIMITS="500 per minute;5000 per hour")
+        env_limits = os.getenv("RATE_LIMITS", "").strip()
+        if env_limits:
+            default_limits = [s.strip() for s in env_limits.split(";") if s.strip()]
         self.limiter = Limiter(
             app=self.app,
             key_func=get_remote_address,
-            default_limits=["200 per minute", "1000 per hour"],
+            default_limits=default_limits,
             storage_uri="memory://"
         )
         
@@ -289,11 +323,6 @@ class SmartSafeSaaSAPI:
         self.db = None
         self.db_adapter = None
         self._db_initialized = False
-        
-        # Production database schema handler
-        self.is_production = (os.environ.get('RENDER') or 
-                             os.environ.get('SUPABASE_URL') or
-                             os.environ.get('FLASK_ENV') == 'production')
         
         if self.is_production:
             logger.info("🚀 Production mode: PostgreSQL/Supabase schema active")
@@ -434,11 +463,19 @@ class SmartSafeSaaSAPI:
         self.setup_cache_management()
     
     def ensure_database_initialized(self):
-        """Lazy initialize database on first request"""
-        # Her zaman self.db kontrolü yap - eğer None ise tekrar initialize et
-        if self.db is not None and self._db_initialized:
-            return True
-        
+        """Ensure database is ready; re-initialize if connection died after idle."""
+        # Eğer daha önce initialize ettiysek, bağlantı sağlıklı mı kontrol et
+        if self.db_adapter is not None and self._db_initialized:
+            try:
+                if self.db_adapter.health_check():
+                    return True
+                else:
+                    logger.warning("⚠️ Database health check failed, forcing re-initialization")
+                    self._db_initialized = False
+            except Exception as hc_err:
+                logger.warning(f"⚠️ Database health check error: {hc_err}, will re-initialize")
+                self._db_initialized = False
+
         try:
             # Database adapter'ı önce initialize et
             if self.db_adapter is None:

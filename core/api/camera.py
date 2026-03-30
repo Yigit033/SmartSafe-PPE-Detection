@@ -385,6 +385,12 @@ def create_blueprint(api):
             return jsonify({'error': 'Yetkisiz erişim'}), 401
         
         try:
+            # Şirket varlığını kontrol et
+            company_info = api.db.get_company_info(company_id)
+            if not company_info:
+                logger.error(f"❌ Company not found: {company_id}")
+                return jsonify({'success': False, 'error': f'Şirket bulunamadı: {company_id}'}), 404
+
             # Unified approach: Database'den kameraları al
             cameras = api.db.get_company_cameras(company_id)
             
@@ -628,20 +634,13 @@ def create_blueprint(api):
                         # Continue without sync
             
             except ImportError:
-                # Fallback: örnek veriler
-                discovered_cameras = [
-                    {
-                        'ip': '192.168.1.101',
-                        'port': 554,
-                        'brand': 'Hikvision',
-                        'model': 'DS-2CD2043G0-I',
-                        'rtsp_url': 'rtsp://192.168.1.101:554/Streaming/Channels/101',
-                        'resolution': '4MP',
-                        'status': 'online',
-                        'auth_required': True
-                    }
-                ]
-                scan_time = '2.3 saniye'
+                # Mock veriler yerine hata dön
+                logger.error("❌ Camera discovery modules not available")
+                return jsonify({
+                    'success': False, 
+                    'error': 'Kamera keşif modülleri yüklü değil. Lütfen sistem yöneticisi ile iletişime geçin.',
+                    'mode': 'error'
+                }), 500
             
             return jsonify({
                 'success': True,

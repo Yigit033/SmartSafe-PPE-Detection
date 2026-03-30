@@ -43,10 +43,10 @@ export const list = api(
   { expose: true, method: "GET", path: "/company/:company_id/dvr" },
   async (
     params: ListDVRRequest,
-  ): Promise<{ success: boolean; systems: DVRSystem[] }> => {
+  ): Promise<{ success: boolean; systems: any[] }> => {
     try {
       const res = await pool.query(
-        "SELECT dvr_id, company_id, name, ip_address, port, username, dvr_type, status FROM dvr_systems WHERE company_id = $1 ORDER BY created_at DESC",
+        "SELECT * FROM dvr_systems WHERE company_id = $1 ORDER BY created_at DESC",
         [params.company_id],
       );
       return { success: true, systems: res.rows };
