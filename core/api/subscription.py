@@ -127,7 +127,7 @@ def create_blueprint(api):
             ''', (new_plan, new_billing_cycle, plan_prices[new_plan]['cameras'], company_id))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,
@@ -166,7 +166,7 @@ def create_blueprint(api):
             ''', (company_id,))
             
             results = cursor.fetchall()
-            conn.close()
+            api.db.close_connection(conn)
             
             # Convert to list of dictionaries
             billing_history = []
@@ -205,7 +205,7 @@ def create_blueprint(api):
             ''', (company_id,))
             
             results = cursor.fetchall()
-            conn.close()
+            api.db.close_connection(conn)
             
             # Convert to list of dictionaries
             payment_methods = []
@@ -246,7 +246,7 @@ def create_blueprint(api):
             ''', (company_id,))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,
@@ -281,7 +281,7 @@ def create_blueprint(api):
             ''', (company_id,))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,
@@ -317,7 +317,7 @@ def create_blueprint(api):
             ''', (auto_renewal, company_id))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,
@@ -365,7 +365,7 @@ def create_blueprint(api):
                 cursor.execute(f"SELECT company_name FROM companies WHERE company_id = {placeholder}", (company_id,))
                 company_result = cursor.fetchone()
                 
-                conn.close()
+                api.db.close_connection(conn)
                 logger.info(f"🔍 Database connection test successful. Total companies: {company_count}")
                 if company_result:
                     logger.info(f"🔍 Company found: {company_result[0]}")

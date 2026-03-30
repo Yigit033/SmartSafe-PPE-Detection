@@ -1445,6 +1445,51 @@ def create_blueprint(api):
             ]
             alternative_urls = stream_only_urls + snapshot_fallback_urls
             
+            # 🚀 DVR Kanalı ise RTSP -> MJPEG Dönüştürücü Kullan
+            if camera.get('is_dvr') or str(camera.get('stream_path', '')).startswith('rtsp://'):
+                rtsp_url = camera.get('rtsp_url') or camera.get('stream_path')
+                logger.info(f"🎥 Proxying DVR RTSP stream as MJPEG: {rtsp_url}")
+                
+                # DVR Stream Generator
+                def _dvr_mjpeg_generator():
+                    import cv2
+                    import time
+                    
+                    cap = cv2.VideoCapture(rtsp_url)
+                    if not cap.isOpened():
+                        logger.error(f"❌ Failed to open DVR RTSP stream: {rtsp_url}")
+                        return
+                    
+                    try:
+                        while True:
+                            ret, frame = cap.read()
+                            if not ret:
+                                logger.warning(f"⚠️ Failed to read frame from DVR stream: {rtsp_url}")
+                                # Try to reconnect
+                                cap.release()
+                                time.sleep(1)
+                                cap = cv2.VideoCapture(rtsp_url)
+                                continue
+                            
+                            # Encode frame as JPEG
+                            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            frame_bytes = buffer.tobytes()
+                            
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                            
+                            # Limit FPS to avoid high CPU usage
+                            time.sleep(0.04) # ~25 FPS
+                    finally:
+                        cap.release()
+                        logger.info(f"🛑 DVR RTSP stream proxy stopped: {rtsp_url}")
+
+                return Response(
+                    _dvr_mjpeg_generator(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame'
+                )
+
+            # Standart IP Kamera Akışı (MJPEG)
             import requests
             from requests.auth import HTTPBasicAuth
             
@@ -1493,6 +1538,27 @@ def create_blueprint(api):
                     logger.warning(f"❌ Alternative URL {i} failed {alt_url}: {e}")
                     continue
             
+            # Eğer IP kamera linki patladıysa ama RTSP URL varsa son çare onu dene (Eskiden capture'da vardı)
+            rtsp_url = camera.get('rtsp_url')
+            if rtsp_url and rtsp_url.startswith('rtsp://'):
+                logger.info(f"🔄 Retrying with RTSP as backup for MJPEG proxy: {rtsp_url}")
+                # Use the same generator as DVR
+                def _backup_rtsp_generator():
+                    import cv2
+                    import time
+                    cap = cv2.VideoCapture(rtsp_url)
+                    try:
+                        while cap.isOpened():
+                            ret, frame = cap.read()
+                            if not ret: break
+                            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                            time.sleep(0.04)
+                    finally:
+                        cap.release()
+                return Response(_backup_rtsp_generator(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
             return jsonify({'success': False, 'error': 'Kamera stream alınamadı'}), 404
             
         except Exception as e:
@@ -1541,6 +1607,23 @@ def create_blueprint(api):
                 f"{protocol}://{camera['ip_address']}:{port}/picture"
             ]
             
+            # 🚀 DVR Kanalı ise RTSP -> Snapshot Dönüştürücü Kullan
+            rtsp_url = camera.get('rtsp_url') or (camera.get('stream_path') if str(camera.get('stream_path', '')).startswith('rtsp://') else None)
+            if camera.get('is_dvr') or rtsp_url:
+                logger.info(f"📸 Capturing snapshot from DVR RTSP: {rtsp_url}")
+                try:
+                    import cv2
+                    cap = cv2.VideoCapture(rtsp_url)
+                    if cap.isOpened():
+                        ret, frame = cap.read()
+                        cap.release()
+                        if ret and frame is not None:
+                            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                            return Response(buffer.tobytes(), content_type='image/jpeg')
+                except Exception as e:
+                    logger.warning(f"❌ DVR Snapshot capture failed: {e}")
+
+            # Standart IP Kamera Snapshot
             import requests
             from requests.auth import HTTPBasicAuth
             
@@ -1565,6 +1648,18 @@ def create_blueprint(api):
                     logger.warning(f"Snapshot URL failed {url}: {e}")
                     continue
             
+            # Hiçbiri çalışmazsa ve yukarıda RTSP denememişsek (örn. IP kameranın RTSP'si varsa)
+            if rtsp_url and not camera.get('is_dvr'):
+                 try:
+                    import cv2
+                    cap = cv2.VideoCapture(rtsp_url)
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret:
+                        _, buffer = cv2.imencode('.jpg', frame)
+                        return Response(buffer.tobytes(), content_type='image/jpeg')
+                 except: pass
+
             # Hiçbiri çalışmazsa hata döndür
             return jsonify({'success': False, 'error': 'Kamera snapshot alınamadı'}), 404
             
@@ -2063,11 +2158,11 @@ def create_blueprint(api):
             ''', (json.dumps(cleaned_ppe_config), json.dumps(cleaned_ppe_config), json.dumps(compliance_settings), company_id))
             
             if cursor.rowcount == 0:
-                conn.close()
+                api.db.close_connection(conn)
                 return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             logger.info(f"✅ PPE config updated for company {company_id}: {len(cleaned_ppe_config['required'])} required, {len(cleaned_ppe_config['optional'])} optional")
             
@@ -2289,7 +2384,7 @@ def create_blueprint(api):
                     'aviation': {'name': 'Havacılık', 'icon': 'fas fa-plane', 'emoji': '✈️'}
                 }
                 
-                conn.close()
+                api.db.close_connection(conn)
                 return jsonify({
                     'success': True,
                     'current_config': {
@@ -2305,7 +2400,7 @@ def create_blueprint(api):
                     'required_ppe': current_required  # Backward compatibility
                 })
             else:
-                conn.close()
+                api.db.close_connection(conn)
                 return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
             
         except Exception as e:

@@ -268,7 +268,7 @@ class DatabaseAdapter:
             if self.db_type == 'postgresql':
                 try:
                     # Fresh connection al
-                    conn.close()
+                    self.close_connection(conn)
                     conn = self.get_connection()
                     logger.info("🔄 PostgreSQL fresh connection established")
                     logger.info("🔧 PostgreSQL autocommit already enabled in secure connector")
@@ -1198,7 +1198,7 @@ class DatabaseAdapter:
             # Close connection properly
             try:
                 if conn:
-                    conn.close()
+                    self.close_connection(conn)
             except Exception:
                 pass
     

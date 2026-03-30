@@ -861,7 +861,7 @@ class SmartSafeSaaSAPI:
             return {'success': False, 'error': str(e)}
         finally:
             if 'conn' in locals():
-                conn.close()
+                self.db.close_connection(conn)
     
     def _apply_demo_channel_limits(self, company_id: str, dvr_id: str, max_cameras: int, active_cameras: int):
         """Demo hesabı için DVR kanal limitlerini uygula"""
@@ -1241,7 +1241,7 @@ class SmartSafeSaaSAPI:
                         result = None
                 else:
                     raise e
-            conn.close()
+            self.db.close_connection(conn)
             
             if not result:
                 return {'is_demo': False, 'expired': False}
@@ -1334,7 +1334,7 @@ class SmartSafeSaaSAPI:
                 ''', (company_id,))
                 
                 violation_count = cursor.fetchone()[0]
-                conn.close()
+                self.db.close_connection(conn)
                 
                 if violation_count >= limits.get('violations', 100):
                     return {
@@ -1688,7 +1688,7 @@ class SmartSafeSaaSAPI:
             placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '?'
             cursor.execute(f'SELECT sector FROM companies WHERE company_id = {placeholder}', (company_id,))
             result = cursor.fetchone()
-            conn.close()
+            self.db.close_connection(conn)
             
             # PostgreSQL RealDictRow için sözlük erişimi kullan
             if result:
@@ -2213,7 +2213,7 @@ class SmartSafeSaaSAPI:
                         conn = self.db.get_connection()
                         cursor = conn.cursor()
                         cursor.execute("SELECT 1")
-                        conn.close()
+                        self.db.close_connection(conn)
                     except Exception as e:
                         db_status = f"unhealthy: {str(e)}"
                 else:
@@ -2826,7 +2826,7 @@ smartsafe_requests_total 100
                       people_detected, ppe_compliant, violations_count, datetime.now()))
             
             conn.commit()
-            conn.close()
+            self.db.close_connection(conn)
             logger.debug(f"✅ Detection saved to reports: {people_detected} people, {ppe_compliant} compliant")
             
         except Exception as e:
@@ -2903,7 +2903,7 @@ smartsafe_requests_total 100
                               alert_data['title'], alert_data['message']))
                     
                     conn.commit()
-                    conn.close()
+                    self.db.close_connection(conn)
                     
                     logger.info(f"✅ Live alert generated: {alert_data['title']} - {alert_data['message']}")
                     
@@ -2945,7 +2945,7 @@ smartsafe_requests_total 100
                       missing_ppe, violation_type, confidence, datetime.now()))
             
             conn.commit()
-            conn.close()
+            self.db.close_connection(conn)
             logger.debug(f"✅ Violation saved to reports: {missing_ppe}")
             
         except Exception as e:
@@ -4450,7 +4450,7 @@ smartsafe_requests_total 100
             ))
             
             conn.commit()
-            conn.close()
+            self.db.close_connection(conn)
             logger.debug(f"✅ Detection kaydedildi (summary): {detection_data.get('camera_id', 'unknown')}")
             
         except Exception as e:
@@ -4483,7 +4483,7 @@ smartsafe_requests_total 100
                 ))
             
             conn.commit()
-            conn.close()
+            self.db.close_connection(conn)
             logger.debug(f"✅ Violation kaydedildi: {camera_id}")
             
         except Exception as e:

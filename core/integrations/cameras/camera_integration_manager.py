@@ -128,6 +128,9 @@ class DVRChannel:
     
     def get_rtsp_url(self, dvr_config: DVRConfig) -> str:
         """Generate RTSP URL for this channel"""
+        if self.rtsp_path and self.rtsp_path.startswith('rtsp://'):
+            return self.rtsp_path
+            
         base_url = dvr_config.get_rtsp_base_url()
         if self.rtsp_path:
             return f"{base_url}{self.rtsp_path}"
@@ -289,8 +292,8 @@ class DVRManager:
             return False, str(e)
     
     def discover_cameras(self, dvr_id: str, company_id: str) -> List[Dict[str, Any]]:
-        """Discover cameras on DVR system with database persistence"""
-        # 1. Bellekte yoksa DB'den yükle (Ecritical fix!)
+        """Discover cameras on DVR system with deep RTSP pattern scanning"""
+        # 1. Bellekte yoksa DB'den yükle
         if dvr_id not in self.dvr_systems:
             logger.info(f"🔍 DVR {dvr_id} memory cache'de yok, DB'den yükleniyor...")
             system = self.db_adapter.get_dvr_system(company_id, dvr_id)
@@ -315,19 +318,54 @@ class DVRManager:
                 return []
         
         dvr_config = self.dvr_systems[dvr_id]
-        logger.info(f"📡 {dvr_config.name} ({dvr_config.ip_address}) için kanal keşfi başlıyor...")
+        logger.info(f"📡 {dvr_config.name} ({dvr_config.ip_address}) için DERİN kanal keşfi başlıyor...")
         
+        # Temel kanal listesini al (Marka bazlı API'den)
         channels = self._discover_dvr_channels(dvr_config)
         
-        # Eğer otomatik keşif başarısız olduysa veya az kanal bulduysa, 
-        # max_channels kadar zorla (brute-force) kanal oluşturmayı dene
         if not channels:
             logger.warning(f"⚠️ Otomatik keşif sonuç vermedi, {dvr_config.max_channels} kanal zorlanıyor...")
             channels = self._discover_generic_channels(dvr_config)
+        
+        # ── DERİN TARAMA (Deep Scan) ──────────────────────────────────
+        try:
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            stream_handler = get_stream_handler()
+            
+            logger.info(f"🧪 {len(channels)} kanal için PARALEL RTSP taraması başlatılıyor...")
+            
+            def _scan_single_channel(ch):
+                url = stream_handler.find_working_url(
+                    dvr_config.ip_address,
+                    dvr_config.username,
+                    dvr_config.password,
+                    dvr_config.rtsp_port,
+                    ch.channel_number,
+                    dvr_config.dvr_type
+                )
+                return ch, url
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_scan_single_channel, ch) for ch in channels]
+                for future in as_completed(futures):
+                    try:
+                        ch, working_url = future.result()
+                        if working_url:
+                            ch.rtsp_path = working_url  # Tam URL'yi sakla
+                            ch.status = 'active'
+                            logger.info(f"✅ Kanal {ch.channel_number} doğrulanmış formül: {working_url}")
+                        else:
+                            ch.status = 'inactive'
+                            logger.warning(f"⚠️ Kanal {ch.channel_number} için çalışan bağlantı bulunamadı.")
+                    except Exception as ch_err:
+                        logger.error(f"❌ Kanal tarama hatası: {ch_err}")
+        
+        except Exception as scan_err:
+            logger.error(f"❌ Derin tarama toplu hatası: {scan_err}")
 
         # Save channels to database
         for channel in channels:
-            # Fix channel_id format to match expected format
             channel_id = f"{dvr_id}_ch{channel.channel_number:02d}"
             channel.channel_id = channel_id
             
@@ -343,12 +381,8 @@ class DVRManager:
                 'http_path': channel.http_path
             }
             
-            success = self.db_adapter.add_dvr_channel(company_id, dvr_id, channel_data)
-            if success:
-                logger.info(f"✅ Channel {channel_id} added to database")
-            else:
-                # Zaten varsa error değil info log basıyoruz
-                logger.info(f"ℹ️ Channel {channel_id} already in database or error")
+            # DB'ye kaydet veya güncelle
+            self.db_adapter.add_dvr_channel(company_id, dvr_id, channel_data)
         
         # Update memory cache
         self.dvr_channels[dvr_id] = channels
@@ -360,7 +394,8 @@ class DVRManager:
                 'channel_number': ch.channel_number,
                 'status': ch.status,
                 'resolution': ch.resolution,
-                'fps': ch.fps
+                'fps': ch.fps,
+                'working_url': ch.rtsp_path
             }
             for ch in channels
         ]

@@ -126,7 +126,7 @@ def create_blueprint(api):
                     }
                 ]
             
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,
@@ -178,7 +178,7 @@ def create_blueprint(api):
                 ''', (company_id, camera_id, alert_type, severity, title, message))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             logger.info(f"✅ Alert generated: {title} - {message}")
             
@@ -228,7 +228,7 @@ def create_blueprint(api):
                 ''', (alert_id, company_id))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,

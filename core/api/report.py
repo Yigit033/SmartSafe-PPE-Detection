@@ -62,7 +62,7 @@ def create_blueprint(api):
                 ''', (company_id,))
                 
                 company_data = cursor.fetchone()
-                conn.close()
+                api.db.close_connection(conn)
                 
                 if company_data:
                     try:
@@ -261,7 +261,7 @@ def create_blueprint(api):
                     """, (data.get('email').strip(), company_id))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             print(f"✅ Profile updated successfully for company: {company_id}")
             return jsonify({'success': True, 'message': 'Profil başarıyla güncellendi'})
@@ -346,7 +346,7 @@ def create_blueprint(api):
                     """, (logo_url, company_id))
                     
                     conn.commit()
-                    conn.close()
+                    api.db.close_connection(conn)
                 except Exception as db_error:
                     if 'logo_url' in str(db_error) and 'does not exist' in str(db_error):
                         print(f"⚠️ logo_url kolonu bulunamadı, sadece updated_at güncelleniyor")
@@ -356,7 +356,7 @@ def create_blueprint(api):
                             WHERE company_id = {placeholder}
                         """, (company_id,))
                         conn.commit()
-                        conn.close()
+                        api.db.close_connection(conn)
                     else:
                         raise db_error
             
@@ -411,7 +411,7 @@ def create_blueprint(api):
             """, (new_password_hash, company_id))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({'success': True, 'message': 'Şifre başarıyla değiştirildi'})
                 
@@ -448,7 +448,7 @@ def create_blueprint(api):
                 cursor.execute(f'DELETE FROM {table} WHERE company_id = {placeholder}', (company_id,))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             session.clear()
             
@@ -514,7 +514,7 @@ def create_blueprint(api):
                             'last_login': str(row[6]) if row[6] else ''
                     })
             
-            conn.close()
+            api.db.close_connection(conn)
             return jsonify({'success': True, 'users': users})
             
         except Exception as e:
@@ -553,7 +553,7 @@ def create_blueprint(api):
             """, (user_id, company_id, username, data['email'], data['contact_person'], password_hash, data['role']))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True, 
@@ -585,7 +585,7 @@ def create_blueprint(api):
             cursor.execute(f"DELETE FROM sessions WHERE user_id = {placeholder}", (user_id,))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({'success': True, 'message': 'Kullanıcı başarıyla silindi'})
             
@@ -673,7 +673,7 @@ def create_blueprint(api):
             
             ppe_violations = cursor.fetchall()
             
-            conn.close()
+            api.db.close_connection(conn)
             
             violations_data = {
                 'daily_violations': [],
@@ -856,7 +856,7 @@ def create_blueprint(api):
             total_violations = cursor.fetchone()
             total_violations = total_violations[0] if total_violations else 0
             
-            conn.close()
+            api.db.close_connection(conn)
             
             overall_compliance = 0
             if total_detections > 0:
@@ -1019,7 +1019,7 @@ def create_blueprint(api):
                 camera_data = cursor.fetchall()
                 report_data['data']['camera_performance'] = camera_data
             
-            conn.close()
+            api.db.close_connection(conn)
             
             conn = api.db.get_connection()
             cursor = conn.cursor()
@@ -1036,7 +1036,7 @@ def create_blueprint(api):
                 ''', (company_id, report_type, report_data, datetime.now()))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             export_url = f"/exports/{company_id}_{report_type}_{format_type}.{format_type}"
             
@@ -1082,7 +1082,7 @@ def create_blueprint(api):
                 ''', (company_id,))
                 
                 company_data = cursor.fetchone()
-                conn.close()
+                api.db.close_connection(conn)
                 
                 if company_data:
                     if hasattr(company_data, 'keys'):
@@ -1145,7 +1145,7 @@ def create_blueprint(api):
             ''', (company_id,))
             
             result = cursor.fetchone()
-            conn.close()
+            api.db.close_connection(conn)
             
             if result:
                 if hasattr(result, 'keys'):
@@ -1243,7 +1243,7 @@ def create_blueprint(api):
             ))
             
             conn.commit()
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,
@@ -1334,7 +1334,7 @@ def create_blueprint(api):
                 for r in (cur.fetchall() or [])
             ]
 
-            conn.close()
+            api.db.close_connection(conn)
 
             total = sum(x['count'] for x in time_series)
             worst_day = max(time_series, key=lambda x: x['count'])['date'] if time_series else None

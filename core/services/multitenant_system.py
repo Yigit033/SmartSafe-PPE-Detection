@@ -94,7 +94,7 @@ class MultiTenantDatabase:
         if self.db_adapter:
             self.db_adapter.close_connection(conn)
         elif conn:
-            conn.close()
+            self.close_connection(conn)
     
     def get_placeholder(self):
         """Get appropriate placeholder for database type"""
@@ -491,7 +491,7 @@ class MultiTenantDatabase:
                 logger.error(f"❌ Detections tablosu migration hatası: {e}")
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             logger.info("✅ PostgreSQL tabloları kontrol edildi")
             
         except Exception as e:
@@ -855,14 +855,14 @@ class MultiTenantDatabase:
             except Exception as e:
                 logger.info(f"Migration info: {e}")
 
-            conn.close()
+            self.close_connection(conn)
             logger.info("✅ Multi-tenant veritabanı oluşturuldu")
         except Exception as e:
             logger.error(f"❌ SQLite database initialization failed: {e}")
             raise
         finally:
             if conn:
-                conn.close()
+                self.close_connection(conn)
     
     def create_company(self, company_data: Dict) -> Tuple[bool, str]:
         """Yeni şirket kaydı"""
@@ -1525,13 +1525,13 @@ class MultiTenantDatabase:
             return False, f"Kamera eklenirken hata oluştu: {str(e)}"
     
     def get_company_cameras(self, company_id: str) -> List[Dict]:
-        """Şirket kameralarını getir"""
+        """Şirkete ait tüm kameraları ve DVR kanallarını getir (Unified List)"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
-            # Tüm kamera bilgilerini çek (protocol ve stream_path dahil)
             placeholder = self.get_placeholder()
+            
+            # 1. Standart Kameraları Getir
             cursor.execute(f'''
                 SELECT camera_id, camera_name, location, ip_address, rtsp_url, 
                        username, password, resolution, fps, status, last_detection,
@@ -1542,35 +1542,32 @@ class MultiTenantDatabase:
             
             cameras = []
             for row in cursor.fetchall():
-                # PostgreSQL RealDictRow için sözlük erişimi kullan
-                if hasattr(row, 'keys') and hasattr(row, 'get'):  # RealDictRow veya dict
+                if hasattr(row, 'keys') and hasattr(row, 'get'):
                     camera = {
                         'camera_id': row.get('camera_id'),
                         'camera_name': row.get('camera_name'),
                         'location': row.get('location'),
                         'ip_address': row.get('ip_address'),
-                        'port': row.get('port', 8080),  # Use actual port from database
-                        'protocol': row.get('protocol', 'http'),  # Use actual protocol from database
-                        'stream_path': row.get('stream_path', '/video'),  # Use actual stream_path from database
+                        'port': row.get('port', 8080),
+                        'protocol': row.get('protocol', 'http'),
+                        'stream_path': row.get('stream_path', '/video'),
                         'rtsp_url': row.get('rtsp_url'),
                         'username': row.get('username'),
                         'password': row.get('password'),
                         'resolution': row.get('resolution'),
                         'fps': row.get('fps'),
                         'status': row.get('status'),
+                        'is_dvr': False,
                         'last_detection': str(row.get('last_detection')) if row.get('last_detection') else '',
                         'created_at': str(row.get('created_at')) if row.get('created_at') else '',
-                        'updated_at': str(row.get('created_at')) if row.get('created_at') else ''  # Use created_at as fallback
+                        'updated_at': str(row.get('created_at')) if row.get('created_at') else ''
                     }
-                else:  # Liste formatı (SQLite için)
+                else:
                     camera = {
                         'camera_id': row[0],
                         'camera_name': row[1],
                         'location': row[2],
                         'ip_address': row[3],
-                        'port': row[14] if len(row) > 14 else 8080,  # Use actual port from database
-                        'protocol': row[12] if len(row) > 12 else 'http',  # Use actual protocol from database
-                        'stream_path': row[13] if len(row) > 13 else '/video',  # Use actual stream_path from database
                         'rtsp_url': row[4],
                         'username': row[5],
                         'password': row[6],
@@ -1579,24 +1576,231 @@ class MultiTenantDatabase:
                         'status': row[9],
                         'last_detection': str(row[10]) if row[10] else '',
                         'created_at': str(row[11]) if row[11] else '',
-                        'updated_at': str(row[11]) if row[11] else ''  # Use created_at as fallback
+                        'protocol': row[12] if len(row) > 12 else 'http',
+                        'stream_path': row[13] if len(row) > 13 else '/video',
+                        'port': row[14] if len(row) > 14 else 8080,
+                        'is_dvr': False,
+                        'updated_at': str(row[11]) if row[11] else ''
                     }
                 cameras.append(camera)
-            
+
+            # 2. DVR Kanallarını Getir
+            try:
+                cursor.execute(f'''
+                    SELECT c.channel_id, c.name, s.ip_address, s.port, s.protocol, 
+                           c.rtsp_path, s.username, s.password, c.status, 
+                           c.created_at, c.updated_at, s.dvr_id, c.channel_number, s.rtsp_port
+                    FROM dvr_channels c
+                    JOIN dvr_systems s ON c.dvr_id = s.dvr_id AND c.company_id = s.company_id
+                    WHERE c.company_id = {placeholder} AND c.status != 'deleted'
+                ''', (company_id,))
+                
+                for row in cursor.fetchall():
+                    import urllib.parse
+                    if hasattr(row, 'keys') and hasattr(row, 'get'):
+                        res = dict(row)
+                        user = res.get('username', 'admin')
+                        pwd = res.get('password', '')
+                        ip = res.get('ip_address')
+                        r_port = res.get('rtsp_port', 554)
+                        safe_u = urllib.parse.quote(user)
+                        safe_p = urllib.parse.quote(pwd)
+                        r_path = res.get('rtsp_path', '')
+                        
+                        if r_path and r_path.startswith('rtsp://'):
+                            rtsp_url = r_path
+                        else:
+                            base = f"rtsp://{safe_u}:{safe_p}@{ip}:{r_port}"
+                            rtsp_url = f"{base}{r_path}" if r_path else f"{base}/ch{res.get('channel_number'):02d}/main"
+
+                        camera = {
+                            'camera_id': res.get('channel_id'),
+                            'camera_name': res.get('name'),
+                            'location': f"DVR {res.get('dvr_id')} - Ch {res.get('channel_number')}",
+                            'ip_address': ip,
+                            'port': res.get('port', 80),
+                            'protocol': res.get('protocol', 'http'),
+                            'stream_path': rtsp_url,
+                            'rtsp_url': rtsp_url,
+                            'username': user,
+                            'password': pwd,
+                            'resolution': '1920x1080',
+                            'fps': 25,
+                            'status': res.get('status', 'active'),
+                            'is_dvr': True,
+                            'last_detection': '',
+                            'created_at': str(res.get('created_at')) if res.get('created_at') else '',
+                            'updated_at': str(res.get('updated_at')) if res.get('updated_at') else ''
+                        }
+                    else:
+                        c_id, name, ip, port, proto, r_path, user, pwd, stat, c_at, u_at, d_id, ch_num, r_port = row
+                        safe_u = urllib.parse.quote(user or 'admin')
+                        safe_p = urllib.parse.quote(pwd or '')
+                        
+                        if r_path and r_path.startswith('rtsp://'):
+                            rtsp_url = r_path
+                        else:
+                            base = f"rtsp://{safe_u}:{safe_p}@{ip}:{r_port or 554}"
+                            rtsp_url = f"{base}{r_path}" if r_path else f"{base}/ch{ch_num:02d}/main"
+
+                        camera = {
+                            'camera_id': c_id,
+                            'camera_name': name,
+                            'location': f"DVR {d_id} - Ch {ch_num}",
+                            'ip_address': ip,
+                            'port': port,
+                            'protocol': proto,
+                            'stream_path': rtsp_url,
+                            'rtsp_url': rtsp_url,
+                            'username': user,
+                            'password': pwd,
+                            'resolution': '1920x1080',
+                            'fps': 25,
+                            'status': stat,
+                            'is_dvr': True,
+                            'last_detection': '',
+                            'created_at': str(c_at) if c_at else '',
+                            'updated_at': str(u_at) if u_at else ''
+                        }
+                    cameras.append(camera)
+            except Exception as dvr_err:
+                logger.error(f"⚠️ Error fetching DVR channels for unified list: {dvr_err}")
+
             self.close_connection(conn)
             return cameras
             
         except Exception as e:
             logger.error(f"ERROR: Kamera listesi getirme hatasi: {e}")
-            raise e
+            return []
     
     def get_camera_by_id(self, camera_id: str, company_id: str) -> Optional[Dict]:
-        """ID ile kamerayı getir"""
+        """ID ile kamerayı getir (Standart IP Kamera veya DVR Kanalı)"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
             placeholder = self.get_placeholder()
+
+            # 1. DVR Kanalı kontrolü
+            if camera_id and str(camera_id).startswith('dvr_'):
+                logger.info(f"🔍 Searching DVR channel: {camera_id}")
+                cursor.execute(f'''
+                    SELECT c.channel_id, c.name, s.ip_address, s.port, s.protocol, 
+                           c.rtsp_path, s.username, s.password, c.status, 
+                           c.created_at, c.updated_at, s.dvr_id, c.channel_number
+                    FROM dvr_channels c
+                    JOIN dvr_systems s ON c.dvr_id = s.dvr_id AND c.company_id = s.company_id
+                    WHERE c.channel_id = {placeholder} AND c.company_id = {placeholder}
+                ''', (camera_id, company_id))
+                
+                row = cursor.fetchone()
+                if row:
+                    # PostgreSQL RealDictRow or SQLite tuple conversion
+                    if hasattr(row, 'keys') and hasattr(row, 'get'):
+                        res = dict(row)
+                        dvr_id = res.get('dvr_id')
+                        channel_number = res.get('channel_number')
+                        ip_address = res.get('ip_address')
+                        rtsp_port = res.get('port', 554) # DVR systems usually use port for HTTP and have separate rtsp_port, but let's be careful
+                        # Check dvr_systems table again for rtsp_port
+                        
+                        import urllib.parse
+                        username = res.get('username', 'admin')
+                        password = res.get('password', '')
+                        safe_username = urllib.parse.quote(username)
+                        safe_password = urllib.parse.quote(password)
+                        
+                        rtsp_path = res.get('rtsp_path', '')
+                        if rtsp_path and rtsp_path.startswith('rtsp://'):
+                            rtsp_url = rtsp_path
+                        elif rtsp_path:
+                            # Use stored path with discovered rtsp_port (need to get rtsp_port from s)
+                            # Let's adjust the query to include rtsp_port
+                            pass # Query already includes s.port as res.get('port')
+
+                        # Re-query with rtsp_port
+                        cursor.execute(f'''
+                            SELECT s.rtsp_port FROM dvr_systems s 
+                            WHERE s.dvr_id = {placeholder} AND s.company_id = {placeholder}
+                        ''', (dvr_id, company_id))
+                        rtsp_port_row = cursor.fetchone()
+                        rtsp_port = rtsp_port_row[0] if rtsp_port_row else 554
+
+                        if not rtsp_path or not rtsp_path.startswith('rtsp://'):
+                            base_rtsp = f"rtsp://{safe_username}:{safe_password}@{ip_address}:{rtsp_port}"
+                            if rtsp_path:
+                                rtsp_url = f"{base_rtsp}{rtsp_path}"
+                            else:
+                                rtsp_url = f"{base_rtsp}/ch{channel_number:02d}/main"
+                        else:
+                            rtsp_url = rtsp_path
+
+                        # Adapt to camera schema
+                        result = {
+                            'camera_id': res.get('channel_id'),
+                            'camera_name': res.get('name'),
+                            'location': f"DVR Channel {res.get('channel_number')}",
+                            'ip_address': res.get('ip_address'),
+                            'port': res.get('port', 80),
+                            'protocol': res.get('protocol', 'http'),
+                            'stream_path': rtsp_url, # Use full RTSP URL as stream_path for dvr
+                            'rtsp_url': rtsp_url,
+                            'username': username,
+                            'password': password,
+                            'resolution': '1920x1080',
+                            'fps': 25,
+                            'status': res.get('status', 'active'),
+                            'is_dvr': True,
+                            'dvr_id': dvr_id,
+                            'channel_number': channel_number,
+                            'created_at': str(res.get('created_at')) if res.get('created_at') else '',
+                            'updated_at': str(res.get('updated_at')) if res.get('updated_at') else ''
+                        }
+                    else:
+                        # SQLite path
+                        c_id, name, ip, port, proto, r_path, user, pswd, status, c_at, u_at, d_id, ch_num = row
+                        
+                        # Get rtsp_port
+                        cursor.execute(f"SELECT rtsp_port FROM dvr_systems WHERE dvr_id = {placeholder} AND company_id = {placeholder}", (d_id, company_id))
+                        r_port_row = cursor.fetchone()
+                        r_port = r_port_row[0] if r_port_row else 554
+
+                        import urllib.parse
+                        safe_user = urllib.parse.quote(user or 'admin')
+                        safe_pswd = urllib.parse.quote(pswd or '')
+                        
+                        if r_path and r_path.startswith('rtsp://'):
+                            rtsp_url = r_path
+                        else:
+                            base = f"rtsp://{safe_user}:{safe_pswd}@{ip}:{r_port}"
+                            if r_path:
+                                rtsp_url = f"{base}{r_path}"
+                            else:
+                                rtsp_url = f"{base}/ch{ch_num:02d}/main"
+
+                        result = {
+                            'camera_id': c_id,
+                            'camera_name': name,
+                            'location': f"DVR Channel {ch_num}",
+                            'ip_address': ip,
+                            'port': port,
+                            'protocol': proto,
+                            'stream_path': rtsp_url,
+                            'rtsp_url': rtsp_url,
+                            'username': user,
+                            'password': pswd,
+                            'resolution': '1920x1080',
+                            'fps': 25,
+                            'status': status,
+                            'is_dvr': True,
+                            'dvr_id': d_id,
+                            'channel_number': ch_num,
+                            'created_at': str(c_at) if c_at else '',
+                            'updated_at': str(u_at) if u_at else ''
+                        }
+                    self.close_connection(conn)
+                    return result
+
+            # 2. Standart Kamera kontrolü
             # Explicit column selection for better compatibility
             cursor.execute(f'''
                 SELECT camera_id, camera_name, location, ip_address, port, protocol, stream_path,
@@ -1624,6 +1828,7 @@ class MultiTenantDatabase:
                         'resolution': camera.get('resolution'),
                         'fps': camera.get('fps'),
                         'status': camera.get('status'),
+                        'is_dvr': False,
                         'last_detection': str(camera.get('last_detection')) if camera.get('last_detection') else '',
                         'created_at': str(camera.get('created_at')) if camera.get('created_at') else '',
                         'updated_at': str(camera.get('updated_at')) if camera.get('updated_at') else str(camera.get('created_at', ''))
@@ -1643,20 +1848,21 @@ class MultiTenantDatabase:
                         'resolution': camera[10] if len(camera) > 10 else '',
                         'fps': camera[11] if len(camera) > 11 else 25,
                         'status': camera[12] if len(camera) > 12 else '',
+                        'is_dvr': False,
                         'last_detection': str(camera[13]) if len(camera) > 13 and camera[13] else '',
                         'created_at': str(camera[14]) if len(camera) > 14 and camera[14] else '',
                         'updated_at': str(camera[15]) if len(camera) > 15 and camera[15] else (str(camera[14]) if len(camera) > 14 and camera[14] else '')
                     }
-                conn.close()
+                self.close_connection(conn)
                 return result
             
-            conn.close()
+            self.close_connection(conn)
             return None
             
         except Exception as e:
             logger.error(f"ERROR: Kamera getirme hatasi: {e}")
             if 'conn' in locals():
-                conn.close()
+                self.close_connection(conn)
             return None
     
     def update_camera(self, camera_id: str, company_id: str, camera_data: Dict) -> bool:
@@ -1673,7 +1879,7 @@ class MultiTenantDatabase:
             ''', (company_id, camera_id))
             
             if not cursor.fetchone():
-                conn.close()
+                self.close_connection(conn)
                 return False
             
             # Kamerayı güncelle
@@ -1740,7 +1946,7 @@ class MultiTenantDatabase:
                 ))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             logger.info(f"✅ Updated camera: {camera_data.get('name', 'Unknown')}")
             return True
             
@@ -1762,7 +1968,7 @@ class MultiTenantDatabase:
             ''', (company_id, camera_id))
             
             if not cursor.fetchone():
-                conn.close()
+                self.close_connection(conn)
                 return False
             
             # Kamerayı sil (soft delete)
@@ -1793,7 +1999,7 @@ class MultiTenantDatabase:
                 ''', (company_id, camera_id))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             return True
             
         except Exception as e:
@@ -1819,7 +2025,7 @@ class MultiTenantDatabase:
             result = cursor.fetchone()
             if not result:
                 logger.error(f"❌ Camera not found in database: {camera_id}")
-                conn.close()
+                self.close_connection(conn)
                 return False
             
             current_status = result[1] if len(result) > 1 else 'unknown'
@@ -1853,7 +2059,7 @@ class MultiTenantDatabase:
                 ''', (new_status, company_id, camera_id))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             logger.info(f"✅ Camera status updated successfully in database")
             return True
             
@@ -1929,7 +2135,7 @@ class MultiTenantDatabase:
             return None
         finally:
             if 'conn' in locals():
-                conn.close()
+                self.close_connection(conn)
     
     def get_active_camera_count(self, company_id: str) -> int:
         """Şirketin aktif kamera sayısını getir"""
@@ -1958,7 +2164,7 @@ class MultiTenantDatabase:
             return 0
         finally:
             if 'conn' in locals():
-                conn.close()
+                self.close_connection(conn)
     
     def get_company_stats(self, company_id: str) -> Dict:
         """Enhanced şirket istatistikleri"""
@@ -2424,7 +2630,7 @@ class MultiTenantDatabase:
                 'workers_trend': 0  # Çalışan trendi için daha karmaşık hesaplama gerekir
             }
             
-            conn.close()
+            self.close_connection(conn)
             return result
             
         except Exception as e:
@@ -2433,7 +2639,7 @@ class MultiTenantDatabase:
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             if 'conn' in locals():
                 try:
-                    conn.close()
+                    self.close_connection(conn)
                 except:
                     pass
             return {
@@ -2617,20 +2823,20 @@ class MultiTenantDatabase:
                     'usage_percentage': (used_cameras / (subscription_info['max_cameras'] or 25)) * 100
                 })
                 
-                conn.close()
+                self.close_connection(conn)
                 return {
                     'success': True,
                     'subscription': subscription_info
                 }
             else:
-                conn.close()
+                self.close_connection(conn)
                 return {'success': False, 'error': 'Şirket bulunamadı'}
                 
         except Exception as e:
             logger.error(f"❌ Internal abonelik bilgileri getirme hatası: {e}")
             if 'conn' in locals():
                 try:
-                    conn.close()
+                    self.close_connection(conn)
                 except:
                     pass
             return {'success': False, 'error': 'Veri getirme başarısız'}
@@ -2658,7 +2864,7 @@ class MultiTenantDatabase:
                 """, (logo_url, company_id))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             
             logger.info(f"✅ Company logo URL updated: {company_id} -> {logo_url}")
             return True

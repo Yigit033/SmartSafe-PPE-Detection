@@ -233,7 +233,7 @@ def create_blueprint(api):
             ''', (company_id,))
             
             company_data = cursor.fetchone()
-            conn.close()
+            api.db.close_connection(conn)
             
             if not company_data:
                 return redirect('/')
@@ -688,7 +688,7 @@ def create_blueprint(api):
             if recent_detections > 0:
                 compliance_rate = max(0, (recent_detections - recent_violations) / recent_detections * 100)
 
-            conn.close()
+            api.db.close_connection(conn)
             
             return jsonify({
                 'success': True,

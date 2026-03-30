@@ -288,6 +288,36 @@ class DVRStreamHandler:
         logger.info(f"🎯 Generated {len(unique_urls)} RTSP URLs for channel {channel_number} (brand: {brand})")
         return unique_urls
 
+    def find_working_url(self, ip_address: str, username: str, password: str,
+                         rtsp_port: int, channel_number: int, brand: str = None) -> Optional[str]:
+        """Deep scan for a working RTSP URL for a specific channel"""
+        urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number, brand)
+        
+        logger.info(f"🔍 Discovery: Scanning {len(urls)} patterns for channel {channel_number}...")
+        
+        for i, url in enumerate(urls):
+            cap = None
+            try:
+                # Optimized for fast scanning
+                cap = cv2.VideoCapture(url)
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
+                
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        logger.info(f"✅ Works! Formula found for channel {channel_number} (URL {i+1}): {url}")
+                        cap.release()
+                        return url
+            except Exception:
+                pass
+            finally:
+                if cap:
+                    cap.release()
+                    
+        logger.warning(f"❌ Discovery: No working pattern found for channel {channel_number}")
+        return None
+
     def detect_available_channels(self, ip_address: str, username: str, password: str,
                                   rtsp_port: int, max_channels: int = 32) -> List[int]:
         """Probe DVR to detect which channel numbers are available.

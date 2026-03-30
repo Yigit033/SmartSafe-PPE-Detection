@@ -810,7 +810,7 @@ def create_blueprint(api):
                         company = None
                 else:
                     raise e
-            conn.close()
+            api.db.close_connection(conn)
             
             if not company:
                 return '''
