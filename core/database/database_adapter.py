@@ -2002,6 +2002,100 @@ class DatabaseAdapter:
             logger.error(f"❌ Get camera group config error: {e}")
             return None
 
+    # ========================================
+    # RTSP URL CACHING METHODS
+    # ========================================
+
+    def update_channel_rtsp_path(self, ip_address: str, channel_number: int, rtsp_path: str) -> bool:
+        """Başarılı RTSP URL'yi dvr_channels tablosuna kaydet.
+        
+        DVR stream handler bir kanalın çalışan URL'sini bulduğunda bu methodu çağırır.
+        Bir sonraki bağlantıda sistem bu URL'yi doğrudan kullanarak
+        26 farklı URL'yi denemek yerine anında bağlanır.
+        
+        Args:
+            ip_address: DVR'ın IP adresi
+            channel_number: Kanal numarası
+            rtsp_path: Çalışan tam RTSP URL
+            
+        Returns:
+            True: Başarıyla kaydedildi, False: Hata oluştu
+        """
+        try:
+            if self.db_type == 'sqlite':
+                # dvr_systems tablosundan dvr_id bul
+                query = "SELECT dvr_id FROM dvr_systems WHERE ip_address = ?"
+                dvr_result = self.execute_query(query, (ip_address,), fetch_one=True)
+                if not dvr_result:
+                    logger.debug(f"ℹ️ DVR system not found for IP {ip_address}, skipping URL cache")
+                    return False
+                dvr_id = dvr_result[0] if isinstance(dvr_result, (list, tuple)) else dvr_result.get('dvr_id')
+
+                update_query = """
+                    UPDATE dvr_channels 
+                    SET rtsp_path = ?, updated_at = datetime('now')
+                    WHERE dvr_id = ? AND channel_number = ?
+                """
+                self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+            else:  # PostgreSQL
+                query = "SELECT dvr_id FROM dvr_systems WHERE ip_address = %s"
+                dvr_result = self.execute_query(query, (ip_address,), fetch_one=True)
+                if not dvr_result:
+                    logger.debug(f"ℹ️ DVR system not found for IP {ip_address}, skipping URL cache")
+                    return False
+                dvr_id = dvr_result.get('dvr_id') if isinstance(dvr_result, dict) else dvr_result[0]
+
+                update_query = """
+                    UPDATE dvr_channels 
+                    SET rtsp_path = %s, updated_at = NOW()
+                    WHERE dvr_id = %s AND channel_number = %s
+                """
+                self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+
+            logger.info(f"✅ RTSP URL cached in DB: {ip_address} ch{channel_number}")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to cache RTSP URL in DB: {e}")
+            return False
+
+    def get_channel_cached_rtsp_path(self, ip_address: str, channel_number: int) -> Optional[str]:
+        """Veritabanında kayıtlı başarılı RTSP URL'yi getir.
+        
+        Args:
+            ip_address: DVR'ın IP adresi
+            channel_number: Kanal numarası
+            
+        Returns:
+            Kayıtlı RTSP URL veya None
+        """
+        try:
+            if self.db_type == 'sqlite':
+                query = """
+                    SELECT dc.rtsp_path FROM dvr_channels dc
+                    JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+                    WHERE ds.ip_address = ? AND dc.channel_number = ?
+                    AND dc.rtsp_path IS NOT NULL AND dc.rtsp_path != ''
+                """
+                params = (ip_address, channel_number)
+            else:  # PostgreSQL
+                query = """
+                    SELECT dc.rtsp_path FROM dvr_channels dc
+                    JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+                    WHERE ds.ip_address = %s AND dc.channel_number = %s
+                    AND dc.rtsp_path IS NOT NULL AND dc.rtsp_path != ''
+                """
+                params = (ip_address, channel_number)
+
+            result = self.execute_query(query, params, fetch_one=True)
+            if result:
+                if isinstance(result, dict):
+                    return result.get('rtsp_path')
+                return result[0] if isinstance(result, (list, tuple)) and len(result) > 0 else None
+            return None
+        except Exception as e:
+            logger.debug(f"ℹ️ Could not retrieve cached RTSP URL: {e}")
+            return None
+
     def update_camera_group_id(self, camera_id: str, company_id: str, group_id: str) -> bool:
         """Update camera's group ID"""
         try:
