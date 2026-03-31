@@ -50,7 +50,7 @@ export const list = api(
   ): Promise<{ success: boolean; users: User[] }> => {
     try {
       const res = await pool.query(
-        "SELECT user_id, company_id, username, email, role, status FROM users WHERE company_id = $1 ORDER BY created_at DESC",
+        "SELECT user_id, company_id, username, email, role, status FROM users WHERE company_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC",
         [params.company_id],
       );
       return { success: true, users: res.rows };
@@ -113,7 +113,7 @@ export const login = api(
     try {
       // Önce kullanıcıyı email ile bulalım
       const res = await pool.query(
-        "SELECT user_id, company_id, username, email, password_hash, role, status FROM users WHERE email = $1",
+        "SELECT user_id, company_id, username, email, password_hash, role, status FROM users WHERE email = $1 AND deleted_at IS NULL",
         [params.email],
       );
 
@@ -163,13 +163,15 @@ export const remove = api(
     params: RemoveUserRequest,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
+      // Soft Delete: Kullanıcıyı kalıcı olarak silmek yerine deleted_at işaretle
       await pool.query(
-        "DELETE FROM users WHERE company_id = $1 AND user_id = $2",
+        "UPDATE users SET deleted_at = CURRENT_TIMESTAMP, status = 'deleted' WHERE company_id = $1 AND user_id = $2 AND deleted_at IS NULL",
         [params.company_id, params.user_id],
       );
+      console.log(`🗑️ Soft-deleted user ${params.user_id} from company ${params.company_id}`);
       return { success: true };
     } catch (error: any) {
-      console.error("Error deleting user:", error);
+      console.error("Error soft-deleting user:", error);
       return { success: false, error: error.message };
     }
   },

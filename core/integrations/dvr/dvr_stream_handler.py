@@ -11,6 +11,7 @@ import time
 import base64
 import socket
 import re
+import os
 from typing import Dict, Optional, List, Tuple
 import logging
 import urllib.parse
@@ -28,6 +29,14 @@ class DVRStreamHandler:
         self.connection_timeout = 3000  # Reduced from 5000 to 3000 ms for faster connection
         self.read_timeout = 2000  # Reduced from 3000 to 2000 ms for faster frame reading
 
+        # ══════════════════════════════════════════════════════════════════
+        # 🛡️ RTSP over TCP — UDP paket kaybını önler, H.265 PPS hatalarını bitirir
+        # FFmpeg'in varsayılan UDP yerine TCP kullanmasını zorlar.
+        # Bu, özellikle Hikvision/Dahua NVR'larda "PPS id out of range" hatasını çözer.
+        # ══════════════════════════════════════════════════════════════════
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|analyzeduration;2000000|probesize;1000000"
+        logger.info("🛡️ RTSP over TCP enforced globally via OPENCV_FFMPEG_CAPTURE_OPTIONS")
+
         # Singleton model instance'ları — her detection çağrısında yeniden oluşturulmaz
         # Bu, çok kanallı DVR'da RAM/GPU patlamasnı önler.
         self._sh17_manager = None   # Lazy init at first use
@@ -35,6 +44,13 @@ class DVRStreamHandler:
 
         # ONVIF URI cache — cihazdan alınan kesin URI'ler saklanır (tahmine gerek kalmaz)
         self._onvif_uri_cache: Dict[str, str] = {}
+
+        # ══════════════════════════════════════════════════════════════════
+        # ⚡ Success URL Cache — Bulunan çalışan RTSP URL'leri bellekte saklanır
+        # İlk bağlantı: Discovery (26 URL taraması) → sonraki bağlantı: <500ms
+        # Key format: "ip:channel" → Value: çalışan tam RTSP URL
+        # ══════════════════════════════════════════════════════════════════
+        self._success_url_cache: Dict[str, str] = {}
 
 
         # DVR brand-specific URL patterns
@@ -288,9 +304,92 @@ class DVRStreamHandler:
         logger.info(f"🎯 Generated {len(unique_urls)} RTSP URLs for channel {channel_number} (brand: {brand})")
         return unique_urls
 
+    def _create_capture_tcp(self, url: str, open_timeout: int = None, read_timeout: int = None) -> cv2.VideoCapture:
+        """TCP-enforced VideoCapture factory.
+        
+        Tüm RTSP bağlantıları bu method üzerinden oluşturulmalıdır.
+        Bu sayede:
+        1. RTSP TCP zorlaması tek bir noktadan yönetilir
+        2. Timeout değerleri tutarlı olur
+        3. FFmpeg parametreleri standardize edilir
+        """
+        cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, open_timeout or self.connection_timeout)
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, read_timeout or self.read_timeout)
+        # Buffer boyutunu küçük tut — düşük gecikme (low latency) için
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        return cap
+
+    def _cache_success_url(self, ip_address: str, channel_number: int, url: str):
+        """Başarılı RTSP URL'yi hem bellek cache'ine hem veritabanına kaydet."""
+        cache_key = f"{ip_address}:{channel_number}"
+        self._success_url_cache[cache_key] = url
+        logger.info(f"⚡ URL cached: {cache_key} → {url}")
+
+        # Veritabanına da kaydet (persistent cache)
+        try:
+            from database.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
+            db.update_channel_rtsp_path(ip_address, channel_number, url)
+        except Exception as e:
+            logger.debug(f"ℹ️ DB URL cache kayıt edilemedi (non-critical): {e}")
+
+    def _get_cached_url(self, ip_address: str, channel_number: int) -> Optional[str]:
+        """Bellekte veya veritabanında kayıtlı başarılı URL'yi getir."""
+        cache_key = f"{ip_address}:{channel_number}"
+        
+        # 1. Önce bellek cache'ini kontrol et (en hızlı)
+        cached = self._success_url_cache.get(cache_key)
+        if cached:
+            return cached
+
+        # 2. Veritabanını kontrol et (persistent)
+        try:
+            from database.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
+            db_url = db.get_channel_cached_rtsp_path(ip_address, channel_number)
+            if db_url:
+                # Bellek cache'ine de yükle
+                self._success_url_cache[cache_key] = db_url
+                logger.info(f"⚡ URL loaded from DB cache: {cache_key} → {db_url}")
+                return db_url
+        except Exception as e:
+            logger.debug(f"ℹ️ DB URL cache okunamadı (non-critical): {e}")
+
+        return None
+
     def find_working_url(self, ip_address: str, username: str, password: str,
                          rtsp_port: int, channel_number: int, brand: str = None) -> Optional[str]:
-        """Deep scan for a working RTSP URL for a specific channel"""
+        """Deep scan for a working RTSP URL for a specific channel.
+        
+        Strateji (Cache-First, Discovery-Fallback):
+        1. Önce cache'te kayıtlı URL'yi dene → <500ms
+        2. Cache boşsa veya çalışmazsa → tam discovery taraması
+        3. Başarılı URL'yi cache'e kaydet
+        """
+        # ── Phase 1: Cache'ten hızlı bağlantı ────────────────────────────
+        cached_url = self._get_cached_url(ip_address, channel_number)
+        if cached_url:
+            cap = None
+            try:
+                cap = self._create_capture_tcp(cached_url, open_timeout=2000, read_timeout=2000)
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        logger.info(f"⚡ Cache HIT — channel {channel_number} connected instantly via cached URL")
+                        cap.release()
+                        return cached_url
+                logger.info(f"⚠️ Cache MISS — cached URL no longer works, starting full discovery...")
+            except Exception:
+                pass
+            finally:
+                if cap:
+                    cap.release()
+            # Cache artık geçersiz, temizle
+            cache_key = f"{ip_address}:{channel_number}"
+            self._success_url_cache.pop(cache_key, None)
+
+        # ── Phase 2: Full Discovery (brute-force tarama) ─────────────────
         urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number, brand)
         
         logger.info(f"🔍 Discovery: Scanning {len(urls)} patterns for channel {channel_number}...")
@@ -298,16 +397,15 @@ class DVRStreamHandler:
         for i, url in enumerate(urls):
             cap = None
             try:
-                # Optimized for fast scanning
-                cap = cv2.VideoCapture(url)
-                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
-                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
+                cap = self._create_capture_tcp(url, open_timeout=1500, read_timeout=1500)
                 
                 if cap.isOpened():
                     ret, frame = cap.read()
                     if ret and frame is not None:
                         logger.info(f"✅ Works! Formula found for channel {channel_number} (URL {i+1}): {url}")
                         cap.release()
+                        # Başarılı URL'yi cache'e kaydet
+                        self._cache_success_url(ip_address, channel_number, url)
                         return url
             except Exception:
                 pass
@@ -749,72 +847,88 @@ class DVRStreamHandler:
                     self.active_streams[stream_id]['status'] = 'error'
                     return
             
-            # Generate multiple URLs to try
-            urls_to_try = [rtsp_url]  # Start with original URL
-            
-            # Add brand-specific URLs if we have the parameters
-            if all([ip_address, username, password, rtsp_port, channel_number]):
-                brand_urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number)
-                urls_to_try.extend(brand_urls)
-                logger.info(f"🎯 Channel {channel_number}: Will try {len(urls_to_try)} different URL patterns")
-            else:
-                logger.warning(f"⚠️ Channel {channel_number}: Missing parameters for enhanced URL generation")
-            
-            # Try each URL, prioritize Hikvision ISAPI channels if present
+            # ── Cache-First Strategy: Önce kayıtlı URL'yi dene ────────────
             cap = None
             successful_url = None
-            
-            # Prioritize vendor-specific working URLs: XM stream.sdp first, then cam/realmonitor,
-            # then ISAPI, then /chXX/main and others
-            def _prio(u: str) -> tuple:
-                is_xm = ('stream=0.sdp' in u or 'stream=1.sdp' in u) and '/user=' in u
-                is_cam = 'cam/realmonitor' in u
-                is_isapi = "ISAPI/Streaming/channels" in u
-                is_ch_main = "/ch" in u and u.endswith("/main")
-                return ((0 if is_xm else (1 if is_cam else (2 if is_isapi else (3 if is_ch_main else 4)))), u)
-            urls_to_try.sort(key=_prio)
-            for i, url in enumerate(urls_to_try):
-                try:
-                    logger.info(f"🔄 Channel {channel_number}: Trying RTSP URL {i+1}/{len(urls_to_try)}: {url}")
-                    
-                    cap = cv2.VideoCapture(url)
-                    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.connection_timeout)
-                    cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.read_timeout)
-                    
-                    if cap.isOpened():
-                        # Test if we can actually read a frame
-                        ret, test_frame = cap.read()
-                        if ret and test_frame is not None:
-                            logger.info(f"✅ Channel {channel_number}: Successfully opened RTSP stream: {url}")
-                            successful_url = url
-                            break
+
+            if ip_address and channel_number:
+                cached_url = self._get_cached_url(ip_address, channel_number)
+                if cached_url:
+                    try:
+                        cap = self._create_capture_tcp(cached_url)
+                        if cap.isOpened():
+                            ret, test_frame = cap.read()
+                            if ret and test_frame is not None:
+                                logger.info(f"⚡ Channel {channel_number}: Instant connect via cached URL")
+                                successful_url = cached_url
+                    except Exception:
+                        pass
+                    if not successful_url:
+                        if cap:
+                            cap.release()
+                            cap = None
+                        logger.info(f"⚠️ Channel {channel_number}: Cached URL stale, falling back to discovery")
+
+            # ── Full Discovery (yalnızca cache çalışmazsa) ───────────────
+            if not successful_url:
+                urls_to_try = [rtsp_url]  # Start with original URL
+
+                # Add brand-specific URLs if we have the parameters
+                if all([ip_address, username, password, rtsp_port, channel_number]):
+                    brand_urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number)
+                    urls_to_try.extend(brand_urls)
+                    logger.info(f"🎯 Channel {channel_number}: Will try {len(urls_to_try)} different URL patterns")
+                else:
+                    logger.warning(f"⚠️ Channel {channel_number}: Missing parameters for enhanced URL generation")
+
+                # Prioritize vendor-specific working URLs
+                def _prio(u: str) -> tuple:
+                    is_xm = ('stream=0.sdp' in u or 'stream=1.sdp' in u) and '/user=' in u
+                    is_cam = 'cam/realmonitor' in u
+                    is_isapi = "ISAPI/Streaming/channels" in u
+                    is_ch_main = "/ch" in u and u.endswith("/main")
+                    return ((0 if is_xm else (1 if is_cam else (2 if is_isapi else (3 if is_ch_main else 4)))), u)
+                urls_to_try.sort(key=_prio)
+
+                for i, url in enumerate(urls_to_try):
+                    try:
+                        logger.info(f"🔄 Channel {channel_number}: Trying RTSP URL {i+1}/{len(urls_to_try)}: {url}")
+
+                        cap = self._create_capture_tcp(url)
+
+                        if cap.isOpened():
+                            ret, test_frame = cap.read()
+                            if ret and test_frame is not None:
+                                logger.info(f"✅ Channel {channel_number}: Successfully opened RTSP stream: {url}")
+                                successful_url = url
+                                break
+                            else:
+                                logger.warning(f"⚠️ Channel {channel_number}: Failed to read frame: {url}")
+                                if cap:
+                                    cap.release()
+                                    cap = None
                         else:
                             logger.warning(f"⚠️ Channel {channel_number}: Failed to open URL: {url}")
                             if cap:
                                 cap.release()
                                 cap = None
-                            else:
-                                logger.warning(f"⚠️ Channel {channel_number}: URL opened but no frame data: {url}")
-                                cap.release()
-                                cap = None
-                    else:
-                        logger.warning(f"⚠️ Channel {channel_number}: Failed to open URL: {url}")
+
+                    except Exception as e:
+                        logger.warning(f"⚠️ Channel {channel_number}: Failed to open URL {url}: {e}")
                         if cap:
                             cap.release()
                             cap = None
-                        
-                except Exception as e:
-                    logger.warning(f"⚠️ Channel {channel_number}: Failed to open URL {url}: {e}")
-                    if cap:
-                        cap.release()
-                        cap = None
-                    continue
-            
+                        continue
+
             if not cap or not cap.isOpened():
                 logger.error(f"❌ Failed to open any RTSP stream for {stream_id}")
                 self.active_streams[stream_id]['status'] = 'error'
                 return
-            
+
+            # ── Başarılı URL'yi cache'e kaydet ───────────────────────────
+            if successful_url and ip_address and channel_number:
+                self._cache_success_url(ip_address, channel_number, successful_url)
+
             # Update stream info with successful URL
             self.active_streams[stream_id]['rtsp_url'] = successful_url
             self.active_streams[stream_id]['status'] = 'active'
@@ -868,9 +982,7 @@ class DVRStreamHandler:
                                 
                                 for url in reconnect_urls:
                                     try:
-                                        cap = cv2.VideoCapture(url)
-                                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.connection_timeout)
-                                        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.read_timeout)
+                                        cap = self._create_capture_tcp(url)
                                         
                                         if cap.isOpened():
                                             ret, test_frame = cap.read()
@@ -878,6 +990,9 @@ class DVRStreamHandler:
                                                 logger.info(f"✅ Channel {channel_number}: Reconnection successful: {url}")
                                                 successful_url = url
                                                 consecutive_errors = 0
+                                                # Yeni çalışan URL'yi cache'e güncelle
+                                                if ip_address and channel_number:
+                                                    self._cache_success_url(ip_address, channel_number, url)
                                                 break
                                             else:
                                                 cap.release()

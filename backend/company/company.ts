@@ -250,8 +250,9 @@ export const list = api(
     try {
       const res = await pool.query(`
         SELECT c.company_id, c.company_name, c.email, c.api_key, c.created_at,
-        (SELECT COUNT(*) FROM users u WHERE u.company_id = c.company_id)::int as user_count
+        (SELECT COUNT(*) FROM users u WHERE u.company_id = c.company_id AND u.deleted_at IS NULL)::int as user_count
         FROM companies c
+        WHERE c.deleted_at IS NULL
         ORDER BY c.created_at DESC
       `);
       return { companies: res.rows };
@@ -280,7 +281,7 @@ export const getById = api(
   }): Promise<GetCompanyResponse> => {
     try {
       const res = await pool.query(
-        "SELECT * FROM companies WHERE company_id = $1",
+        "SELECT * FROM companies WHERE company_id = $1 AND deleted_at IS NULL",
         [company_id],
       );
       if (res.rows.length === 0) {
@@ -382,20 +383,24 @@ export const remove = api(
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query("DELETE FROM users WHERE company_id = $1", [
-        company_id,
-      ]);
-      await client.query("DELETE FROM cameras WHERE company_id = $1", [
-        company_id,
-      ]);
-      await client.query("DELETE FROM companies WHERE company_id = $1", [
-        company_id,
-      ]);
+
+      // Soft Delete: Veriyi kalıcı olarak silmek yerine deleted_at işaretle
+      // Bu sayede yanlışlıkla silinen veriler tek bir SQL ile geri getirilebilir
+      await client.query(
+        "UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND deleted_at IS NULL",
+        [company_id],
+      );
+      await client.query(
+        "UPDATE companies SET deleted_at = CURRENT_TIMESTAMP, status = 'deleted' WHERE company_id = $1 AND deleted_at IS NULL",
+        [company_id],
+      );
+
       await client.query("COMMIT");
+      console.log(`🗑️ Soft-deleted company ${company_id} and associated users`);
       return { success: true };
     } catch (error) {
       await client.query("ROLLBACK");
-      console.error("Error deleting company:", error);
+      console.error("Error soft-deleting company:", error);
       return { success: false };
     } finally {
       client.release();
