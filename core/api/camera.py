@@ -1371,6 +1371,7 @@ def create_blueprint(api):
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/proxy-stream')
     def proxy_camera_stream(company_id, camera_id):
         """Kamera stream'ini proxy ile getir - CORS sorunlarını çözer"""
+        logger.info(f"🚀 [DEBUG] Proxy stream request for company={company_id}, camera={camera_id}")
         try:
             # Database initialization kontrolü
             if not api.ensure_database_initialized():
