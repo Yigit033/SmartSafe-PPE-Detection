@@ -2033,7 +2033,14 @@ class DatabaseAdapter:
     # RTSP URL CACHING METHODS
     # ========================================
 
-    def update_channel_rtsp_path(self, ip_address: str, channel_number: int, rtsp_path: str) -> bool:
+    def update_channel_rtsp_path(
+        self,
+        ip_address: str,
+        channel_number: int,
+        rtsp_path: str,
+        *,
+        company_id: str | None = None,
+    ) -> bool:
         """Başarılı RTSP URL'yi dvr_channels tablosuna kaydet.
         
         DVR stream handler bir kanalın çalışan URL'sini bulduğunda bu methodu çağırır.
@@ -2050,35 +2057,85 @@ class DatabaseAdapter:
         """
         try:
             from utils.redaction import redact_url
+            # Resolve dvr_id (and optionally company) from dvr_systems
+            if company_id:
+                dvr_lookup_q = "SELECT dvr_id FROM dvr_systems WHERE ip_address = ? AND company_id = ?"
+                dvr_lookup_params = (ip_address, company_id)
+            else:
+                # Without company_id this can be ambiguous in multi-tenant setups.
+                # We'll only proceed if there's exactly one DVR for that IP.
+                dvr_lookup_q = "SELECT dvr_id, company_id FROM dvr_systems WHERE ip_address = ?"
+                dvr_lookup_params = (ip_address,)
+
+            dvr_rows = self.execute_query(dvr_lookup_q, dvr_lookup_params, fetch_all=True)
+            if not dvr_rows:
+                logger.debug(f"ℹ️ DVR system not found for IP {ip_address}, skipping URL cache")
+                return False
+
+            if company_id:
+                # dvr_rows may be list[dict] (fetch_all=True)
+                dvr_id = dvr_rows[0].get('dvr_id') if isinstance(dvr_rows[0], dict) else dvr_rows[0][0]
+            else:
+                unique_dvr_ids = set()
+                for r in dvr_rows:
+                    if isinstance(r, dict):
+                        unique_dvr_ids.add(r.get('dvr_id'))
+                    elif isinstance(r, (list, tuple)) and r:
+                        unique_dvr_ids.add(r[0])
+                if len(unique_dvr_ids) != 1:
+                    logger.warning(
+                        f"⚠️ RTSP cache write skipped due to ambiguous DVR lookup for ip={ip_address} "
+                        f"(found {len(unique_dvr_ids)} dvrs). Pass company_id to update_channel_rtsp_path()."
+                    )
+                    return False
+                dvr_id = next(iter(unique_dvr_ids))
+
+            # Update using a join on dvr_systems to avoid mismatches and keep
+            # ip_address/company_id as the primary identity.
             if self.db_type == 'sqlite':
-                # dvr_systems tablosundan dvr_id bul
-                query = "SELECT dvr_id FROM dvr_systems WHERE ip_address = ?"
-                dvr_result = self.execute_query(query, (ip_address,), fetch_one=True)
-                if not dvr_result:
-                    logger.debug(f"ℹ️ DVR system not found for IP {ip_address}, skipping URL cache")
-                    return False
-                dvr_id = dvr_result[0] if isinstance(dvr_result, (list, tuple)) else dvr_result.get('dvr_id')
-
-                update_query = """
-                    UPDATE dvr_channels 
-                    SET rtsp_path = ?, updated_at = datetime('now')
-                    WHERE dvr_id = ? AND channel_number = ?
-                """
-                affected = self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+                if company_id:
+                    update_query = """
+                        UPDATE dvr_channels
+                        SET rtsp_path = ?, updated_at = datetime('now')
+                        WHERE channel_id IN (
+                            SELECT dc.channel_id
+                            FROM dvr_channels dc
+                            JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+                            WHERE ds.ip_address = ? AND ds.company_id = ? AND dc.channel_number = ?
+                        )
+                    """
+                    affected = self.execute_query(update_query, (rtsp_path, ip_address, company_id, channel_number))
+                else:
+                    update_query = """
+                        UPDATE dvr_channels
+                        SET rtsp_path = ?, updated_at = datetime('now')
+                        WHERE channel_id IN (
+                            SELECT dc.channel_id
+                            FROM dvr_channels dc
+                            JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+                            WHERE ds.ip_address = ? AND dc.channel_number = ?
+                        )
+                    """
+                    affected = self.execute_query(update_query, (rtsp_path, ip_address, channel_number))
             else:  # PostgreSQL
-                query = "SELECT dvr_id FROM dvr_systems WHERE ip_address = %s"
-                dvr_result = self.execute_query(query, (ip_address,), fetch_one=True)
-                if not dvr_result:
-                    logger.debug(f"ℹ️ DVR system not found for IP {ip_address}, skipping URL cache")
-                    return False
-                dvr_id = dvr_result.get('dvr_id') if isinstance(dvr_result, dict) else dvr_result[0]
-
-                update_query = """
-                    UPDATE dvr_channels 
-                    SET rtsp_path = %s, updated_at = NOW()
-                    WHERE dvr_id = %s AND channel_number = %s
-                """
-                affected = self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+                if company_id:
+                    update_query = """
+                        UPDATE dvr_channels dc
+                        SET rtsp_path = %s, updated_at = NOW()
+                        FROM dvr_systems ds
+                        WHERE dc.dvr_id = ds.dvr_id
+                        AND ds.ip_address = %s AND ds.company_id = %s AND dc.channel_number = %s
+                    """
+                    affected = self.execute_query(update_query, (rtsp_path, ip_address, company_id, channel_number))
+                else:
+                    update_query = """
+                        UPDATE dvr_channels dc
+                        SET rtsp_path = %s, updated_at = NOW()
+                        FROM dvr_systems ds
+                        WHERE dc.dvr_id = ds.dvr_id
+                        AND ds.ip_address = %s AND dc.channel_number = %s
+                    """
+                    affected = self.execute_query(update_query, (rtsp_path, ip_address, channel_number))
 
             if not affected:
                 logger.warning(
@@ -2093,7 +2150,13 @@ class DatabaseAdapter:
             logger.warning(f"⚠️ Failed to cache RTSP URL in DB: {e}")
             return False
 
-    def get_channel_cached_rtsp_path(self, ip_address: str, channel_number: int) -> Optional[str]:
+    def get_channel_cached_rtsp_path(
+        self,
+        ip_address: str,
+        channel_number: int,
+        *,
+        company_id: str | None = None,
+    ) -> Optional[str]:
         """Veritabanında kayıtlı başarılı RTSP URL'yi getir.
         
         Args:
@@ -2111,7 +2174,19 @@ class DatabaseAdapter:
                     WHERE ds.ip_address = ? AND dc.channel_number = ?
                     AND dc.rtsp_path IS NOT NULL AND dc.rtsp_path != ''
                 """
-                params = (ip_address, channel_number)
+                if company_id:
+                    query = query.replace("WHERE ds.ip_address = ? AND dc.channel_number = ?", "WHERE ds.ip_address = ? AND ds.company_id = ? AND dc.channel_number = ?")
+                    params = (ip_address, company_id, channel_number)
+                else:
+                    # Guard against multi-tenant ambiguity: if multiple DVRs share this IP, don't guess.
+                    dvr_count = self.execute_query(
+                        "SELECT dvr_id FROM dvr_systems WHERE ip_address = ?",
+                        (ip_address,),
+                        fetch_all=True,
+                    )
+                    if isinstance(dvr_count, list) and len(dvr_count) > 1:
+                        return None
+                    params = (ip_address, channel_number)
             else:  # PostgreSQL
                 query = """
                     SELECT dc.rtsp_path FROM dvr_channels dc
@@ -2119,7 +2194,18 @@ class DatabaseAdapter:
                     WHERE ds.ip_address = %s AND dc.channel_number = %s
                     AND dc.rtsp_path IS NOT NULL AND dc.rtsp_path != ''
                 """
-                params = (ip_address, channel_number)
+                if company_id:
+                    query = query.replace("WHERE ds.ip_address = %s AND dc.channel_number = %s", "WHERE ds.ip_address = %s AND ds.company_id = %s AND dc.channel_number = %s")
+                    params = (ip_address, company_id, channel_number)
+                else:
+                    dvr_count = self.execute_query(
+                        "SELECT dvr_id FROM dvr_systems WHERE ip_address = %s",
+                        (ip_address,),
+                        fetch_all=True,
+                    )
+                    if isinstance(dvr_count, list) and len(dvr_count) > 1:
+                        return None
+                    params = (ip_address, channel_number)
 
             result = self.execute_query(query, params, fetch_one=True)
             if result:
