@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Company:
-    """Şirket veri modeli"""
+    """Şirket veri modeli""" 
     company_id: str
     company_name: str
     sector: str
