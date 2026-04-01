@@ -373,8 +373,7 @@ def create_blueprint(api):
             state['active_detectors'][camera_key] = True
             import app as _api_mod
             _api_mod.active_detectors[camera_key] = True
-            logger.info(f"✅ active_detectors[{camera_key}] = True set before thread start")
-            # Worker'ın aynı dict referansını görmesi için açıkça geçir (reloader/çift app senaryosu)
+            logger.info(f"✅ active_detectors[{camera_key}] = True | id(state)={id(state['active_detectors'])} id(app)={id(_api_mod.active_detectors)} same={state['active_detectors'] is _api_mod.active_detectors}")
             active_detectors_ref = state['active_detectors']
             detection_thread = threading.Thread(
                 target=api.saas_detection_worker,
@@ -654,6 +653,21 @@ def create_blueprint(api):
                 'camera_id': camera_id
             }), 500
 
+    @bp.route('/api/company/<company_id>/active-detections')
+    def active_detections_list(company_id):
+        """Şirkette aktif olan tüm detection kameralarının ID listesini döner."""
+        try:
+            state = _get_detection_state()
+            prefix = f"{company_id}_"
+            active_ids = [
+                k[len(prefix):] for k, v in state['active_detectors'].items()
+                if k.startswith(prefix) and v
+            ]
+            return jsonify({'success': True, 'active_camera_ids': active_ids})
+        except Exception as e:
+            logger.error(f"❌ Active detections list error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @bp.route('/api/company/<company_id>/live-stats')
     def live_stats(company_id):
         """Canlı istatistikler API"""
@@ -782,21 +796,21 @@ def create_blueprint(api):
 
     @bp.route('/api/company/<company_id>/video-feed/<camera_id>')
     def get_video_feed(company_id, camera_id):
-        """Video feed endpoint"""
+        """Video feed endpoint — detection aktifse overlay'li, değilse proxy-stream'e yönlendir"""
         try:
-            # user_data = api.validate_session()
-            # if not user_data or user_data.get('company_id') != company_id:
-            #     return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
-            
             camera_key = f"{company_id}_{camera_id}"
             state = _get_detection_state()
             ad_ref = state['active_detectors']
-            
-            return Response(
-                api.generate_saas_frames(camera_key, company_id, camera_id, active_detectors_ref=ad_ref),
-                mimetype='multipart/x-mixed-replace; boundary=frame'
-            )
-                
+
+            if ad_ref.get(camera_key, False):
+                return Response(
+                    api.generate_saas_frames(camera_key, company_id, camera_id, active_detectors_ref=ad_ref),
+                    mimetype='multipart/x-mixed-replace; boundary=frame'
+                )
+
+            logger.info(f"🔗 Detection inactive for {camera_key}, redirecting to proxy-stream")
+            return redirect(f"/api/company/{company_id}/cameras/{camera_id}/proxy-stream")
+
         except Exception as e:
             logger.error(f"❌ Video feed hatası: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500

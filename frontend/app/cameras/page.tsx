@@ -123,6 +123,7 @@ function CamerasContent() {
       const data = await response.json();
       if (data.success) {
         setCameras(data.cameras);
+        syncAiStates(cid, data.cameras);
       } else {
         console.error("Cameras fetch failed:", data.error);
       }
@@ -130,6 +131,20 @@ function CamerasContent() {
       console.error("Error fetching cameras:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const syncAiStates = async (cid: string, _cams: any[]) => {
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/api/company/${cid}/active-detections`,
+      );
+      const data = await res.json();
+      if (data.success && data.active_camera_ids?.length > 0) {
+        setEnabledAiCameras(data.active_camera_ids);
+      }
+    } catch {
+      // backend unreachable — keep default empty
     }
   };
 

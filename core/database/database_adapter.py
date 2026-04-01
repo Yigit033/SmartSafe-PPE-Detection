@@ -1047,8 +1047,7 @@ class DatabaseAdapter:
                         severity TEXT DEFAULT 'warning',
                         status TEXT DEFAULT 'active',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (company_id) REFERENCES companies (company_id),
-                        FOREIGN KEY (camera_id) REFERENCES cameras (camera_id)
+                        FOREIGN KEY (company_id) REFERENCES companies (company_id)
                     )
                 ''')
             else:  # PostgreSQL
@@ -1056,7 +1055,7 @@ class DatabaseAdapter:
                     CREATE TABLE IF NOT EXISTS violation_events (
                         event_id VARCHAR(255) PRIMARY KEY,
                         company_id VARCHAR(255) REFERENCES companies(company_id),
-                        camera_id VARCHAR(255) REFERENCES cameras(camera_id),
+                        camera_id VARCHAR(255) NOT NULL,
                         person_id VARCHAR(255) NOT NULL,
                         violation_type VARCHAR(100) NOT NULL,
                         start_time DOUBLE PRECISION NOT NULL,
@@ -1069,6 +1068,13 @@ class DatabaseAdapter:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
+                try:
+                    cursor.execute('''
+                        ALTER TABLE violation_events
+                        DROP CONSTRAINT IF EXISTS violation_events_camera_id_fkey
+                    ''')
+                except Exception:
+                    pass
             
             # ========================================
             # PERSON VIOLATIONS TABLE - Monthly violation tracking per person
@@ -2479,9 +2485,50 @@ class DatabaseAdapter:
     # VIOLATION EVENTS METHODS
     # ========================================
     
+    def _ensure_camera_row_for_dvr(self, camera_id: str, company_id: str) -> None:
+        """DVR kanalı cameras tablosunda yoksa shadow satır ekler (FK uyumu)."""
+        try:
+            ph = self.get_placeholder()
+            check_q = f"SELECT 1 FROM cameras WHERE camera_id = {ph} AND company_id = {ph} LIMIT 1"
+            row = self.execute_query(check_q, (camera_id, company_id), fetch_one=True)
+            if row:
+                return
+            ch_info = self.get_dvr_channel_by_id(camera_id, company_id)
+            if not ch_info:
+                return
+            insert_q = f"""
+                INSERT INTO cameras (camera_id, company_id, camera_name, location, ip_address,
+                    port, protocol, stream_path, username, password, camera_type, status, created_at)
+                VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},'dvr_channel','active', NOW())
+                ON CONFLICT (camera_id) DO NOTHING
+            """
+            if self.db_type == 'sqlite':
+                insert_q = insert_q.replace("NOW()", "datetime('now')")
+                insert_q = insert_q.replace("ON CONFLICT (camera_id) DO NOTHING",
+                                            "ON CONFLICT(camera_id) DO NOTHING")
+            self.execute_query(insert_q, (
+                camera_id, company_id,
+                ch_info.get('camera_name', camera_id),
+                ch_info.get('location', ''),
+                ch_info.get('ip_address', ''),
+                ch_info.get('port', 554),
+                'rtsp',
+                ch_info.get('stream_path', ''),
+                ch_info.get('username', ''),
+                ch_info.get('password', ''),
+            ))
+            logger.info(f"✅ Shadow camera row created for DVR channel: {camera_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not create shadow camera row for {camera_id}: {e}")
+
     def add_violation_event(self, event_data: Dict) -> bool:
         """Yeni ihlal event'i kaydet"""
         try:
+            camera_id = event_data['camera_id']
+            company_id = event_data['company_id']
+            if '_ch' in str(camera_id):
+                self._ensure_camera_row_for_dvr(camera_id, company_id)
+
             if self.db_type == 'sqlite':
                 query = '''
                     INSERT INTO violation_events (
@@ -2499,8 +2546,8 @@ class DatabaseAdapter:
             
             params = (
                 event_data['event_id'],
-                event_data['company_id'],
-                event_data['camera_id'],
+                company_id,
+                camera_id,
                 event_data['person_id'],
                 event_data['violation_type'],
                 event_data['start_time'],

@@ -2517,7 +2517,12 @@ smartsafe_requests_total 100
         _active = ad.get(camera_key, False)
         logger.info(f"🔍 SaaS Detection worker loop başlıyor: active_detectors.get({camera_key}) = {_active}")
         
-        time.sleep(0.3)  # Kamera thread'in açılması için kısa bekleme
+        # DVR kanalları için stream hazır olana kadar daha uzun bekle
+        _is_dvr = '_ch' in camera_id
+        _initial_wait = 5.0 if _is_dvr else 0.3
+        logger.info(f"⏳ Initial wait: {_initial_wait}s (DVR={_is_dvr}) for {camera_key}")
+        time.sleep(_initial_wait)
+
         while ad.get(camera_key, False):
             try:
                 # Frame al
@@ -2808,7 +2813,13 @@ smartsafe_requests_total 100
                 logger.error(f"❌ SaaS Detection hatası: {e}")
                 time.sleep(1)
         
-        logger.info(f"🛑 SaaS Detection durduruldu - Kamera: {camera_id}")
+        _exit_val = ad.get(camera_key, 'KEY_MISSING')
+        logger.info(
+            f"🛑 SaaS Detection durduruldu - Kamera: {camera_id} | "
+            f"active_detectors[{camera_key}]={_exit_val} | "
+            f"frame_count={frame_count} | detection_count={detection_count} | "
+            f"id(ad)={id(ad)}"
+        )
 
     def _save_detection_to_reports(self, company_id, camera_id, detection_type, 
                                   people_detected, ppe_compliant, violations_count, 
@@ -3818,13 +3829,22 @@ smartsafe_requests_total 100
             from utils.redaction import redact_url
             from urllib.parse import urlsplit
 
-            # Proxy-stream ile aynı kaynaktan al (aynı IP/URL tutarlılığı için)
             camera_info = self.db.get_camera_by_id(camera_id, company_id)
+            if not camera_info:
+                if hasattr(self.db, 'get_dvr_channel_by_id'):
+                    camera_info = self.db.get_dvr_channel_by_id(camera_id, company_id)
+                    if camera_info:
+                        logger.info(f"✅ DVR channel resolved for detection worker: {camera_id}")
             if not camera_info:
                 logger.error(f"❌ Kamera bulunamadı: {camera_id}")
                 return
             logger.info(f"📷 Detection worker kamera kaynağı: {camera_id} -> ip={camera_info.get('ip_address')} (proxy ile aynı get_camera_by_id)")
             
+            # DVR kanalı ise mevcut DVRStreamHandler buffer'ından oku (ayrı RTSP bağlantısı açma)
+            if camera_info.get('is_dvr') or str(camera_info.get('camera_type', '')).lower() == 'dvr_channel':
+                self._start_dvr_detection_polling(camera_key, camera_id, camera_info, active_detectors_ref)
+                return
+
             # Kamera URL'sini oluştur - Alternatif URL'ler ile
             camera_url = None
             if camera_info.get('ip_address') and camera_info.get('port'):
@@ -3939,6 +3959,91 @@ smartsafe_requests_total 100
             
         except Exception as e:
             logger.error(f"❌ SaaS Kamera başlatma hatası: {e}")
+
+    def _start_dvr_detection_polling(self, camera_key, camera_id, camera_info, active_detectors_ref=None):
+        """DVR kanalı için detection frame polling — mevcut DVRStreamHandler buffer'ından okur."""
+        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
+
+        def _dvr_poll_worker():
+            import base64
+            poll_count = 0
+            try:
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                sh = get_stream_handler()
+
+                dvr_id = camera_info.get('dvr_id', '')
+                ch_num = camera_info.get('channel_number')
+                if not dvr_id and '_ch' in camera_id:
+                    dvr_id = camera_id.rsplit('_ch', 1)[0]
+                if ch_num is None and '_ch' in camera_id:
+                    try:
+                        ch_num = int(camera_id.rsplit('_ch', 1)[1])
+                    except (ValueError, IndexError):
+                        ch_num = 1
+                stream_id = f"{dvr_id}_ch{ch_num:02d}" if ch_num else camera_id
+
+                ip = camera_info.get('ip_address')
+                user = camera_info.get('username', 'admin')
+                pwd = camera_info.get('password', '')
+                rtsp_port = camera_info.get('port') or 554
+                rtsp_url = camera_info.get('rtsp_url') or camera_info.get('stream_path') or ''
+
+                company_id = camera_info.get('company_id', '')
+
+                # Proxy stream zaten aynı stream_id'yi kullanıyor olabilir
+                status = sh.get_stream_status(stream_id)
+                if status and status.get('status') == 'active':
+                    logger.info(f"✅ DVR stream already active (proxy), reusing: {stream_id}")
+                else:
+                    # Proxy prefix'li stream de kontrol et
+                    proxy_sid = f"proxy:{company_id}:{stream_id}"
+                    proxy_status = sh.get_stream_status(proxy_sid)
+                    if proxy_status and proxy_status.get('status') == 'active':
+                        stream_id = proxy_sid
+                        logger.info(f"✅ DVR stream active as proxy stream, reusing: {stream_id}")
+                    else:
+                        logger.info(f"🔄 DVR stream not active, starting: {stream_id}")
+                        sh.start_stream(
+                            stream_id=stream_id,
+                            rtsp_url=rtsp_url,
+                            ip_address=ip,
+                            username=user,
+                            password=pwd,
+                            rtsp_port=int(rtsp_port),
+                            channel_number=ch_num,
+                            company_id=company_id,
+                        )
+                        deadline = time.time() + 30
+                        while time.time() < deadline:
+                            s = sh.get_stream_status(stream_id)
+                            if s and s.get('status') == 'active':
+                                break
+                            time.sleep(0.5)
+
+                logger.info(f"✅ DVR detection polling started: {camera_key} -> stream {stream_id}")
+
+                while ad.get(camera_key, False):
+                    try:
+                        frame_b64 = sh.get_latest_frame(stream_id)
+                        if frame_b64:
+                            jpg_bytes = base64.b64decode(frame_b64)
+                            nparr = np.frombuffer(jpg_bytes, np.uint8)
+                            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                            if frame is not None:
+                                frame_buffers[camera_key] = frame
+                                poll_count += 1
+                        time.sleep(0.04)
+                    except Exception as poll_err:
+                        logger.debug(f"⚠️ DVR poll frame error: {poll_err}")
+                        time.sleep(0.2)
+
+                logger.info(f"🛑 DVR poll worker exiting: {camera_key} | active={ad.get(camera_key, 'N/A')} | frames_polled={poll_count}")
+            except Exception as e:
+                logger.error(f"❌ DVR detection polling error ({camera_key}): {e}", exc_info=True)
+
+        t = threading.Thread(target=_dvr_poll_worker, daemon=True)
+        t.start()
+        logger.info(f"✅ DVR detection polling thread started: {camera_key}")
 
     def start_camera_with_alternatives(self, camera_key, primary_url, alternative_urls, active_detectors_ref=None):
         """Alternatif URL'ler ile kamera başlatma"""

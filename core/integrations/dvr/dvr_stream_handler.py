@@ -886,7 +886,19 @@ class DVRStreamHandler:
 
                     logger.debug(f"🎯 Pose-aware detection: stream={stream_id}, sector={sector}")
                     result = self._pose_detector.detect_with_pose(frame, sector, confidence=0.25)
-                    return result
+                    if isinstance(result, dict):
+                        return result
+                    if isinstance(result, list):
+                        people = len([d for d in result if isinstance(d, dict) and d.get('class_name') == 'person'])
+                        return {
+                            'detections': result,
+                            'people_detected': people,
+                            'compliance_rate': 100,
+                            'ppe_violations': [],
+                            'timestamp': time.time(),
+                            'sector': sector,
+                            'model_type': 'PoseAware',
+                        }
 
                 except Exception as pose_error:
                     logger.warning(f"⚠️ DVR Pose-aware detection failed, falling back to standard: {pose_error}")
