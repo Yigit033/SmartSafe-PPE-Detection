@@ -414,11 +414,31 @@ class DVRManager:
         except Exception as scan_err:
             logger.error(f"❌ Derin tarama toplu hatası: {scan_err}")
 
-        # Save channels to database
+        # Remove previously stored inactive channels for this DVR
+        active_ids = set()
+        for channel in channels:
+            ch_id = f"{dvr_id}_ch{channel.channel_number:02d}"
+            if channel.status == 'active':
+                active_ids.add(ch_id)
+        try:
+            existing = self.db_adapter.get_dvr_channels(company_id, dvr_id)
+            for ex_ch in existing:
+                ex_id = ex_ch.get('channel_id', '')
+                if ex_id and ex_id not in active_ids:
+                    self.db_adapter.delete_dvr_channel(company_id, dvr_id, ex_id)
+                    logger.info(f"🗑️ Eski inaktif kanal silindi: {ex_id}")
+        except Exception as cleanup_err:
+            logger.warning(f"⚠️ Eski kanal temizliği başarısız: {cleanup_err}")
+
+        # Save only active channels (with working RTSP URL) to database
         for channel in channels:
             channel_id = f"{dvr_id}_ch{channel.channel_number:02d}"
             channel.channel_id = channel_id
             
+            if channel.status != 'active':
+                logger.info(f"⏭️ Kanal {channel.channel_number} atlandı (kamera bağlı değil)")
+                continue
+
             channel_data = {
                 'channel_id': channel_id,
                 'name': channel.name,
@@ -431,7 +451,6 @@ class DVRManager:
                 'http_path': channel.http_path
             }
             
-            # DB'ye kaydet veya güncelle
             self.db_adapter.add_dvr_channel(company_id, dvr_id, channel_data)
         
         # Update memory cache

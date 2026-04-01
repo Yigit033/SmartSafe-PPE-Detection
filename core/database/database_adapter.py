@@ -1575,6 +1575,18 @@ class DatabaseAdapter:
             return False
     
     # DVR Channel Methods
+    def delete_dvr_channel(self, company_id: str, dvr_id: str, channel_id: str) -> bool:
+        """Delete a DVR channel from database"""
+        try:
+            placeholder = '?' if self.db_type == 'sqlite' else '%s'
+            query = f"DELETE FROM dvr_channels WHERE company_id = {placeholder} AND dvr_id = {placeholder} AND channel_id = {placeholder}"
+            self.execute_query(query, (company_id, dvr_id, channel_id))
+            logger.info(f"✅ DVR channel deleted: {channel_id}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Error deleting DVR channel {channel_id}: {e}")
+            return False
+
     def add_dvr_channel(self, company_id: str, dvr_id: str, channel_data: Dict[str, Any]) -> bool:
         """Add DVR channel to database"""
         try:

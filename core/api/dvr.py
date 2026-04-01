@@ -111,19 +111,23 @@ def create_blueprint(api):
 
             channels = manager.discover_cameras(dvr_id, company_id)
             
-            # ... rest of the existing logic ...
+            active_channels = [ch for ch in channels if ch.get('status') == 'active']
+            inactive_channels = [ch for ch in channels if ch.get('status') != 'active']
+
             company_info = api.db.get_company_info(company_id)
             subscription_type = company_info.get('subscription_type', 'basic') if company_info else 'basic'
             max_cameras = company_info.get('max_cameras', 25) if company_info else 25
-            active_cameras = api.db.get_active_camera_count(company_id) if company_info else 0
+            active_camera_count = api.db.get_active_camera_count(company_id) if company_info else 0
 
             if subscription_type == 'demo':
-                channels = api._limit_demo_channels(channels, max_cameras, active_cameras)
+                active_channels = api._limit_demo_channels(active_channels, max_cameras, active_camera_count)
             
             return jsonify({
                 'success': True,
-                'channels': channels,
-                'count': len(channels)
+                'channels': active_channels,
+                'count': len(active_channels),
+                'inactive_count': len(inactive_channels),
+                'total_scanned': len(channels)
             })
         except Exception as e:
             logger.error(f"❌ DVR kanal keşif hatası: {e}")

@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
 
 export default function CamerasPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-slate-400 text-sm">Yükleniyor...</div>}>
+      <CamerasContent />
+    </Suspense>
+  );
+}
+
+function CamerasContent() {
   const [cameras, setCameras] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,6 +73,17 @@ export default function CamerasPage() {
     },
   });
   const [editingGroup, setEditingGroup] = useState<any>(null);
+  const prevFiltersRef = useRef<{ search: string; group: string } | null>(null);
+  const searchParams = useSearchParams();
+  const CAMERAS_PER_PAGE = 6;
+  const currentPage = Math.max(0, parseInt(searchParams.get("page") || "1", 10) - 1);
+
+  const setCurrentPage = useCallback((pageOrFn: number | ((prev: number) => number)) => {
+    const next = typeof pageOrFn === "function" ? pageOrFn(currentPage) : pageOrFn;
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", String(next + 1));
+    window.location.href = url.pathname + url.search;
+  }, [currentPage]);
 
   const companyId = getCompanyId();
 
@@ -373,8 +392,12 @@ export default function CamerasPage() {
       );
       const data = await response.json();
       if (data.success) {
-        alert(`${data.count} yeni kanal başarıyla sisteminize eklendi!`);
-        fetchCameras(); // Kamera listesini yenile
+        const inactive = data.inactive_count || 0;
+        const msg = inactive > 0
+          ? `${data.count} aktif kanal bulundu (${inactive} kanalda kamera bağlı değil).`
+          : `${data.count} kanal başarıyla keşfedildi!`;
+        alert(msg);
+        fetchCameras();
       } else {
         alert(`Hata: ${data.error || "Kanallar keşfedilemedi."}`);
       }
@@ -486,6 +509,27 @@ export default function CamerasPage() {
       activeGroupFilter === "all" || cam.group_id === activeGroupFilter;
     return matchesSearch && matchesGroup;
   });
+
+  const totalPages = Math.ceil(filteredCameras.length / CAMERAS_PER_PAGE);
+  const paginatedCameras = filteredCameras.slice(
+    currentPage * CAMERAS_PER_PAGE,
+    (currentPage + 1) * CAMERAS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    if (prevFiltersRef.current === null) {
+      prevFiltersRef.current = { search: searchTerm, group: activeGroupFilter };
+      return;
+    }
+    const prev = prevFiltersRef.current;
+    if (prev.search === searchTerm && prev.group === activeGroupFilter) {
+      return;
+    }
+    prevFiltersRef.current = { search: searchTerm, group: activeGroupFilter };
+    const url = new URL(window.location.href);
+    url.searchParams.delete("page");
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [searchTerm, activeGroupFilter, router]);
 
   return (
     <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">
@@ -887,8 +931,9 @@ export default function CamerasPage() {
           </p>
         </div>
       ) : (
+        <>
         <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredCameras.map((camera) => (
+          {paginatedCameras.map((camera) => (
             <div
               key={camera.camera_id}
               className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg hover:shadow-2xl transition-all duration-500"
@@ -1095,6 +1140,49 @@ export default function CamerasPage() {
             </div>
           ))}
         </div>
+
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-center gap-3">
+            <button
+              onClick={() => { setCurrentPage((p) => Math.max(0, p - 1)); setRefreshKey(Date.now()); }}
+              disabled={currentPage === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <span className="material-symbols-rounded text-sm">chevron_left</span>
+              Önceki
+            </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setCurrentPage(i); setRefreshKey(Date.now()); }}
+                  className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
+                    i === currentPage
+                      ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/30"
+                      : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { setCurrentPage((p) => Math.min(totalPages - 1, p + 1)); setRefreshKey(Date.now()); }}
+              disabled={currentPage === totalPages - 1}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none"
+            >
+              Sonraki
+              <span className="material-symbols-rounded text-sm">chevron_right</span>
+            </button>
+
+            <span className="ml-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              {filteredCameras.length} kamera • Sayfa {currentPage + 1}/{totalPages}
+            </span>
+          </div>
+        )}
+        </>
       )}
 
       <div className="flex items-center justify-between py-8 border-t border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest mt-12">

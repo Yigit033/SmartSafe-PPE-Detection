@@ -773,19 +773,25 @@ class DVRStreamHandler:
             logger.error(f"❌ Start stream error: {e}")
             return False
 
+    _onvif_fail_cache: Dict[str, float] = {}
+    _ONVIF_FAIL_TTL = 300  # 5 min
+
     def _try_onvif_stream_uri(self, ip_address: str, username: str,
                               password: str, channel_number: int) -> Optional[str]:
         """Try to get stream URI via ONVIF. Returns URI or None on failure."""
-        # Check cache first
         cache_key = f"{ip_address}:{channel_number}"
+
         cached = self._onvif_uri_cache.get(cache_key)
         if cached:
             return cached
 
+        fail_ts = self._onvif_fail_cache.get(ip_address, 0)
+        if time.time() - fail_ts < self._ONVIF_FAIL_TTL:
+            return None
+
         try:
             from integrations.cameras.onvif_discovery import get_onvif_manager
             onvif_mgr = get_onvif_manager()
-            # profile_index = channel_number - 1 (ONVIF profiles are 0-indexed)
             uri = onvif_mgr.get_stream_uri(
                 ip_address, port=80,
                 username=username, password=password,
@@ -795,7 +801,8 @@ class DVRStreamHandler:
                 self._onvif_uri_cache[cache_key] = uri
             return uri
         except Exception as e:
-            logger.debug(f"ONVIF URI alınamadı ({ip_address} ch{channel_number}): {e}")
+            self._onvif_fail_cache[ip_address] = time.time()
+            logger.debug(f"ONVIF URI alınamadı ({ip_address}), 5dk boyunca tekrar denenmeyecek: {e}")
             return None
     
     def stop_stream(self, stream_id: str) -> bool:
