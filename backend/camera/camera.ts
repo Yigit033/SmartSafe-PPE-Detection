@@ -108,7 +108,7 @@ export const list = api(
         SELECT 
           dc.channel_id as camera_id, dc.company_id, dc.name as camera_name, 
           'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
-          'rtsp' as protocol, '/channel=' || dc.channel_number as stream_path, 
+          'rtsp' as protocol, dc.rtsp_path as stream_path, 
           ds.username, ds.password, dc.status, dc.channel_number, ds.dvr_id, NULL as group_id, 'dvr_channel' as camera_type, dc.created_at
         FROM dvr_channels dc
         JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
@@ -294,7 +294,7 @@ export const getSnapshot = api(
           SELECT 
             dc.channel_id as camera_id, dc.company_id, dc.name as camera_name, 
             'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
-            'rtsp' as protocol, '/channel=' || dc.channel_number as stream_path, 
+            'rtsp' as protocol, dc.rtsp_path as stream_path, 
             ds.username, ds.password, dc.status, dc.created_at, 'dvr_channel' as camera_type
           FROM dvr_channels dc
           JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id

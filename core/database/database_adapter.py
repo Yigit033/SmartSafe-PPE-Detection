@@ -2164,25 +2164,25 @@ class DatabaseAdapter:
                             'port': result[6] if len(result) > 6 else 8080,
                             'rtsp_url': result[7] if len(result) > 7 else None,
                             'username': result[8] if len(result) > 8 else None,
-                            'password': result[8] if len(result) > 8 else None,
-                            'protocol': result[9] if len(result) > 9 else 'http',
-                            'stream_path': result[10] if len(result) > 10 else '/video',
-                            'auth_type': result[11] if len(result) > 11 else 'basic',
-                            'resolution': result[12] if len(result) > 12 else '1920x1080',
-                            'fps': result[13] if len(result) > 13 else 25,
-                            'quality': result[14] if len(result) > 14 else 80,
-                            'audio_enabled': result[15] if len(result) > 15 else False,
-                            'night_vision': result[16] if len(result) > 16 else False,
-                            'motion_detection': result[17] if len(result) > 17 else True,
-                            'recording_enabled': result[18] if len(result) > 18 else True,
-                            'camera_type': result[19] if len(result) > 19 else 'ip_camera',
-                            'status': result[20] if len(result) > 20 else 'active',
-                            'last_detection': result[21] if len(result) > 21 else None,
-                            'last_test_time': result[22] if len(result) > 22 else None,
-                            'connection_retries': result[23] if len(result) > 23 else 3,
-                            'timeout': result[24] if len(result) > 24 else 10,
-                            'created_at': result[25] if len(result) > 25 else None,
-                            'updated_at': result[26] if len(result) > 26 else None
+                            'password': result[9] if len(result) > 9 else None,
+                            'protocol': result[10] if len(result) > 10 else 'http',
+                            'stream_path': result[11] if len(result) > 11 else '/video',
+                            'auth_type': result[12] if len(result) > 12 else 'basic',
+                            'resolution': result[13] if len(result) > 13 else '1920x1080',
+                            'fps': result[14] if len(result) > 14 else 25,
+                            'quality': result[15] if len(result) > 15 else 80,
+                            'audio_enabled': result[16] if len(result) > 16 else False,
+                            'night_vision': result[17] if len(result) > 17 else False,
+                            'motion_detection': result[18] if len(result) > 18 else True,
+                            'recording_enabled': result[19] if len(result) > 19 else True,
+                            'camera_type': result[20] if len(result) > 20 else 'ip_camera',
+                            'status': result[21] if len(result) > 21 else 'active',
+                            'last_detection': result[22] if len(result) > 22 else None,
+                            'last_test_time': result[23] if len(result) > 23 else None,
+                            'connection_retries': result[24] if len(result) > 24 else 3,
+                            'timeout': result[25] if len(result) > 25 else 10,
+                            'created_at': result[26] if len(result) > 26 else None,
+                            'updated_at': result[27] if len(result) > 27 else None
                         }
             return None
             
@@ -2190,6 +2190,80 @@ class DatabaseAdapter:
             logger.error(f"❌ Get camera by ID error: {e}")
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            return None
+
+    def get_dvr_channel_by_id(self, channel_id: str, company_id: str) -> Optional[Dict[str, Any]]:
+        """Get DVR channel info by ID and company ID, formatted as a camera object"""
+        try:
+            if self.db_type == 'sqlite':
+                query = '''
+                    SELECT dc.channel_id, dc.company_id, NULL as group_id, dc.name as camera_name, 
+                           'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
+                           dc.rtsp_path as rtsp_url, ds.username, ds.password, 'rtsp' as protocol, 
+                           dc.rtsp_path as stream_path, 'basic' as auth_type, 
+                           (dc.resolution_width || 'x' || dc.resolution_height) as resolution, 
+                           dc.fps, 80 as quality, FALSE as audio_enabled, FALSE as night_vision, 
+                           TRUE as motion_detection, TRUE as recording_enabled, 
+                           'dvr_channel' as camera_type, dc.status, NULL as last_detection, 
+                           dc.last_test_time, 3 as connection_retries, 10 as timeout, 
+                           dc.created_at, dc.updated_at
+                    FROM dvr_channels dc
+                    JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+                    WHERE dc.channel_id = ? AND dc.company_id = ?
+                '''
+            else:  # PostgreSQL
+                query = '''
+                    SELECT dc.channel_id, dc.company_id, NULL as group_id, dc.name as camera_name, 
+                           CONCAT('DVR: ', ds.name) as location, ds.ip_address, ds.rtsp_port as port, 
+                           dc.rtsp_path as rtsp_url, ds.username, ds.password, 'rtsp' as protocol, 
+                           dc.rtsp_path as stream_path, 'basic' as auth_type, 
+                           CONCAT(dc.resolution_width, 'x', dc.resolution_height) as resolution, 
+                           dc.fps, 80 as quality, FALSE as audio_enabled, FALSE as night_vision, 
+                           TRUE as motion_detection, TRUE as recording_enabled, 
+                           'dvr_channel' as camera_type, dc.status, NULL as last_detection, 
+                           dc.last_test_time, 3 as connection_retries, 10 as timeout, 
+                           dc.created_at, dc.updated_at
+                    FROM dvr_channels dc
+                    JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
+                    WHERE dc.channel_id = %s AND dc.company_id = %s
+                '''
+            
+            result = self.execute_query(query, (channel_id, company_id), fetch_one=True)
+            
+            if result:
+                if hasattr(result, 'keys') or isinstance(result, dict):  # PostgreSQL RealDictRow
+                    camera = dict(result)
+                    camera['is_dvr'] = True
+                    return camera
+                else:  # SQLite tuple/list
+                    return {
+                        'camera_id': result[0],
+                        'company_id': result[1],
+                        'group_id': result[2],
+                        'camera_name': result[3],
+                        'location': result[4],
+                        'ip_address': result[5],
+                        'port': result[6],
+                        'rtsp_url': result[7],
+                        'username': result[8],
+                        'password': result[9],
+                        'protocol': result[10],
+                        'stream_path': result[11],
+                        'auth_type': result[12],
+                        'resolution': result[13],
+                        'fps': result[14],
+                        'quality': result[15],
+                        'audio_enabled': result[16],
+                        'night_vision': result[17],
+                        'motion_detection': result[18],
+                        'recording_enabled': result[19],
+                        'camera_type': result[20],
+                        'status': result[21],
+                        'is_dvr': True
+                    }
+            return None
+        except Exception as e:
+            logger.error(f"❌ Get dvr channel by ID error: {e}")
             return None
     
     def get_company_detection_stats(self, company_id: str, hours: int = 24) -> Dict[str, Any]:

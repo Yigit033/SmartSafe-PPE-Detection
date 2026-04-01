@@ -46,9 +46,9 @@ export default function CamerasPage() {
   const [dvrs, setDvrs] = useState<any[]>([]);
   const [isDeletingDvr, setIsDeletingDvr] = useState(false);
   const [isDiscoveringDvr, setIsDiscoveringDvr] = useState<string | null>(null);
-  const [groupFormData, setGroupFormData] = useState({ 
-    name: "", 
-    location: "", 
+  const [groupFormData, setGroupFormData] = useState({
+    name: "",
+    location: "",
     group_type: "general",
     ppe_config: {
       helmet: { is_required: true, confidence_threshold: 0.3 },
@@ -58,8 +58,8 @@ export default function CamerasPage() {
       face_mask: { is_required: false, confidence_threshold: 0.3 },
       safety_shoes: { is_required: false, confidence_threshold: 0.3 },
       ear_protection: { is_required: false, confidence_threshold: 0.3 },
-      harness: { is_required: false, confidence_threshold: 0.3 }
-    }
+      harness: { is_required: false, confidence_threshold: 0.3 },
+    },
   });
   const [editingGroup, setEditingGroup] = useState<any>(null);
 
@@ -189,7 +189,10 @@ export default function CamerasPage() {
     setIsModalOpen(true);
   };
 
-  const handleAssignToGroup = async (camera_id: string, group_id: string | null) => {
+  const handleAssignToGroup = async (
+    camera_id: string,
+    group_id: string | null,
+  ) => {
     const cid = getCompanyId();
     if (!cid) return;
     try {
@@ -217,7 +220,7 @@ export default function CamerasPage() {
   const handleSaveGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     const cid = getCompanyId();
-    
+
     if (!cid) {
       alert("Hata: Şirket kimliği bulunamadı. Lütfen tekrar giriş yapın.");
       return;
@@ -226,9 +229,9 @@ export default function CamerasPage() {
     const url = editingGroup
       ? `http://127.0.0.1:4000/company/${cid}/cameras/groups/${editingGroup.group_id}`
       : `http://127.0.0.1:4000/company/${cid}/cameras/groups`;
-    
+
     const method = editingGroup ? "PATCH" : "POST";
-    
+
     console.log("Saving group to:", url, method, groupFormData);
 
     try {
@@ -248,9 +251,9 @@ export default function CamerasPage() {
         setIsGroupModalOpen(false);
         fetchGroups();
         // Reset form
-        setGroupFormData({ 
-          name: "", 
-          location: "", 
+        setGroupFormData({
+          name: "",
+          location: "",
           group_type: "general",
           ppe_config: {
             helmet: { is_required: true, confidence_threshold: 0.3 },
@@ -260,8 +263,8 @@ export default function CamerasPage() {
             face_mask: { is_required: false, confidence_threshold: 0.3 },
             safety_shoes: { is_required: false, confidence_threshold: 0.3 },
             ear_protection: { is_required: false, confidence_threshold: 0.3 },
-            harness: { is_required: false, confidence_threshold: 0.3 }
-          }
+            harness: { is_required: false, confidence_threshold: 0.3 },
+          },
         });
         setEditingGroup(null);
       } else {
@@ -276,11 +279,16 @@ export default function CamerasPage() {
   const handleDeleteGroup = async (group_id: string) => {
     const cid = getCompanyId();
     if (!cid) return;
-    if (!confirm("Bu grubu silmek istediğinizden emin misiniz? Kameralar gruptan çıkarılacaktır.")) return;
+    if (
+      !confirm(
+        "Bu grubu silmek istediğinizden emin misiniz? Kameralar gruptan çıkarılacaktır.",
+      )
+    )
+      return;
     try {
       const response = await fetch(
         `http://127.0.0.1:4000/company/${cid}/cameras/groups/${group_id}`,
-        { method: "DELETE" }
+        { method: "DELETE" },
       );
       const data = await response.json();
       if (data.success) {
@@ -320,7 +328,9 @@ export default function CamerasPage() {
   const fetchDvrs = async () => {
     if (!companyId) return;
     try {
-      const response = await fetch(`http://localhost:4000/company/${companyId}/dvr`);
+      const response = await fetch(
+        `http://localhost:4000/company/${companyId}/dvr`,
+      );
       const data = await response.json();
       if (data.success) {
         setDvrs(data.systems || []);
@@ -333,15 +343,18 @@ export default function CamerasPage() {
   const discoverChannels = async (dvrId: string) => {
     setIsDiscoveringDvr(dvrId);
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/company/${companyId}/dvr/${dvrId}/discover`, {
-        method: 'POST'
-      });
+      const response = await fetch(
+        `http://127.0.0.1:5000/api/company/${companyId}/dvr/${dvrId}/discover`,
+        {
+          method: "POST",
+        },
+      );
       const data = await response.json();
       if (data.success) {
         alert(`${data.count} yeni kanal başarıyla sisteminize eklendi!`);
         fetchCameras(); // Kamera listesini yenile
       } else {
-        alert(`Hata: ${data.error || 'Kanallar keşfedilemedi.'}`);
+        alert(`Hata: ${data.error || "Kanallar keşfedilemedi."}`);
       }
     } catch (error) {
       console.error("Error discovering channels:", error);
@@ -352,12 +365,20 @@ export default function CamerasPage() {
   };
 
   const deleteDvr = async (dvrId: string) => {
-    if (!confirm("Bu DVR sistemini ve bağlı tüm kanalları silmek istediğinize emin misiniz?")) return;
+    if (
+      !confirm(
+        "Bu DVR sistemini ve bağlı tüm kanalları silmek istediğinize emin misiniz?",
+      )
+    )
+      return;
     setIsDeletingDvr(true);
     try {
-      const response = await fetch(`http://localhost:4000/company/${companyId}/dvr/${dvrId}`, {
-        method: 'DELETE'
-      });
+      const response = await fetch(
+        `http://localhost:4000/company/${companyId}/dvr/${dvrId}`,
+        {
+          method: "DELETE",
+        },
+      );
       const data = await response.json();
       if (data.success) {
         fetchDvrs();
@@ -375,7 +396,7 @@ export default function CamerasPage() {
       fetchDvrs();
     }
   }, [isManageDvrsOpen]);
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = editingCamera
@@ -436,9 +457,11 @@ export default function CamerasPage() {
   };
 
   const filteredCameras = cameras.filter((cam) => {
-    const matchesSearch = cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesGroup = activeGroupFilter === "all" || cam.group_id === activeGroupFilter;
+    const matchesSearch =
+      cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesGroup =
+      activeGroupFilter === "all" || cam.group_id === activeGroupFilter;
     return matchesSearch && matchesGroup;
   });
 
@@ -644,6 +667,20 @@ export default function CamerasPage() {
                   </div>
                   <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
                     <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
+                      BAĞLANTI
+                    </span>
+                    <button
+                      onClick={() => startStream(previewCamera.camera_id)}
+                      className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 text-white hover:bg-white text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer border border-white/10"
+                    >
+                      <span className="material-symbols-rounded text-sm">
+                        refresh
+                      </span>
+                      YENİLE
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
+                    <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
                       AI ANALİZ
                     </span>
                     <button
@@ -692,7 +729,12 @@ export default function CamerasPage() {
                       src={streamUrl}
                       alt="Canlı Yayın"
                       className="w-full h-full object-contain"
-                      onError={() => setStreamUrl(null)}
+                      onError={() => {
+                        console.error("Stream failed to load:", streamUrl);
+                        // Don't set null immediately, maybe it's a momentary glitch
+                        // but provide a way to see it failed
+                        setStreamUrl(null);
+                      }}
                     />
 
                     {/* 🎯 Analiz Bölgesi Overlay (Sadece AI kapalıyken gösterelim ki AI çizimleriyle çakışmasın) */}
@@ -760,13 +802,15 @@ export default function CamerasPage() {
             onClick={() => setIsManageDvrsOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
           >
-            <span className="material-symbols-rounded">router</span> DVR YÖNETİMİ
+            <span className="material-symbols-rounded">router</span> DVR
+            YÖNETİMİ
           </button>
           <button
             onClick={() => setIsManageGroupsOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
           >
-            <span className="material-symbols-rounded">folder_open</span> GRUP YÖNETİMİ
+            <span className="material-symbols-rounded">folder_open</span> GRUP
+            YÖNETİMİ
           </button>
           <button
             onClick={() => router.push("/cameras/setup")}
@@ -787,7 +831,7 @@ export default function CamerasPage() {
           >
             TÜMÜ ({cameras.length})
           </button>
-          {groups.map(group => (
+          {groups.map((group) => (
             <button
               key={group.group_id}
               onClick={() => setActiveGroupFilter(group.group_id)}
@@ -976,19 +1020,28 @@ export default function CamerasPage() {
                     {camera.location}
                   </span>
                 </div>
-                
+
                 {/* Group Selector */}
                 <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="material-symbols-rounded text-slate-300 text-sm flex-shrink-0">folder</span>
-                    <select 
+                    <span className="material-symbols-rounded text-slate-300 text-sm flex-shrink-0">
+                      folder
+                    </span>
+                    <select
                       value={camera.group_id || ""}
-                      onChange={(e) => handleAssignToGroup(camera.camera_id, e.target.value === "" ? null : e.target.value)}
+                      onChange={(e) =>
+                        handleAssignToGroup(
+                          camera.camera_id,
+                          e.target.value === "" ? null : e.target.value,
+                        )
+                      }
                       className="bg-transparent text-[10px] font-bold text-slate-500 uppercase tracking-tight outline-none cursor-pointer hover:text-brand-teal transition-colors w-full"
                     >
                       <option value="">Grup Yok</option>
-                      {groups.map(g => (
-                        <option key={g.group_id} value={g.group_id}>{g.name}</option>
+                      {groups.map((g) => (
+                        <option key={g.group_id} value={g.group_id}>
+                          {g.name}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1009,278 +1062,462 @@ export default function CamerasPage() {
       </div>
 
       {/* Group Management Modal */}
-      {isManageGroupsOpen && mounted && createPortal(
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsManageGroupsOpen(false)}></div>
-          <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-rounded">folder_managed</span>
-                <h3 className="font-black tracking-widest uppercase italic text-sm">KAMERA GRUP YÖNETİMİ</h3>
-              </div>
-              <button onClick={() => setIsManageGroupsOpen(false)} className="p-2 hover:bg-white/10 rounded-xl">
-                <span className="material-symbols-rounded">close</span>
-              </button>
-            </div>
-            
-            <div className="p-8 overflow-y-auto">
-              <div className="flex items-center justify-between mb-8">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">MEVCUT GRUPLAR ({groups.length})</p>
-                <button 
-                  onClick={() => {
-                    setEditingGroup(null);
-                    setGroupFormData({ 
-                      name: "", 
-                      location: "", 
-                      group_type: "general",
-                      ppe_config: {
-                        helmet: { is_required: true, confidence_threshold: 0.3 },
-                        safety_vest: { is_required: true, confidence_threshold: 0.3 },
-                        gloves: { is_required: false, confidence_threshold: 0.3 },
-                        glasses: { is_required: false, confidence_threshold: 0.3 },
-                        face_mask: { is_required: false, confidence_threshold: 0.3 },
-                        safety_shoes: { is_required: false, confidence_threshold: 0.3 },
-                        ear_protection: { is_required: false, confidence_threshold: 0.3 },
-                        harness: { is_required: false, confidence_threshold: 0.3 }
-                      }
-                    });
-                    setIsGroupModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+      {isManageGroupsOpen &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => setIsManageGroupsOpen(false)}
+            ></div>
+            <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+              <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-rounded">
+                    folder_managed
+                  </span>
+                  <h3 className="font-black tracking-widest uppercase italic text-sm">
+                    KAMERA GRUP YÖNETİMİ
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsManageGroupsOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-xl"
                 >
-                  <span className="material-symbols-rounded text-sm">add</span> YENİ GRUP
+                  <span className="material-symbols-rounded">close</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                {groups.length === 0 ? (
-                  <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Henüz grup oluşturulmadı</p>
-                  </div>
-                ) : (
-                  groups.map(group => (
-                    <div key={group.group_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                          <span className="material-symbols-rounded">folder</span>
-                        </div>
-                        <div>
-                          <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">{group.name}</h4>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{group.location || "Lokasyon Belirtilmemiş"} • {group.camera_count} Kamera</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => {
-                            setEditingGroup(group);
-                            setGroupFormData({ 
-                              name: group.name, 
-                              location: group.location || "", 
-                              group_type: group.group_type || "general",
-                              ppe_config: group.ppe_config || {
-                                helmet: { is_required: true, confidence_threshold: 0.3 },
-                                safety_vest: { is_required: true, confidence_threshold: 0.3 },
-                                gloves: { is_required: false, confidence_threshold: 0.3 },
-                                glasses: { is_required: false, confidence_threshold: 0.3 },
-                                face_mask: { is_required: false, confidence_threshold: 0.3 },
-                                safety_shoes: { is_required: false, confidence_threshold: 0.3 },
-                                ear_protection: { is_required: false, confidence_threshold: 0.3 },
-                                harness: { is_required: false, confidence_threshold: 0.3 }
-                              }
-                            });
-                            setIsGroupModalOpen(true);
-                          }}
-                          className="p-2 text-slate-400 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
-                        >
-                          <span className="material-symbols-rounded text-lg">edit</span>
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteGroup(group.group_id)}
-                          className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all"
-                        >
-                          <span className="material-symbols-rounded text-lg">delete</span>
-                        </button>
-                      </div>
+              <div className="p-8 overflow-y-auto">
+                <div className="flex items-center justify-between mb-8">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    MEVCUT GRUPLAR ({groups.length})
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingGroup(null);
+                      setGroupFormData({
+                        name: "",
+                        location: "",
+                        group_type: "general",
+                        ppe_config: {
+                          helmet: {
+                            is_required: true,
+                            confidence_threshold: 0.3,
+                          },
+                          safety_vest: {
+                            is_required: true,
+                            confidence_threshold: 0.3,
+                          },
+                          gloves: {
+                            is_required: false,
+                            confidence_threshold: 0.3,
+                          },
+                          glasses: {
+                            is_required: false,
+                            confidence_threshold: 0.3,
+                          },
+                          face_mask: {
+                            is_required: false,
+                            confidence_threshold: 0.3,
+                          },
+                          safety_shoes: {
+                            is_required: false,
+                            confidence_threshold: 0.3,
+                          },
+                          ear_protection: {
+                            is_required: false,
+                            confidence_threshold: 0.3,
+                          },
+                          harness: {
+                            is_required: false,
+                            confidence_threshold: 0.3,
+                          },
+                        },
+                      });
+                      setIsGroupModalOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+                  >
+                    <span className="material-symbols-rounded text-sm">
+                      add
+                    </span>{" "}
+                    YENİ GRUP
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {groups.length === 0 ? (
+                    <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                      <p className="text-[10px] font-black text-slate-400 uppercase">
+                        Henüz grup oluşturulmadı
+                      </p>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Create/Edit Group Modal */}
-      {isGroupModalOpen && mounted && createPortal(
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setIsGroupModalOpen(false)}></div>
-          <div className="relative w-full max-w-lg bg-white rounded-[2rem] overflow-hidden shadow-2xl animate-scale-in flex flex-col max-h-[90vh]">
-            <div className="bg-brand-teal p-6 flex items-center justify-between text-white shrink-0">
-              <h3 className="font-black tracking-widest uppercase italic text-xs">{editingGroup ? "GRUBU DÜZENLE" : "YENİ GRUP OLUŞTUR"}</h3>
-              <button onClick={() => setIsGroupModalOpen(false)} className="p-1 hover:bg-white/20 rounded-lg">
-                <span className="material-symbols-rounded">close</span>
-              </button>
-            </div>
-            <form onSubmit={handleSaveGroup} className="p-8 space-y-6 overflow-y-auto">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Grup Adı</label>
-                  <input 
-                    type="text" 
-                    value={groupFormData.name}
-                    onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
-                    placeholder="Örn: Kuzey Cephe"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-teal"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Lokasyon</label>
-                  <input 
-                    type="text" 
-                    value={groupFormData.location}
-                    onChange={(e) => setGroupFormData({...groupFormData, location: e.target.value})}
-                    placeholder="Örn: Ana Fabrika"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-teal"
-                  />
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block border-b border-slate-100 pb-2">KGİ TESPİT AYARLARI</label>
-                  <div className="grid grid-cols-1 gap-3">
-                    {Object.entries(groupFormData.ppe_config || {}).map(([key, config]: [string, any]) => (
-                      <div key={key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${config.is_required ? "bg-brand-teal/10 text-brand-teal" : "bg-slate-200 text-slate-400"}`}>
-                            <span className="material-symbols-rounded text-sm">
-                              {key === 'helmet' ? 'engineering' : 
-                               key === 'safety_vest' ? 'checkroom' : 
-                               key === 'gloves' ? 'back_hand' : 
-                               key === 'glasses' ? 'visibility' : 
-                               key === 'face_mask' ? 'masks' :
-                               key === 'safety_shoes' ? 'ice_skating' :
-                               key === 'ear_protection' ? 'hearing' : 'accessibility_new'}
+                  ) : (
+                    groups.map((group) => (
+                      <div
+                        key={group.group_id}
+                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                            <span className="material-symbols-rounded">
+                              folder
                             </span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">
-                              {key === 'helmet' ? 'KASK' : 
-                               key === 'safety_vest' ? 'YELEK' : 
-                               key === 'gloves' ? 'ELDİVEN' : 
-                               key === 'glasses' ? 'GÖZLÜK' : 
-                               key === 'face_mask' ? 'MASKE' :
-                               key === 'safety_shoes' ? 'AYAKKABI' :
-                               key === 'ear_protection' ? 'KULAKLIK' : 'EMNİYET KEMERİ'}
-                            </span>
+                            <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">
+                              {group.name}
+                            </h4>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                              {group.location || "Lokasyon Belirtilmemiş"} •{" "}
+                              {group.camera_count} Kamera
+                            </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">
-                              {config.is_required ? "ZORUNLU" : "PASİF"}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingGroup(group);
+                              setGroupFormData({
+                                name: group.name,
+                                location: group.location || "",
+                                group_type: group.group_type || "general",
+                                ppe_config: group.ppe_config || {
+                                  helmet: {
+                                    is_required: true,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  safety_vest: {
+                                    is_required: true,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  gloves: {
+                                    is_required: false,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  glasses: {
+                                    is_required: false,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  face_mask: {
+                                    is_required: false,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  safety_shoes: {
+                                    is_required: false,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  ear_protection: {
+                                    is_required: false,
+                                    confidence_threshold: 0.3,
+                                  },
+                                  harness: {
+                                    is_required: false,
+                                    confidence_threshold: 0.3,
+                                  },
+                                },
+                              });
+                              setIsGroupModalOpen(true);
+                            }}
+                            className="p-2 text-slate-400 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
+                          >
+                            <span className="material-symbols-rounded text-lg">
+                              edit
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newPpeConfig = { ...groupFormData.ppe_config } as any;
-                                newPpeConfig[key] = { ...config, is_required: !config.is_required };
-                                setGroupFormData({ ...groupFormData, ppe_config: newPpeConfig });
-                              }}
-                              className={`relative w-10 h-5 rounded-full transition-all duration-300 ${config.is_required ? "bg-brand-teal" : "bg-slate-200"}`}
-                            >
-                              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${config.is_required ? "left-6" : "left-1"}`}></div>
-                            </button>
-                          </div>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteGroup(group.group_id)}
+                            className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all"
+                          >
+                            <span className="material-symbols-rounded text-lg">
+                              delete
+                            </span>
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setIsGroupModalOpen(false)} className="flex-1 py-4 text-[10px] font-black uppercase text-slate-400 rounded-xl bg-slate-50 hover:bg-slate-100">VAZGEÇ</button>
-                <button type="submit" className="flex-1 py-4 text-[10px] font-black uppercase text-white rounded-xl bg-brand-teal hover:bg-brand-teal/90 shadow-lg shadow-brand-teal/20">KAYDET</button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
-      {/* DVR Management Modal */}
-      {isManageDvrsOpen && mounted && createPortal(
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsManageDvrsOpen(false)}></div>
-          <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-rounded">router</span>
-                <h3 className="font-black tracking-widest uppercase italic text-sm">DVR SİSTEM YÖNETİMİ</h3>
-              </div>
-              <button onClick={() => setIsManageDvrsOpen(false)} className="p-2 hover:bg-white/10 rounded-xl">
-                <span className="material-symbols-rounded">close</span>
-              </button>
             </div>
-            
-            <div className="p-8 overflow-y-auto">
-              <div className="flex items-center justify-between mb-8">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">KAYITLI CİHAZLAR ({dvrs.length})</p>
-                <button 
-                  onClick={() => router.push("/cameras/setup")}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+          </div>,
+          document.body,
+        )}
+
+      {/* Create/Edit Group Modal */}
+      {isGroupModalOpen &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
+              onClick={() => setIsGroupModalOpen(false)}
+            ></div>
+            <div className="relative w-full max-w-lg bg-white rounded-[2rem] overflow-hidden shadow-2xl animate-scale-in flex flex-col max-h-[90vh]">
+              <div className="bg-brand-teal p-6 flex items-center justify-between text-white shrink-0">
+                <h3 className="font-black tracking-widest uppercase italic text-xs">
+                  {editingGroup ? "GRUBU DÜZENLE" : "YENİ GRUP OLUŞTUR"}
+                </h3>
+                <button
+                  onClick={() => setIsGroupModalOpen(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg"
                 >
-                  <span className="material-symbols-rounded text-sm">add</span> CİHAZ EKLE
+                  <span className="material-symbols-rounded">close</span>
+                </button>
+              </div>
+              <form
+                onSubmit={handleSaveGroup}
+                className="p-8 space-y-6 overflow-y-auto"
+              >
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                      Grup Adı
+                    </label>
+                    <input
+                      type="text"
+                      value={groupFormData.name}
+                      onChange={(e) =>
+                        setGroupFormData({
+                          ...groupFormData,
+                          name: e.target.value,
+                        })
+                      }
+                      placeholder="Örn: Kuzey Cephe"
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-teal"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                      Lokasyon
+                    </label>
+                    <input
+                      type="text"
+                      value={groupFormData.location}
+                      onChange={(e) =>
+                        setGroupFormData({
+                          ...groupFormData,
+                          location: e.target.value,
+                        })
+                      }
+                      placeholder="Örn: Ana Fabrika"
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-teal"
+                    />
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block border-b border-slate-100 pb-2">
+                      KGİ TESPİT AYARLARI
+                    </label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {Object.entries(groupFormData.ppe_config || {}).map(
+                        ([key, config]: [string, any]) => (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center ${config.is_required ? "bg-brand-teal/10 text-brand-teal" : "bg-slate-200 text-slate-400"}`}
+                              >
+                                <span className="material-symbols-rounded text-sm">
+                                  {key === "helmet"
+                                    ? "engineering"
+                                    : key === "safety_vest"
+                                      ? "checkroom"
+                                      : key === "gloves"
+                                        ? "back_hand"
+                                        : key === "glasses"
+                                          ? "visibility"
+                                          : key === "face_mask"
+                                            ? "masks"
+                                            : key === "safety_shoes"
+                                              ? "ice_skating"
+                                              : key === "ear_protection"
+                                                ? "hearing"
+                                                : "accessibility_new"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">
+                                  {key === "helmet"
+                                    ? "KASK"
+                                    : key === "safety_vest"
+                                      ? "YELEK"
+                                      : key === "gloves"
+                                        ? "ELDİVEN"
+                                        : key === "glasses"
+                                          ? "GÖZLÜK"
+                                          : key === "face_mask"
+                                            ? "MASKE"
+                                            : key === "safety_shoes"
+                                              ? "AYAKKABI"
+                                              : key === "ear_protection"
+                                                ? "KULAKLIK"
+                                                : "EMNİYET KEMERİ"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">
+                                  {config.is_required ? "ZORUNLU" : "PASİF"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newPpeConfig = {
+                                      ...groupFormData.ppe_config,
+                                    } as any;
+                                    newPpeConfig[key] = {
+                                      ...config,
+                                      is_required: !config.is_required,
+                                    };
+                                    setGroupFormData({
+                                      ...groupFormData,
+                                      ppe_config: newPpeConfig,
+                                    });
+                                  }}
+                                  className={`relative w-10 h-5 rounded-full transition-all duration-300 ${config.is_required ? "bg-brand-teal" : "bg-slate-200"}`}
+                                >
+                                  <div
+                                    className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${config.is_required ? "left-6" : "left-1"}`}
+                                  ></div>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsGroupModalOpen(false)}
+                    className="flex-1 py-4 text-[10px] font-black uppercase text-slate-400 rounded-xl bg-slate-50 hover:bg-slate-100"
+                  >
+                    VAZGEÇ
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-4 text-[10px] font-black uppercase text-white rounded-xl bg-brand-teal hover:bg-brand-teal/90 shadow-lg shadow-brand-teal/20"
+                  >
+                    KAYDET
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body,
+        )}
+      {/* DVR Management Modal */}
+      {isManageDvrsOpen &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => setIsManageDvrsOpen(false)}
+            ></div>
+            <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+              <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-rounded">router</span>
+                  <h3 className="font-black tracking-widest uppercase italic text-sm">
+                    DVR SİSTEM YÖNETİMİ
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsManageDvrsOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-xl"
+                >
+                  <span className="material-symbols-rounded">close</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                {dvrs.length === 0 ? (
-                  <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                    <p className="text-[10px] font-black text-slate-400 uppercase text-center w-full">Henüz DVR sistemi eklenmedi</p>
-                  </div>
-                ) : (
-                  dvrs.map(dvr => (
-                    <div key={dvr.dvr_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                          <span className="material-symbols-rounded">dns</span>
-                        </div>
-                        <div>
-                          <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">{dvr.name}</h4>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{dvr.ip_address} • {dvr.max_channels} KANAL • {dvr.dvr_type}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => discoverChannels(dvr.dvr_id)}
-                          disabled={isDiscoveringDvr === dvr.dvr_id}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all disabled:opacity-50"
-                        >
-                          {isDiscoveringDvr === dvr.dvr_id ? (
-                            <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <span className="material-symbols-rounded text-sm">search</span>
-                          )}
-                          KEŞFET
-                        </button>
-                        <button 
-                          onClick={() => deleteDvr(dvr.dvr_id)}
-                          disabled={isDeletingDvr}
-                          className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all disabled:opacity-50"
-                        >
-                          <span className="material-symbols-rounded text-lg">delete</span>
-                        </button>
-                      </div>
+              <div className="p-8 overflow-y-auto">
+                <div className="flex items-center justify-between mb-8">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    KAYITLI CİHAZLAR ({dvrs.length})
+                  </p>
+                  <button
+                    onClick={() => router.push("/cameras/setup")}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+                  >
+                    <span className="material-symbols-rounded text-sm">
+                      add
+                    </span>{" "}
+                    CİHAZ EKLE
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {dvrs.length === 0 ? (
+                    <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                      <p className="text-[10px] font-black text-slate-400 uppercase text-center w-full">
+                        Henüz DVR sistemi eklenmedi
+                      </p>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    dvrs.map((dvr) => (
+                      <div
+                        key={dvr.dvr_id}
+                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                            <span className="material-symbols-rounded">
+                              dns
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">
+                              {dvr.name}
+                            </h4>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                              {dvr.ip_address} • {dvr.max_channels} KANAL •{" "}
+                              {dvr.dvr_type}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => discoverChannels(dvr.dvr_id)}
+                            disabled={isDiscoveringDvr === dvr.dvr_id}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all disabled:opacity-50"
+                          >
+                            {isDiscoveringDvr === dvr.dvr_id ? (
+                              <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <span className="material-symbols-rounded text-sm">
+                                search
+                              </span>
+                            )}
+                            KEŞFET
+                          </button>
+                          <button
+                            onClick={() => deleteDvr(dvr.dvr_id)}
+                            disabled={isDeletingDvr}
+                            className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all disabled:opacity-50"
+                          >
+                            <span className="material-symbols-rounded text-lg">
+                              delete
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
