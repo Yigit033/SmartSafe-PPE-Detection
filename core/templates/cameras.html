@@ -2406,29 +2406,45 @@
             } else {
                 // Tüm URL'ler denendi, hata göster
                 if (globalStreamContainer && globalCamera) {
-                    globalStreamContainer.innerHTML = `
-                        <div class="text-center p-3">
-                            <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
-                            <p class="text-muted mb-2"><strong>Kamera Görüntüsü Alınamadı</strong></p>
-                            <div class="alert alert-info text-start" style="font-size: 0.85rem;">
-                                <strong>Bağlantı Bilgileri:</strong><br>
-                                <code>IP: ${globalCamera.ip_address}:${globalCamera.port || 8080}</code><br>
-                                <code>Protokol: ${globalCamera.protocol || 'http'}</code><br>
-                                <code>Stream Path: ${globalCamera.stream_path || '/video'}</code>
-                            </div>
-                            <div class="alert alert-warning text-start" style="font-size: 0.85rem;">
-                                <strong>⚠️ Kontrol Listesi:</strong><br>
-                                • Telefon ve bilgisayar aynı WiFi ağında mı?<br>
-                                • IP Webcam uygulaması çalışıyor mu?<br>
-                                • IP adresi doğru mu? (${globalCamera.ip_address})<br>
-                                • Port numarası doğru mu? (${globalCamera.port || 8080})<br>
-                                • Firewall kamera erişimini engelliyor olabilir mi?
-                            </div>
-                            <button class="btn btn-sm btn-primary mt-2" onclick="loadCameraStreamForModal(globalCamera)">
-                                <i class="fas fa-redo"></i> Yeniden Dene
-                            </button>
-                        </div>
-                    `;
+                    fetch(`/api/company/{{ company_id }}/cameras/${globalCamera.camera_id}/stream-status`, { credentials: 'same-origin' })
+                        .then(r => r.json().then(j => ({ status: r.status, body: j })))
+                        .then(({ status, body }) => {
+                            const st = body && body.status ? body.status : {};
+                            const reason = st.status_reason || (body && body.error && body.error.message) || 'unknown';
+                            const code = st.last_error_code || (body && body.error && body.error.code) || 'UNKNOWN';
+                            const state = st.status || 'unknown';
+                            const diagLine = `State=${state} | Code=${code} | Reason=${reason} | HTTP=${status}`;
+                            globalStreamContainer.innerHTML = `
+                                <div class="text-center p-3">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                                    <p class="text-muted mb-2"><strong>Kamera Görüntüsü Alınamadı</strong></p>
+                                    <div class="alert alert-danger text-start" style="font-size: 0.85rem;">
+                                        <strong>Durum (Backend):</strong><br>
+                                        <code>${diagLine}</code>
+                                    </div>
+                                    <div class="alert alert-info text-start" style="font-size: 0.85rem;">
+                                        <strong>Bağlantı Bilgileri:</strong><br>
+                                        <code>IP: ${globalCamera.ip_address}:${globalCamera.port || 8080}</code><br>
+                                        <code>Protokol: ${globalCamera.protocol || 'http'}</code><br>
+                                        <code>Stream Path: ${globalCamera.stream_path || '/video'}</code>
+                                    </div>
+                                    <button class="btn btn-sm btn-primary mt-2" onclick="loadCameraStreamForModal(globalCamera)">
+                                        <i class="fas fa-redo"></i> Yeniden Dene
+                                    </button>
+                                </div>
+                            `;
+                        })
+                        .catch(() => {
+                            globalStreamContainer.innerHTML = `
+                                <div class="text-center p-3">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                                    <p class="text-muted mb-2"><strong>Kamera Görüntüsü Alınamadı</strong></p>
+                                    <button class="btn btn-sm btn-primary mt-2" onclick="loadCameraStreamForModal(globalCamera)">
+                                        <i class="fas fa-redo"></i> Yeniden Dene
+                                    </button>
+                                </div>
+                            `;
+                        });
                 }
             }
         };

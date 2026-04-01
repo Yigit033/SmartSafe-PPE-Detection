@@ -31,6 +31,9 @@ export default function CamerasPage() {
   const [cameraToDelete, setCameraToDelete] = useState<any>(null);
   const [enabledAiCameras, setEnabledAiCameras] = useState<string[]>([]);
   const [failedCameras, setFailedCameras] = useState<string[]>([]);
+  const [failedCameraDiagnostics, setFailedCameraDiagnostics] = useState<
+    Record<string, string>
+  >({});
 
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewCamera, setPreviewCamera] = useState<any>(null);
@@ -166,6 +169,25 @@ export default function CamerasPage() {
       : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
 
     setStreamUrl(streamUrl);
+  };
+
+  const fetchStreamDiagnostics = async (cameraId: string) => {
+    if (!companyId) return null;
+    try {
+      const r = await fetch(
+        `http://127.0.0.1:5000/api/company/${companyId}/cameras/${cameraId}/stream-status`,
+        { cache: "no-store" },
+      );
+      const body = await r.json().catch(() => null);
+      const st = body && body.status ? body.status : {};
+      const state = st.status || "unknown";
+      const code = st.last_error_code || (body?.error?.code as string) || "UNKNOWN";
+      const reason =
+        st.status_reason || (body?.error?.message as string) || "unknown";
+      return `State=${state} | Code=${code} | Reason=${reason} | HTTP=${r.status}`;
+    } catch {
+      return null;
+    }
   };
 
   const openPreviewModal = (camera: any) => {
@@ -729,10 +751,12 @@ export default function CamerasPage() {
                       src={streamUrl}
                       alt="Canlı Yayın"
                       className="w-full h-full object-contain"
-                      onError={() => {
+                      onError={async () => {
                         console.error("Stream failed to load:", streamUrl);
-                        // Don't set null immediately, maybe it's a momentary glitch
-                        // but provide a way to see it failed
+                        const diag = await fetchStreamDiagnostics(
+                          previewCamera?.camera_id,
+                        );
+                        if (diag) setStreamError(diag);
                         setStreamUrl(null);
                       }}
                     />
@@ -779,6 +803,11 @@ export default function CamerasPage() {
                     <p className="mt-4 font-black tracking-widest uppercase italic">
                       SİNYAL YOK
                     </p>
+                    {streamError && (
+                      <p className="mt-3 text-[10px] font-mono text-white/40 max-w-[90%] mx-auto">
+                        {streamError}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -877,6 +906,13 @@ export default function CamerasPage() {
                     setFailedCameras((prev) => [
                       ...new Set([...prev, camera.camera_id]),
                     ]);
+                    fetchStreamDiagnostics(camera.camera_id).then((diag) => {
+                      if (!diag) return;
+                      setFailedCameraDiagnostics((prev) => ({
+                        ...prev,
+                        [camera.camera_id]: diag,
+                      }));
+                    });
                     (e.target as HTMLImageElement).src =
                       "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop";
                     (e.target as HTMLImageElement).className =
@@ -886,6 +922,10 @@ export default function CamerasPage() {
                     setFailedCameras((prev) =>
                       prev.filter((id) => id !== camera.camera_id),
                     );
+                    setFailedCameraDiagnostics((prev) => {
+                      const { [camera.camera_id]: _omit, ...rest } = prev;
+                      return rest;
+                    });
                   }}
                 />
 
@@ -929,6 +969,11 @@ export default function CamerasPage() {
                     <p className="text-[10px] font-black text-white px-4 py-2 bg-red-500/80 rounded-xl uppercase tracking-widest shadow-2xl">
                       KAMERA BULUNAMADI
                     </p>
+                    {failedCameraDiagnostics[camera.camera_id] && (
+                      <p className="mt-2 text-[10px] font-mono text-white/70 px-3 text-center max-w-[90%]">
+                        {failedCameraDiagnostics[camera.camera_id]}
+                      </p>
+                    )}
                   </div>
                 )}
 

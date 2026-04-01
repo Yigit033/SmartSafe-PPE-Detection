@@ -262,6 +262,7 @@ def create_blueprint(api):
                 rtsp_port=dvr_system['rtsp_port'],
                 channel_number=channel_number,
                 sector=company_sector,
+                company_id=company_id,
             )
             if not success:
                 return jsonify({'success': False, 'error': 'Failed to start stream'}), 404
@@ -468,6 +469,7 @@ def create_blueprint(api):
                     rtsp_port=dvr_system['rtsp_port'],
                     channel_number=channel_number,
                     sector=company_sector_mjpeg,
+                    company_id=company_id,
                 )
 
             boundary = 'frame'

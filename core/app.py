@@ -2428,30 +2428,42 @@ smartsafe_requests_total 100
         try:
             self.ensure_database_initialized()
             if self.db is not None:
+                cfg = {}
+                if hasattr(self.db, "get_company_detection_config"):
+                    try:
+                        cfg = self.db.get_company_detection_config(company_id) or {}
+                    except Exception:
+                        cfg = {}
                 company_data = self.db.get_company_info(company_id)
-                sector_raw = company_data.get('sector', 'construction') if company_data and isinstance(company_data, dict) else 'construction'
+                sector_raw = (
+                    (cfg.get("sector") if isinstance(cfg, dict) else None)
+                    or (company_data.get('sector') if company_data and isinstance(company_data, dict) else None)
+                    or 'construction'
+                )
                 sector = _normalize_sector(sector_raw)
             else:
                 sector = 'construction'
                 logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
             
-            # Şirket bazlı zorunlu PPE: multitenant_system.get_company_ppe_requirements (kullanıcı şirket/ayarlardan belirlediği liste)
+            # Şirket bazlı zorunlu PPE: tek kaynak = companies.ppe_requirements (DB)
             required_ppe = None
-            if self.db is not None and hasattr(self.db, 'get_company_ppe_requirements'):
-                try:
-                    raw_list = self.db.get_company_ppe_requirements(company_id)
-                    if isinstance(raw_list, list) and raw_list:
-                        normalized = []
-                        for item in raw_list:
-                            if item is None:
-                                continue
-                            try:
-                                normalized.append(str(item).strip().lower())
-                            except Exception:
-                                continue
-                        required_ppe = normalized if normalized else None
-                except Exception as cfg_err:
-                    logger.warning(f"⚠️ PPE gereksinimleri okunamadı, sektör varsayılanı kullanılacak: {cfg_err}")
+            try:
+                if isinstance(cfg, dict):
+                    raw_list = cfg.get("required_ppe")
+                else:
+                    raw_list = None
+                if isinstance(raw_list, list) and raw_list:
+                    normalized = []
+                    for item in raw_list:
+                        if item is None:
+                            continue
+                        try:
+                            normalized.append(str(item).strip().lower())
+                        except Exception:
+                            continue
+                    required_ppe = normalized if normalized else None
+            except Exception as cfg_err:
+                logger.warning(f"⚠️ PPE gereksinimleri okunamadı, sektör varsayılanı kullanılacak: {cfg_err}")
             if required_ppe is None:
                 required_ppe = SECTOR_DEFAULT_PPE.get(sector) or SECTOR_DEFAULT_PPE.get('construction')
                 logger.info(f"📋 Sektör varsayılan PPE kullanılıyor (şirkette PPE tanımlı değil): {sector} -> {required_ppe}")
@@ -3803,6 +3815,9 @@ smartsafe_requests_total 100
     def start_saas_camera(self, camera_key, camera_id, company_id, active_detectors_ref=None):
         """SaaS Kamera başlatma - proxy-stream ile aynı kaynak: get_camera_by_id. active_detectors_ref: detection worker'dan gelen dict ref."""
         try:
+            from utils.redaction import redact_url
+            from urllib.parse import urlsplit
+
             # Proxy-stream ile aynı kaynaktan al (aynı IP/URL tutarlılığı için)
             camera_info = self.db.get_camera_by_id(camera_id, company_id)
             if not camera_info:
@@ -3816,7 +3831,10 @@ smartsafe_requests_total 100
                 protocol = camera_info.get('protocol', 'http')
                 ip = camera_info['ip_address']
                 port = camera_info['port']
-                stream_path = (camera_info.get('stream_path') or '/video').strip().lower()
+                raw_stream_path = (camera_info.get('stream_path') or '/video').strip()
+                # Only normalize casing for relative paths; absolute URLs must keep original casing
+                # (credentials and paths can be case-sensitive depending on device).
+                stream_path = raw_stream_path.lower() if "://" not in raw_stream_path else raw_stream_path
                 username = camera_info.get('username', '')
                 password = camera_info.get('password', '')
                 
@@ -3841,15 +3859,39 @@ smartsafe_requests_total 100
                 
                 # Ana URL - Authentication ile
                 if username and password:
-                    if protocol == 'rtsp':
+                    if "://" in stream_path:
+                        # stream_path is already a full URL; do not prepend http://ip:port (prevents http...8000rtsp://... bugs).
+                        camera_url = stream_path
+                    elif protocol == 'rtsp':
                         camera_url = f"rtsp://{username}:{password}@{ip}:{port}{stream_path}"
                     else:
                         camera_url = f"http://{username}:{password}@{ip}:{port}{stream_path}"
                 else:
-                    if protocol == 'rtsp':
+                    if "://" in stream_path:
+                        camera_url = stream_path
+                    elif protocol == 'rtsp':
                         camera_url = f"rtsp://{ip}:{port}{stream_path}"
                     else:
                         camera_url = f"http://{ip}:{port}{stream_path}"
+
+                # Fail-fast validation: if we ended up with a malformed URL, stop early instead of feeding OpenCV garbage.
+                try:
+                    parts = urlsplit(str(camera_url))
+                    if not parts.scheme or not parts.netloc:
+                        raise ValueError("missing scheme/netloc")
+                    # Guard against accidental concatenation like "http://...:8000rtsp://..."
+                    s_url = str(camera_url)
+                    if s_url.startswith(("http://", "https://")) and "rtsp://" in s_url:
+                        raise ValueError("mixed-scheme URL (http prefix contains rtsp://)")
+                    # Optional schema-mismatch guard: if protocol says http but URL is rtsp (or vice versa), prefer URL's scheme.
+                    if isinstance(protocol, str) and protocol and parts.scheme and protocol != parts.scheme:
+                        logger.warning(
+                            f"⚠️ Kamera protocol/URL şema uyuşmazlığı: protocol={protocol}, url={parts.scheme} "
+                            f"(camera_id={camera_id}). URL şeması esas alınacak."
+                        )
+                except Exception as exc:
+                    logger.error(f"❌ Geçersiz kamera URL (fail-fast): {redact_url(str(camera_url))} — {exc}")
+                    return
 
                 
                 # Alternatif URL'ler - Önce snapshot'lar (canlı görüntü /video ile çakışmasın), sonra stream
@@ -3893,7 +3935,7 @@ smartsafe_requests_total 100
             )
             camera_thread.start()
             
-            logger.info(f"✅ SaaS Kamera başlatıldı: {camera_id} -> {camera_url}")
+            logger.info(f"✅ SaaS Kamera başlatıldı: {camera_id} -> {redact_url(str(camera_url))}")
             
         except Exception as e:
             logger.error(f"❌ SaaS Kamera başlatma hatası: {e}")
@@ -3971,9 +4013,10 @@ smartsafe_requests_total 100
         ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
         try:
             import cv2
+            from utils.redaction import redact_url
             
             # Önce ana URL'yi dene
-            logger.info(f"🔍 Ana URL deneniyor: {primary_url}")
+            logger.info(f"🔍 Ana URL deneniyor: {redact_url(str(primary_url))}")
             cap = cv2.VideoCapture(primary_url)
             current_url = primary_url
             
@@ -4028,7 +4071,7 @@ smartsafe_requests_total 100
                 
                 # Alternatif URL'leri dene
                 for alt_url in alternative_urls:
-                    logger.info(f"🔍 Alternatif URL deneniyor: {alt_url}")
+                    logger.info(f"🔍 Alternatif URL deneniyor: {redact_url(str(alt_url))}")
                     if cap is not None:
                         try:
                             cap.release()
@@ -4038,11 +4081,11 @@ smartsafe_requests_total 100
                     cap = cv2.VideoCapture(alt_url)
                     
                     if cap.isOpened():
-                        logger.info(f"✅ Alternatif URL başarılı: {alt_url}")
+                        logger.info(f"✅ Alternatif URL başarılı: {redact_url(str(alt_url))}")
                         current_url = alt_url
                         break
                     else:
-                        logger.warning(f"❌ Alternatif URL başarısız: {alt_url}")
+                        logger.warning(f"❌ Alternatif URL başarısız: {redact_url(str(alt_url))}")
             
             if not cap.isOpened():
                 logger.error(f"❌ Hiçbir URL çalışmadı: {camera_key}")

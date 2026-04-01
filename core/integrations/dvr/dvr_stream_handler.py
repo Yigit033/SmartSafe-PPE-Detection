@@ -16,6 +16,8 @@ from typing import Dict, Optional, List, Tuple
 import logging
 import urllib.parse
 
+from utils.redaction import redact_url
+
 logger = logging.getLogger(__name__)
 
 class DVRStreamHandler:
@@ -51,6 +53,119 @@ class DVRStreamHandler:
         # Key format: "ip:channel" → Value: çalışan tam RTSP URL
         # ══════════════════════════════════════════════════════════════════
         self._success_url_cache: Dict[str, str] = {}
+
+        # ══════════════════════════════════════════════════════════════════
+        # 🌩️ Probe storm controls
+        # - Concurrency limit: prevents dozens of simultaneous RTSP opens
+        # - TTL caches: avoid repeating expensive discovery/probes
+        # - Retry budgets: cap URL attempts per operation
+        # ══════════════════════════════════════════════════════════════════
+        try:
+            probe_conc = int(os.getenv("DVR_PROBE_CONCURRENCY", "4"))
+        except Exception:
+            probe_conc = 4
+        self._probe_sem = threading.Semaphore(max(1, probe_conc))
+
+        try:
+            self._probe_ttl_success_s = int(os.getenv("DVR_PROBE_TTL_SUCCESS_S", "600"))
+        except Exception:
+            self._probe_ttl_success_s = 600
+        try:
+            self._probe_ttl_fail_s = int(os.getenv("DVR_PROBE_TTL_FAIL_S", "60"))
+        except Exception:
+            self._probe_ttl_fail_s = 60
+
+        # key -> (value, expires_at)
+        self._probe_success_ttl: Dict[str, Tuple[str, float]] = {}
+        self._probe_fail_ttl: Dict[str, Tuple[str, float]] = {}
+
+        try:
+            self._start_url_budget = int(os.getenv("DVR_START_URL_BUDGET", "18"))
+        except Exception:
+            self._start_url_budget = 18
+        try:
+            self._probe_url_budget = int(os.getenv("DVR_CHANNEL_PROBE_URL_BUDGET", "6"))
+        except Exception:
+            self._probe_url_budget = 6
+        try:
+            self._channel_probe_workers = int(os.getenv("DVR_CHANNEL_PROBE_WORKERS", "4"))
+        except Exception:
+            self._channel_probe_workers = 4
+
+    def _ttl_get(self, d: Dict[str, Tuple[str, float]], key: str) -> Optional[str]:
+        v = d.get(key)
+        if not v:
+            return None
+        value, exp = v
+        if time.time() >= exp:
+            d.pop(key, None)
+            return None
+        return value
+
+    def _ttl_set(self, d: Dict[str, Tuple[str, float]], key: str, value: str, ttl_s: int):
+        d[key] = (value, time.time() + max(1, ttl_s))
+
+    # ─────────────────────────────────────────────────────────────────────
+    # State machine helpers
+    # ─────────────────────────────────────────────────────────────────────
+    def _transition(
+        self,
+        stream_id: str,
+        new_status: str,
+        *,
+        reason: Optional[str] = None,
+        error_code: Optional[str] = None,
+    ):
+        now = time.time()
+        with self._lock:
+            if stream_id not in self.active_streams:
+                self.active_streams[stream_id] = {}
+            st = self.active_streams[stream_id]
+            st["status"] = new_status
+            st["last_transition_ts"] = now
+            if reason is not None:
+                st["status_reason"] = reason
+            if error_code is not None:
+                st["last_error_code"] = error_code
+
+    def _ensure_stream_config(
+        self,
+        stream_id: str,
+        *,
+        company_id: Optional[str],
+        sector: Optional[str],
+        required_ppe: Optional[list],
+    ):
+        """Resolve and freeze (immutable) detection config for this stream."""
+        if not company_id and (sector or required_ppe):
+            cfg = {"sector": sector, "required_ppe": required_ppe}
+        else:
+            cfg = {}
+            if company_id:
+                try:
+                    from database.database_adapter import DatabaseAdapter
+                    db = DatabaseAdapter()
+                    cfg = db.get_company_detection_config(company_id) or {}
+                except Exception:
+                    cfg = {}
+            if sector and not cfg.get("sector"):
+                cfg["sector"] = sector
+            if required_ppe is not None and cfg.get("required_ppe") is None:
+                cfg["required_ppe"] = required_ppe
+
+        # Freeze into stream metadata
+        with self._lock:
+            st = self.active_streams.get(stream_id, {})
+            if "immutable_config" not in st:
+                st["immutable_config"] = {
+                    "company_id": company_id,
+                    "sector": cfg.get("sector") or None,
+                    "required_ppe": cfg.get("required_ppe"),
+                }
+                # Also keep top-level sector for backwards-compat
+                if cfg.get("sector"):
+                    st["sector"] = cfg.get("sector")
+            self.active_streams[stream_id] = st
 
 
         # DVR brand-specific URL patterns
@@ -324,7 +439,9 @@ class DVRStreamHandler:
         """Başarılı RTSP URL'yi hem bellek cache'ine hem veritabanına kaydet."""
         cache_key = f"{ip_address}:{channel_number}"
         self._success_url_cache[cache_key] = url
-        logger.info(f"⚡ URL cached: {cache_key} → {url}")
+        # TTL success cache (prevents immediate re-discovery storms)
+        self._ttl_set(self._probe_success_ttl, cache_key, url, self._probe_ttl_success_s)
+        logger.info(f"⚡ URL cached: {cache_key} → {redact_url(str(url))}")
 
         # Veritabanına da kaydet (persistent cache)
         try:
@@ -368,16 +485,27 @@ class DVRStreamHandler:
         3. Başarılı URL'yi cache'e kaydet
         """
         # ── Phase 1: Cache'ten hızlı bağlantı ────────────────────────────
+        # TTL success cache
+        ttl_key = f"{ip_address}:{channel_number}"
+        ttl_hit = self._ttl_get(self._probe_success_ttl, ttl_key)
+        if ttl_hit:
+            return ttl_hit
+        # TTL fail cache
+        if self._ttl_get(self._probe_fail_ttl, ttl_key) is not None:
+            return None
+
         cached_url = self._get_cached_url(ip_address, channel_number)
         if cached_url:
             cap = None
             try:
-                cap = self._create_capture_tcp(cached_url, open_timeout=2000, read_timeout=2000)
+                with self._probe_sem:
+                    cap = self._create_capture_tcp(cached_url, open_timeout=2000, read_timeout=2000)
                 if cap.isOpened():
                     ret, frame = cap.read()
                     if ret and frame is not None:
                         logger.info(f"⚡ Cache HIT — channel {channel_number} connected instantly via cached URL")
                         cap.release()
+                        self._ttl_set(self._probe_success_ttl, ttl_key, cached_url, self._probe_ttl_success_s)
                         return cached_url
                 logger.info(f"⚠️ Cache MISS — cached URL no longer works, starting full discovery...")
             except Exception:
@@ -394,18 +522,20 @@ class DVRStreamHandler:
         
         logger.info(f"🔍 Discovery: Scanning {len(urls)} patterns for channel {channel_number}...")
         
-        for i, url in enumerate(urls):
+        for i, url in enumerate(urls[: max(1, self._start_url_budget)]):
             cap = None
             try:
-                cap = self._create_capture_tcp(url, open_timeout=1500, read_timeout=1500)
+                with self._probe_sem:
+                    cap = self._create_capture_tcp(url, open_timeout=1500, read_timeout=1500)
                 
                 if cap.isOpened():
                     ret, frame = cap.read()
                     if ret and frame is not None:
-                        logger.info(f"✅ Works! Formula found for channel {channel_number} (URL {i+1}): {url}")
+                        logger.info(f"✅ Works! Formula found for channel {channel_number} (URL {i+1}): {redact_url(str(url))}")
                         cap.release()
                         # Başarılı URL'yi cache'e kaydet
                         self._cache_success_url(ip_address, channel_number, url)
+                        self._ttl_set(self._probe_success_ttl, ttl_key, url, self._probe_ttl_success_s)
                         return url
             except Exception:
                 pass
@@ -414,6 +544,7 @@ class DVRStreamHandler:
                     cap.release()
                     
         logger.warning(f"❌ Discovery: No working pattern found for channel {channel_number}")
+        self._ttl_set(self._probe_fail_ttl, ttl_key, "1", self._probe_ttl_fail_s)
         return None
 
     def detect_available_channels(self, ip_address: str, username: str, password: str,
@@ -425,6 +556,13 @@ class DVRStreamHandler:
         2. Fallback: parallel RTSP probe with ThreadPoolExecutor — ~30 seconds
         """
         available_channels: List[int] = []
+        ttl_key = f"channels:{ip_address}:{rtsp_port}"
+        cached = self._ttl_get(self._probe_success_ttl, ttl_key)
+        if cached:
+            try:
+                return sorted([int(x) for x in cached.split(",") if x.strip().isdigit()])
+            except Exception:
+                pass
 
         # ── Phase 1: ONVIF Channel Enumeration (fast path) ──────────────
         try:
@@ -463,12 +601,13 @@ class DVRStreamHandler:
                 urls = self.generate_rtsp_urls(
                     ip_address, username, password, rtsp_port, channel
                 )
-                for url in urls[:6]:  # limit attempts per channel
+                for url in urls[: max(1, self._probe_url_budget)]:  # retry budget per channel
                     cap = None
                     try:
-                        cap = cv2.VideoCapture(url)
-                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
-                        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
+                        with self._probe_sem:
+                            cap = cv2.VideoCapture(url)
+                            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)
+                            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500)
                         if cap.isOpened():
                             ret, frame = cap.read()
                             if ret and frame is not None:
@@ -481,7 +620,7 @@ class DVRStreamHandler:
                             cap.release()
                 return -1
 
-            with ThreadPoolExecutor(max_workers=8) as executor:
+            with ThreadPoolExecutor(max_workers=max(1, self._channel_probe_workers)) as executor:
                 futures = {
                     executor.submit(_probe_channel, ch): ch
                     for ch in range(1, max_channels + 1)
@@ -498,7 +637,12 @@ class DVRStreamHandler:
             logger.error(f"❌ Channel detection error: {e}")
 
         # Ensure unique and sorted
-        return sorted(list(set(available_channels)))
+        out = sorted(list(set(available_channels)))
+        if out:
+            self._ttl_set(self._probe_success_ttl, ttl_key, ",".join(str(x) for x in out), self._probe_ttl_success_s)
+        else:
+            self._ttl_set(self._probe_fail_ttl, ttl_key, "1", self._probe_ttl_fail_s)
+        return out
     
     def test_network_connectivity(self, ip_address: str, rtsp_port: int) -> bool:
         """Test basic network connectivity to DVR"""
@@ -512,11 +656,19 @@ class DVRStreamHandler:
             logger.error(f"❌ Network connectivity test failed: {e}")
             return False
     
-    def start_stream(self, stream_id: str, rtsp_url: str,
-                    ip_address: str = None, username: str = None,
-                    password: str = None, rtsp_port: int = None,
-                    channel_number: int = None,
-                    sector: Optional[str] = None) -> bool:
+    def start_stream(
+        self,
+        stream_id: str,
+        rtsp_url: str,
+        ip_address: str = None,
+        username: str = None,
+        password: str = None,
+        rtsp_port: int = None,
+        channel_number: int = None,
+        sector: Optional[str] = None,
+        company_id: Optional[str] = None,
+        required_ppe: Optional[list] = None,
+    ) -> bool:
         """Start streaming with ONVIF-first URL resolution + fallback to guessed URL."""
         try:
             # ── ONVIF URI resolution: prefer device-provided URI ─────────
@@ -555,6 +707,13 @@ class DVRStreamHandler:
                         'channel_number': channel_number,
                         'sector': sector or self.active_streams[stream_id].get('sector'),
                     })
+                    self._ensure_stream_config(
+                        stream_id,
+                        company_id=company_id,
+                        sector=sector,
+                        required_ppe=required_ppe,
+                    )
+                    self._transition(stream_id, "starting", reason="restart_requested", error_code=None)
                     if stream_id not in self.frame_buffers:
                         self.frame_buffers[stream_id] = []
                     thread = threading.Thread(
@@ -578,6 +737,9 @@ class DVRStreamHandler:
                 'rtsp_port': rtsp_port,
                 'channel_number': channel_number,
                 'sector': sector or 'construction',
+                'status_reason': 'init',
+                'last_error_code': None,
+                'last_transition_ts': time.time(),
                 'detection_result': {
                     'detections': [],
                     'people_detected': 0,
@@ -586,6 +748,13 @@ class DVRStreamHandler:
                     'timestamp': time.time()
                 }
             }
+            self._ensure_stream_config(
+                stream_id,
+                company_id=company_id,
+                sector=sector,
+                required_ppe=required_ppe,
+            )
+            self._transition(stream_id, "starting", reason="start_requested", error_code=None)
             
             self.frame_buffers[stream_id] = []
             
@@ -634,7 +803,7 @@ class DVRStreamHandler:
         try:
             with self._lock:
                 if stream_id in self.active_streams:
-                    self.active_streams[stream_id]['status'] = 'stopping'
+                    self._transition(stream_id, "stopping", reason="stop_requested", error_code=None)
                     logger.info(f"🛑 Stream stopping: {stream_id}")
                     return True
                 return False
@@ -676,9 +845,18 @@ class DVRStreamHandler:
                                sector: Optional[str] = None) -> Dict:
         """Perform PPE detection on a frame. sector eksikse stream metadata'dan al."""
         try:
-            # Sektör önceŏli olarak dışarıdan alınır; yoksa stream metadata'ya bak.
-            if not sector and stream_id in self.active_streams:
-                sector = self.active_streams[stream_id].get('sector')
+            required_ppe = None
+            cfg = None
+            if stream_id in self.active_streams:
+                cfg = self.active_streams[stream_id].get("immutable_config") or {}
+
+            # Sektör önceŏli olarak dışarıdan alınır; yoksa immutable config / stream metadata'ya bak.
+            if not sector:
+                sector = (cfg.get("sector") if isinstance(cfg, dict) else None) or (
+                    self.active_streams[stream_id].get('sector') if stream_id in self.active_streams else None
+                )
+            if isinstance(cfg, dict):
+                required_ppe = cfg.get("required_ppe")
 
             # Sektör hala bilinemiyorsa varsayılan kullan.
             if not sector:
@@ -715,7 +893,8 @@ class DVRStreamHandler:
 
             detections = self._sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
             people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
-            required_ppe = self._sh17_manager.get_sector_requirements(sector)
+            if not required_ppe:
+                required_ppe = self._sh17_manager.get_sector_requirements(sector)
             compliance_analysis = self._sh17_manager.analyze_compliance(detections, required_ppe)
 
             return {
@@ -844,7 +1023,7 @@ class DVRStreamHandler:
             if ip_address and rtsp_port:
                 if not self.test_network_connectivity(ip_address, rtsp_port):
                     logger.error(f"❌ No network connectivity to {ip_address}:{rtsp_port}")
-                    self.active_streams[stream_id]['status'] = 'error'
+                    self._transition(stream_id, "error", reason="no_network_connectivity", error_code="NO_NETWORK")
                     return
             
             # ── Cache-First Strategy: Önce kayıtlı URL'yi dene ────────────
@@ -922,7 +1101,7 @@ class DVRStreamHandler:
 
             if not cap or not cap.isOpened():
                 logger.error(f"❌ Failed to open any RTSP stream for {stream_id}")
-                self.active_streams[stream_id]['status'] = 'error'
+                self._transition(stream_id, "error", reason="open_failed", error_code="OPEN_FAILED")
                 return
 
             # ── Başarılı URL'yi cache'e kaydet ───────────────────────────
@@ -931,7 +1110,7 @@ class DVRStreamHandler:
 
             # Update stream info with successful URL
             self.active_streams[stream_id]['rtsp_url'] = successful_url
-            self.active_streams[stream_id]['status'] = 'active'
+            self._transition(stream_id, "active", reason="stream_opened", error_code=None)
             logger.info(f"✅ RTSP stream opened successfully: {stream_id} -> {successful_url}")
             
             # Immediately try to read a frame to ensure stream is working
@@ -1010,7 +1189,7 @@ class DVRStreamHandler:
                             
                             if not cap or not cap.isOpened():
                                 logger.error(f"❌ Reconnection failed for {stream_id}")
-                                self.active_streams[stream_id]['status'] = 'error'
+                                self._transition(stream_id, "error", reason="reconnect_failed", error_code="RECONNECT_FAILED")
                                 break
                         
                         time.sleep(0.1)
@@ -1086,12 +1265,12 @@ class DVRStreamHandler:
         except Exception as e:
             logger.error(f"❌ Stream worker error for {stream_id}: {e}")
             if stream_id in self.active_streams:
-                self.active_streams[stream_id]['status'] = 'error'
+                self._transition(stream_id, "error", reason="worker_exception", error_code="WORKER_EXCEPTION")
         finally:
             if cap:
                 cap.release()
             if stream_id in self.active_streams:
-                self.active_streams[stream_id]['status'] = 'stopped'
+                self._transition(stream_id, "stopped", reason="worker_exit", error_code=None)
             logger.info(f"🛑 Stream worker stopped: {stream_id}")
 
     def switch_channel_fast(self, stream_id: str, new_rtsp_url: str, 

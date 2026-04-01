@@ -1202,10 +1202,31 @@ class DatabaseAdapter:
             except Exception:
                 pass
     
-    def execute_query(self, query: str, params: tuple = None, fetch_all: bool = True) -> Any:
-        """Execute database query with improved error handling and retry logic"""
+    def execute_query(
+        self,
+        query: str,
+        params: tuple = None,
+        fetch_all: bool = True,
+        fetch_one: bool = False,
+    ) -> Any:
+        """Execute database query with improved error handling and retry logic.
+        
+        Contract:
+        - For SELECT:
+          - fetch_one=True  -> returns single row as dict (or None)
+          - fetch_all=True  -> returns list[dict] (possibly empty)
+          - fetch_all=False -> returns single row as dict (or None)  (legacy behavior)
+        - For INSERT/UPDATE/DELETE: returns cursor.rowcount (int)
+        
+        Notes:
+        - fetch_one takes precedence over fetch_all to avoid ambiguous calls.
+        """
         max_retries = 3
         retry_delay = 0.1  # 100ms
+
+        # Normalize flags (fetch_one wins).
+        if fetch_one:
+            fetch_all = False
         
         for attempt in range(max_retries):
             conn = None
@@ -1557,6 +1578,7 @@ class DatabaseAdapter:
     def add_dvr_channel(self, company_id: str, dvr_id: str, channel_data: Dict[str, Any]) -> bool:
         """Add DVR channel to database"""
         try:
+            from utils.redaction import redact_url
             logger.info(f"🔧 Adding DVR channel: {channel_data.get('name')} for DVR: {dvr_id}")
             
             # Use INSERT OR REPLACE to handle conflicts
@@ -1599,7 +1621,12 @@ class DatabaseAdapter:
             )
             
             logger.info(f"🔧 Channel SQL Query: {query}")
-            logger.info(f"🔧 Channel Parameters: {params}")
+            # Never log credentials/URLs verbatim (RTSP/HTTP may include user:pass)
+            safe_params = list(params)
+            if len(safe_params) >= 11:
+                safe_params[9] = redact_url(str(safe_params[9]))   # rtsp_path
+                safe_params[10] = redact_url(str(safe_params[10]))  # http_path
+            logger.info(f"🔧 Channel Parameters: {tuple(safe_params)}")
             
             result = self.execute_query(query, params, fetch_all=False)
             logger.info(f"🔧 Channel Query result: {result}")
@@ -2022,6 +2049,7 @@ class DatabaseAdapter:
             True: Başarıyla kaydedildi, False: Hata oluştu
         """
         try:
+            from utils.redaction import redact_url
             if self.db_type == 'sqlite':
                 # dvr_systems tablosundan dvr_id bul
                 query = "SELECT dvr_id FROM dvr_systems WHERE ip_address = ?"
@@ -2036,7 +2064,7 @@ class DatabaseAdapter:
                     SET rtsp_path = ?, updated_at = datetime('now')
                     WHERE dvr_id = ? AND channel_number = ?
                 """
-                self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+                affected = self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
             else:  # PostgreSQL
                 query = "SELECT dvr_id FROM dvr_systems WHERE ip_address = %s"
                 dvr_result = self.execute_query(query, (ip_address,), fetch_one=True)
@@ -2050,7 +2078,14 @@ class DatabaseAdapter:
                     SET rtsp_path = %s, updated_at = NOW()
                     WHERE dvr_id = %s AND channel_number = %s
                 """
-                self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+                affected = self.execute_query(update_query, (rtsp_path, dvr_id, channel_number))
+
+            if not affected:
+                logger.warning(
+                    f"⚠️ RTSP cache write did not affect any rows: ip={ip_address} ch{channel_number} "
+                    f"url={redact_url(str(rtsp_path))}"
+                )
+                return False
 
             logger.info(f"✅ RTSP URL cached in DB: {ip_address} ch{channel_number}")
             return True
@@ -2197,7 +2232,8 @@ class DatabaseAdapter:
         try:
             if self.db_type == 'sqlite':
                 query = '''
-                    SELECT dc.channel_id, dc.company_id, NULL as group_id, dc.name as camera_name, 
+                    SELECT dc.channel_id, dc.company_id, NULL as group_id, dc.name as camera_name,
+                           dc.channel_number as channel_number, dc.dvr_id as dvr_id,
                            'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
                            dc.rtsp_path as rtsp_url, ds.username, ds.password, 'rtsp' as protocol, 
                            dc.rtsp_path as stream_path, 'basic' as auth_type, 
@@ -2213,7 +2249,8 @@ class DatabaseAdapter:
                 '''
             else:  # PostgreSQL
                 query = '''
-                    SELECT dc.channel_id, dc.company_id, NULL as group_id, dc.name as camera_name, 
+                    SELECT dc.channel_id, dc.company_id, NULL as group_id, dc.name as camera_name,
+                           dc.channel_number as channel_number, dc.dvr_id as dvr_id,
                            CONCAT('DVR: ', ds.name) as location, ds.ip_address, ds.rtsp_port as port, 
                            dc.rtsp_path as rtsp_url, ds.username, ds.password, 'rtsp' as protocol, 
                            dc.rtsp_path as stream_path, 'basic' as auth_type, 
@@ -2241,24 +2278,26 @@ class DatabaseAdapter:
                         'company_id': result[1],
                         'group_id': result[2],
                         'camera_name': result[3],
-                        'location': result[4],
-                        'ip_address': result[5],
-                        'port': result[6],
-                        'rtsp_url': result[7],
-                        'username': result[8],
-                        'password': result[9],
-                        'protocol': result[10],
-                        'stream_path': result[11],
-                        'auth_type': result[12],
-                        'resolution': result[13],
-                        'fps': result[14],
-                        'quality': result[15],
-                        'audio_enabled': result[16],
-                        'night_vision': result[17],
-                        'motion_detection': result[18],
-                        'recording_enabled': result[19],
-                        'camera_type': result[20],
-                        'status': result[21],
+                        'channel_number': result[4],
+                        'dvr_id': result[5],
+                        'location': result[6],
+                        'ip_address': result[7],
+                        'port': result[8],
+                        'rtsp_url': result[9],
+                        'username': result[10],
+                        'password': result[11],
+                        'protocol': result[12],
+                        'stream_path': result[13],
+                        'auth_type': result[14],
+                        'resolution': result[15],
+                        'fps': result[16],
+                        'quality': result[17],
+                        'audio_enabled': result[18],
+                        'night_vision': result[19],
+                        'motion_detection': result[20],
+                        'recording_enabled': result[21],
+                        'camera_type': result[22],
+                        'status': result[23],
                         'is_dvr': True
                     }
             return None
@@ -3112,6 +3151,55 @@ class CameraDiscoveryManager:
             print(f"❌ Database adapter - get_company_info hatası: {e}")
             self.logger.error(f"❌ Failed to get company info: {e}")
             return None
+
+    def get_company_detection_config(self, company_id: str) -> Dict[str, Any]:
+        """Single source of truth for sector + required_ppe.
+        
+        - Sector comes from `companies.sector`
+        - required_ppe comes from `companies.ppe_requirements` (if configured),
+          otherwise caller may fallback to sector defaults.
+        """
+        try:
+            query = "SELECT sector, ppe_requirements FROM companies WHERE company_id = ?"
+            row = self.execute_query(query, (company_id,), fetch_one=True)
+            if not row or not isinstance(row, dict):
+                return {}
+
+            sector = (row.get("sector") or "").strip()
+            raw_ppe = row.get("ppe_requirements")
+
+            required_ppe = None
+            if raw_ppe:
+                # sqlite may store JSON as TEXT; postgres as JSON already
+                if isinstance(raw_ppe, str):
+                    try:
+                        import json as _json
+                        raw_ppe = _json.loads(raw_ppe)
+                    except Exception:
+                        raw_ppe = None
+
+                if isinstance(raw_ppe, dict):
+                    # Accept a few shapes:
+                    # - {"required_ppe": [...]}
+                    # - {"mandatory_ppe": [...]}
+                    # - {"mandatory": [...]}
+                    required_ppe = (
+                        raw_ppe.get("required_ppe")
+                        or raw_ppe.get("mandatory_ppe")
+                        or raw_ppe.get("mandatory")
+                    )
+                elif isinstance(raw_ppe, list):
+                    required_ppe = raw_ppe
+
+            if required_ppe is not None and not isinstance(required_ppe, list):
+                required_ppe = None
+
+            return {
+                "sector": sector or None,
+                "required_ppe": required_ppe,
+            }
+        except Exception:
+            return {}
 
 # Global camera discovery manager instance
 camera_discovery_manager = CameraDiscoveryManager(db_adapter)

@@ -55,15 +55,9 @@ def create_blueprint(api):
             username = camera.get('username', '')
             password = camera.get('password', '')
             
-            # Build stream URL
-            if username and password:
-                safe_username = urllib.parse.quote(username)
-                safe_password = urllib.parse.quote(password)
-                stream_url = f"{protocol}://{safe_username}:{safe_password}@{camera['ip_address']}:{port}{stream_path}"
-                auth = HTTPBasicAuth(username, password)
-            else:
-                stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
-                auth = None
+            # Build stream URL (NEVER embed credentials in URLs returned to clients)
+            stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
+            auth = HTTPBasicAuth(username, password) if (username and password) else None
 
             # Alternative URLs for different camera types
             alternative_urls = [
@@ -1371,16 +1365,28 @@ def create_blueprint(api):
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/proxy-stream')
     def proxy_camera_stream(company_id, camera_id):
         """Kamera stream'ini proxy ile getir - CORS sorunlarını çözer"""
+        from utils.redaction import redact_url
         logger.info(f"🚀 [DEBUG] Proxy stream request for company={company_id}, camera={camera_id}")
         try:
+            def _structured_error(http_status: int, code: str, message: str, *, details: dict | None = None):
+                payload = {
+                    'success': False,
+                    'error': {
+                        'code': code,
+                        'message': message,
+                        'details': details or {},
+                    }
+                }
+                return jsonify(payload), http_status
+
             # Database initialization kontrolü
             if not api.ensure_database_initialized():
                 logger.error("❌ Database initialization failed in proxy_camera_stream")
-                return jsonify({'success': False, 'error': 'Veritabanı başlatılamadı'}), 500
+                return _structured_error(503, 'DB_UNAVAILABLE', 'Veritabanı başlatılamadı')
             
             if api.db is None:
                 logger.error("❌ Database connection is None in proxy_camera_stream")
-                return jsonify({'success': False, 'error': 'Veritabanı bağlantısı yok'}), 500
+                return _structured_error(503, 'DB_UNAVAILABLE', 'Veritabanı bağlantısı yok')
             
             # Session kontrolü - SaaS için yerelde bypass ediyoruz
             try:
@@ -1397,6 +1403,19 @@ def create_blueprint(api):
             
             # Kamerayı veritabanından al
             camera = api.db.get_camera_by_id(camera_id, company_id)
+
+            # Single source of truth:
+            # If this camera is actually a DVR channel, always re-resolve it from dvr_channels
+            # so runtime proxy uses the latest cached "works formula" (rtsp_path) found by discovery.
+            if camera and (
+                camera.get('is_dvr') is True
+                or str(camera.get('camera_type', '')).lower() == 'dvr_channel'
+            ):
+                if hasattr(api.db, 'get_dvr_channel_by_id'):
+                    dvr_camera = api.db.get_dvr_channel_by_id(camera_id, company_id)
+                    if dvr_camera:
+                        camera = dvr_camera
+                        logger.info(f"✅ Resolved DVR channel as source of truth for proxy: {camera_id}")
             
             # 🚀 DVR Kanalı kontrolü (Eğer cameras tablosunda yoksa dvr_channels'a bak)
             if not camera:
@@ -1408,12 +1427,14 @@ def create_blueprint(api):
             
             if not camera:
                 logger.warning(f"⚠️ Camera not found: {camera_id} for company {company_id}")
-                return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
+                return _structured_error(404, 'CAMERA_NOT_FOUND', 'Kamera bulunamadı')
             
             # Stream URL'sini oluştur (kullanıcının stream_path'i - genelde MJPEG)
             protocol = camera.get('protocol', 'http')
             port = camera.get('port', 8080)
-            stream_path = (camera.get('stream_path') or '/video').strip().lower()
+            raw_stream_path = (camera.get('stream_path') or '/video').strip()
+            # Only normalize casing for relative paths; absolute URLs must keep original casing.
+            stream_path = raw_stream_path.lower() if "://" not in raw_stream_path else raw_stream_path
             username = camera.get('username', '')
             password = camera.get('password', '')
             
@@ -1425,13 +1446,8 @@ def create_blueprint(api):
             is_snapshot_path = any(stream_path.endswith(s) or stream_path == s.lstrip('/') 
                                    for s in SNAPSHOT_PATH_SUFFIXES)
             
-            if username and password:
-                import urllib.parse
-                safe_username = urllib.parse.quote(username)
-                safe_password = urllib.parse.quote(password)
-                stream_url = f"http://{safe_username}:{safe_password}@{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
-            else:
-                stream_url = f"http://{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
+            # Never embed credentials into URLs that may reach the client.
+            stream_url = f"http://{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
             
             # Önce MJPEG stream URL'leri (canlı video), en sonda snapshot (tek kare)
             stream_only_urls = [
@@ -1457,47 +1473,92 @@ def create_blueprint(api):
             
             # 🚀 DVR Kanalı ise RTSP -> MJPEG Dönüştürücü Kullan
             if camera.get('is_dvr') or str(camera.get('stream_path', '')).startswith('rtsp://'):
-                rtsp_url = camera.get('rtsp_url') or camera.get('stream_path')
-                logger.info(f"🎥 Proxying DVR RTSP stream as MJPEG: {rtsp_url}")
-                
-                # DVR Stream Generator
-                def _dvr_mjpeg_generator():
-                    import cv2
-                    import time
-                    
-                    cap = cv2.VideoCapture(rtsp_url)
-                    if not cap.isOpened():
-                        logger.error(f"❌ Failed to open DVR RTSP stream: {rtsp_url}")
-                        return
-                    
-                    try:
-                        while True:
-                            ret, frame = cap.read()
-                            if not ret:
-                                logger.warning(f"⚠️ Failed to read frame from DVR stream: {rtsp_url}")
-                                # Try to reconnect
-                                cap.release()
-                                time.sleep(1)
-                                cap = cv2.VideoCapture(rtsp_url)
-                                continue
-                            
-                            # Encode frame as JPEG
-                            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                            frame_bytes = buffer.tobytes()
-                            
-                            yield (b'--frame\r\n'
-                                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                            
-                            # Limit FPS to avoid high CPU usage
-                            time.sleep(0.04) # ~25 FPS
-                    finally:
-                        cap.release()
-                        logger.info(f"🛑 DVR RTSP stream proxy stopped: {rtsp_url}")
+                # DVR streams must be handled by the DVRStreamHandler service (state machine + probe budgets).
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                import time
+                import base64
 
-                return Response(
-                    _dvr_mjpeg_generator(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame'
-                )
+                sh = get_stream_handler()
+                rtsp_url = camera.get('rtsp_url') or camera.get('stream_path') or ''
+                ip_address = camera.get('ip_address')
+                username = camera.get('username')
+                password = camera.get('password')
+                rtsp_port = camera.get('port') or 554
+                channel_number = camera.get('channel_number')
+
+                stream_id = f"proxy:{company_id}:{camera_id}"
+                logger.info(f"🎥 Proxying DVR stream via service: {stream_id} url={redact_url(str(rtsp_url))}")
+
+                if not sh.start_stream(
+                    stream_id=stream_id,
+                    rtsp_url=str(rtsp_url),
+                    ip_address=ip_address,
+                    username=username,
+                    password=password,
+                    rtsp_port=rtsp_port,
+                    channel_number=channel_number,
+                    sector=None,
+                    company_id=company_id,
+                ):
+                    return _structured_error(
+                        503,
+                        'STREAM_START_FAILED',
+                        'Stream başlatılamadı',
+                        details={'stream_id': stream_id},
+                    )
+
+                # Wait briefly for state transition.
+                deadline = time.time() + 3.0
+                last_status = None
+                while time.time() < deadline:
+                    last_status = sh.get_stream_status(stream_id) or {}
+                    st = (last_status.get('status') or '').lower()
+                    if st == 'active':
+                        break
+                    if st == 'error':
+                        return _structured_error(
+                            503,
+                            'STREAM_UNAVAILABLE',
+                            'DVR RTSP stream açılamadı',
+                            details={'stream_id': stream_id, 'status': last_status},
+                        )
+                    time.sleep(0.15)
+
+                if not last_status or (last_status.get('status') or '').lower() != 'active':
+                    # Still starting/probing → tell client to retry
+                    resp, status = _structured_error(
+                        503,
+                        'STREAM_STARTING',
+                        'Stream hazırlanıyor, lütfen tekrar deneyin',
+                        details={'stream_id': stream_id, 'status': last_status or {}},
+                    )
+                    resp.headers['Retry-After'] = '2'
+                    return resp, status
+
+                def _mjpeg_from_service():
+                    # 10-15 FPS is enough for dashboard view and avoids CPU spikes.
+                    frame_sleep = 0.08
+                    last_frame_ts = time.time()
+                    while True:
+                        st = sh.get_stream_status(stream_id) or {}
+                        if (st.get('status') or '').lower() in ('stopping', 'stopped', 'error'):
+                            break
+                        b64 = sh.get_latest_frame(stream_id)
+                        if b64:
+                            try:
+                                frame_bytes = base64.b64decode(b64)
+                                last_frame_ts = time.time()
+                                yield (b'--frame\r\n'
+                                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                            except Exception:
+                                pass
+                        else:
+                            # If no frames for a while, stop (prevents hanging connections).
+                            if time.time() - last_frame_ts > 5.0:
+                                break
+                        time.sleep(frame_sleep)
+
+                return Response(_mjpeg_from_service(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
             # Standart IP Kamera Akışı (MJPEG)
             import requests
@@ -1526,11 +1587,11 @@ def create_blueprint(api):
             
             # Kullanıcı path'i snapshot ise (örn. /shot.jpg) önce MJPEG stream dene; yoksa donuyor hissi olur.
             if not is_snapshot_path:
-                logger.info(f"🎥 Trying primary stream URL: {stream_url}")
+                logger.info(f"🎥 Trying primary stream URL: {redact_url(str(stream_url))}")
                 try:
                     response = requests.get(stream_url, auth=auth, headers=headers, timeout=10, stream=True)
                     if response.status_code == 200:
-                        logger.info(f"✅ Primary stream URL successful: {stream_url}")
+                        logger.info(f"✅ Primary stream URL successful: {redact_url(str(stream_url))}")
                         return _stream_response(response)
                 except Exception as e:
                     logger.warning(f"❌ Primary stream URL failed: {e}")
@@ -1539,19 +1600,19 @@ def create_blueprint(api):
             
             for i, alt_url in enumerate(alternative_urls, 1):
                 try:
-                    logger.info(f"🎥 Trying alternative URL {i}/{len(alternative_urls)}: {alt_url}")
+                    logger.info(f"🎥 Trying alternative URL {i}/{len(alternative_urls)}: {redact_url(str(alt_url))}")
                     response = requests.get(alt_url, auth=auth, headers=headers, timeout=10, stream=True)
                     if response.status_code == 200:
-                        logger.info(f"✅ Alternative URL successful: {alt_url}")
+                        logger.info(f"✅ Alternative URL successful: {redact_url(str(alt_url))}")
                         return _stream_response(response)
                 except Exception as e:
-                    logger.warning(f"❌ Alternative URL {i} failed {alt_url}: {e}")
+                    logger.warning(f"❌ Alternative URL {i} failed {redact_url(str(alt_url))}: {e}")
                     continue
             
             # Eğer IP kamera linki patladıysa ama RTSP URL varsa son çare onu dene (Eskiden capture'da vardı)
             rtsp_url = camera.get('rtsp_url')
             if rtsp_url and rtsp_url.startswith('rtsp://'):
-                logger.info(f"🔄 Retrying with RTSP as backup for MJPEG proxy: {rtsp_url}")
+                logger.info(f"🔄 Retrying with RTSP as backup for MJPEG proxy: {redact_url(str(rtsp_url))}")
                 # Use the same generator as DVR
                 def _backup_rtsp_generator():
                     import cv2
@@ -1569,11 +1630,11 @@ def create_blueprint(api):
                         cap.release()
                 return Response(_backup_rtsp_generator(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-            return jsonify({'success': False, 'error': 'Kamera stream alınamadı'}), 404
+            return _structured_error(503, 'STREAM_UNAVAILABLE', 'Kamera stream alınamadı')
             
         except Exception as e:
             logger.error(f"Proxy camera stream error: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return _structured_error(502, 'PROXY_ERROR', 'Proxy stream error')
 
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/proxy-snapshot')
     def proxy_camera_snapshot(company_id, camera_id):
@@ -1676,6 +1737,39 @@ def create_blueprint(api):
         except Exception as e:
             logger.error(f"Proxy camera snapshot error: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    @bp.route('/api/company/<company_id>/cameras/<camera_id>/stream-status', methods=['GET'])
+    def camera_stream_status(company_id, camera_id):
+        """Stream diagnostics for frontend (DVR streams use a state machine)."""
+        from utils.redaction import redact_url
+        try:
+            if not api.ensure_database_initialized() or api.db is None:
+                return jsonify({'success': False, 'error': {'code': 'DB_UNAVAILABLE', 'message': 'DB unavailable'}}), 503
+
+            cam = api.db.get_camera_by_id(camera_id, company_id)
+            if not cam and hasattr(api.db, 'get_dvr_channel_by_id'):
+                cam = api.db.get_dvr_channel_by_id(camera_id, company_id)
+            if not cam:
+                return jsonify({'success': False, 'error': {'code': 'CAMERA_NOT_FOUND', 'message': 'Not found'}}), 404
+
+            is_dvr = (
+                cam.get('is_dvr') is True
+                or str(cam.get('camera_type', '')).lower() == 'dvr_channel'
+                or str(cam.get('stream_path', '')).startswith('rtsp://')
+            )
+            if is_dvr:
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                sh = get_stream_handler()
+                stream_id = f"proxy:{company_id}:{camera_id}"
+                status = sh.get_stream_status(stream_id) or {}
+                if status.get('rtsp_url'):
+                    status['rtsp_url'] = redact_url(str(status['rtsp_url']))
+                return jsonify({'success': True, 'stream_id': stream_id, 'status': status})
+
+            return jsonify({'success': True, 'stream_id': None, 'status': {'status': 'unknown'}})
+        except Exception as e:
+            logger.error(f"camera_stream_status error: {e}")
+            return jsonify({'success': False, 'error': {'code': 'STATUS_ERROR', 'message': 'Status error'}}), 502
 
     @bp.route('/api/company/<company_id>/cameras/groups', methods=['GET'])
     def get_camera_groups(company_id):
@@ -2843,7 +2937,8 @@ def create_blueprint(api):
                         channels_from_onvif = [{
                             'channel_number': 1,
                             'name': cam_name,
-                            'stream_uri': f"rtsp://{username}:{password}@{ip}:{port}/stream1" if username else f"rtsp://{ip}:{port}/stream1",
+                            # Never embed credentials into the URI; credentials are stored separately.
+                            'stream_uri': f"rtsp://{ip}:{port}/stream1",
                         }]
                         entry_result['detail'] = (
                             'Otomatik bağlantı testi başarısız oldu. '
@@ -2860,7 +2955,8 @@ def create_blueprint(api):
                     
                     ch_number = ch.get('channel_number', 1)
                     ch_name = ch.get('name', f'{cam_name} CH{ch_number}')
-                    stream_uri = ch.get('stream_uri', '')
+                    from utils.redaction import strip_url_userinfo
+                    stream_uri = strip_url_userinfo(ch.get('stream_uri', ''))
                     
                     camera_data = {
                         'name': ch_name,

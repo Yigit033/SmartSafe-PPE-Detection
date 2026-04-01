@@ -326,6 +326,56 @@ class DVRManager:
         if not channels:
             logger.warning(f"⚠️ Otomatik keşif sonuç vermedi, {dvr_config.max_channels} kanal zorlanıyor...")
             channels = self._discover_generic_channels(dvr_config)
+
+        # ── Realistic channel count (dynamic) ───────────────────────────
+        # Do not blindly trust max_channels input; detect real channels.
+        try:
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
+            stream_handler = get_stream_handler()
+            detected_nums = stream_handler.detect_available_channels(
+                ip_address=dvr_config.ip_address,
+                username=dvr_config.username,
+                password=dvr_config.password,
+                rtsp_port=dvr_config.rtsp_port,
+                max_channels=int(dvr_config.max_channels or 16),
+            )
+            if detected_nums:
+                detected_set = set(detected_nums)
+                # Filter brand/API-discovered channels to only those that really exist.
+                filtered = [ch for ch in channels if ch.channel_number in detected_set]
+                if filtered:
+                    channels = filtered
+                else:
+                    # Build minimal channels list from detected numbers
+                    channels = [
+                        DVRChannel(
+                            channel_id=f"{dvr_config.dvr_id}_CH{n:02d}",
+                            name=f"Channel {n}",
+                            dvr_id=dvr_config.dvr_id,
+                            channel_number=n,
+                            rtsp_path="",
+                            http_path="",
+                            status="inactive",
+                        )
+                        for n in detected_nums
+                    ]
+                # Optionally persist an updated max_channels (best-effort, not critical)
+                try:
+                    new_max = max(detected_nums)
+                    if new_max and new_max != dvr_config.max_channels:
+                        self.db_adapter.update_dvr_system(
+                            company_id,
+                            dvr_config.dvr_id,
+                            {"max_channels": int(new_max)},
+                        )
+                        dvr_config.max_channels = int(new_max)
+                except Exception:
+                    pass
+                logger.info(f"✅ Dinamik kanal sayısı tespit edildi: {len(detected_nums)} kanal ({detected_nums[:10]}...)")
+            else:
+                logger.warning("⚠️ Dinamik kanal tespiti boş döndü; mevcut kanal listesi ile devam ediliyor")
+        except Exception as e:
+            logger.warning(f"⚠️ Dinamik kanal tespiti başarısız (fallback): {e}")
         
         # ── DERİN TARAMA (Deep Scan) ──────────────────────────────────
         try:
