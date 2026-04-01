@@ -301,6 +301,15 @@ def create_blueprint(api):
                 return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
             
             camera = api.db.get_camera_by_id(camera_id, company_id)
+            
+            # 🚀 DVR Kanalı kontrolü (SaaS logic - dvr_channels'a bak)
+            if not camera:
+                if hasattr(api.db, 'get_dvr_channel_by_id'):
+                    dvr_camera = api.db.get_dvr_channel_by_id(camera_id, company_id)
+                    if dvr_camera:
+                        camera = dvr_camera
+                        logger.info(f"✅ Found DVR channel for detection start: {camera_id}")
+            
             if not camera:
                 logger.error(f"❌ Start detection: Camera not found: {camera_id}")
                 return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404

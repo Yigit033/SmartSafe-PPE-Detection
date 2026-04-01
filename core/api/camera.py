@@ -1397,6 +1397,15 @@ def create_blueprint(api):
             
             # Kamerayı veritabanından al
             camera = api.db.get_camera_by_id(camera_id, company_id)
+            
+            # 🚀 DVR Kanalı kontrolü (Eğer cameras tablosunda yoksa dvr_channels'a bak)
+            if not camera:
+                if hasattr(api.db, 'get_dvr_channel_by_id'):
+                    dvr_camera = api.db.get_dvr_channel_by_id(camera_id, company_id)
+                    if dvr_camera:
+                        camera = dvr_camera
+                        logger.info(f"✅ Found DVR channel for proxy: {camera_id}")
+            
             if not camera:
                 logger.warning(f"⚠️ Camera not found: {camera_id} for company {company_id}")
                 return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
