@@ -79,7 +79,7 @@ export default function Home() {
     },
     {
       name: "Aktif Çalışan",
-      value: data ? data.active_workers.toString() : "0",
+      value: data ? (data.active_workers || 0).toString() : "0",
       trend: 0,
       icon: "cpu",
       color: "text-indigo-600",

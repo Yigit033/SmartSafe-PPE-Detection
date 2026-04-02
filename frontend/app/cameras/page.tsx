@@ -75,8 +75,15 @@ function CamerasContent() {
   const [editingGroup, setEditingGroup] = useState<any>(null);
   const prevFiltersRef = useRef<{ search: string; group: string } | null>(null);
   const searchParams = useSearchParams();
-  const CAMERAS_PER_PAGE = 6;
+  const camerasPerPage = parseInt(searchParams.get("limit") || "6", 10);
   const currentPage = Math.max(0, parseInt(searchParams.get("page") || "1", 10) - 1);
+
+  const setLimit = (limit: number) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("page", "1");
+    window.location.href = url.pathname + url.search;
+  };
 
   const setCurrentPage = useCallback((pageOrFn: number | ((prev: number) => number)) => {
     const next = typeof pageOrFn === "function" ? pageOrFn(currentPage) : pageOrFn;
@@ -525,10 +532,10 @@ function CamerasContent() {
     return matchesSearch && matchesGroup;
   });
 
-  const totalPages = Math.ceil(filteredCameras.length / CAMERAS_PER_PAGE);
+  const totalPages = Math.ceil(filteredCameras.length / camerasPerPage);
   const paginatedCameras = filteredCameras.slice(
-    currentPage * CAMERAS_PER_PAGE,
-    (currentPage + 1) * CAMERAS_PER_PAGE,
+    currentPage * camerasPerPage,
+    (currentPage + 1) * camerasPerPage,
   );
 
   useEffect(() => {
@@ -947,7 +954,7 @@ function CamerasContent() {
         </div>
       ) : (
         <>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className={`mt-12 grid gap-8 ${camerasPerPage === 1 ? "grid-cols-1 max-w-5xl mx-auto" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}>
           {paginatedCameras.map((camera) => (
             <div
               key={camera.camera_id}
@@ -1156,47 +1163,66 @@ function CamerasContent() {
           ))}
         </div>
 
-        {totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-center gap-3">
+        <div className="mt-12 flex items-center justify-center gap-3">
+          {totalPages > 1 && (
+            <>
+              <button
+                onClick={() => { setCurrentPage((p) => Math.max(0, p - 1)); setRefreshKey(Date.now()); }}
+                disabled={currentPage === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+              >
+                <span className="material-symbols-rounded text-sm">chevron_left</span>
+                Önceki
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setCurrentPage(i); setRefreshKey(Date.now()); }}
+                    className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
+                      i === currentPage
+                        ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/30"
+                        : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => { setCurrentPage((p) => Math.min(totalPages - 1, p + 1)); setRefreshKey(Date.now()); }}
+                disabled={currentPage === totalPages - 1}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+              >
+                Sonraki
+                <span className="material-symbols-rounded text-sm">chevron_right</span>
+              </button>
+            </>
+          )}
+
+          <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 border border-slate-200 rounded-2xl ml-4 shadow-inner">
             <button
-              onClick={() => { setCurrentPage((p) => Math.max(0, p - 1)); setRefreshKey(Date.now()); }}
-              disabled={currentPage === 0}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none"
+              onClick={() => setLimit(1)}
+              className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 1 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
             >
-              <span className="material-symbols-rounded text-sm">chevron_left</span>
-              Önceki
+              <span className="material-symbols-rounded text-sm">rectangle</span>
+              <span className="text-[10px] font-black uppercase tracking-widest leading-none">1</span>
             </button>
-
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setCurrentPage(i); setRefreshKey(Date.now()); }}
-                  className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
-                    i === currentPage
-                      ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/30"
-                      : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-
             <button
-              onClick={() => { setCurrentPage((p) => Math.min(totalPages - 1, p + 1)); setRefreshKey(Date.now()); }}
-              disabled={currentPage === totalPages - 1}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none"
+              onClick={() => setLimit(6)}
+              className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 6 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
             >
-              Sonraki
-              <span className="material-symbols-rounded text-sm">chevron_right</span>
+              <span className="material-symbols-rounded text-sm">grid_view</span>
+              <span className="text-[10px] font-black uppercase tracking-widest leading-none">6</span>
             </button>
-
-            <span className="ml-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {filteredCameras.length} kamera • Sayfa {currentPage + 1}/{totalPages}
-            </span>
           </div>
-        )}
+
+          <span className="ml-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
+            {filteredCameras.length} KAMERA • SAYFA {currentPage + 1}/{totalPages || 1}
+          </span>
+        </div>
         </>
       )}
 
