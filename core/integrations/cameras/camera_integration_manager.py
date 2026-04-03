@@ -338,6 +338,7 @@ class DVRManager:
                 password=dvr_config.password,
                 rtsp_port=dvr_config.rtsp_port,
                 max_channels=int(dvr_config.max_channels or 16),
+                company_id=company_id,
             )
             if detected_nums:
                 detected_set = set(detected_nums)
@@ -392,7 +393,8 @@ class DVRManager:
                     dvr_config.password,
                     dvr_config.rtsp_port,
                     ch.channel_number,
-                    dvr_config.dvr_type
+                    dvr_config.dvr_type,
+                    company_id=company_id,
                 )
                 return ch, url
 

@@ -180,7 +180,8 @@ class DVRStreamProcessor:
                     dvr_system['ip_address'],
                     dvr_system['username'],
                     dvr_system['password'],
-                    channel
+                    channel,
+                    company_id=company_id,
                 )
                 if onvif_uri:
                     rtsp_url = onvif_uri
@@ -805,6 +806,25 @@ class EnhancedPPEDetectionManager:
         except Exception as e:
             logger.warning(f"⚠️ SH17 Model Manager yüklenemedi: {e}")
             self.sh17_available = False
+
+    def list_active_dvr_detection_ids(self, dvr_id: str) -> List[str]:
+        """Thread tabanlı + önizleme akışına bağlı (tek RTSP) PPE oturumlarının processor stream_id listesi."""
+        seen: Dict[str, None] = {}
+        with self.dvr_processor._lock:
+            for sid, t in self.dvr_processor.detection_threads.items():
+                if t.is_alive() and dvr_id in sid:
+                    seen[sid] = None
+        try:
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
+            sh = get_stream_handler()
+            for psid in sh.list_ppe_detection_stream_ids():
+                if psid.startswith(f"{dvr_id}_ch"):
+                    suffix = psid.rsplit("_ch", 1)[-1]
+                    proc_sid = f"dvr_{dvr_id}_ch{suffix}"
+                    seen[proc_sid] = None
+        except Exception:
+            pass
+        return list(seen.keys())
         
     def start_dvr_ppe_detection(self, dvr_id: str, channels: List[int], company_id: str, detection_mode: str = 'construction') -> Dict[str, Any]:
         """Birden fazla DVR kanalında PPE detection başlatır"""
@@ -834,6 +854,25 @@ class EnhancedPPEDetectionManager:
         active_detections = []
 
         for channel in channels:
+            preview_sid = f"{dvr_id}_ch{channel:02d}"
+            processor_sid = f"dvr_{dvr_id}_ch{channel:02d}"
+            try:
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                sh = get_stream_handler()
+                pst = sh.get_stream_status(preview_sid)
+                if pst and pst.get("status") == "active":
+                    if sh.set_ppe_detection_active(preview_sid, True):
+                        self.dvr_processor.save_detection_session(
+                            processor_sid, dvr_id, company_id, channel, detection_mode
+                        )
+                        active_detections.append(processor_sid)
+                        logger.info(
+                            f"✅ DVR PPE on preview stream {preview_sid} (no extra RTSP)"
+                        )
+                        continue
+            except Exception as bind_err:
+                logger.debug(f"ℹ️ Preview-bound PPE skipped ch{channel}: {bind_err}")
+
             result = self.dvr_processor.start_dvr_detection(
                 dvr_id, channel, company_id, detection_mode, use_sh17
             )
@@ -856,18 +895,33 @@ class EnhancedPPEDetectionManager:
         """DVR PPE detection'ı durdurur"""
         
         stopped_detections = []
-        
+        try:
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
+            sh = get_stream_handler()
+        except Exception:
+            sh = None
+
         if channels is None:
-            # Tüm aktif detection'ları durdur
             active_detections = self.dvr_processor.get_active_detections()
-            for stream_id in active_detections:
+            for stream_id in list(active_detections):
                 if dvr_id in stream_id:
                     result = self.dvr_processor.stop_dvr_detection(stream_id)
                     if result['success']:
                         stopped_detections.append(stream_id)
+            if sh:
+                for psid in list(sh.list_ppe_detection_stream_ids()):
+                    if psid.startswith(f"{dvr_id}_ch"):
+                        sh.set_ppe_detection_active(psid, False)
+                        suffix = psid.rsplit("_ch", 1)[-1]
+                        proc = f"dvr_{dvr_id}_ch{suffix}"
+                        self.dvr_processor.stop_dvr_detection(proc)
+                        if proc not in stopped_detections:
+                            stopped_detections.append(proc)
         else:
-            # Belirtilen kanalları durdur
             for channel in channels:
+                preview_sid = f"{dvr_id}_ch{channel:02d}"
+                if sh:
+                    sh.set_ppe_detection_active(preview_sid, False)
                 stream_id = f"dvr_{dvr_id}_ch{channel:02d}"
                 result = self.dvr_processor.stop_dvr_detection(stream_id)
                 if result['success']:
@@ -881,8 +935,7 @@ class EnhancedPPEDetectionManager:
     def get_dvr_detection_status(self, dvr_id: str) -> Dict[str, Any]:
         """DVR detection durumunu döndürür"""
         
-        active_detections = self.dvr_processor.get_active_detections()
-        dvr_detections = [d for d in active_detections if dvr_id in d]
+        dvr_detections = self.list_active_dvr_detection_ids(dvr_id)
         
         # Son detection sonuçlarını al
         detection_results = []

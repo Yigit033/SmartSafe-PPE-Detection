@@ -556,6 +556,13 @@ def create_blueprint(api):
                 if camera_key in state['active_detectors'] and state['active_detectors'][camera_key]:
                     logger.info(f"🛑 Stopping detection for camera: {camera_id}")
                     state['active_detectors'][camera_key] = False
+                    # DVR önizleme akışındaki worker PPE bayrağını kapat (çift inference önlenir)
+                    if "_ch" in camera_id:
+                        try:
+                            from integrations.dvr.dvr_stream_handler import get_stream_handler
+                            get_stream_handler().set_ppe_detection_active(camera_id, False)
+                        except Exception:
+                            pass
                     
                     if camera_key in state['detection_threads']:
                         del state['detection_threads'][camera_key]
@@ -576,10 +583,18 @@ def create_blueprint(api):
             else:
                 state = _get_detection_state()
                 keys_to_remove = []
+                prefix = f"{company_id}_"
                 for camera_key in list(state['active_detectors'].keys()):
-                    if camera_key.startswith(f"{company_id}_"):
+                    if camera_key.startswith(prefix):
                         state['active_detectors'][camera_key] = False
                         keys_to_remove.append(camera_key)
+                        cam_id = camera_key[len(prefix):]
+                        if "_ch" in cam_id:
+                            try:
+                                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                                get_stream_handler().set_ppe_detection_active(cam_id, False)
+                            except Exception:
+                                pass
                 
                 for camera_key in keys_to_remove:
                     if camera_key in state['camera_captures'] and state['camera_captures'][camera_key] is not None:

@@ -75,7 +75,9 @@ def create_blueprint(api):
 
             def generate():
                 nonlocal frame_count, last_detection_time
-                
+                import app as _app_mod
+                _mjpeg_cam_key = f"{company_id}_{camera_id}"
+
                 while True:
                     try:
                         # Try to get frame from primary URL
@@ -110,9 +112,14 @@ def create_blueprint(api):
                         if frame is not None and frame.size > 0:
                             frame_count += 1
                             
-                            # 🎯 PPE DETECTION - Her 5 frame'de bir detection (daha sık)
+                            # PPE yalnızca start-detection ile açılmış kameralarda (video-feed ile aynı mantık)
                             current_time = time.time()
-                            if frame_count % 5 == 0 and (current_time - last_detection_time) > 0.2:
+                            _det_on = _app_mod.active_detectors.get(_mjpeg_cam_key, False)
+                            if (
+                                _det_on
+                                and frame_count % 5 == 0
+                                and (current_time - last_detection_time) > 0.2
+                            ):
                                 try:
                                     # PPE Detection yap
                                     # Resolve sector from company configuration

@@ -100,6 +100,13 @@ export const create = api(
       return { success: true, dvr_id };
     } catch (error: any) {
       console.error("Error creating DVR system:", error);
+      if (error?.code === "23505") {
+        return {
+          success: false,
+          error:
+            "Bu şirket için bu IP ile kayıtlı bir DVR zaten var. Aynı NVR'ı iki kez ekleyemezsiniz.",
+        };
+      }
       return { success: false, error: error.message };
     }
   },

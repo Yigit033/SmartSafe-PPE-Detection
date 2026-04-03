@@ -349,7 +349,9 @@ class PoseAwarePPEDetector:
             
             # 🔍 FALLBACK CHECK - If no persons detected, use standard detection
             if not persons_with_pose:
-                logger.warning("⚠️ No persons detected with pose, falling back to standard detection")
+                logger.debug(
+                    "ℹ️ No persons detected with pose, falling back to standard detection"
+                )
                 if self.ppe_detector:
                     return self.ppe_detector.detect_ppe(frame, sector, confidence)
                 return self._create_empty_result()

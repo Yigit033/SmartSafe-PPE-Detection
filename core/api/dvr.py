@@ -654,7 +654,8 @@ def create_blueprint(api):
                     username=dvr_system['username'],
                     password=dvr_system['password'],
                     rtsp_port=dvr_system['rtsp_port'],
-                    channel_number=ch
+                    channel_number=ch,
+                    company_id=company_id,
                 )
                 previews.append({
                     'channel_number': ch,
@@ -747,7 +748,9 @@ def create_blueprint(api):
             try:
                 from integrations.dvr.dvr_stream_handler import get_stream_handler
                 sh = get_stream_handler()
-                uri = sh._try_onvif_stream_uri(ip, user, pwd, 1)
+                uri = sh._try_onvif_stream_uri(
+                    ip, user, pwd, 1, company_id=company_id
+                )
                 if uri:
                     result['onvif_ok'] = True
                     result['method'] = 'ONVIF'
@@ -816,7 +819,7 @@ def create_blueprint(api):
             from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
             sh = get_stream_handler()
             dvr_ppe = get_dvr_ppe_manager()
-            active_streams = dvr_ppe.dvr_processor.get_active_detections()
+            active_detection_ids = set(dvr_ppe.list_active_dvr_detection_ids(dvr_id))
 
             max_ch = int(dvr_system.get('max_channels', 16))
             # Sadece istenen kanalları dene (client ?channels=1,2,3)
@@ -830,13 +833,14 @@ def create_blueprint(api):
             health = []
             for ch in channels_to_check:
                 stream_id = f"dvr_{dvr_id}_ch{ch:02d}"
-                detection_active = stream_id in active_streams
+                detection_active = stream_id in active_detection_ids
                 frame_b64 = sh.capture_single_frame(
                     ip_address=dvr_system['ip_address'],
                     username=dvr_system['username'],
                     password=dvr_system['password'],
                     rtsp_port=dvr_system['rtsp_port'],
-                    channel_number=ch
+                    channel_number=ch,
+                    company_id=company_id,
                 )
                 health.append({
                     'channel_number': ch,

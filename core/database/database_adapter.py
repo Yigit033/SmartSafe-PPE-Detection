@@ -87,10 +87,15 @@ class DatabaseAdapter:
                         parsed = urlparse(database_url)
                         
                         from psycopg2 import pool
-                        # Thread-safe connection pool
+                        try:
+                            minconn = max(1, int(os.getenv("DB_POOL_MINCONN", "5")))
+                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "100")))
+                        except ValueError:
+                            minconn, maxconn = 5, 100
+                        # Thread-safe connection pool (single process → one adapter via get_db_adapter())
                         self.connection_pool = pool.ThreadedConnectionPool(
-                            minconn=5,
-                            maxconn=100,  # Kapasite artırıldı
+                            minconn=minconn,
+                            maxconn=maxconn,
                             host=parsed.hostname,
                             port=parsed.port or 5432,
                             database=parsed.path[1:],
@@ -98,7 +103,9 @@ class DatabaseAdapter:
                             password=parsed.password,
                             connect_timeout=10
                         )
-                        logger.info("✅ PostgreSQL threaded connection pool initialized (5-100)")
+                        logger.info(
+                            f"✅ PostgreSQL threaded connection pool initialized ({minconn}-{maxconn})"
+                        )
                     except Exception as pool_error:
                         logger.warning(f"⚠️ Connection pool initialization failed: {pool_error}, will use direct connections")
                 else:
@@ -1256,7 +1263,7 @@ class DatabaseAdapter:
                 if query.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')):
                     result = cursor.rowcount
                     conn.commit()
-                    logger.info(f"✅ Query executed successfully: {result} rows affected")
+                    logger.debug(f"✅ Query executed successfully: {result} rows affected")
                     return result
                 else:  # SELECT queries
                     if fetch_all:
@@ -1435,7 +1442,19 @@ class DatabaseAdapter:
         """Add DVR system to database"""
         try:
             logger.info(f"🔧 Adding DVR system: {dvr_data.get('name')} for company: {company_id}")
-            
+
+            dup = self.execute_query(
+                "SELECT dvr_id FROM dvr_systems WHERE company_id = ? AND ip_address = ?",
+                (company_id, dvr_data["ip_address"]),
+                fetch_one=True,
+            )
+            if dup:
+                logger.warning(
+                    "⚠️ Bu şirket için bu IP ile kayıtlı bir DVR zaten var; "
+                    f"company_id={company_id} ip={dvr_data.get('ip_address')}"
+                )
+                return False
+
             query = '''
                 INSERT INTO dvr_systems (
                     dvr_id, company_id, name, ip_address, port, username, password,
@@ -1518,6 +1537,20 @@ class DatabaseAdapter:
     def update_dvr_system(self, company_id: str, dvr_id: str, dvr_data: Dict[str, Any]) -> bool:
         """Update DVR system"""
         try:
+            new_ip = dvr_data.get("ip_address")
+            if new_ip:
+                conflict = self.execute_query(
+                    "SELECT dvr_id FROM dvr_systems WHERE company_id = ? AND ip_address = ? AND dvr_id <> ?",
+                    (company_id, new_ip, dvr_id),
+                    fetch_one=True,
+                )
+                if conflict:
+                    logger.warning(
+                        "⚠️ Bu şirket için bu IP başka bir DVR kaydında kullanılıyor; "
+                        f"company_id={company_id} ip={new_ip}"
+                    )
+                    return False
+
             query = '''
                 UPDATE dvr_systems 
                 SET name = ?, ip_address = ?, port = ?, username = ?, password = ?,
@@ -1597,7 +1630,7 @@ class DatabaseAdapter:
         """Add DVR channel to database"""
         try:
             from utils.redaction import redact_url
-            logger.info(f"🔧 Adding DVR channel: {channel_data.get('name')} for DVR: {dvr_id}")
+            logger.debug(f"🔧 Adding DVR channel: {channel_data.get('name')} for DVR: {dvr_id}")
             
             # Use INSERT OR REPLACE to handle conflicts
             if self.db_type == 'sqlite':
@@ -1638,16 +1671,16 @@ class DatabaseAdapter:
                 channel_data.get('http_path', '')
             )
             
-            logger.info(f"🔧 Channel SQL Query: {query}")
+            logger.debug(f"🔧 Channel SQL Query: {query}")
             # Never log credentials/URLs verbatim (RTSP/HTTP may include user:pass)
             safe_params = list(params)
             if len(safe_params) >= 11:
                 safe_params[9] = redact_url(str(safe_params[9]))   # rtsp_path
                 safe_params[10] = redact_url(str(safe_params[10]))  # http_path
-            logger.info(f"🔧 Channel Parameters: {tuple(safe_params)}")
+            logger.debug(f"🔧 Channel Parameters: {tuple(safe_params)}")
             
             result = self.execute_query(query, params, fetch_all=False)
-            logger.info(f"🔧 Channel Query result: {result}")
+            logger.debug(f"🔧 Channel Query result: {result}")
             
             if result is not None and result > 0:
                 logger.info(f"✅ DVR channel added successfully: {channel_data.get('name')}")
@@ -2155,15 +2188,84 @@ class DatabaseAdapter:
                     """
                     affected = self.execute_query(update_query, (rtsp_path, ip_address, channel_number))
 
-            if not affected:
+            if affected is None:
                 logger.warning(
-                    f"⚠️ RTSP cache write did not affect any rows: ip={ip_address} ch{channel_number} "
+                    f"⚠️ RTSP cache update failed (no rowcount): ip={ip_address} ch{channel_number} "
+                    f"url={redact_url(str(rtsp_path))}"
+                )
+                return False
+            if affected > 0:
+                logger.info(f"✅ RTSP URL cached in DB: {ip_address} ch{channel_number}")
+                return True
+
+            # UPDATE matched no row: common during parallel discovery before channels are persisted.
+            if company_id:
+                cid_company = company_id
+            else:
+                r0 = dvr_rows[0]
+                if isinstance(r0, dict):
+                    cid_company = r0.get("company_id")
+                elif isinstance(r0, (list, tuple)) and len(r0) > 1:
+                    cid_company = r0[1]
+                else:
+                    cid_company = None
+            if not cid_company:
+                logger.warning(
+                    f"⚠️ RTSP cache upsert skipped (no company_id): ip={ip_address} ch{channel_number} "
                     f"url={redact_url(str(rtsp_path))}"
                 )
                 return False
 
-            logger.info(f"✅ RTSP URL cached in DB: {ip_address} ch{channel_number}")
-            return True
+            channel_id = f"{dvr_id}_ch{channel_number:02d}"
+            name = f"Channel {channel_number}"
+            http_path = f"/ch{channel_number:02d}/snapshot"
+            if self.db_type == "sqlite":
+                upsert_query = """
+                    INSERT OR REPLACE INTO dvr_channels (
+                        channel_id, dvr_id, company_id, name, channel_number,
+                        status, resolution_width, resolution_height, fps, rtsp_path, http_path
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+            else:
+                upsert_query = """
+                    INSERT INTO dvr_channels (
+                        channel_id, dvr_id, company_id, name, channel_number,
+                        status, resolution_width, resolution_height, fps, rtsp_path, http_path
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (channel_id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        status = EXCLUDED.status,
+                        resolution_width = EXCLUDED.resolution_width,
+                        resolution_height = EXCLUDED.resolution_height,
+                        fps = EXCLUDED.fps,
+                        rtsp_path = EXCLUDED.rtsp_path,
+                        http_path = EXCLUDED.http_path,
+                        updated_at = CURRENT_TIMESTAMP
+                """
+            upsert_params = (
+                channel_id,
+                dvr_id,
+                cid_company,
+                name,
+                channel_number,
+                "active",
+                1920,
+                1080,
+                25,
+                rtsp_path,
+                http_path,
+            )
+            ins = self.execute_query(upsert_query, upsert_params, fetch_all=False)
+            if ins is not None and ins > 0:
+                logger.info(
+                    f"✅ RTSP URL upserted in DB (no prior channel row): {ip_address} ch{channel_number}"
+                )
+                return True
+            logger.warning(
+                f"⚠️ RTSP cache upsert did not affect rows: ip={ip_address} ch{channel_number} "
+                f"url={redact_url(str(rtsp_path))}"
+            )
+            return False
         except Exception as e:
             logger.warning(f"⚠️ Failed to cache RTSP URL in DB: {e}")
             return False
@@ -2879,17 +2981,6 @@ class DatabaseAdapter:
             return []
 
 
-# Global database adapter instance
-db_adapter = DatabaseAdapter()
-
-def get_db_adapter() -> DatabaseAdapter:
-    """Get global database adapter instance"""
-    return db_adapter 
-
-def get_camera_discovery_manager() -> 'CameraDiscoveryManager':
-    """Get camera discovery manager instance"""
-    return CameraDiscoveryManager(db_adapter)
-
 class CameraDiscoveryManager:
     """Keşfedilen kameraları veritabanı ile senkronize etmek için manager"""
     
@@ -3346,9 +3437,30 @@ class CameraDiscoveryManager:
         except Exception:
             return {}
 
-# Global camera discovery manager instance
-camera_discovery_manager = CameraDiscoveryManager(db_adapter)
+
+# ── Process-wide singletons (one PG pool per process, thread-safe) ─────────
+_db_adapter_instance: Optional[DatabaseAdapter] = None
+_db_adapter_lock = threading.Lock()
+
+_camera_discovery_manager_instance: Optional[CameraDiscoveryManager] = None
+_camera_discovery_manager_lock = threading.Lock()
+
+
+def get_db_adapter() -> DatabaseAdapter:
+    """Return the shared DatabaseAdapter (lazy init, double-checked lock)."""
+    global _db_adapter_instance
+    if _db_adapter_instance is None:
+        with _db_adapter_lock:
+            if _db_adapter_instance is None:
+                _db_adapter_instance = DatabaseAdapter()
+    return _db_adapter_instance
+
 
 def get_camera_discovery_manager() -> CameraDiscoveryManager:
-    """Get global camera discovery manager instance"""
-    return camera_discovery_manager 
+    """Return the shared CameraDiscoveryManager bound to get_db_adapter()."""
+    global _camera_discovery_manager_instance
+    if _camera_discovery_manager_instance is None:
+        with _camera_discovery_manager_lock:
+            if _camera_discovery_manager_instance is None:
+                _camera_discovery_manager_instance = CameraDiscoveryManager(get_db_adapter())
+    return _camera_discovery_manager_instance
