@@ -3221,7 +3221,11 @@ class ProfessionalCameraManager:
                                             # Database'e snapshot olmadan kaydet
                                             from database.database_adapter import get_db_adapter
                                             db = get_db_adapter()
-                                            db.add_violation_event(new_violation)
+                                            if not db.add_violation_event(new_violation):
+                                                logger.warning(
+                                                    f"⚠️ violation_events kaydı reddedildi (fail-fast) "
+                                                    f"event_id={new_violation.get('event_id')}"
+                                                )
                                             continue
                                         
                                         # 📸 SNAPSHOT ÇEK - İLK İHLAL ANI (EKSİK EKİPMANLARLA)
@@ -3246,9 +3250,15 @@ class ProfessionalCameraManager:
                                         # Database'e kaydet
                                         from database.database_adapter import get_db_adapter
                                         db = get_db_adapter()
-                                        db.add_violation_event(new_violation)
-                                        
-                                        logger.info(f"🚨 NEW VIOLATION + SNAPSHOT: {new_violation['violation_type']} - {new_violation['event_id']}")
+                                        if db.add_violation_event(new_violation):
+                                            logger.info(
+                                                f"🚨 NEW VIOLATION + SNAPSHOT: {new_violation['violation_type']} - {new_violation['event_id']}"
+                                            )
+                                        else:
+                                            logger.warning(
+                                                f"⚠️ violation_events kaydı reddedildi (fail-fast) "
+                                                f"event_id={new_violation.get('event_id')}"
+                                            )
                                     except Exception as ve:
                                         logger.error(f"❌ Violation event save error: {ve}")
                                 

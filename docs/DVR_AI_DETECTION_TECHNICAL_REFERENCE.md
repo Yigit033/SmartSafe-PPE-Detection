@@ -298,10 +298,9 @@ No session required. Returns:
 
 **Problem**: `violation_events.camera_id` had a FOREIGN KEY referencing `cameras(camera_id)`. DVR channel IDs exist only in `dvr_channels` table, not `cameras`.
 
-**Solution** (applied):
+**Solution** (PR1 → PR3):
 - PostgreSQL: `ALTER TABLE violation_events DROP CONSTRAINT IF EXISTS violation_events_camera_id_fkey` runs at table init.
-- New table definition: `camera_id VARCHAR(255) NOT NULL` (no FK reference).
-- Shadow camera row helper `_ensure_camera_row_for_dvr()` exists as additional safety — auto-creates a row in `cameras` table if a DVR channel is about to be referenced.
+- `violation_events`: `source_type` (`camera` | `dvr_channel`), `dvr_channel_id` → `dvr_channels`, no shadow `cameras` rows. **PR3:** CHECK + `source_type NOT NULL`, DVR satırlarında `camera_id` NULL; `add_violation_event` DVR’da yalnızca `dvr_channel_id` yazar (fail-fast korunur). API `getEvents` `source_type` ile ayrı join; `camera_id` cevapta geri uyum için `dvr_channel_id` ile doldurulur.
 
 ### 8.2 get_dvr_channel_by_id
 

@@ -370,7 +370,11 @@ class DVRStreamProcessor:
                                             
                                             if not person_visible:
                                                 logger.warning(f"⚠️ DVR: Kişi frame'de yeterince görünür değil, snapshot atlandı")
-                                                self.db_adapter.add_violation_event(new_violation)
+                                                if not self.db_adapter.add_violation_event(new_violation):
+                                                    logger.warning(
+                                                        f"⚠️ DVR: violation_events kaydı reddedildi (fail-fast) "
+                                                        f"event_id={new_violation.get('event_id')}"
+                                                    )
                                                 continue
                                             
                                             # Snapshot çek
@@ -392,8 +396,15 @@ class DVRStreamProcessor:
                                                 logger.warning(f"⚠️ DVR Snapshot kaydedilemedi: {new_violation['violation_type']} - {stream_id}")
                                             
                                             # Database'e kaydet
-                                            self.db_adapter.add_violation_event(new_violation)
-                                            logger.info(f"🚨 DVR NEW VIOLATION: {new_violation['violation_type']} - {new_violation['event_id']}")
+                                            if self.db_adapter.add_violation_event(new_violation):
+                                                logger.info(
+                                                    f"🚨 DVR NEW VIOLATION: {new_violation['violation_type']} - {new_violation['event_id']}"
+                                                )
+                                            else:
+                                                logger.warning(
+                                                    f"⚠️ DVR: violation_events kaydı reddedildi (fail-fast) "
+                                                    f"event_id={new_violation.get('event_id')}"
+                                                )
                                         
                                         except Exception as ve:
                                             logger.error(f"❌ DVR violation event save error: {ve}")

@@ -70,7 +70,11 @@ class DatabaseAdapter:
         self.connection_pool = None  # Will be initialized for PostgreSQL
         self._init_connection_pool()
         logger.info(f"🗄️ Database adapter initialized: {self.db_type}")
-    
+
+    def get_placeholder(self) -> str:
+        """Parametre placeholder'ı (SQLite ? / PostgreSQL %s)."""
+        return "?" if self.db_type == "sqlite" else "%s"
+
     def _init_connection_pool(self):
         """Initialize connection pool for PostgreSQL"""
         try:
@@ -1043,7 +1047,7 @@ class DatabaseAdapter:
                     CREATE TABLE IF NOT EXISTS violation_events (
                         event_id TEXT PRIMARY KEY,
                         company_id TEXT NOT NULL,
-                        camera_id TEXT NOT NULL,
+                        camera_id TEXT,
                         person_id TEXT NOT NULL,
                         violation_type TEXT NOT NULL,
                         start_time REAL NOT NULL,
@@ -1053,16 +1057,20 @@ class DatabaseAdapter:
                         resolution_snapshot_path TEXT,
                         severity TEXT DEFAULT 'warning',
                         status TEXT DEFAULT 'active',
+                        source_type TEXT NOT NULL,
+                        dvr_channel_id TEXT REFERENCES dvr_channels (channel_id),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (company_id) REFERENCES companies (company_id)
                     )
                 ''')
+                self.ensure_violation_events_pr1_expand(cursor)
+                self.ensure_violation_events_pr3_contract(cursor)
             else:  # PostgreSQL
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS violation_events (
                         event_id VARCHAR(255) PRIMARY KEY,
                         company_id VARCHAR(255) REFERENCES companies(company_id),
-                        camera_id VARCHAR(255) NOT NULL,
+                        camera_id VARCHAR(255),
                         person_id VARCHAR(255) NOT NULL,
                         violation_type VARCHAR(100) NOT NULL,
                         start_time DOUBLE PRECISION NOT NULL,
@@ -1072,7 +1080,14 @@ class DatabaseAdapter:
                         resolution_snapshot_path TEXT,
                         severity VARCHAR(20) DEFAULT 'warning',
                         status VARCHAR(20) DEFAULT 'active',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        source_type VARCHAR(20) NOT NULL,
+                        dvr_channel_id VARCHAR(255) REFERENCES dvr_channels (channel_id),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT violation_events_source_shape_chk CHECK (
+                            (source_type = 'camera' AND camera_id IS NOT NULL AND dvr_channel_id IS NULL)
+                            OR
+                            (source_type = 'dvr_channel' AND dvr_channel_id IS NOT NULL AND camera_id IS NULL)
+                        )
                     )
                 ''')
                 try:
@@ -1082,7 +1097,9 @@ class DatabaseAdapter:
                     ''')
                 except Exception:
                     pass
-            
+                self.ensure_violation_events_pr1_expand(cursor)
+                self.ensure_violation_events_pr3_contract(cursor)
+
             # ========================================
             # PERSON VIOLATIONS TABLE - Monthly violation tracking per person
             # ========================================
@@ -1329,6 +1346,133 @@ class DatabaseAdapter:
 
         logger.error(f"❌ Database query failed after {max_retries} attempts")
         return None
+
+    def ensure_violation_events_pr1_expand(self, cursor) -> None:
+        """
+        PR1 Expand: source_type, dvr_channel_id, camera_id nullable (+ PostgreSQL FK).
+        Idempotent; Encore migration ile aynı hedef şema (Python-only init senaryosu).
+        """
+        try:
+            if self.db_type == "postgresql":
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'violation_events'
+                    )
+                """)
+                if not cursor.fetchone()[0]:
+                    return
+                cursor.execute(
+                    "ALTER TABLE violation_events ADD COLUMN IF NOT EXISTS source_type VARCHAR(20)"
+                )
+                cursor.execute(
+                    "ALTER TABLE violation_events ADD COLUMN IF NOT EXISTS dvr_channel_id VARCHAR(255)"
+                )
+                cursor.execute(
+                    "ALTER TABLE violation_events ALTER COLUMN camera_id DROP NOT NULL"
+                )
+                cursor.execute("""
+                    DO $$
+                    BEGIN
+                      IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'violation_events_dvr_channel_id_fkey'
+                      ) THEN
+                        ALTER TABLE violation_events
+                          ADD CONSTRAINT violation_events_dvr_channel_id_fkey
+                          FOREIGN KEY (dvr_channel_id) REFERENCES dvr_channels (channel_id);
+                      END IF;
+                    END $$;
+                """)
+            else:
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='violation_events'"
+                )
+                if not cursor.fetchone():
+                    return
+                cursor.execute("PRAGMA table_info(violation_events)")
+                colnames = {row[1] for row in cursor.fetchall()}
+                if "source_type" not in colnames:
+                    cursor.execute(
+                        "ALTER TABLE violation_events ADD COLUMN source_type TEXT"
+                    )
+                if "dvr_channel_id" not in colnames:
+                    cursor.execute("""
+                        ALTER TABLE violation_events ADD COLUMN dvr_channel_id TEXT
+                        REFERENCES dvr_channels (channel_id)
+                    """)
+        except Exception as e:
+            logger.warning(f"⚠️ ensure_violation_events_pr1_expand: {e}")
+
+    def ensure_violation_events_pr3_contract(self, cursor) -> None:
+        """
+        PR3 Contract: DVR satırlarında camera_id temizliği; PostgreSQL'de ayrıca NOT NULL,
+        CHECK ve partial index (migration 3 ile uyumlu). SQLite'ta yalnızca veri düzeltmesi.
+        """
+        try:
+            if self.db_type == "sqlite":
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='violation_events'"
+                )
+                if not cursor.fetchone():
+                    return
+                try:
+                    cursor.execute(
+                        "UPDATE violation_events SET camera_id = NULL WHERE source_type = 'dvr_channel'"
+                    )
+                except Exception as ue:
+                    logger.debug(f"SQLite violation_events PR3 DVR camera_id clear: {ue}")
+                return
+        except Exception as e:
+            logger.warning(f"⚠️ ensure_violation_events_pr3_contract (sqlite): {e}")
+            return
+
+        try:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'violation_events'
+                )
+            """)
+            if not cursor.fetchone()[0]:
+                return
+            cursor.execute(
+                "UPDATE violation_events SET camera_id = NULL WHERE source_type = 'dvr_channel'"
+            )
+            try:
+                cursor.execute(
+                    "ALTER TABLE violation_events ALTER COLUMN source_type SET NOT NULL"
+                )
+            except Exception as ne:
+                logger.warning(
+                    f"⚠️ violation_events source_type NOT NULL (PR2 gerekli olabilir): {ne}"
+                )
+            cursor.execute("""
+                DO $$
+                BEGIN
+                  IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'violation_events_source_shape_chk'
+                  ) THEN
+                    ALTER TABLE violation_events
+                      ADD CONSTRAINT violation_events_source_shape_chk CHECK (
+                        (source_type = 'camera' AND camera_id IS NOT NULL AND dvr_channel_id IS NULL)
+                        OR
+                        (source_type = 'dvr_channel' AND dvr_channel_id IS NOT NULL AND camera_id IS NULL)
+                      );
+                  END IF;
+                END $$;
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_violation_events_active_camera
+                ON violation_events (company_id, start_time DESC)
+                WHERE source_type = 'camera' AND status = 'active'
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_violation_events_active_dvr
+                ON violation_events (company_id, dvr_channel_id, start_time DESC)
+                WHERE source_type = 'dvr_channel' AND status = 'active'
+            """)
+        except Exception as e:
+            logger.warning(f"⚠️ ensure_violation_events_pr3_contract: {e}")
     
     def _check_and_sync_schema(self, conn) -> bool:
         """PostgreSQL schema'sını kontrol et ve senkronize et"""
@@ -1413,6 +1557,20 @@ class DatabaseAdapter:
                         logger.info(f"✅ Added column to detections: {column}")
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to add column {column} to detections: {e}")
+
+            # 3b. violation_events PR1 genişletme (migration ile aynı; Python-only deploy senaryosu)
+            try:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'violation_events'
+                    )
+                """)
+                if cursor.fetchone()[0]:
+                    self.ensure_violation_events_pr1_expand(cursor)
+                    self.ensure_violation_events_pr3_contract(cursor)
+            except Exception as e:
+                logger.warning(f"⚠️ violation_events PR1 expand (schema sync): {e}")
             
             # 4. Ek tabloları kontrol et
             cursor.execute("""
@@ -2586,70 +2744,111 @@ class DatabaseAdapter:
     # ========================================
     # VIOLATION EVENTS METHODS
     # ========================================
-    
-    def _ensure_camera_row_for_dvr(self, camera_id: str, company_id: str) -> None:
-        """DVR kanalı cameras tablosunda yoksa shadow satır ekler (FK uyumu)."""
-        try:
-            ph = self.get_placeholder()
-            check_q = f"SELECT 1 FROM cameras WHERE camera_id = {ph} AND company_id = {ph} LIMIT 1"
-            row = self.execute_query(check_q, (camera_id, company_id), fetch_one=True)
-            if row:
-                return
-            ch_info = self.get_dvr_channel_by_id(camera_id, company_id)
-            if not ch_info:
-                return
-            insert_q = f"""
-                INSERT INTO cameras (camera_id, company_id, camera_name, location, ip_address,
-                    port, protocol, stream_path, username, password, camera_type, status, created_at)
-                VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},'dvr_channel','active', NOW())
-                ON CONFLICT (camera_id) DO NOTHING
-            """
-            if self.db_type == 'sqlite':
-                insert_q = insert_q.replace("NOW()", "datetime('now')")
-                insert_q = insert_q.replace("ON CONFLICT (camera_id) DO NOTHING",
-                                            "ON CONFLICT(camera_id) DO NOTHING")
-            self.execute_query(insert_q, (
-                camera_id, company_id,
-                ch_info.get('camera_name', camera_id),
-                ch_info.get('location', ''),
-                ch_info.get('ip_address', ''),
-                ch_info.get('port', 554),
-                'rtsp',
-                ch_info.get('stream_path', ''),
-                ch_info.get('username', ''),
-                ch_info.get('password', ''),
-            ))
-            logger.info(f"✅ Shadow camera row created for DVR channel: {camera_id}")
-        except Exception as e:
-            logger.warning(f"⚠️ Could not create shadow camera row for {camera_id}: {e}")
+
+    def _resolve_dvr_channel_fk(self, camera_id: str, company_id: str) -> Optional[str]:
+        """
+        violation_events.camera_id (örn. işlemci stream_id dvr_{dvr_id}_ch01) değerini
+        dvr_channels.channel_id (genelde {dvr_id}_ch01) ile eşleştirir.
+        """
+        sid = str(camera_id)
+        info = self.get_dvr_channel_by_id(sid, company_id)
+        if info:
+            pk = info.get("channel_id") or info.get("camera_id")
+            if pk:
+                return str(pk)
+        if sid.startswith("dvr_") and "_ch" in sid:
+            stripped = sid[4:]
+            info2 = self.get_dvr_channel_by_id(stripped, company_id)
+            if info2:
+                pk2 = info2.get("channel_id") or info2.get("camera_id")
+                if pk2:
+                    return str(pk2)
+                return stripped
+        return None
+
+    def _viol_events_match_camera_sql(
+        self, camera_id: str, company_id: Optional[str]
+    ) -> Tuple[str, Tuple[Any, ...]]:
+        """
+        PR3: DVR satırlarında DB camera_id NULL; stream/camera anahtarı ile arama için
+        camera_id kolonu VEYA dvr_channel_id (çözülmüş channel pk) eşleşmesi.
+        """
+        ph = self.get_placeholder()
+        dvr_pk: Optional[str] = None
+        if company_id and "_ch" in str(camera_id):
+            dvr_pk = self._resolve_dvr_channel_fk(camera_id, company_id)
+        if dvr_pk:
+            return (
+                f"(camera_id = {ph} OR dvr_channel_id = {ph})",
+                (camera_id, dvr_pk),
+            )
+        return (f"camera_id = {ph}", (camera_id,))
 
     def add_violation_event(self, event_data: Dict) -> bool:
-        """Yeni ihlal event'i kaydet"""
+        """Yeni ihlal event'i kaydet. DVR kaynağında dvr_channels eşleşmesi yoksa yazılmaz (fail-fast)."""
         try:
             camera_id = event_data['camera_id']
             company_id = event_data['company_id']
-            if '_ch' in str(camera_id):
-                self._ensure_camera_row_for_dvr(camera_id, company_id)
+
+            explicit_st = event_data.get('source_type')
+            explicit_dc = event_data.get('dvr_channel_id')
+
+            if explicit_st == 'camera':
+                source_type = 'camera'
+                dvr_channel_id = None
+            elif explicit_st == 'dvr_channel':
+                if not explicit_dc or not str(explicit_dc).strip():
+                    logger.error(
+                        "❌ violation_events: source_type=dvr_channel but dvr_channel_id missing "
+                        f"(event_id={event_data.get('event_id')}, company_id={company_id})"
+                    )
+                    return False
+                row = self.get_dvr_channel_by_id(str(explicit_dc), company_id)
+                if not row:
+                    logger.error(
+                        "❌ violation_events: dvr_channel_id not found in dvr_channels for company "
+                        f"(event_id={event_data.get('event_id')}, dvr_channel_id={explicit_dc}, company_id={company_id})"
+                    )
+                    return False
+                pk = row.get('channel_id') or row.get('camera_id')
+                source_type = 'dvr_channel'
+                dvr_channel_id = str(pk) if pk else str(explicit_dc)
+            elif '_ch' in str(camera_id):
+                dvr_channel_id = self._resolve_dvr_channel_fk(camera_id, company_id)
+                if not dvr_channel_id:
+                    logger.error(
+                        "❌ violation_events: DVR camera_id could not be resolved to dvr_channels.channel_id "
+                        f"(event_id={event_data.get('event_id')}, camera_id={camera_id}, company_id={company_id})"
+                    )
+                    return False
+                source_type = 'dvr_channel'
+            else:
+                source_type = 'camera'
+                dvr_channel_id = None
+
+            insert_camera_id = None if source_type == 'dvr_channel' else camera_id
 
             if self.db_type == 'sqlite':
                 query = '''
                     INSERT INTO violation_events (
                         event_id, company_id, camera_id, person_id, violation_type,
-                        start_time, end_time, duration_seconds, snapshot_path, severity, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        start_time, end_time, duration_seconds, snapshot_path, severity, status,
+                        source_type, dvr_channel_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 '''
             else:  # PostgreSQL
                 query = '''
                     INSERT INTO violation_events (
                         event_id, company_id, camera_id, person_id, violation_type,
-                        start_time, end_time, duration_seconds, snapshot_path, severity, status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        start_time, end_time, duration_seconds, snapshot_path, severity, status,
+                        source_type, dvr_channel_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 '''
             
             params = (
                 event_data['event_id'],
                 company_id,
-                camera_id,
+                insert_camera_id,
                 event_data['person_id'],
                 event_data['violation_type'],
                 event_data['start_time'],
@@ -2657,7 +2856,9 @@ class DatabaseAdapter:
                 event_data.get('duration_seconds'),
                 event_data.get('snapshot_path'),
                 event_data.get('severity', 'warning'),
-                event_data.get('status', 'active')
+                event_data.get('status', 'active'),
+                source_type,
+                dvr_channel_id,
             )
             
             self.execute_query(query, params)
@@ -2705,12 +2906,15 @@ class DatabaseAdapter:
         try:
             if self.db_type == 'sqlite':
                 if camera_id:
-                    query = '''
+                    cam_clause, cam_params = self._viol_events_match_camera_sql(
+                        camera_id, company_id
+                    )
+                    query = f'''
                         SELECT * FROM violation_events 
-                        WHERE camera_id = ? AND status = 'active'
+                        WHERE {cam_clause} AND status = 'active'
                         ORDER BY start_time DESC
                     '''
-                    params = (camera_id,)
+                    params = cam_params
                 elif company_id:
                     query = '''
                         SELECT * FROM violation_events 
@@ -2723,12 +2927,15 @@ class DatabaseAdapter:
                     params = ()
             else:  # PostgreSQL
                 if camera_id:
-                    query = '''
+                    cam_clause, cam_params = self._viol_events_match_camera_sql(
+                        camera_id, company_id
+                    )
+                    query = f'''
                         SELECT * FROM violation_events 
-                        WHERE camera_id = %s AND status = 'active'
+                        WHERE {cam_clause} AND status = 'active'
                         ORDER BY start_time DESC
                     '''
-                    params = (camera_id,)
+                    params = cam_params
                 elif company_id:
                     query = '''
                         SELECT * FROM violation_events 
@@ -2787,28 +2994,37 @@ class DatabaseAdapter:
             logger.error(traceback.format_exc())
             return []
     
-    def get_violation_history(self, camera_id: str, hours: int = 24, limit: int = 100) -> List[Dict]:
-        """İhlal geçmişini getir"""
+    def get_violation_history(
+        self,
+        camera_id: str,
+        hours: int = 24,
+        limit: int = 100,
+        company_id: Optional[str] = None,
+    ) -> List[Dict]:
+        """İhlal geçmişini getir (DVR için company_id verilirse dvr_channel_id eşlemesi yapılır)."""
         try:
             import time
             cutoff_time = time.time() - (hours * 3600)
-            
+            cam_clause, cam_params = self._viol_events_match_camera_sql(camera_id, company_id)
+
             if self.db_type == 'sqlite':
-                query = '''
+                query = f'''
                     SELECT * FROM violation_events 
-                    WHERE camera_id = ? AND start_time >= ?
+                    WHERE {cam_clause} AND start_time >= ?
                     ORDER BY start_time DESC
                     LIMIT ?
                 '''
             else:  # PostgreSQL
-                query = '''
+                query = f'''
                     SELECT * FROM violation_events 
-                    WHERE camera_id = %s AND start_time >= %s
+                    WHERE {cam_clause} AND start_time >= %s
                     ORDER BY start_time DESC
                     LIMIT %s
                 '''
             
-            results = self.execute_query(query, (camera_id, cutoff_time, limit), fetch_all=True)
+            results = self.execute_query(
+                query, (*cam_params, cutoff_time, limit), fetch_all=True
+            )
             
             if not results or not isinstance(results, list):
                 return []

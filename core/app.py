@@ -2698,7 +2698,11 @@ smartsafe_requests_total 100
                                             logger.warning(f"⚠️ Snapshot çekilemedi: {snap_err}")
                                         
                                         # violation_events tablosuna kaydet
-                                        db_adapter.add_violation_event(new_ev)
+                                        if not db_adapter.add_violation_event(new_ev):
+                                            logger.warning(
+                                                f"⚠️ violation_events kaydı reddedildi (fail-fast) "
+                                                f"event_id={new_ev.get('event_id')}"
+                                            )
                                         
                                     except Exception as ev_err:
                                         logger.error(f"❌ Violation event kayıt hatası: {ev_err}")

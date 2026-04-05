@@ -37,7 +37,9 @@ interface ResolveAlertRequest {
 interface ViolationEvent {
   event_id: string;
   company_id: string;
+  /** IP kamera: DB camera_id; DVR (PR3): COALESCE ile dvr_channel_id üzerinden doldurulur */
   camera_id: string;
+  dvr_channel_id?: string | null;
   camera_name?: string;
   violation_type: string;
   start_time: number;
@@ -48,7 +50,9 @@ interface ViolationEvent {
 }
 
 /**
- * Şirketin ihlal olaylarını (Event-based) getirir
+ * Şirketin ihlal olaylarını (Event-based) getirir.
+ * PR3: `source_type` üzerinden ayrı join — OR / SUBSTRING yok. `camera_id` alanı API’de
+ * her zaman anlamlı string (DVR’da dvr_channel_id ile geri uyum).
  */
 export const getEvents = api(
   {
@@ -63,15 +67,26 @@ export const getEvents = api(
   }): Promise<{ success: boolean; events: ViolationEvent[] }> => {
     try {
       const res = await pool.query(
-        `SELECT ve.*, c.camera_name 
+        `SELECT ve.*, COALESCE(c.camera_name, dc.name) AS camera_name
          FROM violation_events ve
-         LEFT JOIN cameras c ON ve.camera_id = c.camera_id
-         WHERE ve.company_id = $1 
-         ORDER BY ve.start_time DESC 
+         LEFT JOIN cameras c
+           ON c.company_id = ve.company_id
+          AND ve.source_type = 'camera'
+          AND c.camera_id = ve.camera_id
+         LEFT JOIN dvr_channels dc
+           ON dc.company_id = ve.company_id
+          AND ve.source_type = 'dvr_channel'
+          AND dc.channel_id = ve.dvr_channel_id
+         WHERE ve.company_id = $1
+         ORDER BY ve.start_time DESC
          LIMIT 200`,
         [company_id],
       );
-      return { success: true, events: res.rows };
+      const events: ViolationEvent[] = res.rows.map((row) => ({
+        ...row,
+        camera_id: String(row.camera_id ?? row.dvr_channel_id ?? ""),
+      }));
+      return { success: true, events };
     } catch (error) {
       console.error("Error fetching violation events:", error);
       return { success: false, events: [] };
