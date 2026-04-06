@@ -64,6 +64,6 @@ FROM pg_indexes
 WHERE tablename = 'violation_events'
   AND indexname IN (
     'idx_violation_events_active_camera',
-    'idx_violation_events_active_dvr'
+    'idx_violation_events_active_dvr' 
   )
 ORDER BY indexname;
