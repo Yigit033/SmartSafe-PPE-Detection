@@ -65,6 +65,11 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(current_dir, '.env'))
 from services.multitenant_system import MultiTenantDatabase
 from database.database_adapter import get_db_adapter
+from sector.sector_ppe_config import (
+    get_default_mandatory_ppe_ids,
+    map_sh17_class_to_config_requirement_id,
+    sector_default_ppe_map,
+)
 from integrations.cameras.camera_integration_manager import DVRConfig
 from detection.snapshot_manager import get_snapshot_manager
 from detection.violation_tracker import get_violation_tracker
@@ -1812,41 +1817,13 @@ class SmartSafeSaaSAPI:
                             except Exception as persist_error:
                                 logger.warning(f"⚠️ Detection persist warning: {persist_error}")
 
-                            # === NEW: Snapshot business rule (start once, resolve once) ===
+                            # === SaaS Resolution Status tracking (no snapshots) ===
                             try:
                                 violations_count = detection_data.get('analysis', {}).get('violations_count',
                                                             len(detection_data.get('violations', [])))
-                                prev_active = live_violation_state.get(camera_key, False)
-                                now_active = violations_count > 0
-                                if frame is not None:
-                                    snapshot_manager = get_snapshot_manager()
-                                    # İhlal başladı (0 -> >0)
-                                    if now_active and not prev_active:
-                                        snapshot_path = snapshot_manager.capture_full_frame_snapshot(
-                                            frame=frame,
-                                            company_id=str(company_id),
-                                            camera_id=str(camera_id),
-                                            tag='violation_start'
-                                        )
-                                        if snapshot_path:
-                                            logger.info(f"📸 SaaS VIOLATION START SNAPSHOT: {snapshot_path} - Camera: {camera_id}")
-                                        else:
-                                            logger.warning(f"⚠️ SaaS Violation start snapshot kaydedilemedi: {camera_id}")
-                                    # İhlal çözüldü (>0 -> 0)
-                                    if (not now_active) and prev_active:
-                                        snapshot_path = snapshot_manager.capture_full_frame_snapshot(
-                                            frame=frame,
-                                            company_id=str(company_id),
-                                            camera_id=str(camera_id),
-                                            tag='violation_resolved'
-                                        )
-                                        if snapshot_path:
-                                            logger.info(f"📸 SaaS VIOLATION RESOLVED SNAPSHOT: {snapshot_path} - Camera: {camera_id}")
-                                        else:
-                                            logger.warning(f"⚠️ SaaS Violation resolved snapshot kaydedilemedi: {camera_id}")
-                                live_violation_state[camera_key] = now_active
-                            except Exception as snap_error:
-                                logger.warning(f"⚠️ Snapshot rule warning: {snap_error}")
+                                live_violation_state[camera_key] = (violations_count > 0)
+                            except Exception as state_error:
+                                logger.warning(f"⚠️ State update warning: {state_error}")
                             
                             last_detection_time = current_time
                     
@@ -1858,7 +1835,7 @@ class SmartSafeSaaSAPI:
                     
         except Exception as e:
             print(f"Detection thread hatası: {e}")
-        
+            
         print(f"Kamera {camera_key} tespiti durduruldu")
     
     def calculate_real_chart_data(self, company_id):
@@ -2395,19 +2372,8 @@ smartsafe_requests_total 100
         # PPE Detection Model - SH17 or PoseAware fallback
         pose_detector = None
         device = 'cpu'
-        # Sektöre göre varsayılan required_ppe (DB'de konfig yoksa kullanılır)
-        SECTOR_DEFAULT_PPE = {
-            'food': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
-            'food_beverage': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
-            'construction': ['helmet', 'safety_vest', 'safety_shoes'],
-            'manufacturing': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
-            'warehouse_logistics': ['helmet', 'safety_vest', 'safety_shoes'],
-            'chemical': ['helmet', 'safety_vest', 'safety_glasses', 'gloves'],
-            'energy': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
-            'petrochemical': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
-            'marine_shipyard': ['helmet', 'safety_vest', 'safety_shoes'],
-            'aviation': ['helmet', 'safety_vest', 'safety_shoes'],
-        }
+        # Sektöre göre varsayılan required_ppe — backend/company/sector_config.ts ile senkron
+        SECTOR_DEFAULT_PPE = sector_default_ppe_map()
         def _normalize_sector(s: Optional[str]) -> str:
             if not s or not isinstance(s, str):
                 return 'construction'
@@ -3141,43 +3107,20 @@ smartsafe_requests_total 100
     def _analyze_sh17_ppe_compliance(self, detections: List[Dict], sector: str) -> Dict[str, Any]:
         """SH17 detection sonuçlarından PPE compliance analizi"""
         try:
-            # Sektör bazlı gerekli PPE'ler — SECTOR_DEFAULT_PPE ile tutarlı canonical isimler
-            sector_requirements = {
-                'construction': ['helmet', 'safety_vest', 'safety_shoes'],
-                'manufacturing': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
-                'chemical': ['helmet', 'safety_vest', 'safety_glasses', 'gloves'],
-                'food': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
-                'food_beverage': ['haircap', 'face_mask', 'gloves', 'safety_suit'],
-                'warehouse_logistics': ['helmet', 'safety_vest', 'safety_shoes'],
-                'energy': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
-                'petrochemical': ['helmet', 'safety_vest', 'safety_shoes', 'safety_glasses'],
-                'marine_shipyard': ['helmet', 'safety_vest', 'safety_shoes'],
-                'aviation': ['helmet', 'safety_vest', 'safety_shoes'],
-            }
-
-            # Canonical alias eşlemesi: model class_name → PPE requirement name
-            _COMPLIANCE_ALIASES = {
-                'face_mask_medical': 'face_mask',
-                'medical_suit': 'safety_suit',
-                'safety_suit': 'safety_suit',
-                'haircap': 'haircap',
-                'hair_net': 'haircap',
-                'hairnet': 'haircap',
-            }
-
-            required_ppe = sector_requirements.get(sector, ['helmet', 'safety_vest', 'safety_shoes'])
+            # Sektör bazlı gerekli PPE — sector_config.ts (sector_ppe_config.py) mandatory listesi
+            required_ppe = get_default_mandatory_ppe_ids(sector)
+            if not required_ppe:
+                required_ppe = get_default_mandatory_ppe_ids("construction")
             detected_ppe = set()
 
-            # Tespit edilen PPE'leri topla — alias eşlemesiyle
+            # Model class_name → sector_config `id` (gıda: haircap → hairnet, …)
             for detection in detections:
-                class_name = detection.get('class_name', '')
-                # Doğrudan eşleşme
+                class_name = detection.get("class_name", "")
                 if class_name in required_ppe:
                     detected_ppe.add(class_name)
-                # Alias eşlemesi
-                alias = _COMPLIANCE_ALIASES.get(class_name)
-                if alias and alias in required_ppe:
-                    detected_ppe.add(alias)
+                rid = map_sh17_class_to_config_requirement_id(class_name, sector)
+                if rid and rid in required_ppe:
+                    detected_ppe.add(rid)
 
             # Compliance kontrolü
             missing_ppe = [item for item in required_ppe if item not in detected_ppe]
@@ -3757,24 +3700,26 @@ smartsafe_requests_total 100
                 'required_ppe': ['helmet', 'safety_vest', 'gloves', 'respirator']
             },
             'food': {
-                'has_haircap': 'haircap' not in missing_ppe,
+                # sector_config.ts id'leri: hairnet, face_mask, apron (+ model alias haircap/safety_suit)
+                'has_haircap': ('hairnet' not in missing_ppe and 'haircap' not in missing_ppe),
                 'has_gloves': 'gloves' not in missing_ppe,
-                'has_safety_suit': 'safety_suit' not in missing_ppe,
+                'has_safety_suit': ('apron' not in missing_ppe and 'safety_suit' not in missing_ppe),
                 'has_mask': 'face_mask' not in missing_ppe,
-                'required_ppe': ['haircap', 'gloves', 'safety_suit', 'face_mask']
+                'required_ppe': get_default_mandatory_ppe_ids('food') or ['hairnet', 'face_mask', 'apron'],
             },
             'food_beverage': {
-                'has_haircap': 'haircap' not in missing_ppe,
+                'has_haircap': ('hairnet' not in missing_ppe and 'haircap' not in missing_ppe),
                 'has_gloves': 'gloves' not in missing_ppe,
-                'has_safety_suit': 'safety_suit' not in missing_ppe,
+                'has_safety_suit': ('apron' not in missing_ppe and 'safety_suit' not in missing_ppe),
                 'has_mask': 'face_mask' not in missing_ppe,
-                'required_ppe': ['haircap', 'gloves', 'safety_suit', 'face_mask']
+                'required_ppe': get_default_mandatory_ppe_ids('food') or ['hairnet', 'face_mask', 'apron'],
             },
             'warehouse': {
                 'has_helmet': 'helmet' not in missing_ppe,
-                'has_vest': 'safety_vest' not in missing_ppe,
-                'has_shoes': 'safety_shoes' not in missing_ppe,
-                'required_ppe': ['helmet', 'safety_vest', 'safety_shoes']
+                # TS: vest, shoes — SH17 genelde safety_vest / shoes
+                'has_vest': ('vest' not in missing_ppe and 'safety_vest' not in missing_ppe),
+                'has_shoes': ('shoes' not in missing_ppe and 'safety_shoes' not in missing_ppe),
+                'required_ppe': get_default_mandatory_ppe_ids('warehouse') or ['vest', 'shoes'],
             }
         }
         

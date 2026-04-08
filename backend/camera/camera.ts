@@ -113,7 +113,10 @@ export const list = api(
         FROM dvr_channels dc
         JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
         WHERE dc.company_id = $1
-        ORDER BY created_at DESC
+        ORDER BY
+          channel_number ASC NULLS FIRST,
+          camera_name ASC,
+          created_at ASC
         `,
         [company_id],
       );

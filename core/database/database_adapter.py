@@ -60,6 +60,61 @@ class DatabaseConfig:
     database_type: str  # 'sqlite' or 'postgresql'
     connection_params: Dict[str, Any]
 
+
+def _normalize_company_ppe_requirements_list(
+    items: Any, sector: Optional[str] = None
+) -> Optional[List[str]]:
+    """DB/UI listesini `backend/company/sector_config.ts` id'leriyle hizalar.
+
+    - mandatory:false olanlar çıkarılır.
+    - ID'ler TS'deki gibi kalır (hairnet, apron, face_mask, …); model sınıf adlarına
+      çevirme detection katmanında yapılır (bkz. sector_ppe_config.map_sh17_…).
+    - Sektör biliniyorsa, yalnızca o sektör şablonunda tanımlı id'ler tutulur;
+      hiçbiri eşleşmezse (eski/özel veri) liste olduğu gibi bırakılır.
+    """
+    if items is None:
+        return None
+    if not isinstance(items, list):
+        return None
+    if len(items) == 0:
+        return []
+
+    # Lazy import: database_adapter çok erken yüklenebilir
+    from sector.sector_ppe_config import get_all_ppe_ids_for_sector, resolve_sector_config_key
+
+    out: List[str] = []
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, dict):
+            pid = item.get("id") or item.get("ppe_type") or item.get("type")
+            if pid is None:
+                continue
+            if item.get("mandatory") is False:
+                continue
+            out.append(str(pid).strip().lower())
+        else:
+            s = str(item).strip().lower()
+            if s:
+                out.append(s)
+
+    seen = set()
+    result: List[str] = []
+    for pid in out:
+        if pid not in seen:
+            seen.add(pid)
+            result.append(pid)
+
+    if sector:
+        sk = resolve_sector_config_key(sector)
+        allowed = get_all_ppe_ids_for_sector(sk)
+        if allowed:
+            filtered = [x for x in result if x in allowed]
+            if filtered:
+                return filtered
+    return result
+
+
 class DatabaseAdapter:
     """Universal database adapter for SQLite and PostgreSQL"""
     
@@ -3196,6 +3251,60 @@ class DatabaseAdapter:
             logger.error(traceback.format_exc())
             return []
 
+    def get_company_detection_config(self, company_id: str) -> Dict[str, Any]:
+        """Single source of truth for sector + required_ppe.
+
+        - Sector comes from `companies.sector`
+        - required_ppe comes from `companies.ppe_requirements` (if configured),
+          otherwise caller may fallback to sector defaults.
+
+        UI format: [{"id":"hairnet","mandatory":true}, ...] — sadece mandatory:true olanlar;
+        `mandatory:false` (ör. eldiven) pose-aware zorunlu listesine alınmaz.
+        """
+        try:
+            query = "SELECT sector, ppe_requirements FROM companies WHERE company_id = ?"
+            row = self.execute_query(query, (company_id,), fetch_one=True)
+            if not row or not isinstance(row, dict):
+                return {}
+
+            sector = (row.get("sector") or "").strip()
+            raw_ppe = row.get("ppe_requirements")
+
+            required_ppe = None
+            if raw_ppe is not None:
+                # sqlite may store JSON as TEXT; postgres as JSON already
+                if isinstance(raw_ppe, str):
+                    s = raw_ppe.strip()
+                    if s in ("", "null", "{}"):
+                        raw_ppe = None
+                    else:
+                        try:
+                            raw_ppe = json.loads(raw_ppe)
+                        except Exception:
+                            raw_ppe = None
+
+            inner_list = None
+            if isinstance(raw_ppe, dict):
+                inner_list = (
+                    raw_ppe.get("required_ppe")
+                    or raw_ppe.get("mandatory_ppe")
+                    or raw_ppe.get("mandatory")
+                )
+            elif isinstance(raw_ppe, list):
+                inner_list = raw_ppe
+
+            if inner_list is not None:
+                required_ppe = _normalize_company_ppe_requirements_list(
+                    inner_list, sector=sector or None
+                )
+
+            return {
+                "sector": sector or None,
+                "required_ppe": required_ppe,
+            }
+        except Exception:
+            return {}
+
 
 class CameraDiscoveryManager:
     """Keşfedilen kameraları veritabanı ile senkronize etmek için manager"""
@@ -3603,105 +3712,6 @@ class CameraDiscoveryManager:
             print(f"❌ Database adapter - get_company_info hatası: {e}")
             self.logger.error(f"❌ Failed to get company info: {e}")
             return None
-
-    def get_company_detection_config(self, company_id: str) -> Dict[str, Any]:
-        """Single source of truth for sector + required_ppe.
-        
-        - Sector comes from `companies.sector`
-        - required_ppe comes from `companies.ppe_requirements` (if configured),
-          otherwise caller may fallback to sector defaults.
-        
-        UI format: [{"id":"hairnet","mandatory":true}, ...] — sadece mandatory:true olanlar;
-        `mandatory:false` (ör. eldiven) pose-aware zorunlu listesine alınmaz.
-        """
-        try:
-            query = "SELECT sector, ppe_requirements FROM companies WHERE company_id = ?"
-            row = self.execute_query(query, (company_id,), fetch_one=True)
-            if not row or not isinstance(row, dict):
-                return {}
-
-            sector = (row.get("sector") or "").strip()
-            raw_ppe = row.get("ppe_requirements")
-
-            required_ppe = None
-            if raw_ppe is not None:
-                # sqlite may store JSON as TEXT; postgres as JSON already
-                if isinstance(raw_ppe, str):
-                    s = raw_ppe.strip()
-                    if s in ("", "null", "{}"):
-                        raw_ppe = None
-                    else:
-                        try:
-                            raw_ppe = json.loads(raw_ppe)
-                        except Exception:
-                            raw_ppe = None
-
-            inner_list = None
-            if isinstance(raw_ppe, dict):
-                inner_list = (
-                    raw_ppe.get("required_ppe")
-                    or raw_ppe.get("mandatory_ppe")
-                    or raw_ppe.get("mandatory")
-                )
-            elif isinstance(raw_ppe, list):
-                inner_list = raw_ppe
-
-            if inner_list is not None:
-                required_ppe = _normalize_company_ppe_requirements_list(inner_list)
-
-            return {
-                "sector": sector or None,
-                "required_ppe": required_ppe,
-            }
-        except Exception:
-            return {}
-
-
-def _normalize_company_ppe_requirements_list(items: Any) -> Optional[List[str]]:
-    """DB/UI listesini pose-aware kanonik id dizisine çevirir.
-
-    - [{"id":"gloves","mandatory":false}] → eldiven listede olmaz
-    - ["helmet","vest"] → string listesi olduğu gibi (mandatory varsayılan true)
-    """
-    if items is None:
-        return None
-    if not isinstance(items, list):
-        return None
-    if len(items) == 0:
-        return []
-
-    # UI: [{"id":"hairnet","mandatory":true}, ...]
-    PPE_ID_ALIASES = {
-        "hairnet": "haircap",
-        "hair_net": "haircap",
-        "apron": "safety_suit",
-        "hijyen_onlugu": "safety_suit",
-    }
-
-    out: List[str] = []
-    for item in items:
-        if item is None:
-            continue
-        if isinstance(item, dict):
-            pid = item.get("id") or item.get("ppe_type") or item.get("type")
-            if pid is None:
-                continue
-            if item.get("mandatory") is False:
-                continue
-            out.append(str(pid).strip().lower())
-        else:
-            s = str(item).strip().lower()
-            if s:
-                out.append(s)
-
-    seen = set()
-    result: List[str] = []
-    for pid in out:
-        canon = PPE_ID_ALIASES.get(pid, pid)
-        if canon not in seen:
-            seen.add(canon)
-            result.append(canon)
-    return result
 
 
 # ── Process-wide singletons (one PG pool per process, thread-safe) ─────────

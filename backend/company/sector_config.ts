@@ -1,3 +1,7 @@
+/**
+ * Sektör şablonları — Python worker ile aynı id listesi: `core/sector/sector_ppe_config.py`.
+ * PPE `id` değişince orayı da güncelleyin.
+ */
 export interface PPERequirement {
     id: string;
     name: string;

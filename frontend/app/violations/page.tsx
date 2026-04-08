@@ -26,6 +26,7 @@ export default function ViolationsPage() {
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   // Calendar states
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -56,6 +57,38 @@ export default function ViolationsPage() {
 
     fetchEvents();
   }, []);
+
+  const deleteAllViolations = async () => {
+    const companyId = getCompanyId();
+    if (!companyId) return;
+    const n = events.length;
+    const ok = window.confirm(
+      n > 0
+        ? `Bu şirkete ait ${n} ihlal kaydı kalıcı olarak silinecek. Devam edilsin mi?`
+        : "Kayıtlı ihlal yok; yine de veritabanındaki tüm ihlal olayları silinsin mi?",
+    );
+    if (!ok) return;
+    setDeletingAll(true);
+    try {
+      const response = await fetch(
+        `http://localhost:4000/company/${companyId}/violation-events/delete-all`,
+        { method: "POST" },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (result.success) {
+        setEvents([]);
+        setSelectedEvent(null);
+        setIsModalOpen(false);
+      } else {
+        window.alert("İhlaller silinemedi. Lütfen tekrar deneyin.");
+      }
+    } catch (e) {
+      console.error(e);
+      window.alert("Bağlantı hatası.");
+    } finally {
+      setDeletingAll(false);
+    }
+  };
 
   const filteredEvents = events.filter((e) => {
     // Priority 1: Date Filter
@@ -281,7 +314,18 @@ export default function ViolationsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={deleteAllViolations}
+            disabled={deletingAll}
+            className="bg-white text-red-600 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-colors flex items-center gap-2 border border-red-200 disabled:opacity-50 disabled:pointer-events-none"
+          >
+            <span className="material-symbols-rounded text-sm">
+              {deletingAll ? "hourglass_empty" : "delete_sweep"}
+            </span>
+            {deletingAll ? "SİLİNİYOR…" : "TÜM İHLALLERİ SİL"}
+          </button>
           {selectedDate && (
             <button
               onClick={() => setSelectedDate(null)}
