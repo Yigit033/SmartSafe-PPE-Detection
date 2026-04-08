@@ -92,13 +92,10 @@ class DatabaseAdapter:
                         
                         from psycopg2 import pool
                         try:
-                            # Safe defaults for Docker/local and small Render instances.
-                            # Override via env when you really need more.
-                            minconn = max(1, int(os.getenv("DB_POOL_MINCONN", "1")))
-                            # Default headroom for concurrent DVR workers without hitting Postgres max_connections.
-                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "20")))
+                            minconn = max(1, int(os.getenv("DB_POOL_MINCONN", "5")))
+                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "100")))
                         except ValueError:
-                            minconn, maxconn = 1, 20
+                            minconn, maxconn = 5, 100
                         # Thread-safe connection pool (single process → one adapter via get_db_adapter())
                         self.connection_pool = pool.ThreadedConnectionPool(
                             minconn=minconn,
@@ -161,8 +158,6 @@ class DatabaseAdapter:
         conn = None
         try:
             conn = self.get_connection(timeout=5)
-            if conn is None:
-                return False
             cursor = conn.cursor()
             if self.db_type == 'sqlite':
                 cursor.execute('SELECT 1')
@@ -189,20 +184,17 @@ class DatabaseAdapter:
             if self.db_type == 'sqlite':
                 conn.close()
             elif self.connection_pool:
-                # Only return connections that actually came from this pool.
-                # Otherwise, close them to avoid poisoning/leaking the pool.
-                from_pool = bool(getattr(conn, "_smartsafe_from_pool", False))
-                if from_pool:
-                    try:
-                        self.connection_pool.putconn(conn)
-                        logger.debug("✅ Connection returned to pool")
-                        return
-                    except Exception:
-                        pass
+                # Havuzdan gelip gelmediğini kontrol et
                 try:
-                    conn.close()
+                    # ThreadedConnectionPool için putconn
+                    self.connection_pool.putconn(conn)
+                    logger.debug("✅ Connection returned to pool")
                 except Exception:
-                    pass
+                    # Havuz dışı (direct) bir bağlantıysa veya hata varsa kapat
+                    try:
+                        conn.close()
+                    except:
+                        pass
             else:
                 try:
                     conn.close()
@@ -226,24 +218,12 @@ class DatabaseAdapter:
             else:  # PostgreSQL
                 # Try to use connection pool first
                 if self.connection_pool:
-                    start = time.time()
-                    last_err: Exception | None = None
-                    while (time.time() - start) < max(0.1, float(timeout or 0)):
-                        try:
-                            conn = self.connection_pool.getconn()
-                            try:
-                                setattr(conn, "_smartsafe_from_pool", True)
-                            except Exception:
-                                pass
-                            logger.debug("✅ Got connection from pool")
-                            return conn
-                        except Exception as pool_error:
-                            last_err = pool_error
-                            # Pool is exhausted or transiently unavailable; wait briefly and retry.
-                            time.sleep(0.05)
-
-                    logger.warning(f"⚠️ Connection pool exhausted (waited {timeout}s): {last_err}")
-                    return None
+                    try:
+                        conn = self.connection_pool.getconn()
+                        logger.debug("✅ Got connection from pool")
+                        return conn
+                    except Exception as pool_error:
+                        logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
                 
                 # Fallback to direct connection via secure connector
                 try:
