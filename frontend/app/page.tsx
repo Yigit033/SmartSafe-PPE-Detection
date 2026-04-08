@@ -10,26 +10,27 @@ import {
 
 function ViolationThumb({ url }: { url: string | null }) {
   const [failed, setFailed] = useState(false);
-  /** İhlal kareleri genelde tam boy insan — 3:4 dikey önizleme */
+  // Sabit yatay dikdörtgen çerçeve - Koyu zemin üzerinde dikey görseli korumak için object-contain
   const frame =
-    "relative w-16 shrink-0 overflow-hidden rounded-xl border border-slate-200 aspect-[3/4]";
+    "relative w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200 aspect-[4/3] bg-[#0c1221]";
+  
   if (!url || failed) {
     return (
       <div
-        className={`flex items-center justify-center bg-slate-100 ${frame}`}
+        className={`flex items-center justify-center ${frame}`}
       >
-        <span className="material-symbols-rounded text-2xl text-slate-300">
+        <span className="material-symbols-rounded text-2xl text-slate-500">
           image_not_supported
         </span>
       </div>
     );
   }
   return (
-    <div className={`bg-slate-900 ${frame}`}>
+    <div className={frame}>
       <img
         src={url}
         alt=""
-        className="h-full w-full object-cover object-center"
+        className="h-full w-full object-contain p-1"
         loading="lazy"
         onError={() => setFailed(true)}
       />
