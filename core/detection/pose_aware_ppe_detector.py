@@ -179,7 +179,8 @@ class PoseAwarePPEDetector:
         # Uses track_id (ByteTrack) when available; falls back to a stable per-frame index id.
         # Applied to person bboxes and to derived anatomical-region bboxes (NO-*).
         # NOTE: keep this fairly responsive; too high => boxes "lag behind" people.
-        self.bbox_smoothing_factor = 0.55  # 55% previous, 45% current
+        # More responsive: less lag, slightly more jitter.
+        self.bbox_smoothing_factor = 0.45  # 45% previous, 55% current
         self._bbox_ema: Dict[Tuple[str, int], Tuple[List[float], float]] = {}  # (kind, id) -> (bbox, last_ts)
         self._bbox_ema_ttl_s: float = 8.0  # prune stale tracks to bound memory
 
@@ -261,7 +262,8 @@ class PoseAwarePPEDetector:
         # If the current box jumps far (identity swap / occlusion / re-id),
         # do NOT "drag" the previous EMA; reset immediately to stay aligned.
         try:
-            if self._bbox_iou(prev_bbox, cur) < 0.10:
+            # More aggressive reset reduces "dragging/ghosting" on fast motion.
+            if self._bbox_iou(prev_bbox, cur) < 0.15:
                 self._bbox_ema[key] = (cur, now)
                 return cur
         except Exception:
@@ -1434,6 +1436,8 @@ class PoseAwarePPEDetector:
                             'confidence': float(item.get('confidence', 0.9)),
                             'missing': False,
                             'pose_based': True,
+                        # Allow downstream stream handlers to associate boxes with the tracked person.
+                        'track_id': tid,
                         }
                     )
                 else:
@@ -1477,6 +1481,7 @@ class PoseAwarePPEDetector:
                                 'confidence': 0.9,
                                 'missing': True,
                                 'pose_based': True,
+                                'track_id': tid,
                             }
                         )
             

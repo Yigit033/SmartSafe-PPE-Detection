@@ -49,6 +49,8 @@ class DVRStreamHandler:
         self._lock = threading.Lock()
         self.active_streams: Dict[str, Dict] = {}
         self.frame_buffers: Dict[str, list] = {}
+        # Async detection workers (per stream) so RTSP capture never blocks on inference.
+        self._det_workers: Dict[str, Dict] = {}  # stream_id -> {thread, stop_evt}
         self.max_buffer_size = 5  # Reduced from 10 to 5 for smoother playback
         self.connection_timeout = 3000  # Reduced from 5000 to 3000 ms for faster connection
         self.read_timeout = 2000  # Reduced from 3000 to 2000 ms for faster frame reading
@@ -186,6 +188,323 @@ class DVRStreamHandler:
                 '/video/camera{channel}'
             ]
         }
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Fast tracking for overlay smoothness
+    # ─────────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _make_tracker():
+        """Create a fast OpenCV tracker if available (MOSSE/KCF/CSRT)."""
+        try:
+            if hasattr(cv2, "legacy") and hasattr(cv2.legacy, "TrackerMOSSE_create"):
+                return cv2.legacy.TrackerMOSSE_create()
+        except Exception:
+            pass
+        try:
+            if hasattr(cv2, "TrackerMOSSE_create"):
+                return cv2.TrackerMOSSE_create()
+        except Exception:
+            pass
+        try:
+            if hasattr(cv2, "legacy") and hasattr(cv2.legacy, "TrackerKCF_create"):
+                return cv2.legacy.TrackerKCF_create()
+        except Exception:
+            pass
+        try:
+            if hasattr(cv2, "TrackerKCF_create"):
+                return cv2.TrackerKCF_create()
+        except Exception:
+            pass
+        try:
+            if hasattr(cv2, "legacy") and hasattr(cv2.legacy, "TrackerCSRT_create"):
+                return cv2.legacy.TrackerCSRT_create()
+        except Exception:
+            pass
+        try:
+            if hasattr(cv2, "TrackerCSRT_create"):
+                return cv2.TrackerCSRT_create()
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _xyxy_to_xywh(b):
+        x1, y1, x2, y2 = [float(v) for v in b]
+        return (max(0.0, x1), max(0.0, y1), max(1.0, x2 - x1), max(1.0, y2 - y1))
+
+    @staticmethod
+    def _xywh_to_xyxy(t):
+        x, y, w, h = [float(v) for v in t]
+        return [x, y, x + max(1.0, w), y + max(1.0, h)]
+
+    def _init_person_trackers(self, stream_id: str, frame, det: Dict):
+        """Initialize/update per-person trackers from a fresh detection result."""
+        if not isinstance(det, dict):
+            return
+        dets = det.get("detections", [])
+        if not isinstance(dets, list) or frame is None:
+            return
+
+        persons = [d for d in dets if isinstance(d, dict) and str(d.get("class_name", "")).lower() == "person" and d.get("bbox")]
+        if not persons:
+            return
+
+        trackers = []
+        meta = []
+        for idx, p in enumerate(persons[:12]):  # cap to avoid CPU blowups
+            bb = p.get("bbox")
+            if not bb or len(bb) != 4:
+                continue
+            tr = self._make_tracker()
+            if tr is None:
+                break
+            try:
+                ok = tr.init(frame, self._xyxy_to_xywh(bb))
+                if not ok:
+                    continue
+                trackers.append(tr)
+                meta.append({"idx": idx, "confidence": p.get("confidence", 0.0)})
+            except Exception:
+                continue
+
+        if trackers:
+            with self._lock:
+                if stream_id in self.active_streams:
+                    self.active_streams[stream_id]["_person_trackers"] = {"trackers": trackers, "meta": meta, "ts": time.time()}
+
+    def _update_tracked_persons(self, stream_id: str, frame, det: Dict) -> Optional[Dict]:
+        """Update person bboxes using trackers for smooth overlay; returns a shallow-copied det dict."""
+        if frame is None or not isinstance(det, dict):
+            return None
+        with self._lock:
+            st = self.active_streams.get(stream_id) or {}
+            tr_state = st.get("_person_trackers")
+        if not tr_state:
+            return None
+        trackers = tr_state.get("trackers") or []
+        if not trackers:
+            return None
+
+        updated_persons = []
+        for tr in trackers:
+            try:
+                ok, xywh = tr.update(frame)
+                if not ok:
+                    updated_persons.append(None)
+                    continue
+                updated_persons.append(self._xywh_to_xyxy(xywh))
+            except Exception:
+                updated_persons.append(None)
+
+        # Copy detection_result and replace person bboxes in-order.
+        out = dict(det)
+        dets = det.get("detections", [])
+        if not isinstance(dets, list):
+            return None
+        new_dets = []
+        p_i = 0
+        for d in dets:
+            if isinstance(d, dict) and str(d.get("class_name", "")).lower() == "person" and d.get("bbox"):
+                nb = updated_persons[p_i] if p_i < len(updated_persons) else None
+                p_i += 1
+                if nb:
+                    d2 = dict(d)
+                    d2["bbox"] = nb
+                    d2["tracked"] = True
+                    new_dets.append(d2)
+                    continue
+            new_dets.append(d)
+        out["detections"] = new_dets
+        out["tracked_ts"] = time.time()
+        return out
+
+    @staticmethod
+    def _propagate_boxes_with_person(
+        det: Dict,
+        *,
+        old_person_by_tid: Dict[int, list],
+        new_person_by_tid: Dict[int, list],
+    ) -> Dict:
+        """
+        Keep PPE/NO-* boxes visually aligned when inference FPS is low.
+        We remap non-person bboxes that carry the same track_id using relative coordinates
+        inside the person's bbox (from last inference) to the new tracked person bbox.
+        """
+        try:
+            if not isinstance(det, dict):
+                return det
+            dets = det.get("detections")
+            if not isinstance(dets, list) or not dets:
+                return det
+
+            mapped = []
+            for d in dets:
+                if not isinstance(d, dict):
+                    mapped.append(d)
+                    continue
+                tid = d.get("track_id")
+                bb = d.get("bbox")
+                if tid is None or not bb or len(bb) != 4:
+                    mapped.append(d)
+                    continue
+                try:
+                    tid_i = int(tid)
+                except Exception:
+                    mapped.append(d)
+                    continue
+
+                # Person box itself is already tracked.
+                if str(d.get("class_name", "")).lower() == "person":
+                    mapped.append(d)
+                    continue
+
+                oldp = old_person_by_tid.get(tid_i)
+                newp = new_person_by_tid.get(tid_i)
+                if not oldp or not newp or len(oldp) != 4 or len(newp) != 4:
+                    mapped.append(d)
+                    continue
+
+                opx1, opy1, opx2, opy2 = [float(v) for v in oldp]
+                npx1, npy1, npx2, npy2 = [float(v) for v in newp]
+                opw = max(1.0, opx2 - opx1)
+                oph = max(1.0, opy2 - opy1)
+                npw = max(1.0, npx2 - npx1)
+                nph = max(1.0, npy2 - npy1)
+
+                x1, y1, x2, y2 = [float(v) for v in bb]
+                rx1 = (x1 - opx1) / opw
+                ry1 = (y1 - opy1) / oph
+                rx2 = (x2 - opx1) / opw
+                ry2 = (y2 - opy1) / oph
+
+                nb = [
+                    npx1 + rx1 * npw,
+                    npy1 + ry1 * nph,
+                    npx1 + rx2 * npw,
+                    npy1 + ry2 * nph,
+                ]
+                d2 = dict(d)
+                d2["bbox"] = nb
+                mapped.append(d2)
+
+            out = dict(det)
+            out["detections"] = mapped
+            return out
+        except Exception:
+            return det
+
+    def _ensure_det_worker(self, stream_id: str):
+        """Ensure an async detection worker exists for stream_id."""
+        try:
+            with self._lock:
+                existing = self._det_workers.get(stream_id)
+                if existing and existing.get("thread") and existing["thread"].is_alive():
+                    return
+                stop_evt = threading.Event()
+                t = threading.Thread(
+                    target=self._det_worker_loop,
+                    args=(stream_id, stop_evt),
+                    daemon=True,
+                )
+                self._det_workers[stream_id] = {"thread": t, "stop_evt": stop_evt}
+                t.start()
+        except Exception as e:
+            logger.debug(f"ℹ️ detection worker start failed for {stream_id}: {e}")
+
+    def _stop_det_worker(self, stream_id: str):
+        """Stop async detection worker for a stream if running."""
+        try:
+            with self._lock:
+                w = self._det_workers.get(stream_id)
+                if not w:
+                    return
+                evt = w.get("stop_evt")
+                if evt:
+                    evt.set()
+        except Exception:
+            pass
+
+    def _det_worker_loop(self, stream_id: str, stop_evt: threading.Event):
+        """
+        Runs PPE detection asynchronously, reading the latest frame stored by the stream worker.
+        This prevents multi-second inference from freezing video capture/buffers.
+        """
+        last_run = 0.0
+        # Run at most once per N seconds per stream (tunable via env).
+        try:
+            min_interval_s = float(os.getenv("DVR_PPE_MIN_INTERVAL_S", "0.8"))
+        except Exception:
+            min_interval_s = 0.8
+
+        while not stop_evt.is_set():
+            try:
+                with self._lock:
+                    st = self.active_streams.get(stream_id) or {}
+                    if st.get("status") != "active":
+                        break
+                    if not st.get("ppe_detection_active", False):
+                        time.sleep(0.2)
+                        continue
+                    frame = st.get("_latest_frame_for_det")
+                    frame_ts = st.get("_latest_frame_ts", None)
+                    sector = st.get("sector")
+                    det_scale = st.get("_latest_frame_det_scale", 1.0)
+
+                now = time.time()
+                if (now - last_run) < min_interval_s:
+                    time.sleep(0.05)
+                    continue
+                if frame is None:
+                    time.sleep(0.05)
+                    continue
+
+                # Run detection (expensive) outside the lock.
+                det = self._perform_ppe_detection(frame, stream_id, sector=sector)
+                # If we ran detection on a downscaled frame, map bboxes back to the streaming frame coords.
+                try:
+                    s = float(det_scale) if det_scale else 1.0
+                    if s and s < 1.0 and isinstance(det, dict) and isinstance(det.get("detections"), list):
+                        inv = 1.0 / s
+                        mapped = []
+                        for d in det.get("detections", []):
+                            if not isinstance(d, dict):
+                                continue
+                            bb = d.get("bbox")
+                            if bb and len(bb) == 4:
+                                d2 = dict(d)
+                                d2["bbox"] = [float(bb[0]) * inv, float(bb[1]) * inv, float(bb[2]) * inv, float(bb[3]) * inv]
+                                mapped.append(d2)
+                            else:
+                                mapped.append(d)
+                        det["detections"] = mapped
+                except Exception:
+                    pass
+                if isinstance(det, dict):
+                    # Stamp with source frame timestamp so renderers can reason about staleness.
+                    if frame_ts is not None:
+                        det.setdefault("frame_ts", frame_ts)
+                    det.setdefault("computed_ts", time.time())
+
+                with self._lock:
+                    if stream_id in self.active_streams:
+                        self.active_streams[stream_id]["detection_result"] = det
+                # Initialize trackers from this fresh detection so overlay can move smoothly between detections.
+                try:
+                    if isinstance(det, dict):
+                        self._init_person_trackers(stream_id, frame, det)
+                except Exception:
+                    pass
+                last_run = now
+            except Exception as e:
+                logger.debug(f"ℹ️ detection worker loop error for {stream_id}: {e}")
+                time.sleep(0.2)
+
+        # Cleanup
+        try:
+            with self._lock:
+                self._det_workers.pop(stream_id, None)
+        except Exception:
+            pass
 
     def _ttl_get(self, d: Dict[str, Tuple[str, float]], key: str) -> Optional[str]:
         v = d.get(key)
@@ -881,6 +1200,10 @@ class DVRStreamHandler:
             with self._lock:
                 if stream_id in self.active_streams:
                     self.active_streams[stream_id]['ppe_detection_active'] = False
+                    try:
+                        self._stop_det_worker(stream_id)
+                    except Exception:
+                        pass
                     self._transition(stream_id, "stopping", reason="stop_requested", error_code=None)
                     logger.info(f"🛑 Stream stopping: {stream_id}")
                     return True
@@ -927,6 +1250,13 @@ class DVRStreamHandler:
                     return False
                 self.active_streams[stream_id]['ppe_detection_active'] = bool(active)
                 if not active:
+                    # Stop async worker and clear last-frame cache.
+                    try:
+                        self._stop_det_worker(stream_id)
+                    except Exception:
+                        pass
+                    self.active_streams[stream_id].pop("_latest_frame_for_det", None)
+                    self.active_streams[stream_id].pop("_latest_frame_ts", None)
                     self.active_streams[stream_id]['detection_result'] = {
                         'detections': [],
                         'people_detected': 0,
@@ -934,6 +1264,12 @@ class DVRStreamHandler:
                         'ppe_violations': [],
                         'timestamp': time.time(),
                     }
+                else:
+                    # Start async detection worker (non-blocking).
+                    try:
+                        self._ensure_det_worker(stream_id)
+                    except Exception:
+                        pass
                 return True
         except Exception as e:
             logger.warning(f"⚠️ set_ppe_detection_active failed: {e}")
@@ -1049,6 +1385,56 @@ class DVRStreamHandler:
                 stream_info = self.active_streams[stream_id]
                 # Detection result'ı stream_info'dan al
                 detection_result = stream_info.get('detection_result', {})
+                # If we have trackers, update PERSON boxes to follow motion smoothly.
+                try:
+                    frame = stream_info.get("_latest_frame_for_det")
+                    old_person_by_tid = {}
+                    try:
+                        dets0 = detection_result.get("detections", []) if isinstance(detection_result, dict) else []
+                        for d in dets0:
+                            if not isinstance(d, dict):
+                                continue
+                            if str(d.get("class_name", "")).lower() != "person":
+                                continue
+                            tid = d.get("track_id")
+                            bb = d.get("bbox")
+                            if tid is None or not bb or len(bb) != 4:
+                                continue
+                            try:
+                                old_person_by_tid[int(tid)] = list(bb)
+                            except Exception:
+                                continue
+                    except Exception:
+                        old_person_by_tid = {}
+
+                    tracked = self._update_tracked_persons(stream_id, frame, detection_result)
+                    if tracked:
+                        new_person_by_tid = {}
+                        try:
+                            dets1 = tracked.get("detections", []) if isinstance(tracked, dict) else []
+                            for d in dets1:
+                                if not isinstance(d, dict):
+                                    continue
+                                if str(d.get("class_name", "")).lower() != "person":
+                                    continue
+                                tid = d.get("track_id")
+                                bb = d.get("bbox")
+                                if tid is None or not bb or len(bb) != 4:
+                                    continue
+                                try:
+                                    new_person_by_tid[int(tid)] = list(bb)
+                                except Exception:
+                                    continue
+                        except Exception:
+                            new_person_by_tid = {}
+
+                        detection_result = self._propagate_boxes_with_person(
+                            tracked,
+                            old_person_by_tid=old_person_by_tid,
+                            new_person_by_tid=new_person_by_tid,
+                        )
+                except Exception:
+                    pass
                 
                 if detection_result:
                     return {
@@ -1057,6 +1443,9 @@ class DVRStreamHandler:
                         'compliance_rate': detection_result.get('compliance_rate', 100),
                         'ppe_violations': detection_result.get('ppe_violations', []),
                         'timestamp': detection_result.get('timestamp', ''),
+                        'frame_ts': detection_result.get('frame_ts'),
+                        'computed_ts': detection_result.get('computed_ts'),
+                        'tracked_ts': detection_result.get('tracked_ts'),
                         'camera_id': stream_info.get('camera_id', 'unknown')
                     }
                 
@@ -1331,6 +1720,29 @@ class DVRStreamHandler:
                     
                     # Reset error count on successful frame
                     consecutive_errors = 0
+
+                    # Cache latest frame for async detection (store a small copy to limit memory).
+                    # This is intentionally outside JPEG/base64 path so detector works on raw BGR.
+                    try:
+                        with self._lock:
+                            ppe_on = self.active_streams.get(stream_id, {}).get('ppe_detection_active', False)
+                        if ppe_on:
+                            # Downscale for detection cache if very large (keeps detector fast and stable).
+                            fh, fw = frame.shape[:2]
+                            max_h = 720
+                            if fh > max_h:
+                                scale = max_h / float(fh)
+                                new_w = max(2, int(fw * scale))
+                                det_frame = cv2.resize(frame, (new_w, max_h), interpolation=cv2.INTER_AREA)
+                            else:
+                                det_frame = frame
+                            with self._lock:
+                                if stream_id in self.active_streams:
+                                    self.active_streams[stream_id]["_latest_frame_for_det"] = det_frame
+                                    self.active_streams[stream_id]["_latest_frame_ts"] = time.time()
+                                    self.active_streams[stream_id]["_latest_frame_det_scale"] = (scale if fh > max_h else 1.0)
+                    except Exception:
+                        pass
                     
                     # Convert frame to JPEG
                     try:
@@ -1350,29 +1762,7 @@ class DVRStreamHandler:
                         frame_count += 1
                         self.active_streams[stream_id]['frame_count'] = frame_count
                         
-                        # PPE: only when explicitly enabled (DVR API / preview-bound detection)
-                        with self._lock:
-                            ppe_on = self.active_streams.get(stream_id, {}).get(
-                                'ppe_detection_active', False
-                            )
-                            detection_frequency = self.active_streams[stream_id].get(
-                                'detection_frequency', 15
-                            )
-                        if ppe_on and frame_count % detection_frequency == 0:
-                            try:
-                                detection_result = self._perform_ppe_detection(
-                                    frame, stream_id,
-                                    sector=self.active_streams[stream_id].get('sector')
-                                )
-                                if stream_id in self.active_streams:
-                                    self.active_streams[stream_id]['detection_result'] = detection_result
-                                logger.debug(
-                                    f"🎯 {stream_id}: Detection completed - People: "
-                                    f"{detection_result.get('people_detected', 0)}, "
-                                    f"PPE: {len(detection_result.get('detections', []))}"
-                                )
-                            except Exception as e:
-                                logger.warning(f"⚠️ Detection error for {stream_id}: {e}")
+                        # PPE detection runs asynchronously (see _det_worker_loop) to avoid freezing capture.
                         
                         # Log progress every 120 frames (reduced frequency for performance)
                         if frame_count % 120 == 0:
