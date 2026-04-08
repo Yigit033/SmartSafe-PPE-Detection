@@ -95,6 +95,19 @@ function CamerasContent() {
     fetchGroups();
   }, []);
 
+  // Arka planda kalan sekmede MJPEG kareleri birikir; geri gelince OSD saati geride kalır.
+  // Görünür olunca cache-bust ile bağlantıyı yenileyerek "canlı" kenara zıplat.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setRefreshKey(Date.now());
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   const fetchGroups = async () => {
     const cid = getCompanyId();
     if (!cid) return;

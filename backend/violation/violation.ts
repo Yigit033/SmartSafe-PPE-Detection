@@ -143,6 +143,37 @@ export const getEvents = api(
 );
 
 /**
+ * Şirkete ait tüm ihlal olaylarını (violation_events) siler.
+ * Diskteki snapshot dosyaları silinmez; yalnızca veritabanı kayıtları kaldırılır.
+ * GET ile aynı path'te başka method kullanılamaz (Encore route çakışması).
+ */
+export const deleteAllEvents = api(
+  {
+    expose: true,
+    method: "POST",
+    path: "/company/:company_id/violation-events/delete-all",
+  },
+  async ({
+    company_id,
+  }: {
+    company_id: string;
+  }): Promise<{ success: boolean; deleted: number }> => {
+    try {
+      const res = await pool.query(
+        "DELETE FROM violation_events WHERE company_id = $1",
+        [company_id],
+      );
+      const deleted =
+        typeof res.rowCount === "number" ? res.rowCount : 0;
+      return { success: true, deleted };
+    } catch (error) {
+      console.error("Error deleting all violation events:", error);
+      return { success: false, deleted: 0 };
+    }
+  },
+);
+
+/**
  * Şirketin ihlal raporlarını getirir (Eski sistem uyumluluk için)
  */
 export const getViolations = api(

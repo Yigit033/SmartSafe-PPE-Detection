@@ -1324,8 +1324,13 @@ class DVRStreamHandler:
                         self._pose_detector = get_pose_aware_detector(ppe_detector=self._sh17_manager)
                         logger.info("✅ DVRStreamHandler: PoseAwarePPEDetector singleton oluşturuldu")
 
-                    logger.debug(f"🎯 Pose-aware detection: stream={stream_id}, sector={sector}")
-                    result = self._pose_detector.detect_with_pose(frame, sector, confidence=0.25)
+                    logger.debug(
+                        f"🎯 Pose-aware detection: stream={stream_id}, sector={sector}, "
+                        f"required_ppe={required_ppe!r}"
+                    )
+                    result = self._pose_detector.detect_with_pose(
+                        frame, sector, confidence=0.25, required_ppe=required_ppe
+                    )
                     if isinstance(result, dict):
                         return result
                     if isinstance(result, list):
@@ -1352,7 +1357,7 @@ class DVRStreamHandler:
 
             detections = self._sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
             people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
-            if not required_ppe:
+            if required_ppe is None:
                 required_ppe = self._sh17_manager.get_sector_requirements(sector)
             compliance_analysis = self._sh17_manager.analyze_compliance(detections, required_ppe)
 
@@ -1746,17 +1751,18 @@ class DVRStreamHandler:
                     
                     # Convert frame to JPEG
                     try:
-                        # Frame quality'yi düşür ve boyutu optimize et
-                        _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                        # Optimized frame quality and size
+                        _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
                         jpeg_base64 = base64.b64encode(jpeg_data).decode('utf-8')
                         
-                        # Add to buffer - Optimized buffer management
+                        # Add to buffer - Consolidated and synchronized buffer management
                         if stream_id in self.frame_buffers:
                             buffer = self.frame_buffers[stream_id]
                             buffer.append(jpeg_base64)
                             
-                            # Keep only latest frames - Smaller buffer for smoother playback
-                            if len(buffer) > 5:  # Reduced from max_buffer_size to 5
+                            # Keep only latest frames - Tight buffer (3 frames) for ultra-low latency
+                            # Excess frames trigger jumping back and forth (flickering).
+                            while len(buffer) > 3:
                                 buffer.pop(0)
                         
                         frame_count += 1
@@ -1764,24 +1770,9 @@ class DVRStreamHandler:
                         
                         # PPE detection runs asynchronously (see _det_worker_loop) to avoid freezing capture.
                         
-                        # Log progress every 120 frames (reduced frequency for performance)
+                        # Log progress every 120 frames
                         if frame_count % 120 == 0:
-                            logger.info(f"📊 {stream_id}: {frame_count} frames captured")
-                        
-                        # 🚀 FRAME SKIP OPTIMIZATION - Her 3 frame'de bir işle (smooth playback)
-                        if frame_count % 3 == 0:
-                            # Frame quality'yi düşür ve boyutu optimize et
-                            _, jpeg_data = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-                            jpeg_base64 = base64.b64encode(jpeg_data).decode('utf-8')
-                            
-                            # Add to buffer - Optimized buffer management
-                            if stream_id in self.frame_buffers:
-                                buffer = self.frame_buffers[stream_id]
-                                buffer.append(jpeg_base64)
-                                
-                                # Keep only latest frames - Smaller buffer for smoother playback
-                                if len(buffer) > 3:  # Reduced buffer size for faster switching
-                                    buffer.pop(0)
+                            logger.debug(f"📊 {stream_id}: {frame_count} frames captured")
                         
                     except Exception as e:
                         logger.error(f"❌ Frame processing error for {stream_id}: {e}")

@@ -329,21 +329,18 @@ class SH17ModelManager:
                 model.to(self.device)
                 self._food_ppe_model = model
                 actual_names = getattr(model, 'names', {})
-                logger.info(f"✅ Food PPE local model yüklendi: {local_path}")
-                logger.info(f"   Sınıflar (model.names): {actual_names}")
-                # Haircap sınıfının model.names'de mevcut olup olmadığını kontrol et
+                # Normal gıda modeli: çoğu checkpoint'te ayrı "haircap" yok; head + rescue ile çalışır — konsolu kirletme
+                logger.debug(f"✅ Food PPE local model yüklendi: {local_path}")
+                logger.debug(f"   Sınıflar (model.names): {actual_names}")
                 haircap_in_model = [f"{k}:{v}" for k, v in actual_names.items()
                                     if v in self._FOOD_PPE_NAME_MAP and
                                     self._FOOD_PPE_NAME_MAP[v] == 'haircap']
                 if haircap_in_model:
-                    logger.info(f"   ✅ Haircap sınıf(lar)ı model'de mevcut: {haircap_in_model}")
+                    logger.debug(f"   Haircap sınıf(lar)ı model'de: {haircap_in_model}")
                 else:
-                    # Haircap sınıfı bulunamadı — olası isim uyuşmazlığı
-                    logger.warning(
-                        f"   ⚠️ Haircap sınıfı model.names'de bulunamadı! "
-                        f"Bilinen varyantlar (_FOOD_PPE_NAME_MAP) ile eşleşen yok. "
-                        f"Model sınıfları: {actual_names}. "
-                        f"Rescue pass dışlama stratejisi devreye girecek."
+                    logger.debug(
+                        "   Food model: haircap sınıfı yok (beklenen); head/rescue stratejisi kullanılacak. "
+                        f"names={actual_names}"
                     )
                 return model
             except Exception as e:

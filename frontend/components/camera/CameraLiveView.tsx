@@ -52,6 +52,17 @@ export default function CameraLiveView({
     }
   }, [camera?.camera_id, enabledAiCameras, startStream]);
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && camera?.camera_id) {
+        startStream(camera.camera_id);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+  }, [camera?.camera_id, startStream]);
+
   const fetchStreamDiagnostics = async (cameraId: string) => {
     if (!companyId) return null;
     try {
