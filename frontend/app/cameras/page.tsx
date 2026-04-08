@@ -4,7 +4,6 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
-import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
 
 export default function CamerasPage() {
   return (
@@ -43,12 +42,7 @@ function CamerasContent() {
     Record<string, string>
   >({});
 
-  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
-  const [previewCamera, setPreviewCamera] = useState<any>(null);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [streamError, setStreamError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
-  const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
   const [groups, setGroups] = useState<any[]>([]);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>("all");
@@ -167,7 +161,6 @@ function CamerasContent() {
       camera_username: "",
       camera_password: "",
     });
-    setStreamUrl(null);
     setIsModalOpen(true);
   };
 
@@ -201,18 +194,9 @@ function CamerasContent() {
     return enabledAiCameras.includes(item.camera_id);
   };
 
-  const startStream = (id: string) => {
-    setStreamError(null);
-    const camera = cameras.find((c) => c.camera_id === id);
-    const isAi = camera && isCameraAiEnabled(camera);
-    const streamUrl = isAi
-      ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${id}?t=${Date.now()}`
-      : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
-
-    setStreamUrl(streamUrl);
-  };
-
-  const fetchStreamDiagnostics = async (cameraId: string) => {
+  const fetchStreamDiagnostics = async (
+    cameraId: string,
+  ): Promise<string | null> => {
     if (!companyId) return null;
     try {
       const r = await fetch(
@@ -222,19 +206,14 @@ function CamerasContent() {
       const body = await r.json().catch(() => null);
       const st = body && body.status ? body.status : {};
       const state = st.status || "unknown";
-      const code = st.last_error_code || (body?.error?.code as string) || "UNKNOWN";
+      const code =
+        st.last_error_code || (body?.error?.code as string) || "UNKNOWN";
       const reason =
         st.status_reason || (body?.error?.message as string) || "unknown";
       return `State=${state} | Code=${code} | Reason=${reason} | HTTP=${r.status}`;
     } catch {
       return null;
     }
-  };
-
-  const openPreviewModal = (camera: any) => {
-    setPreviewCamera(camera);
-    startStream(camera.camera_id);
-    setIsPreviewModalOpen(true);
   };
 
   const openEditModal = (camera: any) => {
@@ -363,28 +342,6 @@ function CamerasContent() {
     } catch (error: any) {
       console.error("Error deleting group:", error);
       alert("Silme işlemi sırasında ağ hatası oluştu.");
-    }
-  };
-
-  const handleSaveZones = async (zones: any[][]) => {
-    if (!previewCamera) return;
-
-    try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/cameras/${previewCamera.camera_id}/roi`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ zones }),
-        },
-      );
-
-      const data = await response.json();
-      if (data.success) {
-        setIsZoneModalOpen(false);
-      }
-    } catch (error) {
-      console.error("Error saving zones:", error);
     }
   };
 
@@ -711,177 +668,6 @@ function CamerasContent() {
           document.body,
         )}
 
-      {/* Preview Modal */}
-      {isPreviewModalOpen &&
-        mounted &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[150] flex items-center justify-center p-0 md:p-12 animate-fade-in"
-            lang="tr"
-          >
-            <div
-              className="absolute inset-0 bg-slate-950/95 backdrop-blur-2xl"
-              onClick={() => setIsPreviewModalOpen(false)}
-            ></div>
-            <div className="relative w-full h-full max-w-6xl max-h-[90vh] overflow-hidden rounded-none md:rounded-[3rem] border border-white/10 bg-black shadow-2xl flex flex-col">
-              <div className="absolute top-8 left-8 right-8 z-10 flex items-center justify-between pointer-events-none">
-                <div className="flex flex-col gap-1 pointer-events-auto">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-red-500 px-3 py-1 rounded-full text-white flex items-center gap-2 shadow-xl">
-                      <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-                      <span className="text-[10px] font-black uppercase tracking-wider">
-                        CANLI
-                      </span>
-                    </div>
-                    <h3 className="text-2xl font-black text-white italic drop-shadow-lg uppercase tracking-tight">
-                      {previewCamera?.camera_name}
-                    </h3>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 pointer-events-auto">
-                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                    <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
-                      ANALİZ BÖLGESİ
-                    </span>
-                    <button
-                      onClick={() => setIsZoneModalOpen(true)}
-                      className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 text-white hover:bg-white text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer border border-white/10"
-                    >
-                      <span className="material-symbols-rounded text-sm">
-                        polyline
-                      </span>
-                      GÜNCELLE
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                    <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
-                      BAĞLANTI
-                    </span>
-                    <button
-                      onClick={() => startStream(previewCamera.camera_id)}
-                      className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 text-white hover:bg-white text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer border border-white/10"
-                    >
-                      <span className="material-symbols-rounded text-sm">
-                        refresh
-                      </span>
-                      YENİLE
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                    <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">
-                      AI ANALİZ
-                    </span>
-                    <button
-                      onClick={async () => {
-                        const isAi = isCameraAiEnabled(previewCamera);
-                        await toggleCameraAi(previewCamera.camera_id, isAi);
-
-                        // Force refresh the specific stream with the corrected route
-                        const nextAiEnabled = !isAi;
-                        const streamUrl = nextAiEnabled
-                          ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${previewCamera.camera_id}?t=${Date.now()}`
-                          : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${previewCamera.camera_id}/proxy-stream?t=${Date.now()}`;
-
-                        setStreamUrl(streamUrl);
-                      }}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCameraAiEnabled(previewCamera) ? "bg-brand-teal" : "bg-white/20"}`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCameraAiEnabled(previewCamera) ? "translate-x-6" : "translate-x-1"}`}
-                      />
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setIsPreviewModalOpen(false)}
-                    className="p-4 rounded-2xl bg-white/10 text-white hover:bg-red-500 transition-all cursor-pointer"
-                  >
-                    <span className="material-symbols-rounded text-3xl">
-                      close
-                    </span>
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 flex items-center justify-center bg-black relative">
-                {isZoneModalOpen && streamUrl ? (
-                  <div className="absolute inset-0 z-50 p-8 md:p-12">
-                    <ZoneDesigner
-                      imageUrl={streamUrl}
-                      initialZones={previewCamera?.detection_zones || []}
-                      onSave={handleSaveZones}
-                      onClose={() => setIsZoneModalOpen(false)}
-                    />
-                  </div>
-                ) : streamUrl ? (
-                  <div className="relative w-full h-full flex items-center justify-center bg-black">
-                    <img
-                      src={streamUrl}
-                      alt="Canlı Yayın"
-                      className="w-full h-full object-contain"
-                      onError={async () => {
-                        console.error("Stream failed to load:", streamUrl);
-                        const diag = await fetchStreamDiagnostics(
-                          previewCamera?.camera_id,
-                        );
-                        if (diag) setStreamError(diag);
-                        setStreamUrl(null);
-                      }}
-                    />
-
-                    {/* 🎯 Analiz Bölgesi Overlay (Sadece AI kapalıyken gösterelim ki AI çizimleriyle çakışmasın) */}
-                    {previewCamera?.detection_zones &&
-                      previewCamera.detection_zones.length > 0 &&
-                      previewCamera.detection_zones[0].length > 0 &&
-                      !isCameraAiEnabled(previewCamera) && (
-                        <svg
-                          className="absolute inset-0 w-full h-full pointer-events-none z-10 opacity-60"
-                          viewBox="0 0 1 1"
-                          preserveAspectRatio="none"
-                        >
-                          <polygon
-                            points={previewCamera.detection_zones[0]
-                              .map((p: any) => `${p.x},${p.y}`)
-                              .join(" ")}
-                            fill="rgba(20, 184, 166, 0.15)"
-                            stroke="#14b8a6"
-                            strokeWidth="0.01"
-                            strokeDasharray="0.02 0.01"
-                            className="drop-shadow-[0_0_10px_rgba(20,184,166,0.5)]"
-                          />
-                          {previewCamera.detection_zones[0].map(
-                            (p: any, idx: number) => (
-                              <circle
-                                key={idx}
-                                cx={p.x}
-                                cy={p.y}
-                                r="0.005"
-                                fill="#14b8a6"
-                              />
-                            ),
-                          )}
-                        </svg>
-                      )}
-                  </div>
-                ) : (
-                  <div className="text-white/20 text-center">
-                    <span className="material-symbols-rounded text-[120px] animate-pulse">
-                      videocam_off
-                    </span>
-                    <p className="mt-4 font-black tracking-widest uppercase italic">
-                      SİNYAL YOK
-                    </p>
-                    {streamError && (
-                      <p className="mt-3 text-[10px] font-mono text-white/40 max-w-[90%] mx-auto">
-                        {streamError}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
       {/* Header Info */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex flex-col gap-2">
@@ -1094,7 +880,12 @@ function CamerasContent() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => openPreviewModal(camera)}
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/camera/${encodeURIComponent(camera.camera_id)}`,
+                        )
+                      }
                       className="p-2.5 rounded-xl bg-brand-teal text-white shadow-xl cursor-pointer"
                     >
                       <span className="material-symbols-rounded text-lg">
@@ -1167,7 +958,7 @@ function CamerasContent() {
           {totalPages > 1 && (
             <>
               <button
-                onClick={() => { setCurrentPage((p) => Math.max(0, p - 1)); setRefreshKey(Date.now()); }}
+                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                 disabled={currentPage === 0}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
               >
@@ -1179,7 +970,7 @@ function CamerasContent() {
                 {Array.from({ length: totalPages }, (_, i) => (
                   <button
                     key={i}
-                    onClick={() => { setCurrentPage(i); setRefreshKey(Date.now()); }}
+                    onClick={() => setCurrentPage(i)}
                     className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
                       i === currentPage
                         ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/30"
@@ -1192,7 +983,9 @@ function CamerasContent() {
               </div>
 
               <button
-                onClick={() => { setCurrentPage((p) => Math.min(totalPages - 1, p + 1)); setRefreshKey(Date.now()); }}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+                }
                 disabled={currentPage === totalPages - 1}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
               >

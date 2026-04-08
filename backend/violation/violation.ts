@@ -49,6 +49,71 @@ interface ViolationEvent {
   status: string;
 }
 
+/** PR3 şeması: source_type + dvr_channel_id (migration 2+3 uygulanmış DB). */
+const VIOLATION_EVENTS_QUERY_PR3 = `
+  SELECT ve.*, COALESCE(c.camera_name, dc.name) AS camera_name
+  FROM violation_events ve
+  LEFT JOIN cameras c
+    ON c.company_id = ve.company_id
+   AND ve.source_type = 'camera'
+   AND c.camera_id = ve.camera_id
+  LEFT JOIN dvr_channels dc
+    ON dc.company_id = ve.company_id
+   AND ve.source_type = 'dvr_channel'
+   AND dc.channel_id = ve.dvr_channel_id
+  WHERE ve.company_id = $1
+  ORDER BY ve.start_time DESC
+  LIMIT 200`;
+
+/**
+ * Eski şema: source_type / dvr_channel_id yok — kamera adı için cameras veya
+ * camera_id ile dvr_channels eşlemesi (kanal id’si camera_id’de tutulmuş DVR satırları).
+ */
+const VIOLATION_EVENTS_QUERY_LEGACY = `
+  SELECT ve.*, COALESCE(c.camera_name, dc.name) AS camera_name
+  FROM violation_events ve
+  LEFT JOIN cameras c
+    ON c.company_id = ve.company_id AND c.camera_id = ve.camera_id
+  LEFT JOIN dvr_channels dc
+    ON dc.company_id = ve.company_id AND dc.channel_id = ve.camera_id
+  WHERE ve.company_id = $1
+  ORDER BY ve.start_time DESC
+  LIMIT 200`;
+
+function mapViolationEventRows(rows: any[]): ViolationEvent[] {
+  return rows.map((row) => ({
+    ...row,
+    camera_id: String(row.camera_id ?? row.dvr_channel_id ?? ""),
+  }));
+}
+
+/** PR3 kolonları yoksa her istekte hatalı SQL denemek Postgres ERROR log üretir; bir kez kontrol edilir. */
+let violationEventsSchemaMode: "pr3" | "legacy" | null = null;
+
+async function getViolationEventsQuerySql(): Promise<string> {
+  if (violationEventsSchemaMode !== null) {
+    return violationEventsSchemaMode === "pr3"
+      ? VIOLATION_EVENTS_QUERY_PR3
+      : VIOLATION_EVENTS_QUERY_LEGACY;
+  }
+  const probe = await pool.query(
+    `SELECT 1 AS ok
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'violation_events'
+       AND column_name = 'source_type'
+     LIMIT 1`,
+  );
+  const hasPr3 = probe.rows.length > 0;
+  violationEventsSchemaMode = hasPr3 ? "pr3" : "legacy";
+  if (!hasPr3) {
+    console.warn(
+      "violation_events: PR3 columns not present; using legacy SQL until backend/company/migrations/2_violation_events_expand_pr1.up.sql is applied.",
+    );
+  }
+  return hasPr3 ? VIOLATION_EVENTS_QUERY_PR3 : VIOLATION_EVENTS_QUERY_LEGACY;
+}
+
 /**
  * Şirketin ihlal olaylarını (Event-based) getirir.
  * PR3: `source_type` üzerinden ayrı join — OR / SUBSTRING yok. `camera_id` alanı API’de
@@ -66,26 +131,9 @@ export const getEvents = api(
     company_id: string;
   }): Promise<{ success: boolean; events: ViolationEvent[] }> => {
     try {
-      const res = await pool.query(
-        `SELECT ve.*, COALESCE(c.camera_name, dc.name) AS camera_name
-         FROM violation_events ve
-         LEFT JOIN cameras c
-           ON c.company_id = ve.company_id
-          AND ve.source_type = 'camera'
-          AND c.camera_id = ve.camera_id
-         LEFT JOIN dvr_channels dc
-           ON dc.company_id = ve.company_id
-          AND ve.source_type = 'dvr_channel'
-          AND dc.channel_id = ve.dvr_channel_id
-         WHERE ve.company_id = $1
-         ORDER BY ve.start_time DESC
-         LIMIT 200`,
-        [company_id],
-      );
-      const events: ViolationEvent[] = res.rows.map((row) => ({
-        ...row,
-        camera_id: String(row.camera_id ?? row.dvr_channel_id ?? ""),
-      }));
+      const sql = await getViolationEventsQuerySql();
+      const res = await pool.query(sql, [company_id]);
+      const events = mapViolationEventRows(res.rows);
       return { success: true, events };
     } catch (error) {
       console.error("Error fetching violation events:", error);

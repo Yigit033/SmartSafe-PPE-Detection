@@ -6,7 +6,10 @@
   "license": "MPL-2.0",
   "type": "module",
   "scripts": {
-    "migrate": "node ./scripts/migrate.cjs"
+    "migrate": "node ./scripts/migrate.cjs",
+    "migrate:company": "node ./scripts/migrate_company.cjs",
+    "migrate:violations": "node ./scripts/migrate_violation_events.cjs",
+    "migrate:violations:pr3": "node ./scripts/migrate_violation_events.cjs --pr3"
   },
   "devDependencies": {
     "@types/node": "^20.5.7",
@@ -17,7 +20,7 @@
     "@types/pg": "^8.18.0",
     "@types/uuid": "^10.0.0",
     "bcrypt": "^6.0.0",
-    "encore.dev": "^1.56.3",
+    "encore.dev": "^1.56.4",
     "pg": "^8.20.0",
     "uuid": "^13.0.0"
   }

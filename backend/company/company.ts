@@ -51,7 +51,10 @@ interface UpdateNotificationsRequest {
 }
 
 interface CompanyStats {
+  /** Aktif IP kameralar + aktif DVR kanalları (toplam) */
   active_cameras: number;
+  /** Abonelik / şirket kapasitesi (dashboard paydası) */
+  max_cameras: number;
   today_violations: number;
   monthly_violations: number;
   avg_compliance_rate: number;
@@ -70,19 +73,38 @@ export const getStats = api(
   { expose: true, method: "GET", path: "/company/:company_id/stats" },
   async ({ company_id }: { company_id: string }): Promise<CompanyStats> => {
     try {
-      // 1. Aktif Kamera Sayısı
-      const camerasRes = await pool.query(
-        "SELECT COUNT(*) as count FROM cameras WHERE company_id = $1 AND status = 'active'",
+      // Kapasite (dashboard: aktif / max)
+      const capRes = await pool.query(
+        "SELECT COALESCE(max_cameras, 25)::int AS max_cameras FROM companies WHERE company_id = $1",
         [company_id],
       );
-      const active_cameras = parseInt(camerasRes.rows[0].count);
+      const max_cameras = parseInt(
+        capRes.rows[0]?.max_cameras ?? "25",
+        10,
+      );
 
-      // 2. Geçen haftaki kamera sayısı (trend için)
-      const lastWeekCamerasRes = await pool.query(
-        "SELECT COUNT(*) as count FROM cameras WHERE company_id = $1 AND created_at < CURRENT_DATE - INTERVAL '7 days'",
+      // 1. Aktif: düz kameralar + DVR kanalları (ikisi de status = 'active')
+      const camerasRes = await pool.query(
+        `SELECT
+           (SELECT COUNT(*)::bigint FROM cameras WHERE company_id = $1 AND status = 'active')
+         + (SELECT COUNT(*)::bigint FROM dvr_channels WHERE company_id = $1 AND status = 'active')
+         AS count`,
         [company_id],
       );
-      const last_week_cameras = parseInt(lastWeekCamerasRes.rows[0].count);
+      const active_cameras = parseInt(String(camerasRes.rows[0].count), 10);
+
+      // 2. Trend için: 7 günden eski kayıt sayısı (IP + DVR kanalı) — önceki mantık, genişletildi
+      const lastWeekCamerasRes = await pool.query(
+        `SELECT
+           (SELECT COUNT(*)::bigint FROM cameras WHERE company_id = $1 AND created_at < CURRENT_DATE - INTERVAL '7 days')
+         + (SELECT COUNT(*)::bigint FROM dvr_channels WHERE company_id = $1 AND created_at < CURRENT_DATE - INTERVAL '7 days')
+         AS count`,
+        [company_id],
+      );
+      const last_week_cameras = parseInt(
+        String(lastWeekCamerasRes.rows[0].count),
+        10,
+      );
 
       // 3. Bugünkü İhlaller (violation_events tablosundan)
       const todayViolationsRes = await pool.query(
@@ -136,6 +158,7 @@ export const getStats = api(
 
       return {
         active_cameras,
+        max_cameras,
         today_violations,
         monthly_violations,
         avg_compliance_rate,

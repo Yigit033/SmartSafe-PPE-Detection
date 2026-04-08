@@ -5347,13 +5347,19 @@ if __name__ == "__main__":
     if env == "local":
         # Only run Flask built-in server locally
         logger.info("🧩 Running in LOCAL mode (Flask dev server)")
+        # Docker bind mount: FLASK_RELOADER_INTERVAL düşürülürse değişiklikler daha çabuk yakalanır (stat reloader).
+        try:
+            _reloader_interval = float(os.getenv("FLASK_RELOADER_INTERVAL", "1"))
+        except ValueError:
+            _reloader_interval = 1.0
         try:
             app.run(
                 host=host,
                 port=port,
                 debug=True,
                 threaded=True,
-                use_reloader=True
+                use_reloader=True,
+                reloader_interval=_reloader_interval,
             )
         except Exception as e:
             logger.error(f"❌ Local server failed: {e}")

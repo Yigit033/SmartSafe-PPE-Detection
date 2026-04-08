@@ -251,15 +251,30 @@ export const remove = api(
     company_id: string;
     camera_id: string;
   }): Promise<{ success: boolean; error?: string }> => {
+    const client = await pool.connect();
     try {
-      await pool.query(
+      await client.query("BEGIN");
+      // violation_events.camera_id → cameras FK (legacy DB'lerde hâlâ olabilir); önce bağı kaldır.
+      await client.query(
+        "DELETE FROM violation_events WHERE company_id = $1 AND camera_id = $2",
+        [company_id, camera_id],
+      );
+      await client.query(
         "DELETE FROM cameras WHERE company_id = $1 AND camera_id = $2",
         [company_id, camera_id],
       );
+      await client.query("COMMIT");
       return { success: true };
     } catch (error: any) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
       console.error("Error deleting camera:", error);
       return { success: false, error: error.message };
+    } finally {
+      client.release();
     }
   },
 );

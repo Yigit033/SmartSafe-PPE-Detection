@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { goToCamerasPage } from "@/lib/camerasNavigation";
 
 const menuItems = [
   {
@@ -74,15 +75,44 @@ export default function Sidebar() {
         <nav className="flex-1 space-y-1">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
+            const className = `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
+              isActive
+                ? "bg-brand-teal/10 text-brand-teal"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            }`;
+            if (item.path === "/cameras") {
+              return (
+                <a
+                  key={item.path}
+                  href="/cameras"
+                  className={className}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    goToCamerasPage();
+                  }}
+                >
+                  <svg
+                    className={`h-5 w-5 ${isActive ? "text-brand-teal" : "text-slate-400"}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d={item.icon}
+                    />
+                  </svg>
+                  {item.name}
+                </a>
+              );
+            }
             return (
               <Link
                 key={item.path}
                 href={item.path}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
-                  isActive
-                    ? "bg-brand-teal/10 text-brand-teal"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                }`}
+                className={className}
               >
                 <svg
                   className={`h-5 w-5 ${isActive ? "text-brand-teal" : "text-slate-400"}`}
