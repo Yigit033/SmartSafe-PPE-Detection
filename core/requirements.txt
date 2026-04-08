@@ -20,6 +20,7 @@ Flask-Mail==0.9.1  # Specific version for stability
 waitress>=2.1.2
 gunicorn>=21.2.0
 Werkzeug>=2.3.7  # Required by Flask
+watchdog>=4.0.0  # Flask dev reloader: Docker bind mount'ta daha iyi izleme (yoksa stat reloader)
 
 # Database & Networking
 SQLAlchemy>=2.0.0

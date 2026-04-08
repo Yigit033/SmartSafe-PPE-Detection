@@ -12,9 +12,13 @@ services:
       - ../core:/app
       - ../storage:/app/storage
     environment:
+      - ENV=local
       - FLASK_ENV=development
       - PORT=5000
       - PYTHONPATH=.
+      - PYTHONDONTWRITEBYTECODE=1
+      # Bind mount (özellikle Docker Desktop / Windows): inotify güvenilir değil; stat reloader sıklığı
+      - FLASK_RELOADER_INTERVAL=0.75
       - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
       - YOLO_CONFIG_DIR=/tmp
     healthcheck:
@@ -68,6 +72,11 @@ services:
       - ENCORE_ENV=local
       - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
       - ENCORE_DEVDASH_LISTEN_ADDR=0.0.0.0:9400
+      # Bind mount üzerinde dosya izleme (frontend ile aynı mantık): polling ile tetikle
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=1000
+      # TypeScript/Encore tarafında polling fallback (Docker volume)
+      - TSC_WATCHFILE=UseFsEventsWithFallbackDynamicPolling
     depends_on:
       postgres:
         condition: service_healthy

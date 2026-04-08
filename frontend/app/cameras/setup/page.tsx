@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
+import { goToCamerasPage } from "@/lib/camerasNavigation";
 
 type SetupMode =
   | "select"
@@ -1296,7 +1297,8 @@ export default function CameraSetupPage() {
                   YENİ EKLE
                 </button>
                 <button
-                  onClick={() => router.push("/cameras")}
+                  type="button"
+                  onClick={() => goToCamerasPage()}
                   className="px-16 py-5 rounded-2xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-2xl shadow-slate-200 active:scale-95"
                 >
                   KAMERA PANELİNE GİT

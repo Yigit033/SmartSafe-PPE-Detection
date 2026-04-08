@@ -1,10 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getCompanyId, getUser } from "@/lib/session";
+import {
+  formatViolationEventTitle,
+  violationSnapshotUrl,
+} from "@/lib/violationAssets";
+
+function ViolationThumb({ url }: { url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  /** İhlal kareleri genelde tam boy insan — 3:4 dikey önizleme */
+  const frame =
+    "relative w-16 shrink-0 overflow-hidden rounded-xl border border-slate-200 aspect-[3/4]";
+  if (!url || failed) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-slate-100 ${frame}`}
+      >
+        <span className="material-symbols-rounded text-2xl text-slate-300">
+          image_not_supported
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className={`bg-slate-900 ${frame}`}>
+      <img
+        src={url}
+        alt=""
+        className="h-full w-full object-cover object-center"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
 
 interface StatsData {
   active_cameras: number;
+  max_cameras?: number;
   today_violations: number;
   monthly_violations: number;
   avg_compliance_rate: number;
@@ -28,8 +63,12 @@ export default function Home() {
         if (!companyId) return;
         // Stats ve Events'i paralel çekelim
         const [statsRes, eventsRes] = await Promise.all([
-          fetch(`http://localhost:4000/company/${companyId}/stats`),
-          fetch(`http://localhost:4000/company/${companyId}/violation-events`),
+          fetch(`http://localhost:4000/company/${companyId}/stats`, {
+            cache: "no-store",
+          }),
+          fetch(`http://localhost:4000/company/${companyId}/violation-events`, {
+            cache: "no-store",
+          }),
         ]);
 
         const statsResult = await statsRes.json();
@@ -55,7 +94,9 @@ export default function Home() {
   const stats = [
     {
       name: "Aktif Kameralar",
-      value: data ? `${data.active_cameras || 0} / 25` : "0 / 0",
+      value: data
+        ? `${data.active_cameras || 0} / ${data.max_cameras ?? 25}`
+        : "0 / 0",
       trend: data?.trends?.cameras || 0,
       icon: "video",
       color: "text-brand-teal",
@@ -197,11 +238,19 @@ export default function Home() {
             </div>
             <div className="mt-6 flex items-center gap-3">
               <span
-                className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${stat.trend >= 0 ? "text-emerald-600 bg-emerald-100" : "text-red-600 bg-red-100"}`}
+                className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${
+                  stat.trend === 0
+                    ? "text-slate-500 bg-slate-100"
+                    : stat.trend > 0
+                      ? "text-emerald-600 bg-emerald-100"
+                      : "text-red-600 bg-red-100"
+                }`}
               >
-                {stat.trend >= 0
-                  ? `↑ ${stat.trend}`
-                  : `↓ ${Math.abs(stat.trend)}`}
+                {stat.trend === 0
+                  ? "-"
+                  : stat.trend > 0
+                    ? `↑ ${stat.trend}`
+                    : `↓ ${Math.abs(stat.trend)}`}
               </span>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
                 {stat.name === "Aktif Kameralar"
@@ -315,95 +364,79 @@ export default function Home() {
               </div>
             ) : (
               events
-                .sort((a, b) => b.start_time - a.start_time)
+                .sort(
+                  (a, b) =>
+                    Number(b.start_time || 0) - Number(a.start_time || 0),
+                )
                 .slice(0, 5)
-                .map((violation, idx) => (
-                  <div
-                    key={violation.event_id}
-                    className="group relative flex gap-6"
-                  >
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`h-4 w-4 shrink-0 rounded-full border-2 border-white ring-4 ring-offset-2 ring-opacity-10 transition-all duration-500 group-hover:scale-125 ${
-                          violation.violation_type
-                            .toLowerCase()
-                            .includes("hardhat") ||
-                          violation.violation_type
-                            .toLowerCase()
-                            .includes("baret")
-                            ? "bg-orange-500 ring-orange-500 shadow-md shadow-orange-500/20"
-                            : violation.violation_type
-                                  .toLowerCase()
-                                  .includes("vest") ||
-                                violation.violation_type
-                                  .toLowerCase()
-                                  .includes("yelek")
-                              ? "bg-blue-500 ring-blue-500 shadow-md shadow-blue-500/20"
-                              : "bg-purple-500 ring-purple-500 shadow-md shadow-purple-500/20"
-                        }`}
-                      ></div>
-                      {idx < Math.min(events.length, 5) - 1 && (
-                        <div className="mt-2 h-full w-0.5 bg-slate-100 group-hover:bg-slate-200 transition-colors"></div>
-                      )}
-                    </div>
-                    <div className="space-y-2 pb-6 flex-1">
-                      <div className="flex items-center justify-between gap-4">
-                        <p className="text-sm font-black text-slate-900 leading-none italic uppercase">
-                          {violation.violation_type
-                            .toLowerCase()
-                            .includes("hardhat") ||
-                          violation.violation_type
-                            .toLowerCase()
-                            .includes("baret")
-                            ? "Baret İhlali Tespit Edildi"
-                            : violation.violation_type
-                                  .toLowerCase()
-                                  .includes("vest") ||
-                                violation.violation_type
-                                  .toLowerCase()
-                                  .includes("yelek")
-                              ? "Yelek İhlali Tespit Edildi"
-                              : violation.violation_type
-                                    .toLowerCase()
-                                    .includes("shoes") ||
-                                  violation.violation_type
-                                    .toLowerCase()
-                                    .includes("ayakkabı")
-                                ? "Ayakkabı İhlali Tespit Edildi"
-                                : "Güvenlik İhlali Tespit Edildi"}
-                        </p>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
-                          {new Date(
-                            violation.start_time * 1000,
-                          ).toLocaleTimeString("tr-TR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                .map((violation, idx) => {
+                  const vt = String(violation.violation_type || "");
+                  const vtLower = vt.toLowerCase();
+                  const ringClass =
+                    /hardhat|baret|helmet|no_helmet|kask/.test(vtLower)
+                      ? "bg-orange-500 ring-orange-500 shadow-md shadow-orange-500/20"
+                      : /vest|yelek|no_vest/.test(vtLower)
+                        ? "bg-blue-500 ring-blue-500 shadow-md shadow-blue-500/20"
+                        : "bg-purple-500 ring-purple-500 shadow-md shadow-purple-500/20";
+                  const thumb = violationSnapshotUrl(violation.snapshot_path);
+                  const started = Number(violation.start_time || 0) * 1000;
+                  return (
+                    <div
+                      key={violation.event_id}
+                      className="group relative flex gap-4 sm:gap-6"
+                    >
+                      <div className="flex flex-col items-center shrink-0">
+                        <div
+                          className={`h-4 w-4 rounded-full border-2 border-white ring-4 ring-offset-2 ring-opacity-10 transition-all duration-500 group-hover:scale-125 ${ringClass}`}
+                        />
+                        {idx < Math.min(events.length, 5) - 1 && (
+                          <div className="mt-2 min-h-[2.5rem] w-0.5 flex-1 bg-slate-100 group-hover:bg-slate-200 transition-colors" />
+                        )}
                       </div>
-                      <p className="text-xs font-bold text-slate-500 leading-relaxed uppercase">
-                        <span className="text-brand-teal">
-                          {violation.camera_name || violation.camera_id}
-                        </span>{" "}
-                        noktasında ihlal kaydedildi. Sistem üzerinden takip
-                        ediliyor.
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-black text-slate-300 uppercase italic">
-                          ID: {violation.event_id.slice(0, 8)}
-                        </span>
+                      <div className="flex min-w-0 flex-1 gap-3 pb-6">
+                        <ViolationThumb url={thumb} />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-black uppercase italic leading-snug text-slate-900">
+                              {formatViolationEventTitle(vt)}
+                            </p>
+                            <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                              {started
+                                ? new Date(started).toLocaleTimeString(
+                                    "tr-TR",
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    },
+                                  )
+                                : "—"}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold uppercase leading-relaxed text-slate-500">
+                            <span className="text-brand-teal">
+                              {violation.camera_name ||
+                                violation.camera_id ||
+                                "Kamera"}
+                            </span>{" "}
+                            noktasında ihlal kaydedildi. Sistem üzerinden takip
+                            ediliyor.
+                          </p>
+                          <p className="text-[10px] font-black uppercase italic text-slate-300">
+                            ID: {violation.event_id}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
             )}
-            <a
+            <Link
               href="/violations"
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-slate-50 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-slate-900 hover:text-white hover:border-slate-900 group cursor-pointer"
+              className="group flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-slate-100 bg-slate-50 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:border-slate-900 hover:bg-slate-900 hover:text-white"
             >
               TÜMÜNÜ GÖRÜNTÜLE
               <svg
-                className="h-4 w-4 transform group-hover:translate-x-1 transition-transform"
+                className="h-4 w-4 transform transition-transform group-hover:translate-x-1"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -415,7 +448,7 @@ export default function Home() {
                   d="M17 8l4 4m0 0l-4 4m4-4H3"
                 />
               </svg>
-            </a>
+            </Link>
           </div>
         </section>
       </div>
