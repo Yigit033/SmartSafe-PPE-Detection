@@ -16,14 +16,15 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm install
 
-# Encore CLI ile encore.dev npm paket sürümü eşleşmeli; aksi halde `encore run` başlarken
-# sürekli "version update" döngüsüne girip 4000'de dinleme oluşmaz (Failed to fetch).
-# Build aşamasında CLI'ı güncelle ve doğrula; runtime'da tekrar update çalıştırma (döngü riski).
+# Encore CLI ile encore.dev npm paket sürümü eşleşmeli; aksi halde `encore run` başlarken sorun çıkar.
+# Image build'de bir kez; container her açılışta docker-entrypoint-backend.sh tekrar `encore version update` çalıştırır.
 RUN encore version update && encore version
 
 EXPOSE 4000
 EXPOSE 9400
 
-# PowerShell/Docker Desktop bazı ortamlarda PATH'i boş geçebiliyor; bu durumda
-# `bash -lc "encore ..."` crash-loop yapar ("encore: not found"). Bu yüzden mutlak path kullan.
-CMD ["/root/.encore/bin/encore", "run", "--listen", "0.0.0.0:4000"]
+COPY infra/docker-entrypoint-backend.sh /docker-entrypoint-backend.sh
+RUN chmod +x /docker-entrypoint-backend.sh
+
+# PowerShell/Docker Desktop bazı ortamlarda PATH'i boş geçebiliyor; bu yüzden mutlak path kullan.
+ENTRYPOINT ["/docker-entrypoint-backend.sh"]

@@ -16,7 +16,8 @@
     "dev:logs": "docker-compose -f infra/docker-compose.yml logs -f",
     "docker:stop": "npm run dev:down",
     "landing": "cd landing && npm run dev",
-    "backend": "cd backend && encore run"
+    "backend": "cd backend && encore version update && encore run",
+    "backend:sync": "cd backend && encore version update"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

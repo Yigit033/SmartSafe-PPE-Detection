@@ -6,6 +6,8 @@
   "license": "MPL-2.0",
   "type": "module",
   "scripts": {
+    "encore:sync": "encore version update",
+    "dev": "encore version update && encore run",
     "migrate": "node ./scripts/migrate.cjs",
     "migrate:company": "node ./scripts/migrate_company.cjs",
     "migrate:violations": "node ./scripts/migrate_violation_events.cjs",

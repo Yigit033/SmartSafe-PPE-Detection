@@ -1,0 +1,2 @@
+# Docker/Linux entrypoint scripts must keep LF (shebang)
+infra/*.sh text eol=lf
