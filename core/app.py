@@ -469,17 +469,29 @@ class SmartSafeSaaSAPI:
     
     def ensure_database_initialized(self):
         """Ensure database is ready; re-initialize if connection died after idle."""
-        # Eğer daha önce initialize ettiysek, bağlantı sağlıklı mı kontrol et
+        # Eğer daha önce initialize ettiysek, her request'te health-check yapma.
+        # Health-check, pool doluyken ekstra connection isteyip re-init döngüsü yaratabiliyor.
         if self.db_adapter is not None and self._db_initialized:
             try:
+                now = time.time()
+                last = getattr(self, "_last_db_healthcheck_ts", 0.0) or 0.0
+                # Only perform DB health-check occasionally (default: 60s).
+                interval = float(os.getenv("DB_HEALTHCHECK_INTERVAL_S", "60"))
+                if (now - last) < interval:
+                    return True
+                setattr(self, "_last_db_healthcheck_ts", now)
+
                 if self.db_adapter.health_check():
                     return True
-                else:
-                    logger.warning("⚠️ Database health check failed, forcing re-initialization")
-                    self._db_initialized = False
+
+                # If health-check fails, DO NOT immediately force re-init:
+                # - pool exhaustion is transient
+                # - re-init tends to amplify load and causes flapping 503s
+                logger.warning("⚠️ Database health check failed (will not force re-init immediately)")
+                return False
             except Exception as hc_err:
-                logger.warning(f"⚠️ Database health check error: {hc_err}, will re-initialize")
-                self._db_initialized = False
+                logger.warning(f"⚠️ Database health check error: {hc_err} (will not force re-init immediately)")
+                return False
 
         try:
             # Database adapter'ı önce initialize et
@@ -4516,6 +4528,7 @@ smartsafe_requests_total 100
 
     def save_detection_to_db(self, detection_data):
         """Detection sonuçlarını veritabanına kaydet - Production uyumlu"""
+        conn = None
         try:
             # Local (SQLite) ortamda legacy 'detections' şeması (people_detected, violations_count vb.)
             # zaten _save_detection_to_reports ile dolduruluyor. Bu fonksiyonun ek person_count
@@ -4529,34 +4542,69 @@ smartsafe_requests_total 100
                 logger.debug("Skipping save_detection_to_db on sqlite (legacy detections schema is used).")
                 return
 
-            # PostgreSQL / Supabase tarafı: modern özet şema
             conn = self.db.get_connection()
+            if conn is None:
+                raise RuntimeError("DB connection unavailable")
             cursor = conn.cursor()
             
             placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '%s'
-            
-            cursor.execute(f'''
-                INSERT INTO detections (
-                    company_id, camera_id, timestamp, person_count, 
-                    ppe_compliant, compliance_rate, processing_time_ms
-                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
-            ''', (
-                detection_data['company_id'],
-                detection_data['camera_id'],
-                detection_data['timestamp'],
-                detection_data.get('person_count', detection_data.get('people_detected', 0)),
-                detection_data.get('ppe_compliant', True),
-                detection_data.get('compliance_rate', 100),
-                detection_data.get('processing_time_ms', 0)
-            ))
+
+            # Prefer "modern summary" schema when it exists; otherwise fall back to legacy schema.
+            try:
+                cursor.execute(f'''
+                    INSERT INTO detections (
+                        company_id, camera_id, timestamp, person_count,
+                        ppe_compliant, compliance_rate, processing_time_ms
+                    ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ''', (
+                    detection_data['company_id'],
+                    detection_data['camera_id'],
+                    detection_data['timestamp'],
+                    detection_data.get('person_count', detection_data.get('people_detected', 0)),
+                    detection_data.get('ppe_compliant', True),
+                    detection_data.get('compliance_rate', 100),
+                    detection_data.get('processing_time_ms', 0)
+                ))
+            except Exception as modern_err:
+                msg = str(modern_err)
+                if "person_count" in msg or "processing_time_ms" in msg or "compliance_rate" in msg:
+                    # Legacy schema (core/database/database_adapter.py) uses people_detected, violations_count, etc.
+                    people = int(detection_data.get('people_detected', detection_data.get('person_count', 0)) or 0)
+                    compliant = int(detection_data.get('ppe_compliant', 0) or 0)
+                    violations_count = int(detection_data.get('violations_count', 0) or 0)
+                    confidence = float(detection_data.get('confidence', 0.0) or 0.0)
+                    detection_type = detection_data.get('detection_type', 'ppe')
+                    ts = detection_data.get('timestamp')
+                    cursor.execute(f'''
+                        INSERT INTO detections (
+                            company_id, camera_id, detection_type, confidence,
+                            people_detected, ppe_compliant, violations_count, timestamp
+                        ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                    ''', (
+                        detection_data['company_id'],
+                        detection_data['camera_id'],
+                        detection_type,
+                        confidence,
+                        people,
+                        compliant,
+                        violations_count,
+                        ts,
+                    ))
+                else:
+                    raise
             
             conn.commit()
-            self.db.close_connection(conn)
             logger.debug(f"✅ Detection kaydedildi (summary): {detection_data.get('camera_id', 'unknown')}")
             
         except Exception as e:
             logger.warning(f"⚠️ Detection DB kayıt hatası (devam ediliyor): {e}")
             # Production'da DB hatası olsa bile detection devam etsin
+        finally:
+            try:
+                if conn is not None:
+                    self.db.close_connection(conn)
+            except Exception:
+                pass
 
     def save_violations_to_db(self, company_id, camera_id, violations):
         """İhlalleri veritabanına kaydet - Production uyumlu"""
