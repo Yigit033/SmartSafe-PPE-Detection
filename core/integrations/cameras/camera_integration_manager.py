@@ -2765,7 +2765,19 @@ class ProfessionalCameraManager:
                     pose_detector = get_pose_aware_detector(ppe_detector=self.ppe_detector)
                     
                     logger.info(f"🎯 Using POSE-AWARE detection for camera {camera_id}")
-                    result = pose_detector.detect_with_pose(frame, sector, confidence=0.25)
+                    req_ppe = None
+                    if company_id:
+                        try:
+                            from database.database_adapter import get_db_adapter
+
+                            req_ppe = get_db_adapter().get_company_detection_config(
+                                company_id
+                            ).get("required_ppe")
+                        except Exception:
+                            req_ppe = None
+                    result = pose_detector.detect_with_pose(
+                        frame, sector, confidence=0.25, required_ppe=req_ppe
+                    )
                     
                     # Validate result is a dictionary
                     if not isinstance(result, dict):

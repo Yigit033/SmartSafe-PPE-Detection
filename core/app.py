@@ -2428,12 +2428,16 @@ smartsafe_requests_total 100
         try:
             self.ensure_database_initialized()
             if self.db is not None:
+                # companies.ppe_requirements tek kaynak — MultiTenantDatabase'de bu metot yok;
+                # hasattr(self.db, ...) ile kaçırılıyordu, hep sektör varsayılanına düşüyordu.
                 cfg = {}
-                if hasattr(self.db, "get_company_detection_config"):
-                    try:
-                        cfg = self.db.get_company_detection_config(company_id) or {}
-                    except Exception:
-                        cfg = {}
+                try:
+                    cfg = get_db_adapter().get_company_detection_config(company_id) or {}
+                except Exception as _cfg_err:
+                    logger.warning(
+                        f"⚠️ get_company_detection_config başarısız: {_cfg_err}"
+                    )
+                    cfg = {}
                 company_data = self.db.get_company_info(company_id)
                 sector_raw = (
                     (cfg.get("sector") if isinstance(cfg, dict) else None)
@@ -2445,28 +2449,28 @@ smartsafe_requests_total 100
                 sector = 'construction'
                 logger.warning(f"⚠️ Database not initialized, using default sector: {sector}")
             
-            # Şirket bazlı zorunlu PPE: tek kaynak = companies.ppe_requirements (DB)
+            # Şirket bazlı zorunlu PPE: get_company_detection_config → ppe_requirements (DB)
+            # None = kolon yok/boş → sektör varsayılanı; [] = şirket açıkça "zorunlu yok" (mandatory hepsi false)
             required_ppe = None
             try:
                 if isinstance(cfg, dict):
-                    raw_list = cfg.get("required_ppe")
-                else:
-                    raw_list = None
-                if isinstance(raw_list, list) and raw_list:
-                    normalized = []
-                    for item in raw_list:
-                        if item is None:
-                            continue
-                        try:
-                            normalized.append(str(item).strip().lower())
-                        except Exception:
-                            continue
-                    required_ppe = normalized if normalized else None
+                    rp = cfg.get("required_ppe")
+                    if rp is not None and isinstance(rp, list):
+                        required_ppe = list(rp)
+                        logger.info(
+                            f"📋 Şirket PPE (companies.ppe_requirements): {required_ppe}"
+                        )
             except Exception as cfg_err:
-                logger.warning(f"⚠️ PPE gereksinimleri okunamadı, sektör varsayılanı kullanılacak: {cfg_err}")
+                logger.warning(
+                    f"⚠️ PPE gereksinimleri okunamadı, sektör varsayılanı kullanılacak: {cfg_err}"
+                )
             if required_ppe is None:
-                required_ppe = SECTOR_DEFAULT_PPE.get(sector) or SECTOR_DEFAULT_PPE.get('construction')
-                logger.info(f"📋 Sektör varsayılan PPE kullanılıyor (şirkette PPE tanımlı değil): {sector} -> {required_ppe}")
+                required_ppe = SECTOR_DEFAULT_PPE.get(sector) or SECTOR_DEFAULT_PPE.get(
+                    "construction"
+                )
+                logger.info(
+                    f"📋 Sektör varsayılan PPE (ppe_requirements yok): {sector} -> {required_ppe}"
+                )
             
             if self.sh17_manager:
                 logger.info(f"🎯 SH17 PPE Detection - Sektör: {sector}")

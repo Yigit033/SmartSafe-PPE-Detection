@@ -988,8 +988,13 @@ class DVRStreamHandler:
                         self._pose_detector = get_pose_aware_detector(ppe_detector=self._sh17_manager)
                         logger.info("✅ DVRStreamHandler: PoseAwarePPEDetector singleton oluşturuldu")
 
-                    logger.debug(f"🎯 Pose-aware detection: stream={stream_id}, sector={sector}")
-                    result = self._pose_detector.detect_with_pose(frame, sector, confidence=0.25)
+                    logger.debug(
+                        f"🎯 Pose-aware detection: stream={stream_id}, sector={sector}, "
+                        f"required_ppe={required_ppe!r}"
+                    )
+                    result = self._pose_detector.detect_with_pose(
+                        frame, sector, confidence=0.25, required_ppe=required_ppe
+                    )
                     if isinstance(result, dict):
                         return result
                     if isinstance(result, list):
@@ -1016,7 +1021,7 @@ class DVRStreamHandler:
 
             detections = self._sh17_manager.detect_ppe(frame, sector=sector, confidence=0.25)
             people_detected = len([d for d in detections if isinstance(d, dict) and d.get('class_name') == 'person'])
-            if not required_ppe:
+            if required_ppe is None:
                 required_ppe = self._sh17_manager.get_sector_requirements(sector)
             compliance_analysis = self._sh17_manager.analyze_compliance(detections, required_ppe)
 

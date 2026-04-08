@@ -16,8 +16,7 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm install
 
-# Encore CLI ile encore.dev npm paket sürümü eşleşmeli; aksi halde `encore run` başlarken sorun çıkar.
-# Image build'de bir kez; container her açılışta docker-entrypoint-backend.sh tekrar `encore version update` çalıştırır.
+# Encore CLI ile encore.dev eşleşmeli. Runtime'da sadece CLI < package.json ise güncellenir (encore-sync-if-needed.cjs).
 RUN encore version update && encore version
 
 EXPOSE 4000
