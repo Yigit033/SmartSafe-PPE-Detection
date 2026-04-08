@@ -94,11 +94,11 @@ class DatabaseAdapter:
                         try:
                             # Safe defaults for Docker/local and small Render instances.
                             # Override via env when you really need more.
-                            minconn = max(1, int(os.getenv("DB_POOL_MINCONN", "1")))
+                            minconn = max(2, int(os.getenv("DB_POOL_MINCONN", "2")))
                             # Default headroom for concurrent DVR workers without hitting Postgres max_connections.
-                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "20")))
+                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "50")))
                         except ValueError:
-                            minconn, maxconn = 1, 20
+                            minconn, maxconn = 2, 50
                         # Thread-safe connection pool (single process → one adapter via get_db_adapter())
                         self.connection_pool = pool.ThreadedConnectionPool(
                             minconn=minconn,
