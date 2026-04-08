@@ -175,6 +175,14 @@ class PoseAwarePPEDetector:
         self.prev_keypoints = {}  # Store previous frame keypoints per tracked person
         self.keypoint_smoothing_factor = 0.6  # 60% previous, 40% current
 
+        # Bounding box smoothing (EMA) — reduces jitter in overlay.
+        # Uses track_id (ByteTrack) when available; falls back to a stable per-frame index id.
+        # Applied to person bboxes and to derived anatomical-region bboxes (NO-*).
+        # NOTE: keep this fairly responsive; too high => boxes "lag behind" people.
+        self.bbox_smoothing_factor = 0.55  # 55% previous, 45% current
+        self._bbox_ema: Dict[Tuple[str, int], Tuple[List[float], float]] = {}  # (kind, id) -> (bbox, last_ts)
+        self._bbox_ema_ttl_s: float = 8.0  # prune stale tracks to bound memory
+
         # Optional ByteTrack-based person tracker (single instance per detector)
         self.byte_tracker = None
         if sv is not None:
@@ -204,6 +212,69 @@ class PoseAwarePPEDetector:
         self._load_pose_model(pose_model_path)
         
         logger.info("✅ Pose-Aware PPE Detector initialized")
+
+    @staticmethod
+    def _bbox_iou(a: List[float], b: List[float]) -> float:
+        """IoU for 2 xyxy boxes (float)."""
+        try:
+            ax1, ay1, ax2, ay2 = [float(v) for v in a]
+            bx1, by1, bx2, by2 = [float(v) for v in b]
+            x1 = max(ax1, bx1)
+            y1 = max(ay1, by1)
+            x2 = min(ax2, bx2)
+            y2 = min(ay2, by2)
+            iw = max(0.0, x2 - x1)
+            ih = max(0.0, y2 - y1)
+            inter = iw * ih
+            area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+            area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+            union = area_a + area_b - inter
+            return float(inter / union) if union > 0 else 0.0
+        except Exception:
+            return 0.0
+
+    def _ema_bbox(self, kind: str, obj_id: int, bbox: Optional[List[float]], *, now: Optional[float] = None) -> Optional[List[float]]:
+        """Exponential moving average for bbox coordinates, keyed by (kind, obj_id)."""
+        if not bbox or len(bbox) != 4:
+            return bbox
+        if now is None:
+            now = time.time()
+
+        # Periodic TTL prune to prevent unbounded growth.
+        try:
+            if self._bbox_ema and (len(self._bbox_ema) > 256):
+                cutoff = now - float(self._bbox_ema_ttl_s)
+                stale = [k for k, (_, ts) in self._bbox_ema.items() if ts < cutoff]
+                for k in stale:
+                    self._bbox_ema.pop(k, None)
+        except Exception:
+            pass
+
+        key = (str(kind), int(obj_id))
+        prev = self._bbox_ema.get(key)
+        cur = [float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])]
+        if prev is None:
+            self._bbox_ema[key] = (cur, now)
+            return cur
+
+        prev_bbox, _ts = prev
+        # If the current box jumps far (identity swap / occlusion / re-id),
+        # do NOT "drag" the previous EMA; reset immediately to stay aligned.
+        try:
+            if self._bbox_iou(prev_bbox, cur) < 0.10:
+                self._bbox_ema[key] = (cur, now)
+                return cur
+        except Exception:
+            pass
+        a = float(self.bbox_smoothing_factor)
+        sm = [
+            prev_bbox[0] * a + cur[0] * (1.0 - a),
+            prev_bbox[1] * a + cur[1] * (1.0 - a),
+            prev_bbox[2] * a + cur[2] * (1.0 - a),
+            prev_bbox[3] * a + cur[3] * (1.0 - a),
+        ]
+        self._bbox_ema[key] = (sm, now)
+        return sm
     
     def _load_pose_model(self, model_path: Optional[str] = None):
         """Load YOLOv8-Pose model with CPU inference to avoid CUDA NMS issues"""
@@ -366,6 +437,19 @@ class PoseAwarePPEDetector:
                     for kp in person.get('keypoints', []):
                         kp['x'] = kp['x'] * inv
                         kp['y'] = kp['y'] * inv
+                    # CRITICAL: anatomical_regions were computed in pose_frame coordinates.
+                    # Recompute them in original-frame coordinates to avoid "shifted" NO-* boxes.
+                    try:
+                        pb = person.get('bbox')
+                        if pb and len(pb) == 4:
+                            person['anatomical_regions'] = self._calculate_anatomical_regions_from_pose(
+                                person.get('keypoints', []),
+                                (float(pb[0]), float(pb[1]), float(pb[2]), float(pb[3])),
+                                frame.shape,
+                            )
+                    except Exception:
+                        # Non-fatal: fall back to existing regions.
+                        pass
             
             # 4️⃣ Associate PPE with persons using pose keypoints (all in original frame coords)
             enhanced_detections = self._associate_ppe_with_pose(
@@ -595,6 +679,18 @@ class PoseAwarePPEDetector:
                         # Use track_id for keypoint smoothing when available, otherwise fallback to index
                         smoothing_id = track_id if track_id is not None else i
                         keypoint_data = self._smooth_keypoints(keypoint_data, smoothing_id)
+
+                        # Smooth PERSON bbox (in current frame coordinate space).
+                        # This reduces jitter before anatomical regions are derived.
+                        # Only smooth when we have a stable tracker id.
+                        # Smoothing on per-frame index causes identity swaps which look like "laggy" boxes.
+                        if track_id is not None:
+                            try:
+                                sm_bbox = self._ema_bbox("person", int(track_id), [x1, y1, x2, y2], now=time.time())
+                                if sm_bbox and len(sm_bbox) == 4:
+                                    x1, y1, x2, y2 = sm_bbox
+                            except Exception:
+                                pass
                         
                         # Calculate anatomical regions from keypoints
                         anatomical_regions = self._calculate_anatomical_regions_from_pose(
@@ -1283,8 +1379,26 @@ class PoseAwarePPEDetector:
             regions = person_data['regions']
             compliance = person_data['compliance']
             ppe_meta = person_data.get('ppe_meta', {})
+
+            # Stable per-person id for bbox smoothing (prefer ByteTrack's track_id).
+            # If we don't have one, we skip smoothing to avoid identity swaps/lag.
+            tid: Optional[int] = None
+            if isinstance(person, dict):
+                raw_tid = person.get('track_id')
+                if raw_tid is not None:
+                    try:
+                        tid = int(raw_tid)
+                    except (TypeError, ValueError):
+                        tid = None
             
             # Add person detection
+            if tid is not None and isinstance(person, dict):
+                try:
+                    person_bbox = person.get('bbox')
+                    if person_bbox and len(person_bbox) == 4:
+                        person['bbox'] = self._ema_bbox("person_orig", tid, list(person_bbox), now=time.time())
+                except Exception:
+                    pass
             all_detections.append(person)
             p_bbox = person.get('bbox') if isinstance(person, dict) else None
             
@@ -1307,6 +1421,12 @@ class PoseAwarePPEDetector:
                         ph = float(p_bbox[3]) - float(p_bbox[1])
                         if pw > 0 and ph > 0 and (bw * bh) > (pw * ph) * 2.0:
                             bbox_to_use = region_bbox
+                    # Smooth positive PPE bbox per person+type to reduce jitter in overlay.
+                    if tid is not None and bbox_to_use and len(bbox_to_use) == 4:
+                        try:
+                            bbox_to_use = self._ema_bbox(f"ppe_pos:{ppe_type}", tid, list(bbox_to_use), now=time.time())
+                        except Exception:
+                            pass
                     all_detections.append(
                         {
                             'bbox': bbox_to_use,
@@ -1344,6 +1464,12 @@ class PoseAwarePPEDetector:
                                 gloves_y1 = y1 + 0.10 * h
                                 gloves_y2 = y2 + 0.10 * h
                                 draw_bbox = [x1, gloves_y1, x2, gloves_y2]
+                        # Smooth negative (NO-*) bbox per person+type to reduce jitter.
+                        if tid is not None and draw_bbox and len(draw_bbox) == 4:
+                            try:
+                                draw_bbox = self._ema_bbox(f"ppe_neg:{ppe_type}", tid, list(draw_bbox), now=time.time())
+                            except Exception:
+                                pass
                         all_detections.append(
                             {
                                 'bbox': draw_bbox,
