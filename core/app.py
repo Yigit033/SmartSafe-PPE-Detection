@@ -2638,7 +2638,7 @@ smartsafe_requests_total 100
                                             if person_area < (frame_area * 0.005):
                                                 person_visible = False
                                         
-                                        # Snapshot çek (kişi görünürse crop, değilse full frame)
+                                        # Sadece kişi görünürse crop snapshot çekilir, değilse snapshot alınmaz
                                         snapshot_path = None
                                         try:
                                             snapshot_mgr = get_snapshot_manager()
@@ -2651,14 +2651,6 @@ smartsafe_requests_total 100
                                                     violation_type=new_ev['violation_type'],
                                                     person_bbox=p_bbox,
                                                     event_id=new_ev['event_id']
-                                                )
-                                            else:
-                                                # Bbox yoksa veya geçersizse full frame snapshot
-                                                snapshot_path = snapshot_mgr.capture_full_frame_snapshot(
-                                                    frame=frame,
-                                                    company_id=company_id,
-                                                    camera_id=camera_id,
-                                                    tag=new_ev['violation_type']
                                                 )
                                             
                                             if snapshot_path:
@@ -2686,20 +2678,8 @@ smartsafe_requests_total 100
                                         f"| Süre: {ended_ev.get('duration_seconds', 0)}s"
                                     )
                                     
-                                    # Çözüm snapshot'ı çek
+                                    # Çözüm snapshot'ı artık alınmıyor (gereksiz tam ekran kaydını önlemek için)
                                     resolution_snapshot_path = None
-                                    try:
-                                        snapshot_mgr = get_snapshot_manager()
-                                        resolution_snapshot_path = snapshot_mgr.capture_full_frame_snapshot(
-                                            frame=frame,
-                                            company_id=company_id,
-                                            camera_id=camera_id,
-                                            tag=f"{ended_ev['violation_type']}_resolved"
-                                        )
-                                        if resolution_snapshot_path:
-                                            logger.info(f"📸 RESOLUTION SNAPSHOT: {resolution_snapshot_path}")
-                                    except Exception as snap_err:
-                                        logger.warning(f"⚠️ Resolution snapshot çekilemedi: {snap_err}")
                                     
                                     # violation_events tablosunu güncelle
                                     db_adapter.update_violation_event(
