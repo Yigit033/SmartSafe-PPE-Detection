@@ -117,7 +117,7 @@ class SmartSafeConfig:
     environment: Environment = Environment.DEVELOPMENT
     debug: bool = True
     host: str = "0.0.0.0"
-    port: int = 5000
+    port: int = 5577
     
     database: DatabaseConfig = None
     camera: CameraConfig = None
@@ -541,7 +541,7 @@ class ProfessionalConfigManager:
             "default.yaml": {
                 "debug": True,
                 "host": "0.0.0.0",
-                "port": 5000,
+                "port": 5577,
                 "database": {
                     "host": "localhost",
                     "port": 5432,

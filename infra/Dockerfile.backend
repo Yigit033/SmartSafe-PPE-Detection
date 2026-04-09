@@ -19,11 +19,11 @@ RUN npm install
 # Encore CLI ile encore.dev eşleşmeli. Runtime'da sadece CLI < package.json ise güncellenir (encore-sync-if-needed.cjs).
 RUN encore version update && encore version
 
-EXPOSE 4000
+EXPOSE 4477
 EXPOSE 9400
 
 COPY infra/docker-entrypoint-backend.sh /docker-entrypoint-backend.sh
-RUN chmod +x /docker-entrypoint-backend.sh
+RUN chmod +x /docker-entrypoint-backend.sh && sed -i 's/\r$//' /docker-entrypoint-backend.sh
 
 # PowerShell/Docker Desktop bazı ortamlarda PATH'i boş geçebiliyor; bu yüzden mutlak path kullan.
 ENTRYPOINT ["/docker-entrypoint-backend.sh"]

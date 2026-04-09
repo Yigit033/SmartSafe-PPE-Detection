@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
+import api from "@/lib/api";
 
 type Props = {
   camera: any;
@@ -39,8 +40,8 @@ export default function CameraLiveView({
       setStreamError(null);
       const isAi = isCameraAiEnabled({ camera_id: id });
       const url = isAi
-        ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${id}?t=${Date.now()}`
-        : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
+        ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${id}?t=${Date.now()}`
+        : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
       setStreamUrl(url);
     },
     [companyId, isCameraAiEnabled],
@@ -67,7 +68,7 @@ export default function CameraLiveView({
     if (!companyId) return null;
     try {
       const r = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/cameras/${cameraId}/stream-status`,
+        `http://127.0.0.1:5577/api/company/${companyId}/cameras/${cameraId}/stream-status`,
         { cache: "no-store" },
       );
       const body = await r.json().catch(() => null);
@@ -86,15 +87,10 @@ export default function CameraLiveView({
   const handleSaveZones = async (zones: any[][]) => {
     if (!camera?.camera_id) return;
     try {
-      const response = await fetch(
-        `http://127.0.0.1:4000/company/${companyId}/cameras/${camera.camera_id}/roi`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ zones }),
-        },
-      );
-      const data = await response.json();
+      const data = await api.camera.saveROI(companyId, camera.camera_id, {
+        zones,
+      });
+
       if (data.success) {
         setIsZoneModalOpen(false);
         onZonesSaved?.();
@@ -168,8 +164,8 @@ export default function CameraLiveView({
                 await onToggleAi(camera.camera_id, isAi);
                 const nextAiEnabled = !isAi;
                 const url = nextAiEnabled
-                  ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${camera.camera_id}?t=${Date.now()}`
-                  : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${Date.now()}`;
+                  ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${camera.camera_id}?t=${Date.now()}`
+                  : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${Date.now()}`;
                 setStreamUrl(url);
               }}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCameraAiEnabled(camera) ? "bg-brand-teal" : "bg-white/20"}`}

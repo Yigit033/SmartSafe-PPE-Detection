@@ -72,7 +72,7 @@ def main():
     print(f"\n📍 Lokal IP: {local_ip}")
     
     # Port kontrolü
-    ports = [5000, 10000]
+    ports = [5577, 10000]
     print(f"\n🔌 Port Kontrolü:")
     for port in ports:
         check_port(port)
@@ -85,9 +85,9 @@ def main():
     
     print("\n" + "=" * 60)
     print("📝 Erişim URL'leri:")
-    print(f"   - Lokal: http://localhost:5000/")
-    print(f"   - Lokal IP: http://{local_ip}:5000/")
-    print(f"   - Harici: http://161.9.126.42:5000/")
+    print(f"   - Lokal: http://localhost:5577/")
+    print(f"   - Lokal IP: http://{local_ip}:5577/")
+    print(f"   - Harici: http://161.9.126.42:5577/")
     print("=" * 60)
     
     print("\n💡 Sorun devam ederse:")

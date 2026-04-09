@@ -115,7 +115,7 @@ export interface CoreDetectionResponse {
 export class CoreServiceClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = "http://localhost:5000") {
+  constructor(baseUrl: string = "http://localhost:5577") {
     this.baseUrl = baseUrl;
   }
 

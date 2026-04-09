@@ -274,8 +274,8 @@ class SmartSafeSaaSAPI:
             'http://127.0.0.1:3000',
             'http://127.0.0.1:3377',
             'http://localhost:8000',
-            'http://localhost:5000',
-            'http://127.0.0.1:5000',
+            'http://localhost:5577',
+            'http://127.0.0.1:5577',
             'https://getsmartsafeai.com',  # Production frontend domain
             'https://www.getsmartsafeai.com',  # WWW variant
             'https://app.getsmartsafeai.com',  # Backend custom domain
@@ -5169,8 +5169,8 @@ def main():
         app = api_server.app
         
         # Development mode - Flask development server
-        # Port 5000 veya 10000 kullan (environment variable ile değiştirilebilir)
-        port = int(os.environ.get('PORT', 5000))  # Default 5000'e değiştirildi
+        # Port 5577 veya 10000 kullan (environment variable ile değiştirilebilir)
+        port = int(os.environ.get('PORT', 5577))  # Default 5577'ye değiştirildi
         logger.info(f"🔧 Development mode: Starting Flask server on port {port}")
         logger.info(f"🌐 Erişim URL: http://0.0.0.0:{port}/")
         logger.info(f"🌐 Harici erişim: http://161.9.126.42:{port}/")
@@ -5266,7 +5266,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     env = os.getenv("ENV", "local").lower()
-    port = int(os.getenv("PORT", 5000 if env == "local" else 10000))
+    port = int(os.getenv("PORT", 5577 if env == "local" else 10000))
     host = "0.0.0.0"
 
     logger.info(f"🚀 Starting SmartSafe SaaS API")

@@ -332,7 +332,7 @@ function CamerasContent() {
     setIsDiscoveringDvr(dvrId);
     try {
       const response = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/dvr/${dvrId}/discover`,
+        `http://127.0.0.1:5577/api/company/${companyId}/dvr/${dvrId}/discover`,
         {
           method: "POST",
         },
@@ -699,8 +699,8 @@ function CamerasContent() {
                 <img
                   src={
                     isCameraAiEnabled(camera)
-                      ? `http://127.0.0.1:5000/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
-                      : `http://127.0.0.1:5000/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
+                      ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
+                      : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
                   }
                   alt={camera.camera_name}
                   className="w-full h-full object-contain bg-slate-950 transition-transform duration-700 group-hover:scale-105"

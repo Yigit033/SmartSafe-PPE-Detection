@@ -10,7 +10,7 @@
  */
 export type BaseURL = string
 
-export const Local: BaseURL = "http://localhost:4000"
+export const Local: BaseURL = "http://localhost:4477"
 
 /**
  * Environment returns a BaseURL for calling the cloud environment with the given name.

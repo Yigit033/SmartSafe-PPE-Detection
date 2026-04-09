@@ -7,14 +7,14 @@ services:
       dockerfile: infra/Dockerfile.core
     container_name: smartsafe-core
     ports:
-      - "5000:5000"
+      - "5577:5577"
     volumes:
       - ../core:/app
       - ../storage:/app/storage
     environment:
       - ENV=local
       - FLASK_ENV=development
-      - PORT=5000
+      - PORT=5577
       - PYTHONPATH=.
       - PYTHONDONTWRITEBYTECODE=1
       # Bind mount (özellikle Docker Desktop / Windows): inotify güvenilir değil; stat reloader sıklığı
@@ -22,7 +22,7 @@ services:
       - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
       - YOLO_CONFIG_DIR=/tmp
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5577/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,7 +45,7 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_API_URL=http://localhost:5577
       - NODE_ENV=development
       - WATCHPACK_POLLING=1000
       - CHOKIDAR_USEPOLLING=true
@@ -62,7 +62,7 @@ services:
       dockerfile: infra/Dockerfile.backend
     container_name: smartsafe-backend-encore
     ports:
-      - "4000:4000"
+      - "4477:4477"
       - "9400:9400"
     volumes:
       - ../backend:/app

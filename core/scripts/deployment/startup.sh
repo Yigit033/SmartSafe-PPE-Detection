@@ -43,7 +43,7 @@ docker-compose ps
 
 # Step 6: Test web application
 echo "📋 Step 6: Testing Web Application"
-curl -f http://localhost:5000/health
+curl -f http://localhost:5577/health
 
 if [ $? -ne 0 ]; then
     echo "❌ Web application health check failed!"
@@ -51,8 +51,8 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "✅ SUCCESS: SmartSafe AI is running with guaranteed database consistency!"
-echo "🌐 Web Interface: http://localhost:5000"
-echo "🔧 Admin Panel: http://localhost:5000/admin"
+echo "🌐 Web Interface: http://localhost:5577"
+echo "🔧 Admin Panel: http://localhost:5577/admin"
 echo "📊 Grafana: http://localhost:3000"
 echo "🎯 Prometheus: http://localhost:9090"
 
