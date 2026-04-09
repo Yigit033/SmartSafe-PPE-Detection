@@ -60,6 +60,61 @@ class DatabaseConfig:
     database_type: str  # 'sqlite' or 'postgresql'
     connection_params: Dict[str, Any]
 
+
+def _normalize_company_ppe_requirements_list(
+    items: Any, sector: Optional[str] = None
+) -> Optional[List[str]]:
+    """DB/UI listesini `backend/company/sector_config.ts` id'leriyle hizalar.
+
+    - mandatory:false olanlar çıkarılır.
+    - ID'ler TS'deki gibi kalır (hairnet, apron, face_mask, …); model sınıf adlarına
+      çevirme detection katmanında yapılır (bkz. sector_ppe_config.map_sh17_…).
+    - Sektör biliniyorsa, yalnızca o sektör şablonunda tanımlı id'ler tutulur;
+      hiçbiri eşleşmezse (eski/özel veri) liste olduğu gibi bırakılır.
+    """
+    if items is None:
+        return None
+    if not isinstance(items, list):
+        return None
+    if len(items) == 0:
+        return []
+
+    # Lazy import: database_adapter çok erken yüklenebilir
+    from sector.sector_ppe_config import get_all_ppe_ids_for_sector, resolve_sector_config_key
+
+    out: List[str] = []
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, dict):
+            pid = item.get("id") or item.get("ppe_type") or item.get("type")
+            if pid is None:
+                continue
+            if item.get("mandatory") is False:
+                continue
+            out.append(str(pid).strip().lower())
+        else:
+            s = str(item).strip().lower()
+            if s:
+                out.append(s)
+
+    seen = set()
+    result: List[str] = []
+    for pid in out:
+        if pid not in seen:
+            seen.add(pid)
+            result.append(pid)
+
+    if sector:
+        sk = resolve_sector_config_key(sector)
+        allowed = get_all_ppe_ids_for_sector(sk)
+        if allowed:
+            filtered = [x for x in result if x in allowed]
+            if filtered:
+                return filtered
+    return result
+
+
 class DatabaseAdapter:
     """Universal database adapter for SQLite and PostgreSQL"""
     
@@ -92,13 +147,10 @@ class DatabaseAdapter:
                         
                         from psycopg2 import pool
                         try:
-                            # Safe defaults for Docker/local and small Render instances.
-                            # Override via env when you really need more.
-                            minconn = max(2, int(os.getenv("DB_POOL_MINCONN", "2")))
-                            # Default headroom for concurrent DVR workers without hitting Postgres max_connections.
-                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "50")))
+                            minconn = max(1, int(os.getenv("DB_POOL_MINCONN", "5")))
+                            maxconn = max(minconn, int(os.getenv("DB_POOL_MAXCONN", "100")))
                         except ValueError:
-                            minconn, maxconn = 2, 50
+                            minconn, maxconn = 5, 100
                         # Thread-safe connection pool (single process → one adapter via get_db_adapter())
                         self.connection_pool = pool.ThreadedConnectionPool(
                             minconn=minconn,
@@ -161,8 +213,6 @@ class DatabaseAdapter:
         conn = None
         try:
             conn = self.get_connection(timeout=5)
-            if conn is None:
-                return False
             cursor = conn.cursor()
             if self.db_type == 'sqlite':
                 cursor.execute('SELECT 1')
@@ -189,20 +239,17 @@ class DatabaseAdapter:
             if self.db_type == 'sqlite':
                 conn.close()
             elif self.connection_pool:
-                # Only return connections that actually came from this pool.
-                # Otherwise, close them to avoid poisoning/leaking the pool.
-                from_pool = bool(getattr(conn, "_smartsafe_from_pool", False))
-                if from_pool:
-                    try:
-                        self.connection_pool.putconn(conn)
-                        logger.debug("✅ Connection returned to pool")
-                        return
-                    except Exception:
-                        pass
+                # Havuzdan gelip gelmediğini kontrol et
                 try:
-                    conn.close()
+                    # ThreadedConnectionPool için putconn
+                    self.connection_pool.putconn(conn)
+                    logger.debug("✅ Connection returned to pool")
                 except Exception:
-                    pass
+                    # Havuz dışı (direct) bir bağlantıysa veya hata varsa kapat
+                    try:
+                        conn.close()
+                    except:
+                        pass
             else:
                 try:
                     conn.close()
@@ -226,24 +273,12 @@ class DatabaseAdapter:
             else:  # PostgreSQL
                 # Try to use connection pool first
                 if self.connection_pool:
-                    start = time.time()
-                    last_err: Exception | None = None
-                    while (time.time() - start) < max(0.1, float(timeout or 0)):
-                        try:
-                            conn = self.connection_pool.getconn()
-                            try:
-                                setattr(conn, "_smartsafe_from_pool", True)
-                            except Exception:
-                                pass
-                            logger.debug("✅ Got connection from pool")
-                            return conn
-                        except Exception as pool_error:
-                            last_err = pool_error
-                            # Pool is exhausted or transiently unavailable; wait briefly and retry.
-                            time.sleep(0.05)
-
-                    logger.warning(f"⚠️ Connection pool exhausted (waited {timeout}s): {last_err}")
-                    return None
+                    try:
+                        conn = self.connection_pool.getconn()
+                        logger.debug("✅ Got connection from pool")
+                        return conn
+                    except Exception as pool_error:
+                        logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
                 
                 # Fallback to direct connection via secure connector
                 try:
@@ -3216,6 +3251,60 @@ class DatabaseAdapter:
             logger.error(traceback.format_exc())
             return []
 
+    def get_company_detection_config(self, company_id: str) -> Dict[str, Any]:
+        """Single source of truth for sector + required_ppe.
+
+        - Sector comes from `companies.sector`
+        - required_ppe comes from `companies.ppe_requirements` (if configured),
+          otherwise caller may fallback to sector defaults.
+
+        UI format: [{"id":"hairnet","mandatory":true}, ...] — sadece mandatory:true olanlar;
+        `mandatory:false` (ör. eldiven) pose-aware zorunlu listesine alınmaz.
+        """
+        try:
+            query = "SELECT sector, ppe_requirements FROM companies WHERE company_id = ?"
+            row = self.execute_query(query, (company_id,), fetch_one=True)
+            if not row or not isinstance(row, dict):
+                return {}
+
+            sector = (row.get("sector") or "").strip()
+            raw_ppe = row.get("ppe_requirements")
+
+            required_ppe = None
+            if raw_ppe is not None:
+                # sqlite may store JSON as TEXT; postgres as JSON already
+                if isinstance(raw_ppe, str):
+                    s = raw_ppe.strip()
+                    if s in ("", "null", "{}"):
+                        raw_ppe = None
+                    else:
+                        try:
+                            raw_ppe = json.loads(raw_ppe)
+                        except Exception:
+                            raw_ppe = None
+
+            inner_list = None
+            if isinstance(raw_ppe, dict):
+                inner_list = (
+                    raw_ppe.get("required_ppe")
+                    or raw_ppe.get("mandatory_ppe")
+                    or raw_ppe.get("mandatory")
+                )
+            elif isinstance(raw_ppe, list):
+                inner_list = raw_ppe
+
+            if inner_list is not None:
+                required_ppe = _normalize_company_ppe_requirements_list(
+                    inner_list, sector=sector or None
+                )
+
+            return {
+                "sector": sector or None,
+                "required_ppe": required_ppe,
+            }
+        except Exception:
+            return {}
+
 
 class CameraDiscoveryManager:
     """Keşfedilen kameraları veritabanı ile senkronize etmek için manager"""
@@ -3623,55 +3712,6 @@ class CameraDiscoveryManager:
             print(f"❌ Database adapter - get_company_info hatası: {e}")
             self.logger.error(f"❌ Failed to get company info: {e}")
             return None
-
-    def get_company_detection_config(self, company_id: str) -> Dict[str, Any]:
-        """Single source of truth for sector + required_ppe.
-        
-        - Sector comes from `companies.sector`
-        - required_ppe comes from `companies.ppe_requirements` (if configured),
-          otherwise caller may fallback to sector defaults.
-        """
-        try:
-            query = "SELECT sector, ppe_requirements FROM companies WHERE company_id = ?"
-            row = self.execute_query(query, (company_id,), fetch_one=True)
-            if not row or not isinstance(row, dict):
-                return {}
-
-            sector = (row.get("sector") or "").strip()
-            raw_ppe = row.get("ppe_requirements")
-
-            required_ppe = None
-            if raw_ppe:
-                # sqlite may store JSON as TEXT; postgres as JSON already
-                if isinstance(raw_ppe, str):
-                    try:
-                        import json as _json
-                        raw_ppe = _json.loads(raw_ppe)
-                    except Exception:
-                        raw_ppe = None
-
-                if isinstance(raw_ppe, dict):
-                    # Accept a few shapes:
-                    # - {"required_ppe": [...]}
-                    # - {"mandatory_ppe": [...]}
-                    # - {"mandatory": [...]}
-                    required_ppe = (
-                        raw_ppe.get("required_ppe")
-                        or raw_ppe.get("mandatory_ppe")
-                        or raw_ppe.get("mandatory")
-                    )
-                elif isinstance(raw_ppe, list):
-                    required_ppe = raw_ppe
-
-            if required_ppe is not None and not isinstance(required_ppe, list):
-                required_ppe = None
-
-            return {
-                "sector": sector or None,
-                "required_ppe": required_ppe,
-            }
-        except Exception:
-            return {}
 
 
 # ── Process-wide singletons (one PG pool per process, thread-safe) ─────────
