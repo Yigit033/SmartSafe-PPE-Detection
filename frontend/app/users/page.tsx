@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCompanyId } from "@/lib/session";
+import api from "@/lib/api";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -15,10 +16,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/users`,
-      );
-      const data = await response.json();
+      const data = await api.user.list(companyId);
       if (data.success) {
         setUsers(data.users);
       }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCompanyId } from "@/lib/session";
+import api from "@/lib/api";
 
 export default function ReportsPage() {
   const [violations, setViolations] = useState<any[]>([]);
@@ -15,10 +16,7 @@ export default function ReportsPage() {
   const fetchReports = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/violations`,
-      );
-      const data = await response.json();
+      const data = await api.violation.getViolations(companyId);
       if (data.success) {
         setViolations(data.violations);
       }

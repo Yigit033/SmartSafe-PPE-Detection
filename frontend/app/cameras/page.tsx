@@ -4,6 +4,8 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
+import api from "@/lib/api";
+import core from "@/lib/core";
 
 export default function CamerasPage() {
   return (
@@ -112,10 +114,7 @@ function CamerasContent() {
     const cid = getCompanyId();
     if (!cid) return;
     try {
-      const response = await fetch(
-        `http://127.0.0.1:4000/company/${cid}/cameras/groups`,
-      );
-      const data = await response.json();
+      const data = await api.camera.listGroups(cid);
       if (data.success) {
         setGroups(data.groups);
       } else {
@@ -131,30 +130,25 @@ function CamerasContent() {
     if (!cid) return;
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `http://127.0.0.1:4000/company/${cid}/cameras`,
-      );
-      const data = await response.json();
+      const data = await api.camera.list(cid);
       if (data.success) {
         setCameras(data.cameras);
         syncAiStates(cid, data.cameras);
       } else {
-        console.error("Cameras fetch failed:", data.error);
+        console.error("Cameras fetch failed");
       }
-    } catch (error) {
-      console.error("Error fetching cameras:", error);
+    } catch (error: any) {
+      console.error("Error fetching cameras:", error.message || error);
     } finally {
       setIsLoading(false);
     }
   };
 
+
   const syncAiStates = async (cid: string, _cams: any[]) => {
     try {
-      const res = await fetch(
-        `http://127.0.0.1:5000/api/company/${cid}/active-detections`,
-      );
-      const data = await res.json();
-      if (data.success && data.active_camera_ids?.length > 0) {
+      const data = await core.getActiveDetections(cid);
+      if (data.success && data.active_camera_ids && data.active_camera_ids.length > 0) {
         setEnabledAiCameras(data.active_camera_ids);
       }
     } catch {
@@ -185,21 +179,17 @@ function CamerasContent() {
 
     // Backend'e haber ver (Yeni durum currentStatus'un tersi olacak)
     const newAiStatus = !currentStatus;
-    const endpoint = newAiStatus ? "start-detection" : "stop-detection";
 
     try {
-      await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/${endpoint}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ camera_id: id }),
-        },
-      );
+      if (newAiStatus) {
+        await core.startDetection(companyId, id);
+      } else {
+        await core.stopDetection(companyId, id);
+      }
       // Görüntüleri tazelemek için refreshKey'i güncelle
       setRefreshKey(Date.now());
     } catch (error) {
-      console.error(`Error toggling AI ${endpoint}:`, error);
+      console.error(`Error toggling AI:`, error);
     }
   };
 
@@ -212,18 +202,14 @@ function CamerasContent() {
   ): Promise<string | null> => {
     if (!companyId) return null;
     try {
-      const r = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/cameras/${cameraId}/stream-status`,
-        { cache: "no-store" },
-      );
-      const body = await r.json().catch(() => null);
+      const body = await core.getStreamDiagnostics(companyId, cameraId);
       const st = body && body.status ? body.status : {};
       const state = st.status || "unknown";
       const code =
         st.last_error_code || (body?.error?.code as string) || "UNKNOWN";
       const reason =
         st.status_reason || (body?.error?.message as string) || "unknown";
-      return `State=${state} | Code=${code} | Reason=${reason} | HTTP=${r.status}`;
+      return `State=${state} | Code=${code} | Reason=${reason}`;
     } catch {
       return null;
     }
@@ -251,15 +237,7 @@ function CamerasContent() {
     const cid = getCompanyId();
     if (!cid) return;
     try {
-      const response = await fetch(
-        `http://127.0.0.1:4000/company/${cid}/cameras/${camera_id}/assign-group`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ group_id }),
-        },
-      );
-      const data = await response.json();
+      const data = await api.camera.assignToGroup(cid, camera_id, { group_id });
       if (data.success) {
         fetchCameras();
         fetchGroups();
@@ -281,27 +259,11 @@ function CamerasContent() {
       return;
     }
 
-    const url = editingGroup
-      ? `http://127.0.0.1:4000/company/${cid}/cameras/groups/${editingGroup.group_id}`
-      : `http://127.0.0.1:4000/company/${cid}/cameras/groups`;
-
-    const method = editingGroup ? "PATCH" : "POST";
-
-    console.log("Saving group to:", url, method, groupFormData);
-
     try {
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(groupFormData),
-      });
+      const data = editingGroup
+        ? await api.camera.updateGroup(cid, editingGroup.group_id, groupFormData)
+        : await api.camera.createGroup(cid, groupFormData);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Sunucu hatası (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
       if (data.success) {
         setIsGroupModalOpen(false);
         fetchGroups();
@@ -341,11 +303,7 @@ function CamerasContent() {
     )
       return;
     try {
-      const response = await fetch(
-        `http://127.0.0.1:4000/company/${cid}/cameras/groups/${group_id}`,
-        { method: "DELETE" },
-      );
-      const data = await response.json();
+      const data = await api.camera.removeGroup(cid, group_id);
       if (data.success) {
         fetchGroups();
         fetchCameras();
@@ -361,10 +319,7 @@ function CamerasContent() {
   const fetchDvrs = async () => {
     if (!companyId) return;
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/dvr`,
-      );
-      const data = await response.json();
+      const data = await api.dvr.list(companyId);
       if (data.success) {
         setDvrs(data.systems || []);
       }
@@ -410,13 +365,7 @@ function CamerasContent() {
       return;
     setIsDeletingDvr(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/dvr/${dvrId}`,
-        {
-          method: "DELETE",
-        },
-      );
-      const data = await response.json();
+      const data = await api.dvr.remove(companyId, dvrId);
       if (data.success) {
         fetchDvrs();
         fetchCameras();
@@ -436,11 +385,6 @@ function CamerasContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = editingCamera
-      ? `http://localhost:4000/company/${companyId}/cameras/${editingCamera.camera_id}`
-      : `http://localhost:4000/company/${companyId}/cameras`;
-
-    const method = editingCamera ? "PATCH" : "POST";
     const bodyData = editingCamera
       ? {
           camera_name: formData.camera_name,
@@ -453,12 +397,10 @@ function CamerasContent() {
       : formData;
 
     try {
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyData),
-      });
-      const data = await response.json();
+      const data = editingCamera
+        ? await api.camera.update(companyId, editingCamera.camera_id, bodyData as any)
+        : await api.camera.create(companyId, bodyData as any);
+
       if (data.success) {
         setIsModalOpen(false);
         fetchCameras();
@@ -476,13 +418,7 @@ function CamerasContent() {
   const confirmDeleteCamera = async () => {
     if (!cameraToDelete) return;
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/cameras/${cameraToDelete.camera_id}`,
-        {
-          method: "DELETE",
-        },
-      );
-      const data = await response.json();
+      const data = await api.camera.remove(companyId, cameraToDelete.camera_id);
       if (data.success) {
         setIsDeleteModalOpen(false);
         setCameraToDelete(null);

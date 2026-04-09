@@ -284,7 +284,7 @@ def create_blueprint(api):
             #     return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
             
             data = request.get_json() or {}
-            camera_id = data.get('camera_id')
+            camera_id = data if isinstance(data, str) else (data.get('camera_id') if isinstance(data, dict) else None)
             detection_mode = data.get('mode', 'ppe')
             confidence = data.get('confidence', 0.5)
             
@@ -547,7 +547,7 @@ def create_blueprint(api):
             #     return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 401
             
             data = request.get_json() or {}
-            camera_id = data.get('camera_id')
+            camera_id = data if isinstance(data, str) else (data.get('camera_id') if isinstance(data, dict) else None)
             logger.info(f"🛑 stop_detection called: company_id={company_id}, camera_id={camera_id}")
             
             if camera_id:

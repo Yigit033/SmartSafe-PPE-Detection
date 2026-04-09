@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getCompanyId } from "@/lib/session";
+import api from "@/lib/api";
 
 interface ViolationEvent {
   event_id: string;
@@ -41,10 +42,9 @@ export default function ViolationsPage() {
       try {
         const companyId = getCompanyId();
         if (!companyId) return;
-        const response = await fetch(
-          `http://localhost:4000/company/${companyId}/violation-events`,
-        );
-        const result = await response.json();
+        
+        const result = await api.violation.getEvents(companyId);
+        
         if (result.success) {
           setEvents(result.events);
         }
@@ -70,11 +70,8 @@ export default function ViolationsPage() {
     if (!ok) return;
     setDeletingAll(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}/violation-events/delete-all`,
-        { method: "POST" },
-      );
-      const result = await response.json().catch(() => ({}));
+      const result = await api.violation.deleteAllEvents(companyId);
+      
       if (result.success) {
         setEvents([]);
         setSelectedEvent(null);

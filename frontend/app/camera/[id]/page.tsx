@@ -7,6 +7,9 @@ import { getCompanyId } from "@/lib/session";
 import { goToCamerasPage } from "@/lib/camerasNavigation";
 import CameraLiveView from "@/components/camera/CameraLiveView";
 
+import api from "@/lib/api";
+import core from "@/lib/core";
+
 function CameraDetailContent() {
   const params = useParams();
   const rawId = params?.id;
@@ -17,13 +20,11 @@ function CameraDetailContent() {
   const [camera, setCamera] = useState<any | null>(undefined);
   const [enabledAiCameras, setEnabledAiCameras] = useState<string[]>([]);
 
+
   const syncAiStates = useCallback(async (cid: string) => {
     try {
-      const res = await fetch(
-        `http://127.0.0.1:5000/api/company/${cid}/active-detections`,
-      );
-      const data = await res.json();
-      if (data.success && data.active_camera_ids?.length > 0) {
+      const data = await core.getActiveDetections(cid);
+      if (data.success && data.active_camera_ids && data.active_camera_ids.length > 0) {
         setEnabledAiCameras(data.active_camera_ids);
       }
     } catch {
@@ -38,10 +39,7 @@ function CameraDetailContent() {
       return;
     }
     try {
-      const response = await fetch(
-        `http://127.0.0.1:4000/company/${cid}/cameras`,
-      );
-      const data = await response.json();
+      const data = await api.camera.list(cid);
       if (data.success && Array.isArray(data.cameras)) {
         const found = data.cameras.find(
           (c: any) => c.camera_id === decodedId,

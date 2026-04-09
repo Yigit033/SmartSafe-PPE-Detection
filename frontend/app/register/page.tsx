@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import api from "@/lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -34,23 +35,11 @@ export default function RegisterPage() {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:4000/company", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Kayıt başarılı, login sayfasına yönlendir veya direkt login yap
-        router.push("/login?registered=true");
-      } else {
-        setError(data.message || "Kayıt işlemi sırasında bir hata oluştu.");
-      }
-    } catch (err) {
+      await api.company.create(formData as any);
+      router.push("/login?registered=true");
+    } catch (err: any) {
       setError(
-        "Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.",
+        err.message || "Kayıt işlemi sırasında bir hata oluştu.",
       );
     } finally {
       setLoading(false);

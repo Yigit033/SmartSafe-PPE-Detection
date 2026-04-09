@@ -8,6 +8,8 @@ import {
   violationSnapshotUrl,
 } from "@/lib/violationAssets";
 
+import api from "@/lib/api";
+
 function ViolationThumb({ url }: { url: string | null }) {
   const [failed, setFailed] = useState(false);
   // Sabit yatay dikdörtgen çerçeve - Koyu zemin üzerinde dikey görseli korumak için object-contain
@@ -38,6 +40,8 @@ function ViolationThumb({ url }: { url: string | null }) {
   );
 }
 
+// StatsData interface is now unified via generated client types where possible, 
+// but we'll keep a local interface for specific dashboard needs if it maps differently.
 interface StatsData {
   active_cameras: number;
   max_cameras?: number;
@@ -62,18 +66,12 @@ export default function Home() {
       try {
         const companyId = getCompanyId();
         if (!companyId) return;
-        // Stats ve Events'i paralel çekelim
-        const [statsRes, eventsRes] = await Promise.all([
-          fetch(`http://localhost:4000/company/${companyId}/stats`, {
-            cache: "no-store",
-          }),
-          fetch(`http://localhost:4000/company/${companyId}/violation-events`, {
-            cache: "no-store",
-          }),
-        ]);
 
-        const statsResult = await statsRes.json();
-        const eventsResult = await eventsRes.json();
+        // Encore Client kullanarak paralel veri çekme
+        const [statsResult, eventsResult] = await Promise.all([
+          api.company.getStats(companyId),
+          api.violation.getEvents(companyId)
+        ]);
 
         setData(statsResult);
         if (eventsResult.success) {

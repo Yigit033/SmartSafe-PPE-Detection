@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCompanyId } from "@/lib/session";
+import api from "@/lib/api";
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
@@ -18,10 +19,7 @@ export default function SettingsPage() {
   const fetchCompanyData = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}`,
-      );
-      const data = await response.json();
+      const data = await api.company.getById(companyId);
       if (data.success) {
         setCompany(data.company);
         // PPE gereksinimlerini ayıkla
@@ -49,19 +47,11 @@ export default function SettingsPage() {
       const updates = Object.fromEntries(formData.entries());
       
       // PPE seçimlerini de her ihtimale karşı pakete dahil et
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            ...updates, 
-            ppe_requirements: ppeRequirements 
-          }),
-        },
-      );
+      const data = await api.company.updateProfile(companyId, { 
+        ...updates, 
+        ppe_requirements: ppeRequirements 
+      } as any);
 
-      const data = await response.json();
       if (data.success) {
         alert("Profil başarıyla güncellendi!");
         // Sektör değişmişse PPE de değişeceği için hepsini yenile
@@ -142,19 +132,11 @@ export default function SettingsPage() {
   const handleUpdatePPE = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/company/${companyId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            sector: company?.sector,
-            ppe_requirements: ppeRequirements 
-          }),
-        },
-      );
+      const data = await api.company.updateProfile(companyId, { 
+        sector: company?.sector,
+        ppe_requirements: ppeRequirements 
+      } as any);
 
-      const data = await response.json();
       if (data.success) {
         alert("PPE konfigürasyonu ve sektör başarıyla güncellendi!");
         fetchCompanyData();

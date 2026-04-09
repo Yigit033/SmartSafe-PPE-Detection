@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
 import { goToCamerasPage } from "@/lib/camerasNavigation";
+import api from "@/lib/api";
+import core from "@/lib/core";
 
 type SetupMode =
   | "select"
@@ -91,18 +93,10 @@ export default function CameraSetupPage() {
     }, 300);
 
     try {
-      const response = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/cameras/discover`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            network_range: "192.168.1.0/24",
-            auto_sync: false,
-          }),
-        },
-      );
-      const data = await response.json();
+      const data = await core.discoverCameras(companyId!, {
+        network_range: "192.168.1.0/24",
+        auto_sync: false,
+      });
 
       if (data.success && data.discovery_result?.cameras) {
         setDiscoveredCameras(data.discovery_result.cameras);
@@ -170,15 +164,7 @@ export default function CameraSetupPage() {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const resp = await fetch(
-        `http://localhost:5000/api/company/${companyId}/cameras/manual-test`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        },
-      );
-      const data = await resp.json();
+      const data = await core.testCamera(companyId!, formData);
       setTestResult({
         success: data.success,
         message: data.success
@@ -196,15 +182,7 @@ export default function CameraSetupPage() {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const resp = await fetch(
-        `http://localhost:4000/company/${companyId}/cameras`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        },
-      );
-      const data = await resp.json();
+      const data = await api.camera.create(companyId, formData as any);
       if (data.success) {
         setCompletedMode("single");
         setMode("success");
@@ -234,19 +212,12 @@ export default function CameraSetupPage() {
         location: batchData.location,
       }));
 
-      const resp = await fetch(
-        `http://localhost:5000/api/company/${companyId}/cameras/batch-provision`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            cameras,
-            use_onvif: batchData.use_onvif,
-            auto_detect_channels: true,
-          }),
-        },
-      );
-      const data = await resp.json();
+      const data = await core.batchProvision(companyId!, {
+        cameras,
+        use_onvif: batchData.use_onvif,
+        auto_detect_channels: true,
+      });
+
       if (data.success) {
         setCompletedMode("batch");
         setMode("success");
@@ -263,25 +234,13 @@ export default function CameraSetupPage() {
     setIsSaving(true);
     try {
       // 1. DVR'ı kaydet
-      const resp = await fetch(
-        `http://127.0.0.1:5000/api/company/${companyId}/dvr/add`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(dvrData),
-        },
-      );
-      const data = await resp.json();
+      const data = await core.addDVR(companyId!, dvrData);
 
       if (data.success) {
         // 2. Kanalları Keşfet
         setMode("dvr-channels");
         setIsDiscovering(true);
-        const discResp = await fetch(
-          `http://127.0.0.1:5000/api/company/${companyId}/dvr/${dvrData.dvr_id}/discover`,
-          { method: "POST" },
-        );
-        const discData = await discResp.json();
+        const discData = await core.discoverDVRChannels(companyId!, dvrData.dvr_id);
         if (discData.success) {
           setDvrChannels(discData.channels || []);
           // Varsayılan olarak tümünü seç

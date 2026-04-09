@@ -5,6 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 
+import api from "@/lib/api";
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,13 +30,7 @@ function LoginContent() {
     setSuccess("");
 
     try {
-      const response = await fetch("http://localhost:4000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const result = await response.json();
+      const result = await api.user.login({ email, password });
 
       if (result.success) {
         localStorage.setItem("user", JSON.stringify(result.user));
