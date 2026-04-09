@@ -221,6 +221,12 @@ class DatabaseAdapter:
                         return conn
                     except Exception as pool_error:
                         logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
+                    try:
+                        conn = self.connection_pool.getconn()
+                        logger.debug("✅ Got connection from pool")
+                        return conn
+                    except Exception as pool_error:
+                        logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
                 
                 # Fallback to direct connection via secure connector
                 try:
