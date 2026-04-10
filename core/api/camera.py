@@ -236,331 +236,6 @@ def create_blueprint(api):
             logger.error(f"❌ IP Camera MJPEG stream error: {e}")
             return jsonify({'error': str(e)}), 500
 
-    # Şirket dashboard
-    @bp.route('/company/<company_id>/dashboard', methods=['GET'])
-    def company_dashboard(company_id):
-        """Şirket dashboard"""
-        # Oturum kontrolü
-        user_data = api.validate_session()
-        if not user_data or user_data['company_id'] != company_id:
-            return redirect(f'/company/{company_id}/login')
-        
-        # Abonelik bilgilerini doğrudan backend'den al
-        try:
-            subscription_info = api.get_subscription_info_internal(company_id)
-            if subscription_info['success']:
-                # get_subscription_info_internal direkt subscription data döndürüyor, 'subscription' key'i yok
-                subscription_data = subscription_info
-            else:
-                subscription_data = {
-                    'subscription_type': 'BASIC',
-                    'used_cameras': 0,
-                    'max_cameras': 25,
-                    'is_active': True,
-                    'usage_percentage': 0
-                }
-        except Exception as e:
-            logger.error(f"❌ Dashboard subscription info error: {e}")
-            subscription_data = {
-                'subscription_type': 'BASIC',
-                'used_cameras': 0,
-                'max_cameras': 25,
-                'is_active': True,
-                'usage_percentage': 0
-            }
-        
-        # İstatistikleri ve son ihlalleri al
-        try:
-            stats = api.db.get_company_stats(company_id)
-            recent_violations = stats.get('recent_violations', [])
-        except Exception as e:
-            logger.error(f"❌ Dashboard stats error: {e}")
-            stats = {
-                'total_workers': 0,
-                'compliance_rate': 0,
-                'violations_today': 0
-            }
-            recent_violations = []
-        
-        # Şirkete ait kameraları al
-        try:
-            cameras = api.db.get_company_cameras(company_id)
-        except Exception as e:
-            logger.error(f"❌ Dashboard cameras error: {e}")
-            cameras = []
-
-        # İstatistikleri ve son ihlalleri al
-        try:
-            stats = api.db.get_company_stats(company_id)
-            recent_violations = stats.get('recent_violations', [])
-        except Exception as e:
-            logger.error(f"❌ Dashboard stats error: {e}")
-            stats = {
-                'total_workers': 0,
-                'compliance_rate': 0,
-                'violations_today': 0
-            }
-            recent_violations = []
-        
-        return render_template('dashboard.html', 
-                                    company_id=company_id, 
-                                    user_data=user_data,
-                                    subscription_data=subscription_data,
-                                    cameras=cameras,
-                                    stats=stats,
-                                    recent_violations=recent_violations)
-
-    # Şirket istatistikleri API (Enhanced)
-    @bp.route('/api/company/<company_id>/stats', methods=['GET'])
-    def get_company_stats(company_id):
-        """Unified şirket istatistikleri - Database'den gerçek kamera sayısı"""
-        user_data = api.validate_session()
-        if not user_data or user_data['company_id'] != company_id:
-            return jsonify({'error': 'Yetkisiz erişim'}), 401
-        
-        try:
-            # MultiTenant database'den base istatistikleri al
-            stats = api.db.get_company_stats(company_id)
-            
-            # Gerçek kamera sayısını database'den al (unified approach)
-            try:
-                cameras = api.db.get_company_cameras(company_id)
-                total_cameras = len(cameras)
-                active_cameras = len([c for c in cameras if c.get('status') == 'active'])
-                discovered_cameras = len([c for c in cameras if c.get('status') == 'discovered'])
-                
-                # Kamera istatistiklerini güncelle
-                stats.update({
-                    'active_cameras': active_cameras,
-                    'total_cameras': total_cameras,
-                    'discovered_cameras': discovered_cameras,
-                    'inactive_cameras': total_cameras - active_cameras
-                })
-                
-                logger.info(f"✅ Unified stats for company {company_id}: {total_cameras} cameras ({active_cameras} active, {discovered_cameras} discovered)")
-                
-            except Exception as camera_error:
-                logger.error(f"❌ Error getting camera stats: {camera_error}")
-                # Fallback to existing stats without camera updates
-            
-            # Enhanced stats with unified camera data
-            enhanced_stats = {
-                'active_cameras': stats.get('active_cameras', 0),
-                'total_cameras': stats.get('total_cameras', 0),
-                'discovered_cameras': stats.get('discovered_cameras', 0),
-                'compliance_rate': stats.get('compliance_rate', 0),
-                'today_violations': stats.get('today_violations', 0),
-                'active_workers': stats.get('active_workers', 0),
-                'total_detections': stats.get('total_detections', 0),
-                'monthly_violations': stats.get('monthly_violations', 0),
-                
-                # Trend indicators - Backward compatibility
-                'cameras_trend': stats.get('cameras_trend', 0),
-                'compliance_trend': stats.get('compliance_trend', 0),
-                'violations_trend': stats.get('violations_trend', 0),
-                'workers_trend': stats.get('workers_trend', 0),
-                'people_trend': stats.get('people_trend', 0),
-                'fps_trend': stats.get('fps_trend', 0),
-                'processing_trend': stats.get('processing_trend', 0),
-                
-                # Unified data source indicator
-                'data_source': 'unified_database',
-                'last_updated': datetime.now().isoformat()
-            }
-            
-            return jsonify(enhanced_stats)
-            
-        except Exception as e:
-            logger.error(f"❌ Stats error for company {company_id}: {e}")
-            return jsonify({
-                'error': 'İstatistikler getirilemedi',
-                'details': str(e)
-            }), 500
-
-    # Şirket kameraları API
-    @bp.route('/api/company/<company_id>/cameras', methods=['GET'])
-    def get_company_cameras(company_id):
-        """Şirket kameralarını getir - Unified Database Source"""
-        user_data = api.validate_session()
-        if not user_data or user_data['company_id'] != company_id:
-            return jsonify({'error': 'Yetkisiz erişim'}), 401
-        
-        try:
-            # Şirket varlığını kontrol et
-            company_info = api.db.get_company_info(company_id)
-            if not company_info:
-                logger.error(f"❌ Company not found: {company_id}")
-                return jsonify({'success': False, 'error': f'Şirket bulunamadı: {company_id}'}), 404
-
-            # Unified approach: Database'den kameraları al
-            cameras = api.db.get_company_cameras(company_id)
-            
-            # Enterprise camera manager entegrasyonu
-            if hasattr(api, 'camera_manager') and api.camera_manager:
-                # Real-time status update
-                for camera in cameras:
-                    try:
-                        # IP'den camera manager'da status kontrol et
-                        if camera.get('ip_address'):
-                            status_info = api._get_realtime_camera_status(camera['ip_address'])
-                            if status_info:
-                                camera.update(status_info)
-                    except Exception as e:
-                        logger.debug(f"Real-time status check failed for {camera.get('name', 'unknown')}: {e}")
-            
-            # Kamera sayısı ve summary bilgileri ekle
-            total_cameras = len(cameras)
-            active_cameras = len([c for c in cameras if c.get('status') == 'active'])
-            
-            result = {
-                'success': True, 
-                'cameras': cameras,
-                'total': total_cameras,
-                'active': active_cameras,
-                'summary': {
-                    'total_cameras': total_cameras,
-                    'active_cameras': active_cameras,
-                    'inactive_cameras': total_cameras - active_cameras,
-                    'last_updated': datetime.now().isoformat()
-                }
-            }
-            
-            logger.info(f"✅ Retrieved {total_cameras} cameras for company {company_id}")
-            return jsonify(result)
-            
-        except Exception as e:
-            logger.error(f"❌ Error getting cameras for company {company_id}: {e}")
-            return jsonify({'success': False, 'error': 'Kameralar getirilemedi'}), 500
-
-    # Kamera ekleme API
-    @bp.route('/api/company/<company_id>/cameras', methods=['POST'])
-    def add_camera(company_id):
-        """Yeni kamera ekleme"""
-        try:
-            logger.info(f"🚀 ADD CAMERA REQUEST STARTED")
-            logger.info(f"📋 Company ID: {company_id}")
-            logger.info(f"📡 Request method: {request.method}")
-            logger.info(f"📡 Request headers: {dict(request.headers)}")
-            logger.info(f"📡 Request data: {request.get_data()}")
-            
-            # Session kontrolü
-            session_id = request.cookies.get('session_id')
-            logger.info(f"🍪 Session ID from cookie: {session_id}")
-            
-            user_data = api.validate_session()
-            logger.info(f"👤 User validation result: {user_data is not None}")
-            if user_data:
-                logger.info(f"👤 User data: {user_data}")
-            
-            if not user_data or user_data['company_id'] != company_id:
-                logger.error(f"❌ Unauthorized access attempt")
-                logger.error(f"❌ User data: {user_data}")
-                logger.error(f"❌ Expected company_id: {company_id}")
-                return jsonify({'error': 'Yetkisiz erişim'}), 401
-            
-            logger.info(f"✅ User authorized successfully")
-            
-            # Abonelik limit kontrolü
-            logger.info(f"🔍 Checking subscription limits...")
-            subscription_info = api.get_subscription_info_internal(company_id)
-            logger.info(f"📊 Subscription info: {subscription_info}")
-                
-            if not subscription_info['success']:
-                logger.error(f"❌ Subscription info failed: {subscription_info}")
-                return jsonify({'success': False, 'error': 'Abonelik bilgileri alınamadı'}), 400
-            
-            # subscription_info doğrudan tüm bilgileri içeriyor, 'subscription' key'i yok
-            current_cameras = subscription_info['used_cameras']
-            max_cameras = subscription_info['max_cameras']
-            
-            logger.info(f"📈 Camera limits - Current: {current_cameras}, Max: {max_cameras}")
-            
-            # Limit kontrolü
-            if current_cameras >= max_cameras:
-                logger.warning(f"⚠️ Camera limit reached: {current_cameras}/{max_cameras}")
-                return jsonify({
-                    'success': False, 
-                    'error': f'Kamera limiti aşıldı! Mevcut: {current_cameras}/{max_cameras}',
-                    'limit_reached': True,
-                    'current_cameras': current_cameras,
-                    'max_cameras': max_cameras,
-                    'subscription_type': subscription_info['subscription_type']
-                }), 403
-            
-            logger.info(f"✅ Camera limit check passed")
-            
-            data = request.json
-            logger.info(f"📹 Raw camera data received: {data}")
-            
-            # Veri doğrulama - Field mapping düzeltmesi
-            # Frontend'den gelen field isimleri: camera_name, camera_location, camera_ip, camera_port, camera_protocol, camera_path
-            # Backend'in beklediği field isimleri: name, location, ip_address, port, protocol, stream_path
-            
-            # Field mapping yap
-            mapped_data = {
-                'name': data.get('camera_name'),
-                'location': data.get('camera_location'),
-                'ip_address': data.get('camera_ip'),
-                'port': data.get('camera_port', 8080),
-                'protocol': data.get('camera_protocol', 'http'),
-                'stream_path': data.get('camera_path', '/video'),
-                'username': data.get('camera_username', ''),
-                'password': data.get('camera_password', '')
-            }
-            
-            # Required fields kontrolü
-            required_fields = ['name', 'location', 'ip_address']
-            missing_fields = [field for field in required_fields if not mapped_data.get(field)]
-            
-            if missing_fields:
-                logger.error(f"❌ Missing required fields: {missing_fields}")
-                return jsonify({'success': False, 'error': f'Eksik alanlar: {", ".join(missing_fields)}'}), 400
-            
-            logger.info(f"✅ Data validation passed")
-            logger.info(f"📝 Camera name: {mapped_data.get('name')}")
-            logger.info(f"📍 Location: {mapped_data.get('location')}")
-            logger.info(f"🌐 IP Address: {mapped_data.get('ip_address')}")
-            logger.info(f"🔌 Port: {mapped_data.get('port')}")
-            logger.info(f"🔐 Protocol: {mapped_data.get('protocol')}")
-            logger.info(f"📁 Stream Path: {mapped_data.get('stream_path')}")
-            
-            # Kamera ekle
-            logger.info(f"💾 Calling database add_camera function...")
-            success, result = api.db.add_camera(company_id, mapped_data)
-            logger.info(f"💾 Database result - Success: {success}, Result: {result}")
-            
-            if success:
-                logger.info(f"✅ Camera added successfully with ID: {result}")
-                return jsonify({'success': True, 'camera_id': result})
-            else:
-                logger.error(f"❌ Camera addition failed: {result}")
-                return jsonify({'success': False, 'error': result}), 400
-                
-        except Exception as e:
-            logger.error(f"💥 EXCEPTION in add_camera: {e}")
-            logger.error(f"💥 Exception type: {type(e)}")
-            import traceback
-            logger.error(f"💥 Full traceback: {traceback.format_exc()}")
-            return jsonify({'success': False, 'error': 'Kamera eklenemedi'}), 500
-
-    # Şirket grafik verileri API
-    @bp.route('/api/company/<company_id>/chart-data', methods=['GET'])
-    def get_company_chart_data(company_id):
-        """Şirket grafik verileri"""
-        user_data = api.validate_session()
-        if not user_data or user_data['company_id'] != company_id:
-            return jsonify({'error': 'Yetkisiz erişim'}), 401
-        
-        try:
-            # Gerçek detection sonuçlarından grafik verilerini hesapla
-            chart_data = api.calculate_real_chart_data(company_id)
-            
-            return jsonify(chart_data)
-            
-        except Exception as e:
-            logger.error(f"❌ Grafik verileri yüklenemedi: {e}")
-            return jsonify({'error': 'Grafik verileri yüklenemedi'}), 500
-
     @bp.route('/api/company/<company_id>/cameras/discover', methods=['POST'])
     def discover_cameras(company_id):
         """Unified kamera keşif ve senkronizasyon sistemi"""
@@ -1271,109 +946,12 @@ def create_blueprint(api):
             logger.error(f"Traceback: {traceback.format_exc()}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @bp.route('/api/company/<company_id>/cameras/<camera_id>/stream')
-    def camera_stream(company_id, camera_id):
-        """Kamera stream sayfası"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data['company_id'] != company_id:
-                return redirect(f'/company/{company_id}/login')
-            
-            # Kamerayı veritabanından al
-            camera = api.db.get_camera_by_id(camera_id, company_id)
-            if not camera:
-                return "Kamera bulunamadı", 404
-            
-            # Stream URL'sini oluştur
-            protocol = camera.get('protocol', 'http')
-            port = camera.get('port', 8080)
-            stream_path = camera.get('stream_path', '/video')
-            username = camera.get('username', '')
-            password = camera.get('password', '')
-            
-            # URL oluştur - Android IP Webcam için optimize edilmiş
-            if username and password:
-                import urllib.parse
-                safe_username = urllib.parse.quote(username)
-                safe_password = urllib.parse.quote(password)
-                stream_url = f"{protocol}://{safe_username}:{safe_password}@{camera['ip_address']}:{port}{stream_path}"
-            else:
-                stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
-            
-            # Android IP Webcam için alternatif URL'ler
-            alternative_urls = [
-                f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",  # Snapshot
-                f"{protocol}://{camera['ip_address']}:{port}/video",     # Video stream
-                f"{protocol}://{camera['ip_address']}:{port}/mjpeg",     # MJPEG
-            ]
-            
-            return f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>{camera['camera_name']} - Canlı Görüntü</title>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body {{ margin: 0; padding: 20px; background: #000; color: white; font-family: Arial, sans-serif; }}
-                    .stream-container {{ text-align: center; }}
-                    .stream-title {{ margin-bottom: 20px; font-size: 24px; }}
-                    .stream-video {{ max-width: 100%; height: auto; border-radius: 10px; }}
-                    .stream-info {{ margin-top: 20px; font-size: 14px; color: #ccc; }}
-                    .error-message {{ color: #ff6b6b; margin-top: 20px; }}
-                    .url-info {{ font-size: 12px; color: #888; margin-top: 10px; }}
-                </style>
-                <script>
-                    let currentUrlIndex = 0;
-                    const streamUrls = [
-                        "{stream_url}",
-                        "{alternative_urls[0]}",
-                        "{alternative_urls[1]}",
-                        "{alternative_urls[2]}"
-                    ];
-                    
-                    function tryNextUrl() {{
-                        currentUrlIndex++;
-                        if (currentUrlIndex < streamUrls.length) {{
-                            document.getElementById('stream-img').src = streamUrls[currentUrlIndex];
-                            document.getElementById('url-info').textContent = 'Denenen URL: ' + streamUrls[currentUrlIndex];
-                        }} else {{
-                            document.getElementById('error-message').style.display = 'block';
-                            document.getElementById('url-info').textContent = 'Tüm URL\\'ler denendi, görüntü alınamadı';
-                        }}
-                    }}
-                </script>
-            </head>
-            <body>
-                <div class="stream-container">
-                    <div class="stream-title">{camera['camera_name']} - Canlı Görüntü</div>
-                    <img id="stream-img" src="{stream_url}" alt="Kamera Görüntüsü" class="stream-video" 
-                         onerror="tryNextUrl()">
-                    <div id="error-message" class="error-message" style="display: none;">
-                        <h2>Görüntü alınamadı</h2>
-                        <p>Kamera bağlantısını kontrol edin</p>
-                        <p>IP: {camera['ip_address']}:{port}</p>
-                        <p>Protokol: {protocol}</p>
-                    </div>
-                    <div id="url-info" class="url-info">Denenen URL: {stream_url}</div>
-                    <div class="stream-info">
-                        <p>IP: {camera['ip_address']} | Konum: {camera.get('location', 'N/A')}</p>
-                        <p>Son güncelleme: {camera.get('updated_at', 'N/A')}</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
-            
-        except Exception as e:
-            logger.error(f"Camera stream error: {e}")
-            return "Stream yüklenirken hata oluştu", 500
 
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/proxy-stream')
     def proxy_camera_stream(company_id, camera_id):
         """Kamera stream'ini proxy ile getir - CORS sorunlarını çözer"""
         from utils.redaction import redact_url
-        logger.info(f"🚀 [DEBUG] Proxy stream request for company={company_id}, camera={camera_id}")
+        logger.debug(f"🚀 [DEBUG] Proxy stream request for company={company_id}, camera={camera_id}")
         try:
             def _structured_error(http_status: int, code: str, message: str, *, details: dict | None = None):
                 payload = {
@@ -1494,7 +1072,7 @@ def create_blueprint(api):
                 channel_number = camera.get('channel_number')
 
                 stream_id = f"proxy:{company_id}:{camera_id}"
-                logger.info(f"🎥 Proxying DVR stream via service: {stream_id} url={redact_url(str(rtsp_url))}")
+                logger.info(f"🎥 Proxying DVR: {camera_id}")
 
                 if not sh.start_stream(
                     stream_id=stream_id,
@@ -1507,65 +1085,42 @@ def create_blueprint(api):
                     sector=None,
                     company_id=company_id,
                 ):
-                    return _structured_error(
-                        503,
-                        'STREAM_START_FAILED',
-                        'Stream başlatılamadı',
-                        details={'stream_id': stream_id},
-                    )
-
-                # Wait briefly for state transition.
-                deadline = time.time() + 3.0
-                last_status = None
-                while time.time() < deadline:
-                    last_status = sh.get_stream_status(stream_id) or {}
-                    st = (last_status.get('status') or '').lower()
-                    if st == 'active':
-                        break
-                    if st == 'error':
-                        return _structured_error(
-                            503,
-                            'STREAM_UNAVAILABLE',
-                            'DVR RTSP stream açılamadı',
-                            details={'stream_id': stream_id, 'status': last_status},
-                        )
-                    time.sleep(0.15)
-
-                if not last_status or (last_status.get('status') or '').lower() != 'active':
-                    # Still starting/probing → tell client to retry
-                    resp, status = _structured_error(
-                        503,
-                        'STREAM_STARTING',
-                        'Stream hazırlanıyor, lütfen tekrar deneyin',
-                        details={'stream_id': stream_id, 'status': last_status or {}},
-                    )
-                    resp.headers['Retry-After'] = '2'
-                    return resp, status
+                    return _structured_error(503, 'STREAM_START_FAILED', 'Stream başlatılamadı')
 
                 def _mjpeg_from_service():
-                    # 10-15 FPS is enough for dashboard view and avoids CPU spikes.
+                    # Generator içinde bekleme — API worker'ını bloklamaz
                     frame_sleep = 0.08
-                    last_frame_ts = time.time()
+                    start_wait = time.time()
+                    connected = False
+                    
                     while True:
-                        st = sh.get_stream_status(stream_id) or {}
-                        if (st.get('status') or '').lower() in ('stopping', 'stopped', 'error'):
+                        st_info = sh.get_stream_status(stream_id) or {}
+                        status = (st_info.get('status') or '').lower()
+                        
+                        if status == 'active':
+                            connected = True
+                            b64 = sh.get_latest_frame(stream_id)
+                            if b64:
+                                try:
+                                    frame_bytes = base64.b64decode(b64)
+                                    yield (b'--frame\r\n'
+                                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                                except Exception:
+                                    pass
+                        elif status == 'error':
+                            logger.error(f"❌ Stream error detected in proxy: {stream_id}")
                             break
-                        b64 = sh.get_latest_frame(stream_id)
-                        if b64:
-                            try:
-                                frame_bytes = base64.b64decode(b64)
-                                last_frame_ts = time.time()
-                                yield (b'--frame\r\n'
-                                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                            except Exception:
-                                pass
-                        else:
-                            # If no frames for a while, stop (prevents hanging connections).
-                            if time.time() - last_frame_ts > 5.0:
-                                break
+                        elif not connected and (time.time() - start_wait > 10.0):
+                            # 10 saniye boyunca hiç bağlanamazsa pes et
+                            logger.warning(f"⚠️ Stream connection timeout: {stream_id}")
+                            break
+                        elif (status in ('stopping', 'stopped')):
+                            break
+                            
                         time.sleep(frame_sleep)
 
                 return Response(_mjpeg_from_service(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
             # Standart IP Kamera Akışı (MJPEG)
             import requests
@@ -1596,7 +1151,7 @@ def create_blueprint(api):
             if not is_snapshot_path:
                 logger.info(f"🎥 Trying primary stream URL: {redact_url(str(stream_url))}")
                 try:
-                    response = requests.get(stream_url, auth=auth, headers=headers, timeout=10, stream=True)
+                    response = requests.get(stream_url, auth=auth, headers=headers, timeout=2, stream=True)
                     if response.status_code == 200:
                         logger.info(f"✅ Primary stream URL successful: {redact_url(str(stream_url))}")
                         return _stream_response(response)
@@ -1608,7 +1163,7 @@ def create_blueprint(api):
             for i, alt_url in enumerate(alternative_urls, 1):
                 try:
                     logger.info(f"🎥 Trying alternative URL {i}/{len(alternative_urls)}: {redact_url(str(alt_url))}")
-                    response = requests.get(alt_url, auth=auth, headers=headers, timeout=10, stream=True)
+                    response = requests.get(alt_url, auth=auth, headers=headers, timeout=2, stream=True)
                     if response.status_code == 200:
                         logger.info(f"✅ Alternative URL successful: {redact_url(str(alt_url))}")
                         return _stream_response(response)
@@ -1778,102 +1333,8 @@ def create_blueprint(api):
             logger.error(f"camera_stream_status error: {e}")
             return jsonify({'success': False, 'error': {'code': 'STATUS_ERROR', 'message': 'Status error'}}), 502
 
-    @bp.route('/api/company/<company_id>/cameras/groups', methods=['GET'])
-    def get_camera_groups(company_id):
-        """Kamera gruplarını getir"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            # Örnek kamera grupları
-            groups = [
-                {
-                    'group_id': 'GRP_001',
-                    'name': 'Ana Giriş',
-                    'location': 'Bina A - Zemin Kat',
-                    'camera_count': 3,
-                    'active_cameras': 3,
-                    'group_type': 'entrance',
-                    'created_at': '2025-01-01 10:00:00'
-                },
-                {
-                    'group_id': 'GRP_002',
-                    'name': 'İnşaat Alanı',
-                    'location': 'Dış Alan - Kuzey',
-                    'camera_count': 5,
-                    'active_cameras': 4,
-                    'group_type': 'work_area',
-                    'created_at': '2025-01-01 11:00:00'
-                },
-                {
-                    'group_id': 'GRP_003',
-                    'name': 'Depo & Yükleme',
-                    'location': 'Bina B - Arka',
-                    'camera_count': 2,
-                    'active_cameras': 2,
-                    'group_type': 'storage',
-                    'created_at': '2025-01-01 12:00:00'
-                }
-            ]
-            
-            return jsonify({'success': True, 'groups': groups})
-            
-        except Exception as e:
-            print(f"❌ Camera groups error: {str(e)}")
-            return jsonify({'success': False, 'error': str(e)}), 500
 
-    @bp.route('/api/company/<company_id>/cameras/groups', methods=['POST'])
-    def create_camera_group(company_id):
-        """Yeni kamera grubu oluştur"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            data = request.get_json()
-            if not data or not all(k in data for k in ['name', 'location', 'group_type']):
-                return jsonify({'success': False, 'error': 'Grup adı, lokasyon ve tür gerekli'}), 400
-            
-            # Grup ID oluştur
-            import uuid
-            group_id = f"GRP_{uuid.uuid4().hex[:8].upper()}"
-            
-            return jsonify({
-                'success': True,
-                'message': 'Kamera grubu oluşturuldu',
-                'group_id': group_id,
-                'name': data['name']
-            })
-            
-        except Exception as e:
-            print(f"❌ Create camera group error: {str(e)}")
-            return jsonify({'success': False, 'error': str(e)}), 500
 
-    @bp.route('/api/company/<company_id>/cameras/<camera_id>/group', methods=['PUT'])
-    def assign_camera_to_group(company_id, camera_id):
-        """Kamerayı gruba ata"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            data = request.get_json()
-            group_id = data.get('group_id')
-            
-            if not group_id:
-                return jsonify({'success': False, 'error': 'Grup ID gerekli'}), 400
-            
-            return jsonify({
-                'success': True,
-                'message': 'Kamera gruba atandı',
-                'camera_id': camera_id,
-                'group_id': group_id
-            })
-            
-        except Exception as e:
-            print(f"❌ Assign camera to group error: {str(e)}")
-            return jsonify({'success': False, 'error': str(e)}), 500
 
     @bp.route('/api/company/<company_id>/cameras/smart-discover', methods=['POST'])
     def smart_discover_cameras(company_id):
@@ -1915,206 +1376,8 @@ def create_blueprint(api):
                 'error': str(e)
             }), 500
 
-    @bp.route('/api/company/<company_id>/cameras/model-database', methods=['GET'])
-    def get_camera_model_database(company_id):
-        """Kamera modeli veritabanını getir"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            try:
-                from utils.camera_model_database import get_camera_database
-                
-                db = get_camera_database()
-                models = {}
-                
-                for model_id in db.get_all_models():
-                    model_info = db.get_model_info(model_id)
-                    models[model_id] = {
-                        'name': model_info.name,
-                        'manufacturer': model_info.manufacturer,
-                        'features': model_info.features,
-                        'ports': model_info.ports,
-                        'paths': model_info.paths
-                    }
-                
-                return jsonify({
-                    'success': True,
-                    'models': models,
-                    'total_models': len(models)
-                })
-                
-            except Exception as e:
-                logger.error(f"❌ Model database error: {e}")
-                return jsonify({
-                    'success': False,
-                    'error': f'Model veritabanı hatası: {str(e)}'
-                }), 500
-            
-        except Exception as e:
-            logger.error(f"❌ Model database API error: {e}")
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
 
-    @bp.route('/api/company/<company_id>/cameras/<camera_id>', methods=['GET'])
-    def get_camera_details(company_id, camera_id):
-        """Kamera detaylarını getir"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            # Kamera detaylarını veritabanından al
-            camera = api.db.get_camera_by_id(camera_id, company_id)
-            if not camera:
-                return jsonify({'success': False, 'error': 'Kamera bulunamadı'}), 404
-            
-            return jsonify({
-                'success': True,
-                'camera': camera
-            })
-            
-        except Exception as e:
-            logger.error(f"❌ Kamera detayları hatası: {e}")
-            return jsonify({'success': False, 'error': 'Kamera detayları alınamadı'}), 500
 
-    # Kamera silme API endpoint'i
-    @bp.route('/api/company/<company_id>/cameras/<camera_id>', methods=['DELETE'])
-    def delete_camera(company_id, camera_id):
-        """Kamera silme API endpoint'i"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            logger.info(f"🗑️ Deleting camera: {camera_id} for company: {company_id}")
-            
-            # Önce kameranın var olup olmadığını kontrol et
-            camera_exists = api.db.get_camera_by_id(camera_id, company_id)
-            if not camera_exists:
-                return jsonify({
-                    'success': False,
-                    'message': 'Kamera bulunamadı veya zaten silinmiş'
-                }), 404
-            
-            # Veritabanından kamerayı sil
-            success = api.db.delete_camera(camera_id, company_id)
-            
-            if not success:
-                return jsonify({
-                    'success': False,
-                    'message': 'Kamera silinemedi'
-                }), 400
-            
-            # Kamera yöneticisinden kamerayı ayır
-            try:
-                from integrations.cameras.camera_integration_manager import get_camera_manager
-                camera_manager = get_camera_manager()
-                
-                # Kamerayı bağlantıdan ayır
-                disconnect_result = camera_manager.disconnect_camera(camera_id)
-                logger.info(f"🔌 Kamera bağlantısı kesildi: {disconnect_result}")
-                    
-            except ImportError:
-                logger.info("⚠️ Enterprise camera manager bulunamadı, sadece veritabanından silindi")
-            
-            return jsonify({
-                'success': True,
-                'message': f'Kamera {camera_id} başarıyla silindi',
-                'camera_id': camera_id
-            })
-                
-        except Exception as e:
-            logger.error(f"❌ Camera deletion failed: {e}")
-            return jsonify({
-                'success': False,
-                'message': f'Kamera silinirken hata oluştu: {str(e)}'
-            }), 500
-
-    # Kamera düzenleme API endpoint'i
-    @bp.route('/api/company/<company_id>/cameras/<camera_id>', methods=['PUT'])
-    def update_camera(company_id, camera_id):
-        """Kamera düzenleme API endpoint'i"""
-        try:
-            user_data = api.validate_session()
-            if not user_data or user_data.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
-            
-            data = request.get_json()
-            logger.info(f"✏️ Updating camera: {camera_id} for company: {company_id}")
-            
-            logger.info(f"📝 Received data: {data}")
-            
-            # Database'de kamerayı güncelle - frontend field names'i kullan
-            camera_data = {
-                'name': data.get('camera_name', data.get('name', '')),
-                'location': data.get('camera_location', data.get('location', '')),
-                'ip_address': data.get('camera_ip', data.get('ip_address', '')),
-                'port': data.get('camera_port', data.get('port', 8080)),
-                'protocol': data.get('camera_protocol', data.get('protocol', 'http')),
-                'stream_path': data.get('camera_path', data.get('stream_path', '/video')),
-                'username': data.get('camera_username', data.get('username', '')),
-                'password': data.get('camera_password', data.get('password', ''))
-            }
-            
-            logger.info(f"📝 Processed camera data: {camera_data}")
-            
-            # Database update
-            success = api.db.update_camera(camera_id, company_id, camera_data)
-            
-            if not success:
-                return jsonify({
-                    'success': False,
-                    'message': 'Veritabanında kamera güncellenemedi'
-                }), 500
-            
-            try:
-                from integrations.cameras.camera_integration_manager import get_camera_manager
-                camera_manager = get_camera_manager()
-                
-                # Kamera konfigürasyonunu güncelle
-                if camera_id in camera_manager.camera_configs:
-                    config = camera_manager.camera_configs[camera_id]
-                    
-                    if camera_data['name']:
-                        config.name = camera_data['name']
-                    if camera_data['ip_address']:
-                        config.connection_url = f"{camera_data['protocol']}://{camera_data['ip_address']}:{camera_data['port']}{camera_data['stream_path']}"
-                    
-                    # Resolution ve FPS güncelleme (eğer varsa)
-                    if 'resolution' in data:
-                        res_parts = data['resolution'].split('x')
-                        if len(res_parts) == 2:
-                            config.resolution = (int(res_parts[0]), int(res_parts[1]))
-                    
-                    if 'fps' in data:
-                        config.fps = int(data['fps'])
-                
-                return jsonify({
-                    'success': True,
-                    'message': 'Kamera başarıyla güncellendi',
-                    'camera_id': camera_id,
-                    'updated_fields': list(camera_data.keys())
-                })
-                    
-            except ImportError:
-                # Fallback: Sadece database güncellemesi
-                return jsonify({
-                    'success': True,
-                    'message': 'Kamera başarıyla güncellendi',
-                    'camera_id': camera_id,
-                    'updated_fields': list(camera_data.keys())
-                })
-                
-        except Exception as e:
-            logger.error(f"❌ Camera update failed: {e}")
-            return jsonify({
-                'success': False,
-                'message': f'Kamera güncellenirken hata oluştu: {str(e)}'
-            }), 500
 
     # Kamera durumu API endpoint'i
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/status', methods=['GET'])
@@ -2158,138 +1421,6 @@ def create_blueprint(api):
                 'success': False,
                 'message': f'Kamera durumu alınırken hata oluştu: {str(e)}'
             }), 500
-
-    @bp.route('/company/<company_id>/cameras', methods=['GET'])
-    def camera_management(company_id):
-        """Kamera yönetimi sayfası - Yeni Geliştirilmiş Sistem"""
-        user_data = api.validate_session()
-        if not user_data or user_data['company_id'] != company_id:
-            return redirect(f'/company/{company_id}/login')
-        
-        return render_template('camera_management.html', 
-                                    company_id=company_id, 
-                                    user_data=user_data)
-
-    @bp.route('/api/company/<company_id>/ppe-config', methods=['PUT'])
-    def update_ppe_config(company_id):
-        """Update company PPE configuration"""
-        try:
-            # Session kontrolü
-            if not api.validate_session():
-                return jsonify({'success': False, 'error': 'Oturum geçersiz'}), 401
-            
-            if session.get('company_id') != company_id:
-                return jsonify({'success': False, 'error': 'Yetkisiz erişim'}), 403
-            
-            data = request.json
-            required_ppe = data.get('required_ppe', [])
-            optional_ppe = data.get('optional_ppe', [])
-            confidence_threshold = data.get('confidence_threshold', 0.6)
-            detection_interval = data.get('detection_interval', 3)
-
-            
-            # Geçerli PPE türleri - tam liste (24 tane) + Eski kayıtlar için uyumluluk
-            valid_ppe_types = [
-                'helmet', 'safety_vest', 'safety_shoes', 'gloves', 'glasses', 'hairnet',
-                'face_mask', 'apron', 'safety_suit', 'chemical_suit', 'respiratory_protection',
-                'special_gloves', 'insulated_gloves', 'dielectric_boots', 'arc_flash_suit',
-                'ear_protection', 'life_jacket', 'marine_helmet', 'waterproof_shoes',
-                'aviation_helmet', 'reflective_vest', 'aviation_shoes', 'safety_harness',
-                'safety_glasses'
-            ]
-            
-            # Eski kayıtlar için uyumluluk mapping'i
-            ppe_type_mapping = {
-                'vest': 'safety_vest',
-                'shoes': 'safety_shoes',
-                'mask': 'face_mask',
-                'suit': 'safety_suit',
-                'boots': 'safety_shoes',
-                'hat': 'helmet',
-                'cap': 'helmet'
-            }
-            
-            # Validation
-            if not required_ppe and not optional_ppe:
-                return jsonify({'success': False, 'error': 'En az bir PPE türü seçmelisiniz'}), 400
-            
-            # PPE türlerini validate et ve eski kayıtları dönüştür
-            all_ppe = required_ppe + optional_ppe
-            normalized_ppe = []
-            
-            for ppe_type in all_ppe:
-                # Eski kayıtları yeni formata dönüştür
-                if ppe_type in ppe_type_mapping:
-                    normalized_ppe.append(ppe_type_mapping[ppe_type])
-                    logger.info(f"🔄 PPE türü dönüştürüldü: {ppe_type} → {ppe_type_mapping[ppe_type]}")
-                elif ppe_type in valid_ppe_types:
-                    normalized_ppe.append(ppe_type)
-                else:
-                    return jsonify({'success': False, 'error': f'Geçersiz PPE türü: {ppe_type}'}), 400
-            
-            # Normalize edilmiş PPE'leri güncelle
-            required_ppe = [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in required_ppe]
-            optional_ppe = [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in optional_ppe]
-            
-            # Duplicate kontrolü
-            if set(required_ppe) & set(optional_ppe):
-                return jsonify({'success': False, 'error': 'Bir PPE türü hem zorunlu hem opsiyonel olamaz'}), 400
-            
-            # PPE konfigürasyonu oluştur
-            ppe_config = {
-                'required': required_ppe,
-                'optional': optional_ppe
-            }
-            
-            # Compliance ayarları
-            compliance_settings = {
-                'confidence_threshold': float(confidence_threshold),
-                'detection_interval': int(detection_interval),
-                'updated_at': datetime.now().isoformat()
-            }
-            
-            # Database güncelleme
-            conn = api.db.get_connection()
-            cursor = conn.cursor()
-            
-            # Eski PPE türlerini temizle ve yeni formata dönüştür
-            cleaned_ppe_config = {
-                'required': [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in ppe_config['required']],
-                'optional': [ppe_type_mapping.get(ppe, ppe) if ppe in ppe_type_mapping else ppe for ppe in ppe_config['optional']]
-            }
-            
-            placeholder = api.db.get_placeholder() if hasattr(api.db, 'get_placeholder') else '?'
-            cursor.execute(f'''
-                UPDATE companies 
-                SET required_ppe = {placeholder},
-                    ppe_requirements = {placeholder},
-                    compliance_settings = {placeholder},
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE company_id = {placeholder}
-            ''', (json.dumps(cleaned_ppe_config), json.dumps(cleaned_ppe_config), json.dumps(compliance_settings), company_id))
-            
-            if cursor.rowcount == 0:
-                api.db.close_connection(conn)
-                return jsonify({'success': False, 'error': 'Şirket bulunamadı'}), 404
-            
-            conn.commit()
-            api.db.close_connection(conn)
-            
-            logger.info(f"✅ PPE config updated for company {company_id}: {len(cleaned_ppe_config['required'])} required, {len(cleaned_ppe_config['optional'])} optional")
-            
-            return jsonify({
-                'success': True,
-                'message': 'PPE konfigürasyonu başarıyla güncellendi',
-                'config': {
-                    'required': cleaned_ppe_config['required'],
-                    'optional': cleaned_ppe_config['optional'],
-                    'settings': compliance_settings
-                }
-            })
-            
-        except Exception as e:
-            logger.error(f"❌ PPE config güncelleme hatası: {e}")
-            return jsonify({'success': False, 'error': 'Güncelleme başarısız'}), 500
 
     @bp.route('/api/company/<company_id>/ppe-config', methods=['GET'])
     def get_ppe_config(company_id):

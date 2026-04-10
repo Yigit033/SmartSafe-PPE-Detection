@@ -43,6 +43,7 @@ function CamerasContent() {
   const [failedCameraDiagnostics, setFailedCameraDiagnostics] = useState<
     Record<string, string>
   >({});
+  const [loadedCameras, setLoadedCameras] = useState<string[]>([]);
 
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [groups, setGroups] = useState<any[]>([]);
@@ -128,6 +129,7 @@ function CamerasContent() {
   const fetchCameras = async () => {
     const cid = getCompanyId();
     if (!cid) return;
+    setLoadedCameras([]);
     setIsLoading(true);
     try {
       const data = await api.camera.list(cid);
@@ -703,8 +705,12 @@ function CamerasContent() {
                       : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
                   }
                   alt={camera.camera_name}
-                  className="w-full h-full object-contain bg-slate-950 transition-transform duration-700 group-hover:scale-105"
-                  onError={(e) => {
+                  className={`w-full h-full transition-all duration-700 group-hover:scale-105 ${
+                    failedCameras.includes(camera.camera_id)
+                      ? "opacity-0"
+                      : "object-contain bg-slate-950 opacity-100"
+                  }`}
+                  onError={() => {
                     setFailedCameras((prev) => [
                       ...new Set([...prev, camera.camera_id]),
                     ]);
@@ -715,12 +721,13 @@ function CamerasContent() {
                         [camera.camera_id]: diag,
                       }));
                     });
-                    (e.target as HTMLImageElement).src =
-                      "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop";
-                    (e.target as HTMLImageElement).className =
-                      "w-full h-full object-cover opacity-10 grayscale";
                   }}
-                  onLoad={() => {
+                  onLoad={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    // Eğer broken image ikonu vs. yüklenirse diye basit bir check
+                    if (target.naturalWidth <= 1) return; 
+                    
+                    setLoadedCameras((prev) => [...new Set([...prev, camera.camera_id])]);
                     setFailedCameras((prev) =>
                       prev.filter((id) => id !== camera.camera_id),
                     );
@@ -781,7 +788,13 @@ function CamerasContent() {
 
                 <div className="absolute top-4 left-4 flex gap-2">
                   <div
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white shadow-lg transition-colors duration-500 ${failedCameras.includes(camera.camera_id) ? "bg-slate-700" : "bg-red-500"}`}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white shadow-lg transition-all duration-500 ${
+                      failedCameras.includes(camera.camera_id)
+                        ? "bg-slate-700 opacity-100"
+                        : loadedCameras.includes(camera.camera_id)
+                          ? "bg-red-500 opacity-100"
+                          : "opacity-0"
+                    }`}
                   >
                     <span
                       className={`h-1.5 w-1.5 rounded-full bg-white ${failedCameras.includes(camera.camera_id) ? "" : "animate-pulse"}`}

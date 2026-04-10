@@ -323,7 +323,7 @@ class DVRStreamHandler:
         # Detect brand if not provided
         if not brand:
             brand = self.detect_dvr_brand(ip_address, username, password, rtsp_port)
-            logger.info(f"🔍 Detected DVR brand: {brand}")
+            logger.debug(f"🔍 Detected DVR brand: {brand}")
         
         # Get brand-specific patterns
         patterns = self.dvr_url_patterns.get(brand, self.dvr_url_patterns['generic'])
@@ -427,7 +427,7 @@ class DVRStreamHandler:
                 unique_urls.append(url)
                 seen.add(url)
         
-        logger.info(f"🎯 Generated {len(unique_urls)} RTSP URLs for channel {channel_number} (brand: {brand})")
+        logger.debug(f"🎯 Generated {len(unique_urls)} RTSP URLs for channel {channel_number} (brand: {brand})")
         return unique_urls
 
     def _create_capture_tcp(self, url: str, open_timeout: int = None, read_timeout: int = None) -> cv2.VideoCapture:
@@ -466,7 +466,7 @@ class DVRStreamHandler:
         self._success_url_cache[cache_key] = url
         # TTL success cache (prevents immediate re-discovery storms)
         self._ttl_set(self._probe_success_ttl, cache_key, url, self._probe_ttl_success_s)
-        logger.info(f"⚡ URL cached: {cache_key!r} → {redact_url(str(url))}")
+        logger.debug(f"⚡ URL cached: {cache_key!r}")
 
         # Veritabanına da kaydet (persistent cache)
         try:
@@ -503,7 +503,7 @@ class DVRStreamHandler:
             if db_url:
                 # Bellek cache'ine de yükle
                 self._success_url_cache[cache_key] = db_url
-                logger.info(f"⚡ URL loaded from DB cache: {cache_key!r} → {db_url}")
+                logger.info(f"⚡ URL cache hit: {ip_address} (ch{channel_number})")
                 return db_url
         except Exception as e:
             logger.debug(f"ℹ️ DB URL cache okunamadı (non-critical): {e}")
@@ -713,6 +713,10 @@ class DVRStreamHandler:
             logger.error(f"❌ Network connectivity test failed: {e}")
             return False
     
+        except Exception as e:
+            logger.error(f"❌ Start stream error: {e}")
+            return False
+
     def start_stream(
         self,
         stream_id: str,
@@ -726,68 +730,42 @@ class DVRStreamHandler:
         company_id: Optional[str] = None,
         required_ppe: Optional[list] = None,
     ) -> bool:
-        """Start streaming with ONVIF-first URL resolution + fallback to guessed URL."""
+        """Kayıtlı URL veya ONVIF üzerinden akışı başlatır. Zaten aktifse anında döner."""
         try:
-            # ── ONVIF URI resolution: prefer device-provided URI ─────────
+            # 1. Hızlı Kontrol: Stream zaten aktif mi?
+            with self._lock:
+                if stream_id in self.active_streams:
+                    st = self.active_streams[stream_id]
+                    status = st.get('status')
+                    if status in ('active', 'starting'):
+                        logger.debug(f"ℹ️ Stream zaten aktif veya başlatılıyor ({status}): {stream_id}")
+                        if stream_id not in self.frame_buffers:
+                            self.frame_buffers[stream_id] = []
+                        return True
+                    else:
+                        # Stream var ama durmuş veya hatalı -> Yeniden başlat
+                        logger.info(f"🔄 Stream {stream_id} durumu '{status}', yeniden başlatılıyor...")
+                else:
+                    # Stream listede yok -> Yeni oluşturulacak
+                    self.active_streams[stream_id] = {}
+
+            # 2. URL Çözümleme Stratejisi (Cache -> ONVIF -> Default)
             effective_url = rtsp_url
             if ip_address and channel_number:
-                onvif_uri = self._try_onvif_stream_uri(
-                    ip_address,
-                    username,
-                    password,
-                    channel_number,
-                    company_id=company_id,
-                )
-                if onvif_uri:
-                    effective_url = onvif_uri
-                    logger.info(
-                        f"✅ ONVIF URI kullanılıyor: {stream_id} kanal {channel_number}"
-                    )
-
-            if stream_id in self.active_streams:
-                existing_status = self.active_streams[stream_id].get('status')
-                if existing_status == 'active':
-                    logger.warning(f"⚠️ Stream already active: {stream_id}")
-                    # Ensure frame buffer exists even if stream was started elsewhere
-                    if stream_id not in self.frame_buffers:
-                        self.frame_buffers[stream_id] = []
-                    return True
+                cached_url = self._get_cached_url(ip_address, channel_number, company_id=company_id)
+                if cached_url:
+                    effective_url = cached_url
+                    logger.debug(f"⚡ Kayıtlı URL kullanılıyor: {stream_id}")
                 else:
-                    # Restart stream if present but not active
-                    logger.info(f"🔄 Stream {stream_id} is in status '{existing_status}', restarting...")
-                    self.active_streams[stream_id].update({
-                        'rtsp_url': effective_url,
-                        'status': 'starting',
-                        'start_time': time.time(),
-                        'frame_count': 0,
-                        'error_count': 0,
-                        'ip_address': ip_address,
-                        'username': username,
-                        'password': password,
-                        'rtsp_port': rtsp_port,
-                        'channel_number': channel_number,
-                        'sector': sector or self.active_streams[stream_id].get('sector'),
-                        'ppe_detection_active': False,
-                    })
-                    self._ensure_stream_config(
-                        stream_id,
-                        company_id=company_id,
-                        sector=sector,
-                        required_ppe=required_ppe,
+                    onvif_uri = self._try_onvif_stream_uri(
+                        ip_address, username, password, channel_number, company_id=company_id
                     )
-                    self._transition(stream_id, "starting", reason="restart_requested", error_code=None)
-                    if stream_id not in self.frame_buffers:
-                        self.frame_buffers[stream_id] = []
-                    thread = threading.Thread(
-                        target=self._stream_worker,
-                        args=(stream_id, effective_url, ip_address, username, password, rtsp_port, channel_number),
-                        daemon=True
-                    )
-                    thread.start()
-                    return True
-                
-            # Initialize stream info
-            self.active_streams[stream_id] = {
+                    if onvif_uri:
+                        effective_url = onvif_uri
+                        logger.info(f"✅ ONVIF URI başarıyla çözüldü: {stream_id}")
+
+            # 3. Stream Metadata Güncelleme ve Worker Başlatma
+            self.active_streams[stream_id].update({
                 'rtsp_url': effective_url,
                 'status': 'starting',
                 'start_time': time.time(),
@@ -798,19 +776,10 @@ class DVRStreamHandler:
                 'password': password,
                 'rtsp_port': rtsp_port,
                 'channel_number': channel_number,
-                'sector': sector or 'construction',
-                'status_reason': 'init',
-                'last_error_code': None,
-                'last_transition_ts': time.time(),
+                'sector': sector or self.active_streams[stream_id].get('sector', 'construction'),
                 'ppe_detection_active': False,
-                'detection_result': {
-                    'detections': [],
-                    'people_detected': 0,
-                    'compliance_rate': 100,
-                    'ppe_violations': [],
-                    'timestamp': time.time()
-                }
-            }
+            })
+
             self._ensure_stream_config(
                 stream_id,
                 company_id=company_id,
@@ -818,23 +787,23 @@ class DVRStreamHandler:
                 required_ppe=required_ppe,
             )
             self._transition(stream_id, "starting", reason="start_requested", error_code=None)
-            
-            self.frame_buffers[stream_id] = []
-            
-            # Start streaming thread
+
+            if stream_id not in self.frame_buffers:
+                self.frame_buffers[stream_id] = []
+
             thread = threading.Thread(
                 target=self._stream_worker,
                 args=(stream_id, effective_url, ip_address, username, password, rtsp_port, channel_number),
                 daemon=True
             )
             thread.start()
-            
-            logger.info(f"✅ Stream started: {stream_id}")
+            logger.info(f"✅ Stream worker başlatıldı: {stream_id}")
             return True
             
         except Exception as e:
             logger.error(f"❌ Start stream error: {e}")
             return False
+
 
     _onvif_fail_cache: Dict[str, float] = {}
     _ONVIF_FAIL_TTL = 300  # 5 min
@@ -901,7 +870,7 @@ class DVRStreamHandler:
                         logger.warning(f"⚠️ Empty frame data for {stream_id}")
                         return None
                 else:
-                    logger.warning(f"⚠️ No frame buffer for {stream_id}")
+                    logger.debug(f"⚠️ No frame buffer for {stream_id}")
                     self.frame_buffers[stream_id] = []
                 return None
         except Exception as e:
@@ -1152,7 +1121,7 @@ class DVRStreamHandler:
             company_id = (st.get("immutable_config") or {}).get("company_id")
 
         try:
-            logger.info(f"🎥 Opening RTSP stream: {stream_id} -> {rtsp_url}")
+            logger.info(f"🎥 Opening RTSP stream: {stream_id}")
             
             # Test network connectivity first
             if ip_address and rtsp_port:
@@ -1175,7 +1144,7 @@ class DVRStreamHandler:
                         if cap.isOpened():
                             ret, test_frame = cap.read()
                             if ret and test_frame is not None:
-                                logger.info(f"⚡ Channel {channel_number}: Instant connect via cached URL")
+                                logger.debug(f"⚡ Channel {channel_number}: Instant connect via cached URL")
                                 successful_url = cached_url
                     except Exception:
                         pass
@@ -1183,7 +1152,7 @@ class DVRStreamHandler:
                         if cap:
                             cap.release()
                             cap = None
-                        logger.info(f"⚠️ Channel {channel_number}: Cached URL stale, falling back to discovery")
+                        logger.debug(f"⚠️ Channel {channel_number}: Cached URL stale, falling back to discovery")
 
             # ── Full Discovery (yalnızca cache çalışmazsa) ───────────────
             if not successful_url:
@@ -1193,7 +1162,7 @@ class DVRStreamHandler:
                 if all([ip_address, username, password, rtsp_port, channel_number]):
                     brand_urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number)
                     urls_to_try.extend(brand_urls)
-                    logger.info(f"🎯 Channel {channel_number}: Will try {len(urls_to_try)} different URL patterns")
+                    logger.debug(f"🎯 Channel {channel_number}: Will try {len(urls_to_try)} different URL patterns")
                 else:
                     logger.warning(f"⚠️ Channel {channel_number}: Missing parameters for enhanced URL generation")
 
@@ -1208,29 +1177,29 @@ class DVRStreamHandler:
 
                 for i, url in enumerate(urls_to_try):
                     try:
-                        logger.info(f"🔄 Channel {channel_number}: Trying RTSP URL {i+1}/{len(urls_to_try)}: {url}")
+                        logger.debug(f"🔄 Channel {channel_number}: Trying RTSP URL {i+1}/{len(urls_to_try)}: {redact_url(url)}")
 
                         cap = self._create_capture_tcp(url)
 
                         if cap.isOpened():
                             ret, test_frame = cap.read()
                             if ret and test_frame is not None:
-                                logger.info(f"✅ Channel {channel_number}: Successfully opened RTSP stream: {url}")
+                                logger.info(f"✅ Channel {channel_number}: Stream found")
                                 successful_url = url
                                 break
                             else:
-                                logger.warning(f"⚠️ Channel {channel_number}: Failed to read frame: {url}")
+                                logger.debug(f"⚠️ Channel {channel_number}: Failed to read frame: {redact_url(url)}")
                                 if cap:
                                     cap.release()
                                     cap = None
                         else:
-                            logger.warning(f"⚠️ Channel {channel_number}: Failed to open URL: {url}")
+                            logger.debug(f"⚠️ Channel {channel_number}: Failed to open URL: {redact_url(url)}")
                             if cap:
                                 cap.release()
                                 cap = None
 
                     except Exception as e:
-                        logger.warning(f"⚠️ Channel {channel_number}: Failed to open URL {url}: {e}")
+                        logger.debug(f"⚠️ Channel {channel_number}: Failed to open URL {redact_url(url)}: {e}")
                         if cap:
                             cap.release()
                             cap = None
@@ -1250,7 +1219,7 @@ class DVRStreamHandler:
             # Update stream info with successful URL
             self.active_streams[stream_id]['rtsp_url'] = successful_url
             self._transition(stream_id, "active", reason="stream_opened", error_code=None)
-            logger.info(f"✅ RTSP stream opened successfully: {stream_id} -> {successful_url}")
+            logger.debug(f"✅ RTSP stream ready: {stream_id}")
             
             # Immediately try to read a frame to ensure stream is working
             try:
@@ -1263,10 +1232,10 @@ class DVRStreamHandler:
                     if stream_id in self.frame_buffers:
                         self.frame_buffers[stream_id].append(jpeg_base64)
                     
-                    logger.info(f"✅ Initial frame captured for {stream_id}")
+                    logger.debug(f"✅ Initial frame captured for {stream_id}")
                 else:
                     logger.warning(f"⚠️ Initial frame read failed for {stream_id}")
-            except Exception as e:
+            except Exception as e:  
                 logger.warning(f"⚠️ Initial frame processing failed for {stream_id}: {e}")
             
             frame_count = 0

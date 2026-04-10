@@ -326,7 +326,7 @@ class ONVIFDeviceManager:
             return result
 
         except Exception as e:
-            logger.warning(f"⚠️ ONVIF cihaz bilgisi alınamadı ({ip}:{port}): {e}")
+            logger.debug(f"ONVIF cihaz bilgisi alınamadı ({ip}:{port}): {e}")
             return self._fallback_device_info(ip, port, username, password)
 
     def _fallback_device_info(self, ip: str, port: int,
@@ -413,7 +413,7 @@ class ONVIFDeviceManager:
             return result
 
         except Exception as e:
-            logger.warning(f"⚠️ ONVIF profil alınamadı ({ip}): {e}")
+            logger.debug(f"ONVIF profil alınamadı ({ip}): {e}")
             return []
 
     # ── Stream URI ──────────────────────────────────────────────────────
@@ -449,7 +449,7 @@ class ONVIFDeviceManager:
             profiles = media_service.GetProfiles()
 
             if not profiles or profile_index >= len(profiles):
-                logger.warning(f"⚠️ ONVIF profil {profile_index} bulunamadı, {len(profiles)} profil mevcut")
+                logger.debug(f"ONVIF profil {profile_index} bulunamadı, {len(profiles)} profil mevcut")
                 return None
 
             profile_token = profiles[profile_index].token
@@ -466,7 +466,7 @@ class ONVIFDeviceManager:
             raw_uri = getattr(uri_response, 'Uri', None)
 
             if not raw_uri:
-                logger.warning(f"⚠️ ONVIF stream URI boş döndü ({ip})")
+                logger.debug(f"ONVIF stream URI boş döndü ({ip})")
                 return None
 
             # Inject credentials into URI if not present
@@ -484,7 +484,7 @@ class ONVIFDeviceManager:
             return raw_uri
 
         except Exception as e:
-            logger.warning(f"⚠️ ONVIF stream URI alınamadı ({ip}): {e}")
+            logger.debug(f"ONVIF stream URI alınamadı ({ip}): {e}")
             return None
 
     # ── Snapshot URI ────────────────────────────────────────────────────
@@ -546,7 +546,7 @@ class ONVIFDeviceManager:
             # Get all profiles — on an NVR each profile ≈ one channel
             profiles = media_service.GetProfiles()
             if not profiles:
-                logger.warning(f"⚠️ ONVIF: {ip} üzerinde profil bulunamadı")
+                logger.debug(f"ONVIF: {ip} üzerinde profil bulunamadı")
                 return channels
 
             for idx, profile in enumerate(profiles):
@@ -600,7 +600,7 @@ class ONVIFDeviceManager:
             logger.info(f"✅ ONVIF kanal listesi: {ip} — {len(channels)} kanal")
 
         except Exception as e:
-            logger.warning(f"⚠️ ONVIF kanal listesi alınamadı ({ip}): {e}")
+            logger.debug(f"ONVIF kanal listesi alınamadı ({ip}): {e}")
 
         return channels
 
