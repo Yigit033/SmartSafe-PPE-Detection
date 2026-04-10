@@ -551,6 +551,8 @@ export namespace dvr {
         public async create(company_id: string, params: CreateDVRRequest): Promise<{
     success: boolean
     "dvr_id"?: string
+    restored?: boolean
+    message?: string
     error?: string
 }> {
             // Now make the actual call to the API
@@ -558,6 +560,8 @@ export namespace dvr {
             return await resp.json() as {
     success: boolean
     "dvr_id"?: string
+    restored?: boolean
+    message?: string
     error?: string
 }
         }
@@ -582,12 +586,14 @@ export namespace dvr {
          */
         public async remove(company_id: string, dvr_id: string): Promise<{
     success: boolean
+    message?: string
     error?: string
 }> {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("DELETE", `/company/${encodeURIComponent(company_id)}/dvr/${encodeURIComponent(dvr_id)}`)
             return await resp.json() as {
     success: boolean
+    message?: string
     error?: string
 }
         }

@@ -69,14 +69,25 @@ def create_blueprint(api):
             )
             
             manager = api.get_camera_manager().dvr_manager
-            success, msg = manager.add_dvr_system(dvr_config, company_id)
-            
-            if success:
+            success, msg, canonical_id, restored = manager.add_dvr_system(
+                dvr_config, company_id
+            )
+
+            if success and canonical_id:
                 # Demo hesabı için kanal limiti uygula
-                if subscription_type == 'demo':
-                    api._apply_demo_channel_limits(company_id, dvr_config.dvr_id, max_cameras, active_cameras)
-            
-            return jsonify({'success': success, 'message': msg})
+                if subscription_type == "demo":
+                    api._apply_demo_channel_limits(
+                        company_id, canonical_id, max_cameras, active_cameras
+                    )
+
+            return jsonify(
+                {
+                    "success": success,
+                    "message": msg,
+                    "dvr_id": canonical_id,
+                    "restored": bool(success and restored),
+                }
+            )
         except Exception as e:
             logger.error(f"❌ DVR ekleme hatası: {e}")
             return jsonify({'error': str(e)}), 500    

@@ -343,7 +343,7 @@ function CamerasContent() {
         const msg = inactive > 0
           ? `${data.count} aktif kanal bulundu (${inactive} kanalda kamera bağlı değil).`
           : `${data.count} kanal başarıyla keşfedildi!`;
-        alert(msg);
+        alert(`Keşif tamamlandı\n\n${msg}`);
         fetchCameras();
       } else {
         alert(`Hata: ${data.error || "Kanallar keşfedilemedi."}`);
@@ -359,7 +359,9 @@ function CamerasContent() {
   const deleteDvr = async (dvrId: string) => {
     if (
       !confirm(
-        "Bu DVR sistemini ve bağlı tüm kanalları silmek istediğinize emin misiniz?",
+        "Bu DVR’yi listeden kaldırmak istiyor musunuz?\n\n" +
+          "Kayıtlar veritabanından silinmez; geçmiş ihlal ve raporlar korunur. " +
+          "Aynı cihazı tekrar eklediğinizde kayıt geri yüklenebilir.",
       )
     )
       return;
@@ -367,11 +369,18 @@ function CamerasContent() {
     try {
       const data = await api.dvr.remove(companyId, dvrId);
       if (data.success) {
+        alert(
+          data.message ||
+            "DVR listeden kaldırıldı. Geçmiş kayıtlar korunur; kamera listesi güncellendi.",
+        );
         fetchDvrs();
         fetchCameras();
+      } else {
+        alert(`Hata: ${data.error || "DVR silinemedi."}`);
       }
     } catch (error) {
       console.error("Error deleting DVR:", error);
+      alert("Sunucuyla bağlantı kurulamadı.");
     } finally {
       setIsDeletingDvr(false);
     }

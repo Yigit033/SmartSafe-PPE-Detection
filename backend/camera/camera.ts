@@ -112,7 +112,7 @@ export const list = api(
           ds.username, ds.password, dc.status, dc.channel_number, ds.dvr_id, NULL as group_id, 'dvr_channel' as camera_type, dc.created_at
         FROM dvr_channels dc
         JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
-        WHERE dc.company_id = $1
+        WHERE dc.company_id = $1 AND dc.status <> 'deleted' AND ds.status <> 'deleted'
         ORDER BY
           channel_number ASC NULLS FIRST,
           camera_name ASC,
@@ -316,7 +316,7 @@ export const getSnapshot = api(
             ds.username, ds.password, dc.status, dc.created_at, 'dvr_channel' as camera_type
           FROM dvr_channels dc
           JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
-          WHERE dc.company_id = $1 AND dc.channel_id = $2
+          WHERE dc.company_id = $1 AND dc.channel_id = $2 AND dc.status <> 'deleted' AND ds.status <> 'deleted'
           `,
           [company_id, camera_id],
         );

@@ -236,21 +236,60 @@ export default function CameraSetupPage() {
       // 1. DVR'ı kaydet
       const data = await core.addDVR(companyId!, dvrData);
 
-      if (data.success) {
-        // 2. Kanalları Keşfet
-        setMode("dvr-channels");
-        setIsDiscovering(true);
-        const discData = await core.discoverDVRChannels(companyId!, dvrData.dvr_id);
-        if (discData.success) {
-          setDvrChannels(discData.channels || []);
-          // Varsayılan olarak tümünü seç
-          setSelectedChannels(
-            (discData.channels || []).map((c: any) => c.channel_number),
-          );
+      if (!data.success) {
+        alert(
+          data.error ||
+            data.message ||
+            "DVR kaydedilemedi. Bağlantı veya yetki bilgilerini kontrol edin.",
+        );
+        return;
+      }
+
+      const effectiveDvrId = data.dvr_id || dvrData.dvr_id;
+      if (data.dvr_id && data.dvr_id !== dvrData.dvr_id) {
+        setDvrData((prev) => ({ ...prev, dvr_id: data.dvr_id }));
+      }
+
+      // 2. Kanalları Keşfet (sunucunun döndürdüğü gerçek dvr_id ile)
+      setMode("dvr-channels");
+      setIsDiscovering(true);
+      const discData = await core.discoverDVRChannels(
+        companyId!,
+        effectiveDvrId,
+      );
+      if (discData.success) {
+        setDvrChannels(discData.channels || []);
+        setSelectedChannels(
+          (discData.channels || []).map((c: any) => c.channel_number),
+        );
+        const n = (discData.channels || []).length;
+        const lines: string[] = [];
+        if (data.restored) {
+          lines.push("DVR geri yüklendi");
+          if (data.message) lines.push(data.message);
+        } else if (data.message) {
+          lines.push(data.message);
+        } else {
+          lines.push("DVR kaydedildi.");
         }
+        lines.push(
+          n > 0
+            ? `Keşif: ${n} kanal bulundu. Sonraki adımda seçim yapabilirsiniz.`
+            : "Keşif: kanal listesi boş döndü; bağlantı veya kanal sayısını kontrol edin.",
+        );
+        alert(lines.join("\n\n"));
+      } else {
+        alert(
+          (data.restored
+            ? `${data.message || "DVR geri yüklendi."}\n\n`
+            : `${data.message || "DVR kaydedildi."}\n\n`) +
+            (discData.error ||
+              "Kanal keşfi tamamlanamadı. Ağ erişimi ve DVR kimlik bilgilerini kontrol edin."),
+        );
       }
     } catch (e) {
       console.error(e);
+      alert("Sunucuya bağlanılamadı veya beklenmeyen bir hata oluştu.");
     } finally {
       setIsSaving(false);
       setIsDiscovering(false);
