@@ -14,10 +14,11 @@ from dataclasses import dataclass, asdict
 import json
 import logging
 import os
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 import bcrypt
 from dotenv import load_dotenv
+import time
 from database.database_adapter import get_db_adapter
 
 # Load environment variables
@@ -80,6 +81,8 @@ class MultiTenantDatabase:
     def __init__(self, db_path: str = "smartsafe_saas.db"):
         self.db_path = db_path
         self.db_adapter = get_db_adapter()
+        self._camera_cache: Dict[str, Dict] = {}
+        self._cache_ttl = 60 # 1 dakika cache
         self.init_database()
     
     def get_connection(self, timeout: int = 30):
@@ -132,7 +135,6 @@ class MultiTenantDatabase:
         # PostgreSQL için ek tablolar kontrolü - her durumda çalışsın
         try:
             if self.db_adapter.db_type == 'postgresql':
-                logger.info("🔧 PostgreSQL tablo kontrolü başlatılıyor...")
                 self._ensure_postgresql_tables()
         except Exception as e:
             logger.error(f"❌ PostgreSQL tablo kontrolü hatası: {e}")
@@ -140,6 +142,7 @@ class MultiTenantDatabase:
     
     def _ensure_postgresql_tables(self):
         """PostgreSQL için eksik tabloları kontrol et ve oluştur"""
+        conn = None
         try:
             conn = self.get_connection()
             if not conn:
@@ -147,7 +150,7 @@ class MultiTenantDatabase:
                 return
                 
             cursor = conn.cursor()
-            logger.info("🔧 PostgreSQL tabloları kontrol ediliyor...")
+            logger.debug("🔧 PostgreSQL tabloları kontrol ediliyor...")
             
             # Sessions tablosu kontrolü
             cursor.execute("""
@@ -157,10 +160,7 @@ class MultiTenantDatabase:
                     AND table_name = 'sessions'
                 );
             """)
-            
-            sessions_exists = cursor.fetchone()[0]
-            
-            if not sessions_exists:
+            if not cursor.fetchone()[0]:
                 logger.info("🔧 Sessions tablosu oluşturuluyor...")
                 cursor.execute('''
                     CREATE TABLE sessions (
@@ -174,9 +174,9 @@ class MultiTenantDatabase:
                         status TEXT DEFAULT 'active'
                     )
                 ''')
-                logger.info("✅ Sessions tablosu oluşturuldu")
+                conn.commit()
             
-            # Cameras tablosuna port kolonu kontrolü - Daha agresif yaklaşım
+            # Cameras tablosuna port kolonu kontrolü
             try:
                 cursor.execute("""
                     SELECT EXISTS (
@@ -188,125 +188,42 @@ class MultiTenantDatabase:
                 """)
                 
                 port_exists = cursor.fetchone()[0]
-                logger.info(f"🔍 Port kolonu var mı: {port_exists}")
                 
                 if not port_exists:
                     logger.info("🔧 Cameras tablosuna port kolonu ekleniyor...")
-                    # Önce mevcut veriyi kontrol et
-                    cursor.execute("SELECT COUNT(*) FROM cameras")
-                    camera_count = cursor.fetchone()[0]
-                    logger.info(f"📊 Mevcut kamera sayısı: {camera_count}")
-                    
-                    # Port kolonunu ekle
                     cursor.execute('ALTER TABLE cameras ADD COLUMN port INTEGER DEFAULT 554')
-                    logger.info("✅ Port kolonu eklendi")
-                    
-                    # Verify eklendi mi
-                    cursor.execute("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.columns 
-                            WHERE table_schema = 'public' 
-                            AND table_name = 'cameras'
-                            AND column_name = 'port'
-                        );
-                    """)
-                    verify_port = cursor.fetchone()[0]
-                    logger.info(f"✅ Port kolonu doğrulama: {verify_port}")
-                else:
-                    logger.info("✅ Port kolonu zaten mevcut")
-                    
+                    conn.commit()
+                
                 # Protocol kolonu kontrolü
-                try:
-                    cursor.execute("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.columns 
-                            WHERE table_schema = 'public' 
-                            AND table_name = 'cameras'
-                            AND column_name = 'protocol'
-                        );
-                    """)
-                    
-                    protocol_exists = cursor.fetchone()[0]
-                    logger.info(f"🔍 Protocol kolonu var mı: {protocol_exists}")
-                    
-                    if not protocol_exists:
-                        logger.info("🔧 Cameras tablosuna protocol kolonu ekleniyor...")
-                        cursor.execute('ALTER TABLE cameras ADD COLUMN protocol TEXT DEFAULT \'http\'')
-                        logger.info("✅ Protocol kolonu eklendi")
-                    else:
-                        logger.info("✅ Protocol kolonu zaten mevcut")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Protocol kolonu işlemi hatası: {e}")
-                    
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'cameras'
+                        AND column_name = 'protocol'
+                    );
+                """)
+                protocol_exists = cursor.fetchone()[0]
+                if not protocol_exists:
+                    cursor.execute('ALTER TABLE cameras ADD COLUMN protocol TEXT DEFAULT \'http\'')
+                    conn.commit()
+                
                 # Stream_path kolonu kontrolü
-                try:
-                    cursor.execute("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.columns 
-                            WHERE table_schema = 'public' 
-                            AND table_name = 'cameras'
-                            AND column_name = 'stream_path'
-                        );
-                    """)
-                    
-                    stream_path_exists = cursor.fetchone()[0]
-                    logger.info(f"🔍 Stream_path kolonu var mı: {stream_path_exists}")
-                    
-                    if not stream_path_exists:
-                        logger.info("🔧 Cameras tablosuna stream_path kolonu ekleniyor...")
-                        cursor.execute('ALTER TABLE cameras ADD COLUMN stream_path TEXT DEFAULT \'/video\'')
-                        logger.info("✅ Stream_path kolonu eklendi")
-                    else:
-                        logger.info("✅ Stream_path kolonu zaten mevcut")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Stream_path kolonu işlemi hatası: {e}")
-                    
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'cameras'
+                        AND column_name = 'stream_path'
+                    );
+                """)
+                stream_path_exists = cursor.fetchone()[0]
+                if not stream_path_exists:
+                    cursor.execute('ALTER TABLE cameras ADD COLUMN stream_path TEXT DEFAULT \'/video\'')
+                    conn.commit()
+
             except Exception as e:
-                logger.error(f"❌ Port kolonu işlemi hatası: {e}")
-                # Son çare - tabloyu yeniden oluştur
-                try:
-                    logger.info("🔧 Son çare: Cameras tablosunu yeniden oluşturuyor...")
-                    cursor.execute('DROP TABLE IF EXISTS cameras_backup')
-                    cursor.execute('CREATE TABLE cameras_backup AS SELECT * FROM cameras')
-                    cursor.execute('DROP TABLE cameras CASCADE')
-                    cursor.execute('''
-                        CREATE TABLE cameras (
-                            camera_id TEXT PRIMARY KEY,
-                            company_id TEXT NOT NULL,
-                            camera_name TEXT NOT NULL,
-                            location TEXT NOT NULL,
-                            ip_address TEXT,
-                            port INTEGER DEFAULT 554,
-                            protocol TEXT DEFAULT 'http',
-                            stream_path TEXT DEFAULT '/video',
-                            rtsp_url TEXT,
-                            username TEXT,
-                            password TEXT,
-                            resolution TEXT DEFAULT '1920x1080',
-                            fps INTEGER DEFAULT 25,
-                            status TEXT DEFAULT 'active',
-                            last_detection TIMESTAMP,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    # Veri varsa geri yükle
-                    cursor.execute('SELECT COUNT(*) FROM cameras_backup')
-                    backup_count = cursor.fetchone()[0]
-                    if backup_count > 0:
-                        cursor.execute('''
-                            INSERT INTO cameras (camera_id, company_id, camera_name, location, 
-                                               ip_address, rtsp_url, username, password, 
-                                               resolution, fps, status, last_detection, 
-                                               created_at, updated_at, port)
-                            SELECT *, 554 FROM cameras_backup
-                        ''')
-                    cursor.execute('DROP TABLE cameras_backup')
-                    logger.info("✅ Cameras tablosu port kolonu ile yeniden oluşturuldu")
-                except Exception as e2:
-                    logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
+                logger.error(f"❌ Cameras tablo güncelleme hatası: {e}")
             
             # Updated_at kolonu kontrolü
             try:
@@ -318,184 +235,55 @@ class MultiTenantDatabase:
                         AND column_name = 'updated_at'
                     );
                 """)
-                
-                updated_at_exists = cursor.fetchone()[0]
-                
-                if not updated_at_exists:
-                    logger.info("🔧 Cameras tablosuna updated_at kolonu ekleniyor...")
+                if not cursor.fetchone()[0]:
                     cursor.execute('ALTER TABLE cameras ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-                    logger.info("✅ Updated_at kolonu eklendi")
-                else:
-                    logger.info("✅ Updated_at kolonu zaten mevcut")
+                    conn.commit()
             except Exception as e:
-                logger.error(f"❌ Updated_at kolonu kontrolü hatası: {e}")
-                # Son çare - tabloyu yeniden oluştur
-                try:
-                    logger.info("🔧 Son çare: Cameras tablosunu updated_at ile yeniden oluşturuyor...")
-                    cursor.execute('DROP TABLE IF EXISTS cameras_backup')
-                    cursor.execute('CREATE TABLE cameras_backup AS SELECT * FROM cameras')
-                    cursor.execute('DROP TABLE cameras CASCADE')
-                    cursor.execute('''
-                        CREATE TABLE cameras (
-                            camera_id TEXT PRIMARY KEY,
-                            company_id TEXT NOT NULL,
-                            camera_name TEXT NOT NULL,
-                            location TEXT NOT NULL,
-                            ip_address TEXT,
-                            port INTEGER DEFAULT 554,
-                            rtsp_url TEXT,
-                            username TEXT,
-                            password TEXT,
-                            resolution TEXT DEFAULT '1920x1080',
-                            fps INTEGER DEFAULT 25,
-                            status TEXT DEFAULT 'active',
-                            last_detection TIMESTAMP,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    # Veri varsa geri yükle
-                    cursor.execute('SELECT COUNT(*) FROM cameras_backup')
-                    backup_count = cursor.fetchone()[0]
-                    if backup_count > 0:
-                        cursor.execute('''
-                            INSERT INTO cameras (camera_id, company_id, camera_name, location, 
-                                               ip_address, rtsp_url, username, password, 
-                                               resolution, fps, status, last_detection, 
-                                               created_at, updated_at, port)
-                            SELECT *, 554 FROM cameras_backup
-                        ''')
-                    cursor.execute('DROP TABLE cameras_backup')
-                    logger.info("✅ Cameras tablosu updated_at kolonu ile yeniden oluşturuldu")
-                except Exception as e2:
-                    logger.error(f"❌ Tablo yeniden oluşturma hatası: {e2}")
-            
-            # Detections tablosu için migration - compliance_rate, compliant_people, violation_people
+                logger.error(f"❌ Updated_at kolonu hatası: {e}")
+
+            # Detections tablosu migration
             try:
-                # compliance_rate kolonu kontrolü
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'detections'
-                        AND column_name = 'compliance_rate'
-                    );
-                """)
-                compliance_rate_exists = cursor.fetchone()[0]
+                # Kolon varlıklarını kontrol et ve ekle
+                columns_to_check = {
+                    'compliance_rate': 'REAL',
+                    'compliant_people': 'INTEGER DEFAULT 0',
+                    'violation_people': 'INTEGER DEFAULT 0',
+                    'track_id': 'TEXT'
+                }
                 
-                if not compliance_rate_exists:
-                    logger.info("🔧 Detections tablosuna compliance_rate kolonu ekleniyor...")
-                    cursor.execute('ALTER TABLE detections ADD COLUMN compliance_rate REAL')
-                    conn.commit()
-                    logger.info("✅ compliance_rate kolonu eklendi")
-                else:
-                    logger.info("✅ compliance_rate kolonu zaten mevcut")
+                for col_name, col_type in columns_to_check.items():
+                    cursor.execute(f"""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' AND table_name = 'detections' AND column_name = '{col_name}'
+                        );
+                    """)
+                    if not cursor.fetchone()[0]:
+                        cursor.execute(f'ALTER TABLE detections ADD COLUMN {col_name} {col_type}')
+                        conn.commit()
                 
-                # compliant_people kolonu kontrolü
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'detections'
-                        AND column_name = 'compliant_people'
-                    );
-                """)
-                compliant_people_exists = cursor.fetchone()[0]
-                
-                if not compliant_people_exists:
-                    logger.info("🔧 Detections tablosuna compliant_people kolonu ekleniyor...")
-                    cursor.execute('ALTER TABLE detections ADD COLUMN compliant_people INTEGER DEFAULT 0')
-                    conn.commit()
-                    logger.info("✅ compliant_people kolonu eklendi")
-                else:
-                    logger.info("✅ compliant_people kolonu zaten mevcut")
-                
-                # violation_people kolonu kontrolü
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'detections'
-                        AND column_name = 'violation_people'
-                    );
-                """)
-                violation_people_exists = cursor.fetchone()[0]
-                
-                if not violation_people_exists:
-                    logger.info("🔧 Detections tablosuna violation_people kolonu ekleniyor...")
-                    cursor.execute('ALTER TABLE detections ADD COLUMN violation_people INTEGER DEFAULT 0')
-                    conn.commit()
-                    logger.info("✅ violation_people kolonu eklendi")
-                else:
-                    logger.info("✅ violation_people kolonu zaten mevcut")
-                
-                # track_id kolonu kontrolü
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'detections'
-                        AND column_name = 'track_id'
-                    );
-                """)
-                track_id_exists = cursor.fetchone()[0]
-                
-                if not track_id_exists:
-                    logger.info("🔧 Detections tablosuna track_id kolonu ekleniyor...")
-                    cursor.execute('ALTER TABLE detections ADD COLUMN track_id TEXT')
-                    conn.commit()
-                    logger.info("✅ track_id kolonu eklendi")
-                else:
-                    logger.info("✅ track_id kolonu zaten mevcut")
-                
-                # Mevcut veriler için compliance_rate hesapla (eğer NULL ise)
-                try:
-                    cursor.execute('''
-                        UPDATE detections 
-                        SET compliance_rate = CASE 
-                            WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0)
-                            ELSE 0 
-                        END
-                        WHERE compliance_rate IS NULL AND people_detected > 0
-                    ''')
-                    conn.commit()
-                    logger.info("✅ Mevcut veriler için compliance_rate hesaplandı")
-                except Exception as e:
-                    logger.info(f"Migration info (compliance_rate calculation): {e}")
-                
-                # Mevcut veriler için compliant_people hesapla (eğer NULL ise)
-                try:
-                    cursor.execute('''
-                        UPDATE detections 
-                        SET compliant_people = ppe_compliant
-                        WHERE compliant_people IS NULL AND ppe_compliant IS NOT NULL
-                    ''')
-                    conn.commit()
-                    logger.info("✅ Mevcut veriler için compliant_people hesaplandı")
-                except Exception as e:
-                    logger.info(f"Migration info (compliant_people calculation): {e}")
-                
-                # Mevcut veriler için violation_people hesapla (eğer NULL ise)
-                try:
-                    cursor.execute('''
-                        UPDATE detections 
-                        SET violation_people = violations_count
-                        WHERE violation_people IS NULL AND violations_count IS NOT NULL
-                    ''')
-                    conn.commit()
-                    logger.info("✅ Mevcut veriler için violation_people hesaplandı")
-                except Exception as e:
-                    logger.info(f"Migration info (violation_people calculation): {e}")
-                    
+                # Veri güncellemeleri
+                cursor.execute('''
+                    UPDATE detections 
+                    SET compliance_rate = CASE 
+                        WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0)
+                        ELSE 0 
+                    END
+                    WHERE compliance_rate IS NULL AND people_detected > 0
+                ''')
+                cursor.execute('UPDATE detections SET compliant_people = ppe_compliant WHERE compliant_people IS NULL AND ppe_compliant IS NOT NULL')
+                cursor.execute('UPDATE detections SET violation_people = violations_count WHERE violation_people IS NULL AND violations_count IS NOT NULL')
+                conn.commit()
             except Exception as e:
-                logger.error(f"❌ Detections tablosu migration hatası: {e}")
+                logger.error(f"❌ Detections migration hatası: {e}")
             
-            conn.commit()
-            self.close_connection(conn)
             logger.info("✅ PostgreSQL tabloları kontrol edildi")
             
         except Exception as e:
             logger.error(f"❌ PostgreSQL tablo kontrolü hatası: {e}")
+        finally:
+            if conn:
+                self.close_connection(conn)
     
     def _init_sqlite_database(self):
         """Fallback SQLite database initialization"""
@@ -1675,6 +1463,12 @@ class MultiTenantDatabase:
     
     def get_camera_by_id(self, camera_id: str, company_id: str) -> Optional[Dict]:
         """ID ile kamerayı getir (Standart IP Kamera veya DVR Kanalı)"""
+        # Hızlı Cache Kontrolü
+        cache_key = f"{company_id}:{camera_id}"
+        cached = self._camera_cache.get(cache_key)
+        if cached and (time.time() - cached['ts'] < self._cache_ttl):
+            return cached['data']
+
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -1798,6 +1592,8 @@ class MultiTenantDatabase:
                             'updated_at': str(u_at) if u_at else ''
                         }
                     self.close_connection(conn)
+                    # Cache'e kaydet (1 dakika geçerli)
+                    self._camera_cache[cache_key] = {'ts': time.time(), 'data': result}
                     return result
 
             # 2. Standart Kamera kontrolü
@@ -1854,6 +1650,8 @@ class MultiTenantDatabase:
                         'updated_at': str(camera[15]) if len(camera) > 15 and camera[15] else (str(camera[14]) if len(camera) > 14 and camera[14] else '')
                     }
                 self.close_connection(conn)
+                # Cache'e kaydet (1 dakika geçerli)
+                self._camera_cache[cache_key] = {'ts': time.time(), 'data': result}
                 return result
             
             self.close_connection(conn)

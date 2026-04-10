@@ -78,50 +78,42 @@ def create_blueprint(api):
     def api_documentation():
         """API Documentation endpoint"""
         docs = {
-            'title': 'SmartSafe AI API Documentation',
-            'version': '2.0.0',
-            'description': 'Professional PPE Detection API with enhanced features',
+            'title': 'SmartSafe AI Headless Engine API',
+            'version': '2.5.0',
+            'description': 'Technical worker engine for AI Detection and Stream Management',
             'endpoints': {
                 'health': {
                     'url': '/health',
                     'method': 'GET',
-                    'description': 'System health check',
-                    'response': {'status': 'healthy', 'timestamp': 'ISO format'}
+                    'description': 'System health check'
                 },
-                'dashboard': {
-                    'url': '/company/{company_id}/dashboard',
+                'status': {
+                    'url': '/api/status',
                     'method': 'GET',
-                    'description': 'Company dashboard with real-time statistics',
-                    'features': ['Real-time stats', 'Mobile optimized', 'Export functionality']
+                    'description': 'Engine operational status'
                 },
                 'detection': {
                     'url': '/api/detection/start',
                     'method': 'POST',
-                    'description': 'Start PPE detection',
-                    'parameters': {
-                        'camera_id': 'Camera identifier',
-                        'detection_mode': 'Sector-specific mode',
-                        'confidence': 'Detection confidence (0.1-1.0)'
-                    }
+                    'description': 'Start AI detection on a specific camera'
                 },
-                'compliance': {
-                    'url': '/api/compliance/{company_id}',
+                'discovery': {
+                    'url': '/api/camera/discover',
+                    'method': 'POST',
+                    'description': 'Discover cameras on network'
+                },
+                'stream': {
+                    'url': '/api/camera/proxy/{camera_id}',
                     'method': 'GET',
-                    'description': 'Get compliance statistics',
-                    'features': ['Cached responses', 'Real-time data', 'Export support']
+                    'description': 'Technical stream proxy for detection visualization'
                 }
             },
-            'features': {
-                'caching': 'Response caching for improved performance',
-                'rate_limiting': 'Enhanced rate limiting (200/min, 1000/hour)',
-                'error_handling': 'Detailed error messages with codes',
-                'mobile_optimization': 'Responsive design for mobile devices',
-                'export_functionality': 'CSV, Excel, PDF, JSON export options'
-            },
-            'sectors': [
-                'construction', 'manufacturing', 'chemical', 'food',
-                'warehouse', 'energy', 'petrochemical', 'marine', 'aviation'
-            ]
+            'engine_features': {
+                'multi_tenant_db': 'Direct database integration for detection persistence',
+                'stream_optimization': 'Thread-safe frame buffering for high-concurrency',
+                'lazy_loading': 'Memory-optimized model loading',
+                'auto_restart': 'Engine-level stream watchdog'
+            }
         }
         return jsonify(docs)
 

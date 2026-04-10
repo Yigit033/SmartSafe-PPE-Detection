@@ -3,7 +3,7 @@ SmartSafe AI - Detection Blueprint
 SH17 PPE Detection & Live Detection endpoints
 """
 
-from flask import Blueprint, request, jsonify, session, redirect, render_template_string, Response
+from flask import Blueprint, request, jsonify, session, Response, redirect
 import logging
 import os
 import json
@@ -213,13 +213,13 @@ def create_blueprint(api):
     # PROFESSIONAL SAAS LIVE DETECTION SYSTEM
     # =========================================================================
 
-    @bp.route('/api/company/<company_id>/live-detection', methods=['GET'])
-    def live_detection_dashboard(company_id):
-        """SaaS Canlı Tespit Dashboard"""
+    @bp.route('/api/company/<company_id>/live-detection-config', methods=['GET'])
+    def live_detection_config(company_id):
+        """SaaS Canlı Tespit Yapılandırması - Data-only endpoint"""
         try:
             user_data = api.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
-                return redirect(f'/company/{company_id}/login')
+                return jsonify({'error': 'Unauthorized', 'redirect': f'/company/{company_id}/login'}), 401
             
             cameras = api.db.get_company_cameras(company_id)
             
@@ -236,7 +236,7 @@ def create_blueprint(api):
             api.db.close_connection(conn)
             
             if not company_data:
-                return redirect('/')
+                return jsonify({'error': 'Company not found'}), 404
             
             if hasattr(company_data, 'keys'):
                 company_name = company_data['company_name']
@@ -258,17 +258,19 @@ def create_blueprint(api):
                 except:
                     ppe_config = ['helmet', 'vest']
             
-            return render_template_string(api.get_live_detection_template(), 
-                                        company_id=company_id,
-                                        company_name=company_name,
-                                        sector=sector,
-                                        cameras=cameras,
-                                        ppe_config=ppe_config,
-                                        user_data=user_data)
+            return jsonify({
+                'success': True,
+                'company_id': company_id,
+                'company_name': company_name,
+                'sector': sector,
+                'cameras': cameras,
+                'ppe_config': ppe_config,
+                'user_data': {k: v for k, v in user_data.items() if k != 'password_hash'}
+            })
             
         except Exception as e:
-            logger.error(f"❌ Live detection dashboard error: {e}")
-            return redirect(f'/company/{company_id}/dashboard')
+            logger.error(f"❌ Live detection config error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     @bp.route('/api/company/<company_id>/start-detection', methods=['POST'])
     def start_detection(company_id):
@@ -340,16 +342,7 @@ def create_blueprint(api):
             if company_info:
                 # Önce şirketin kendi max_cameras değeri
                 plan_max = int(company_info.get('max_cameras') or 25)
-                # Demo hesapsa demo_limits'i kontrol et
-                if company_info.get('account_type') == 'demo':
-                    try:
-                        demo_limits = company_info.get('demo_limits')
-                        if isinstance(demo_limits, str):
-                            import json as _json
-                            demo_limits = _json.loads(demo_limits) if demo_limits else {}
-                        plan_max = int((demo_limits or {}).get('max_cameras', 2))
-                    except Exception:
-                        plan_max = 2  # Demo default: 2 kamera
+
             else:
                 plan_max = getattr(_api_mod, 'MAX_CONCURRENT_CAMERAS', 25)
 
@@ -451,15 +444,7 @@ def create_blueprint(api):
             company_info = api.db.get_company_info(company_id) if hasattr(api, 'db') and hasattr(api.db, 'get_company_info') else None
             if company_info:
                 plan_max = int(company_info.get('max_cameras') or 25)
-                if company_info.get('account_type') == 'demo':
-                    try:
-                        demo_limits = company_info.get('demo_limits')
-                        if isinstance(demo_limits, str):
-                            import json as _json
-                            demo_limits = _json.loads(demo_limits) if demo_limits else {}
-                        plan_max = int((demo_limits or {}).get('max_cameras', 2))
-                    except Exception:
-                        plan_max = 2
+
             else:
                 plan_max = getattr(_api_mod, 'MAX_CONCURRENT_CAMERAS', 25)
             

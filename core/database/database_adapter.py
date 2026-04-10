@@ -265,7 +265,6 @@ class DatabaseAdapter:
             # PostgreSQL schema synchronization
             schema_ok = self._check_and_sync_schema(conn)
             if schema_ok:
-                logger.info("✅ PostgreSQL schema synchronized successfully")
                 return True
             else:
                 logger.warning("⚠️ Schema sync failed, continuing with table creation")

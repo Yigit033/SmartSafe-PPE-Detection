@@ -23,74 +23,6 @@ logger = logging.getLogger(__name__)
 def create_blueprint(api):
     bp = Blueprint('dvr', __name__)
 
-    @bp.route('/api/company/<company_id>/dvr/add', methods=['POST'])
-    def add_dvr_system(company_id):
-        user_data = api.validate_session()
-        if not user_data:
-            return jsonify({'error': 'Unauthorized'}), 401
-        
-        # Debug logging
-        logger.info(f"🔍 DVR Ekleme isteği alındı. Gelen Company ID: '{company_id}'")
-        
-        # Demo hesabı kamera limiti kontrolü
-        company_info = api.db.get_company_info(company_id)
-        if not company_info:
-            return jsonify({'error': 'Şirket bulunamadı'}), 404
-        
-        subscription_type = company_info.get('subscription_type', 'basic')
-        max_cameras = company_info.get('max_cameras', 25)
-        
-        # Mevcut aktif kamera sayısını kontrol et
-        active_cameras = api.db.get_active_camera_count(company_id)
-        
-        if subscription_type == 'demo' and active_cameras >= max_cameras:
-            return jsonify({
-                'error': f'Demo hesabı kamera limiti ({max_cameras}) aşıldı. Mevcut: {active_cameras}'
-            }), 400
-        
-        data = request.get_json()
-        required_fields = ['dvr_id', 'name', 'ip_address']
-        if not all(f in data for f in required_fields):
-            return jsonify({'error': 'Eksik DVR bilgisi'}), 400
-        
-        try:
-            dvr_config = DVRConfig(
-                dvr_id=data['dvr_id'],
-                name=data['name'],
-                ip_address=data['ip_address'],
-                port=int(data.get('port', 80)),
-                username=data.get('username', 'admin'),
-                password=data.get('password', ''),
-                dvr_type=data.get('dvr_type', 'generic'),
-                protocol=data.get('protocol', 'http'),
-                api_path=data.get('api_path', '/api'),
-                rtsp_port=int(data.get('rtsp_port', 554)),
-                max_channels=int(data.get('max_channels', 16))
-            )
-            
-            manager = api.get_camera_manager().dvr_manager
-            success, msg, canonical_id, restored = manager.add_dvr_system(
-                dvr_config, company_id
-            )
-
-            if success and canonical_id:
-                # Demo hesabı için kanal limiti uygula
-                if subscription_type == "demo":
-                    api._apply_demo_channel_limits(
-                        company_id, canonical_id, max_cameras, active_cameras
-                    )
-
-            return jsonify(
-                {
-                    "success": success,
-                    "message": msg,
-                    "dvr_id": canonical_id,
-                    "restored": bool(success and restored),
-                }
-            )
-        except Exception as e:
-            logger.error(f"❌ DVR ekleme hatası: {e}")
-            return jsonify({'error': str(e)}), 500    
 
     @bp.route('/api/company/<company_id>/dvr/<dvr_id>/discover', methods=['POST'])
     def discover_dvr_cameras(company_id, dvr_id):
@@ -98,28 +30,8 @@ def create_blueprint(api):
         if not user_data:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        # Test/Demo Modu Kontrolü
-        # Eğer bir config objesi çekilemiyorsa veya IP 'demo' ise sahte kanalları gönder
         try:
             manager = api.get_camera_manager().dvr_manager
-            
-            # DVR bilgilerini çek
-            db_adapter = get_db_adapter()
-            dvr_system = db_adapter.get_dvr_system(company_id, dvr_id)
-            
-            # DEBUG: IP adresi demo ise veya boş ise sahte kanalları döndür
-            if dvr_system and (dvr_system.get('ip_address') in ['demo', '127.0.0.1', 'localhost']):
-                logger.info(f"🧪 Demo DVR detected ({dvr_id}), returning mock channels...")
-                mock_channels = [
-                    {'channel_id': f'{dvr_id}_ch01', 'channel_number': 1, 'name': 'Giriş Kapısı (Mock)', 'status': 'active'},
-                    {'channel_id': f'{dvr_id}_ch02', 'channel_number': 2, 'name': 'Otopark (Mock)', 'status': 'active'},
-                    {'channel_id': f'{dvr_id}_ch03', 'channel_number': 3, 'name': 'Depo Alanı (Mock)', 'status': 'active'},
-                    {'channel_id': f'{dvr_id}_ch04', 'channel_number': 4, 'name': 'Ofis 1 (Mock)', 'status': 'inactive'},
-                    {'channel_id': f'{dvr_id}_ch05', 'channel_number': 5, 'name': 'Yemekhane (Mock)', 'status': 'active'},
-                    {'channel_id': f'{dvr_id}_ch08', 'channel_number': 8, 'name': 'Arka Bahçe (Mock)', 'status': 'active'},
-                ]
-                return jsonify({'success': True, 'channels': mock_channels, 'count': len(mock_channels)})
-
             channels = manager.discover_cameras(dvr_id, company_id)
             
             active_channels = [ch for ch in channels if ch.get('status') == 'active']
@@ -130,8 +42,7 @@ def create_blueprint(api):
             max_cameras = company_info.get('max_cameras', 25) if company_info else 25
             active_camera_count = api.db.get_active_camera_count(company_id) if company_info else 0
 
-            if subscription_type == 'demo':
-                active_channels = api._limit_demo_channels(active_channels, max_cameras, active_camera_count)
+
             
             return jsonify({
                 'success': True,
@@ -150,21 +61,7 @@ def create_blueprint(api):
         if not user_data:
             return jsonify({'error': 'Unauthorized'}), 401
         
-        # Demo hesabı kamera limiti kontrolü
-        company_info = api.db.get_company_info(company_id)
-        if not company_info:
-            return jsonify({'error': 'Şirket bulunamadı'}), 404
-        
-        subscription_type = company_info.get('subscription_type', 'basic')
-        max_cameras = company_info.get('max_cameras', 25)
-        
-        # Mevcut aktif kamera sayısını kontrol et
-        active_cameras = api.db.get_active_camera_count(company_id)
-        
-        if subscription_type == 'demo' and active_cameras >= max_cameras:
-            return jsonify({
-                'error': f'Demo hesabı kamera limiti ({max_cameras}) aşıldı. Mevcut: {active_cameras}'
-            }), 400
+
         
         data = request.get_json() or {}
         try:
@@ -181,7 +78,7 @@ def create_blueprint(api):
                 'stream_url': stream_url,
                 'dvr_id': dvr_id,
                 'channel': channel,
-                'demo_limited': subscription_type == 'demo',
+
                 'max_cameras': max_cameras,
                 'active_cameras': active_cameras + 1
             })
@@ -189,40 +86,7 @@ def create_blueprint(api):
             logger.error(f"❌ DVR stream start error: {e}")
             return jsonify({'error': str(e)}), 500
 
-    @bp.route('/api/company/<company_id>/dvr/list', methods=['GET'])
-    def list_dvr_systems(company_id):
-        user_data = api.validate_session()
-        if not user_data:
-            return jsonify({'error': 'Unauthorized'}), 401
-        try:
-            manager = api.get_camera_manager().dvr_manager
-            dvr_systems = manager.get_dvr_systems(company_id)
-            return jsonify({
-                'success': True,
-                'dvr_systems': dvr_systems
-            })
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
 
-    @bp.route('/api/company/<company_id>/dvr/<dvr_id>/info', methods=['GET'])
-    def get_dvr_info(company_id, dvr_id):
-        """Get DVR system information"""
-        user_data = api.validate_session()
-        if not user_data:
-            return jsonify({'error': 'Unauthorized'}), 401
-        try:
-            manager = api.get_camera_manager().dvr_manager
-            dvr_system = manager.get_dvr_system(company_id, dvr_id)
-            if dvr_system:
-                return jsonify({
-                    'success': True,
-                    'dvr_system': dvr_system
-                })
-            else:
-                return jsonify({'error': 'DVR system not found'}), 404
-        except Exception as e:
-            logger.error(f"❌ Get DVR info error: {e}")
-            return jsonify({'error': str(e)}), 500
 
     @bp.route('/api/company/<company_id>/dvr/<dvr_id>/stream/<int:channel_number>', methods=['GET', 'POST'])
     def get_dvr_stream(company_id, dvr_id, channel_number):
@@ -713,19 +577,6 @@ def create_blueprint(api):
             logger.error(f"❌ Proxy DVR stream error: {e}")
             return jsonify({'error': str(e)}), 500
 
-    @bp.route('/api/company/<company_id>/dvr/<dvr_id>/delete', methods=['DELETE'])
-    def delete_dvr_system(company_id, dvr_id):
-        user_data = api.validate_session()
-        if not user_data:
-            return jsonify({'error': 'Unauthorized'}), 401
-        try:
-            manager = api.get_camera_manager().dvr_manager
-            success, msg = manager.remove_dvr_system(dvr_id, company_id)
-            return jsonify({'success': success, 'message': msg})
-            
-        except Exception as e:
-            logger.error(f"❌ Delete DVR system error: {e}")
-            return jsonify({'error': str(e)}), 500
 
     @bp.route('/api/company/<company_id>/dvr/<dvr_id>/test', methods=['GET'])
     def test_dvr_connection(company_id, dvr_id):

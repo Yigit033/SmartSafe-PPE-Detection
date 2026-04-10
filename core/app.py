@@ -7,11 +7,11 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string, Response, render_template, send_from_directory
+from flask import Flask, request, jsonify, session, Response, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_mail import Mail, Message
+
 import sqlite3
 import json
 
@@ -22,14 +22,16 @@ import logging
 import re
 from urllib.parse import quote, unquote
 
-# Configure logging - Memory optimized
-import os
-log_level = logging.WARNING if os.environ.get('RENDER') else logging.INFO
+# Configure logging - Dynamic level via LOG_LEVEL env var
+_env_log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, _env_log_level, logging.INFO)
+if os.environ.get('RENDER') and _env_log_level == 'INFO':
+    log_level = logging.WARNING
+
 logging.basicConfig(level=log_level, format='%(levelname)s:%(name)s:%(message)s')
 logger = logging.getLogger(__name__)
 
 # Keep request logs, but suppress ultra-noisy polling endpoints (200 OK spam).
-# You can still reduce all request logs with REQUEST_LOG_LEVEL=WARNING/ERROR.
 _req_log_level = os.getenv("REQUEST_LOG_LEVEL", "INFO").upper()
 _req_level = getattr(logging, _req_log_level, logging.INFO)
 _werkzeug_logger = logging.getLogger("werkzeug")
@@ -42,22 +44,19 @@ class _WerkzeugPollingNoiseFilter(logging.Filter):
         except Exception:
             return True
 
+        # Filter out specific Werkzeug development server warning and exit hint
+        if 'WARNING: This is a development server' in msg or 'Press CTRL+C to quit' in msg:
+            return False
+
         # Only drop successful access logs for polling endpoints.
         if ' 200 ' in msg and '"GET ' in msg:
-            if '/detection-status/' in msg or '/detection/latest' in msg:
+            if '/detection-status/' in msg or '/detection/latest' in msg or '/health' in msg:
                 return False
         return True
 
 _werkzeug_logger.addFilter(_WerkzeugPollingNoiseFilter())
 
-# SendGrid imports (conditional - graceful fallback if not available)
-try:
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail as SendGridMail, Email, To, Content
-    SENDGRID_AVAILABLE = True
-except ImportError:
-    SENDGRID_AVAILABLE = False
-    logger.warning("⚠️ SendGrid not installed. Email will use SMTP only.")
+
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
@@ -195,11 +194,9 @@ class SmartSafeSaaSAPI:
     
     def __init__(self):
         try:
-            self.app = Flask(
-                            __name__,
-                            template_folder='templates',
-                            static_folder='static'
-                            )
+            # Headless API - No template/static folders needed
+            self.app = Flask(__name__)
+            
             _secret = os.getenv('SECRET_KEY')
             if not _secret:
                 import secrets
@@ -210,30 +207,7 @@ class SmartSafeSaaSAPI:
             logger.error(f"❌ Flask app initialization failed: {e}")
             raise
         
-        # 🎯 PRODUCTION-GRADE: Template caching'i devre dışı bırak (development mode)
-        is_development = not (os.environ.get('RENDER') or os.environ.get('FLASK_ENV') == 'production')
-        
-        self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-        self.app.config['TEMPLATES_AUTO_RELOAD'] = True
-        self.app.config['DEBUG'] = is_development  # Only in development
-        self.app.jinja_env.auto_reload = True
-        self.app.jinja_env.cache = None
-        
-        # Cache headers'ı devre dışı bırak - AFTER_REQUEST DECORATOR İLE!
-        @self.app.after_request
-        def add_no_cache_headers(response):
-            """🎯 CRITICAL: Browser cache'i tamamen devre dışı bırak"""
-            response.cache_control.max_age = 0
-            response.cache_control.no_cache = True
-            response.cache_control.no_store = True
-            response.cache_control.must_revalidate = True
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
-            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, public'
-            # HTML sayfaları için ekstra header
-            if response.content_type and 'text/html' in response.content_type:
-                response.headers['X-UA-Compatible'] = 'IE=Edge,chrome=1'
-            return response
+        # UI caching logic removed as this is now a headless API
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
         self.sh17_manager = None
@@ -258,19 +232,12 @@ class SmartSafeSaaSAPI:
             self.app.config['PROPAGATE_EXCEPTIONS'] = True
             self.app.config['PREFERRED_URL_SCHEME'] = 'https'
         
-        # Mail configuration
-        self.app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-        self.app.config['MAIL_PORT'] = 587
-        self.app.config['MAIL_USE_TLS'] = True
-        self.app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
-        self.app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
-        self.mail = Mail(self.app)
+
         
-        # Enable CORS - Vercel Frontend + Render Backend
-        # Production'da Vercel domain'inizi ekleyin
+        # Enable CORS
         allowed_origins = [
             'http://localhost:3000',
-            'http://localhost:3377',    # New frontend port
+            'http://localhost:3377',
             'http://127.0.0.1:3000',
             'http://127.0.0.1:3377',
             'http://localhost:8000',
@@ -339,25 +306,21 @@ class SmartSafeSaaSAPI:
         # Enterprise modülleri başlat
         self.init_enterprise_modules()
         
-        # PPE Detection Manager başlat
+        # PPE Detection Manager başlat (Opsiyonel Modül)
         try:
             from integrations.cameras.ppe_detection_manager import PPEDetectionManager
             self.ppe_manager = PPEDetectionManager()
             if not self.ppe_manager.load_models():
-                logger.warning("⚠️ PPE Detection Manager yüklenemedi, fallback kullanılacak")
+                logger.info("ℹ️ PPE Detection Manager (Legacy) pasif, modern DVR entegrasyonu aktif")
                 self.ppe_manager = None
+        except (ImportError, ModuleNotFoundError):
+            logger.debug("ℹ️ PPEDetectionManager modülü bulunamadı, standard akış kullanılacak")
+            self.ppe_manager = None
         except Exception as e:
-            logger.warning(f"⚠️ PPE Detection Manager yüklenemedi: {e}, fallback kullanılacak")
+            logger.info(f"ℹ️ PPE Detection Manager başlatılamadı ({e}), standard akış devam ediyor")
             self.ppe_manager = None
         
-        # Şifre güvenlik politikası
-        self.password_policy = {
-            'min_length': 8,
-            'require_uppercase': True,
-            'require_lowercase': True,
-            'require_digits': True,
-            'require_special': True
-        }
+
         
         # İYİLEŞTİRİLDİ: Enhanced Error Handlers - Production Grade
         @self.app.errorhandler(404)
@@ -868,240 +831,10 @@ class SmartSafeSaaSAPI:
             if 'conn' in locals():
                 self.db.close_connection(conn)
     
-    def _apply_demo_channel_limits(self, company_id: str, dvr_id: str, max_cameras: int, active_cameras: int):
-        """Demo hesabı için DVR kanal limitlerini uygula"""
-        try:
-            logger.info(f"🔒 Demo hesabı kanal limiti uygulanıyor: {company_id} - DVR: {dvr_id}")
-            
-            # DVR'daki toplam kanal sayısını al
-            manager = self.get_camera_manager()
-            if not manager or not hasattr(manager, 'dvr_manager'):
-                logger.warning("⚠️ DVR manager bulunamadı")
-                return
-            
-            # DVR kanallarını al
-            dvr_channels = manager.dvr_manager.get_dvr_channels(company_id, dvr_id)
-            if not dvr_channels:
-                logger.warning("⚠️ DVR kanalları bulunamadı")
-                return
-            
-            total_channels = len(dvr_channels)
-            available_slots = max_cameras - active_cameras
-            
-            if available_slots <= 0:
-                logger.warning(f"⚠️ Demo hesabı kamera slotu kalmadı: {active_cameras}/{max_cameras}")
-                return
-            
-            # Sadece kullanılabilir slot kadar kanalı aktif et
-            active_channels = min(available_slots, total_channels)
-            
-            logger.info(f"✅ Demo hesabı kanal limiti uygulandı: {active_channels}/{total_channels} kanal aktif")
-            
-            # Kanal durumlarını güncelle (sadece aktif olanlar)
-            for i, channel in enumerate(dvr_channels):
-                if i < active_channels:
-                    # Aktif kanal
-                    self._activate_demo_channel(company_id, dvr_id, channel['channel_id'])
-                else:
-                    # Pasif kanal
-                    self._deactivate_demo_channel(company_id, dvr_id, channel['channel_id'])
-            
-        except Exception as e:
-            logger.error(f"❌ Demo kanal limiti uygulama hatası: {e}")
-    
-    def _activate_demo_channel(self, company_id: str, dvr_id: str, channel_id: str):
-        """Demo hesabı için kanalı aktif et"""
-        try:
-            # Kanalı aktif et
-            manager = self.get_camera_manager()
-            if manager and hasattr(manager, 'dvr_manager'):
-                # Kanal durumunu güncelle
-                self.db.update_dvr_channel_status(company_id, dvr_id, channel_id, 'active')
-                logger.info(f"✅ Demo kanal aktif edildi: {channel_id}")
-        except Exception as e:
-            logger.error(f"❌ Demo kanal aktif etme hatası: {e}")
-    
-    def _deactivate_demo_channel(self, company_id: str, dvr_id: str, channel_id: str):
-        """Demo hesabı için kanalı pasif et"""
-        try:
-            # Kanalı pasif et
-            manager = self.get_camera_manager()
-            if manager and hasattr(manager, 'dvr_manager'):
-                # Kanal durumunu güncelle
-                self.db.update_dvr_channel_status(company_id, dvr_id, channel_id, 'inactive')
-                logger.info(f"✅ Demo kanal pasif edildi: {channel_id}")
-        except Exception as e:
-            logger.error(f"❌ Demo kanal pasif etme hatası: {e}")
-    
-    def _limit_demo_channels(self, channels: List[Dict], max_cameras: int, active_cameras: int) -> List[Dict]:
-        """Demo hesabı için kanal listesini limitlendir"""
-        try:
-            available_slots = max_cameras - active_cameras
-            
-            if available_slots <= 0:
-                logger.warning(f"⚠️ Demo hesabı kamera slotu kalmadı: {active_cameras}/{max_cameras}")
-                return []
-            
-            # Sadece kullanılabilir slot kadar kanalı döndür
-            limited_channels = channels[:available_slots]
-            
-            # Kalan kanalları pasif olarak işaretle
-            for channel in limited_channels:
-                channel['demo_active'] = True
-                channel['demo_note'] = f'Demo hesabı - {len(limited_channels)}/{len(channels)} kanal aktif'
-            
-            logger.info(f"✅ Demo kanal limiti uygulandı: {len(limited_channels)}/{len(channels)} kanal aktif")
-            return limited_channels
-            
-        except Exception as e:
-            logger.error(f"❌ Demo kanal limiti hatası: {e}")
-            return channels
-    
-    def _send_email_with_sendgrid(self, to_email: str, subject: str, content: str) -> bool:
-        """
-        SendGrid API kullanarak mail gönder
-        Returns: True if successful, False otherwise
-        """
-        if not SENDGRID_AVAILABLE:
-            logger.debug("SendGrid not available, skipping")
-            return False
-            
-        try:
-            api_key = os.getenv('SENDGRID_API_KEY')
-            if not api_key:
-                logger.debug("SENDGRID_API_KEY not set")
-                return False
-            
-            from_email = os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
-            
-            # SendGrid mail objesi oluştur
-            message = SendGridMail(
-                from_email=Email(from_email),
-                to_emails=To(to_email),
-                subject=subject,
-                plain_text_content=Content("text/plain", content)
-            )
-            
-            # SendGrid API ile gönder
-            sg = SendGridAPIClient(api_key)
-            response = sg.send(message)
-            
-            if response.status_code in [200, 201, 202]:
-                logger.info(f"✅ SendGrid ile mail gönderildi: {to_email} (status: {response.status_code})")
-                return True
-            else:
-                logger.warning(f"⚠️ SendGrid beklenmeyen status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"❌ SendGrid mail gönderim hatası: {e}")
-            return False
-    
-    def _send_demo_notification(self, email: str, message: str):
-        """
-        Demo bildirim maili gönder - PostgreSQL ve SQLite uyumlu
-        SMTP → SendGrid fallback → Log fallback
-        """
-        mail_sent = False
-        subject = "SmartSafe AI Demo Hesap Bilgileri"
-        
-        # 1. Önce SMTP dene
-        try:
-            if hasattr(self, 'mail') and self.mail:
-                msg = Message(
-                    subject=subject,
-                    recipients=[email],
-                    body=message,
-                    sender=os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
-                )
-                self.mail.send(msg)
-                logger.info(f"✅ SMTP ile demo mail gönderildi: {email}")
-                mail_sent = True
-                return
-        except Exception as smtp_error:
-            logger.warning(f"⚠️ SMTP başarısız: {smtp_error}")
-        
-        # 2. SMTP başarısızsa SendGrid dene
-        if not mail_sent:
-            logger.info("🔄 SendGrid ile deneniyor...")
-            mail_sent = self._send_email_with_sendgrid(email, subject, message)
-        
-        # 3. Her iki yöntem de başarısızsa log'a yaz
-        if not mail_sent:
-            logger.error(f"❌ Tüm mail yöntemleri başarısız oldu: {email}")
-            logger.warning(f"⚠️ Mail gönderilemedi. Log'daki mesaj içeriğini manuel gönderin.")
-            logger.info(f"📧 Mail içeriği:\n{message}")
 
-    def _send_company_notification(self, email: str, message: str):
-        """
-        Şirket kayıt bildirim maili gönder - PostgreSQL ve SQLite uyumlu
-        SMTP → SendGrid fallback → Log fallback
-        """
-        mail_sent = False
-        subject = "SmartSafe AI Şirket Hesap Bilgileri"
-        
-        # 1. Önce SMTP dene
-        try:
-            if hasattr(self, 'mail') and self.mail:
-                msg = Message(
-                    subject=subject,
-                    recipients=[email],
-                    body=message,
-                    sender=os.getenv('MAIL_DEFAULT_SENDER', 'yigittilaver2000@gmail.com')
-                )
-                self.mail.send(msg)
-                logger.info(f"✅ SMTP ile şirket maili gönderildi: {email}")
-                mail_sent = True
-                return
-        except Exception as smtp_error:
-            logger.warning(f"⚠️ SMTP başarısız: {smtp_error}")
-        
-        # 2. SMTP başarısızsa SendGrid dene
-        if not mail_sent:
-            logger.info("🔄 SendGrid ile deneniyor...")
-            mail_sent = self._send_email_with_sendgrid(email, subject, message)
-        
-        # 3. Her iki yöntem de başarısızsa log'a yaz
-        if not mail_sent:
-            logger.error(f"❌ Tüm mail yöntemleri başarısız oldu: {email}")
-            logger.warning(f"⚠️ Mail gönderilemedi. Log'daki mesaj içeriğini manuel gönderin.")
-            logger.info(f"📧 Mail içeriği:\n{message}")
+    
 
-    def validate_password_strength(self, password: str) -> tuple[bool, list[str]]:
-        """Şifre gücünü kontrol et - 5 temel gereksinimi doğrula"""
-        errors = []
 
-        # Boş veya None şifreleri normalize et
-        if password is None:
-            password = ""
-        password = password.strip()
-        
-        # 1. Minimum uzunluk kontrolü
-        if len(password) < self.password_policy['min_length']:
-            errors.append(f"Şifre en az {self.password_policy['min_length']} karakter olmalıdır")
-        
-        # 2. Büyük harf kontrolü
-        if self.password_policy['require_uppercase'] and not re.search(r'[A-Z]', password):
-            errors.append("Şifre en az 1 büyük harf (A-Z) içermelidir")
-        
-        # 3. Küçük harf kontrolü
-        if self.password_policy['require_lowercase'] and not re.search(r'[a-z]', password):
-            errors.append("Şifre en az 1 küçük harf (a-z) içermelidir")
-        
-        # 4. Rakam kontrolü
-        if self.password_policy['require_digits'] and not re.search(r'\d', password):
-            errors.append("Şifre en az 1 rakam (0-9) içermelidir")
-        
-        # 5. Özel karakter kontrolü (yaygın özel karakterleri kapsayacak şekilde genişletildi)
-        if self.password_policy['require_special'] and not re.search(r'[!@#$%^&*()\-_=+.,?":{}|<>]', password):
-            errors.append("Şifre en az 1 özel karakter (!@#$%^&*()_-+= vb.) içermelidir")
-        
-        # 6. Yaygın şifre kontrolü
-        common_passwords = ['password', '123456', 'admin', 'smartsafe', 'qwerty', 'abc123']
-        if password.lower() in common_passwords:
-            errors.append("Bu şifre çok yaygın, lütfen daha güvenli bir şifre seçin")
-        
-        return len(errors) == 0, errors
 
     def setup_routes(self):
         """API rotalarini ayarla - Blueprint modüllerinden yükle"""
@@ -1207,152 +940,7 @@ class SmartSafeSaaSAPI:
             logger.error(f"❌ Session validation error: {e}", exc_info=True)
             return None
     
-    def check_demo_status(self, company_id: str) -> Dict[str, Any]:
-        """Demo hesabı durumunu kontrol et"""
-        try:
-            # Database initialization kontrolü
-            if not self.ensure_database_initialized():
-                logger.error("❌ Database initialization failed in check_demo_status")
-                return {'is_demo': False, 'expires_at': None}
-            
-            if self.db is None:
-                logger.error("❌ Database connection is None in check_demo_status")
-                return {'is_demo': False, 'expires_at': None}
-            
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            placeholder = self.db.get_placeholder()
-            
-            # Safe query with fallback for missing account_type column
-            try:
-                cursor.execute(f'''
-                    SELECT account_type, demo_expires_at, demo_limits, created_at
-                    FROM companies 
-                    WHERE company_id = {placeholder}
-                ''', (company_id,))
-                result = cursor.fetchone()
-            except Exception as e:
-                if 'account_type' in str(e) and 'does not exist' in str(e):
-                    # Column doesn't exist, use fallback
-                    logger.warning(f"⚠️ account_type column missing in demo check, using fallback")
-                    cursor.execute(f'''
-                        SELECT created_at FROM companies WHERE company_id = {placeholder}
-                    ''', (company_id,))
-                    fallback_result = cursor.fetchone()
-                    if fallback_result:
-                        result = ('full', None, None, fallback_result[0])  # Default values
-                    else:
-                        result = None
-                else:
-                    raise e
-            self.db.close_connection(conn)
-            
-            if not result:
-                return {'is_demo': False, 'expired': False}
-            
-            # PostgreSQL Row object vs SQLite tuple compatibility
-            if hasattr(result, 'keys'):  # PostgreSQL Row object
-                account_type = result['account_type']
-                demo_expires_at = result['demo_expires_at']
-                demo_limits = result['demo_limits']
-                created_at = result['created_at']
-            else:  # SQLite tuple
-                account_type, demo_expires_at, demo_limits, created_at = result
-            
-            if account_type != 'demo':
-                return {'is_demo': False, 'expired': False}
-            
-            # Demo süresi kontrolü
-            from datetime import datetime
-            import json
-            
-            if demo_expires_at:
-                if isinstance(demo_expires_at, str):
-                    expire_date = datetime.fromisoformat(demo_expires_at.replace('Z', '+00:00'))
-                else:
-                    expire_date = demo_expires_at
-                
-                is_expired = datetime.now() > expire_date
-                days_remaining = max(0, (expire_date - datetime.now()).days)
-            else:
-                is_expired = True
-                days_remaining = 0
-            
-            # Demo limitleri parse et
-            limits = {}
-            if demo_limits:
-                try:
-                    if isinstance(demo_limits, str):
-                        limits = json.loads(demo_limits)
-                    else:
-                        limits = demo_limits
-                except:
-                    limits = {'cameras': 2, 'violations': 100, 'days': 7}
-            
-            return {
-                'is_demo': True,
-                'expired': is_expired,
-                'days_remaining': days_remaining,
-                'limits': limits,
-                'created_at': created_at
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Demo status check error: {e}")
-            return {'is_demo': False, 'expired': False}
     
-    def enforce_demo_limits(self, company_id: str, action: str) -> Dict[str, Any]:
-        """Demo limitlerini kontrol et ve uygula"""
-        try:
-            demo_status = self.check_demo_status(company_id)
-            
-            if not demo_status['is_demo']:
-                return {'allowed': True, 'message': 'Full account'}
-            
-            if demo_status['expired']:
-                return {'allowed': False, 'message': 'Demo süresi dolmuş', 'expired': True}
-            
-            limits = demo_status.get('limits', {})
-            
-            # Kamera limiti kontrolü
-            if action == 'add_camera':
-                cameras = self.db.get_company_cameras(company_id)
-                if len(cameras) >= limits.get('cameras', 2):
-                    return {
-                        'allowed': False, 
-                        'message': f"Demo hesabında maksimum {limits.get('cameras', 2)} kamera ekleyebilirsiniz",
-                        'limit_type': 'camera'
-                    }
-            
-            # İhlal limiti kontrolü
-            elif action == 'log_violation':
-                # Son 7 günlük ihlal sayısını kontrol et
-                conn = self.db.get_connection()
-                cursor = conn.cursor()
-                
-                placeholder = self.db.get_placeholder()
-                cursor.execute(f'''
-                    SELECT COUNT(*) FROM violations 
-                    WHERE company_id = {placeholder} 
-                    AND timestamp >= datetime('now', '-7 days')
-                ''', (company_id,))
-                
-                violation_count = cursor.fetchone()[0]
-                self.db.close_connection(conn)
-                
-                if violation_count >= limits.get('violations', 100):
-                    return {
-                        'allowed': False,
-                        'message': f"Demo hesabında maksimum {limits.get('violations', 100)} ihlal kaydedebilirsiniz",
-                        'limit_type': 'violation'
-                    }
-            
-            return {'allowed': True, 'message': 'Demo limitleri içinde'}
-            
-        except Exception as e:
-            logger.error(f"❌ Demo limits enforcement error: {e}")
-            return {'allowed': True, 'message': 'Limit check failed'}
     
     def _get_realtime_camera_status(self, ip_address: str) -> Optional[Dict[str, Any]]:
         """Get real-time camera status from IP address"""
@@ -1390,7 +978,7 @@ class SmartSafeSaaSAPI:
         password = camera_data.get('password', '')
         protocol = camera_data.get('protocol', 'http')
         
-        test_result = {
+        test_result = { 
             'success': False,
             'connection_time': 0,
             'stream_quality': 'unknown',
@@ -2134,48 +1722,7 @@ class SmartSafeSaaSAPI:
                 print(f"Frame generation error: {e}")
                 break
     
-    def get_pricing_template(self):
-        """Pricing page template"""
-        return render_template('pricing.html')
-    
-    def get_home_template(self):
-        """Home page template"""
-        return render_template('home.html')
-    
-    def get_dashboard_template(self, **kwargs):
-        """Advanced Dashboard Template with Real-time PPE Analytics"""
-        return render_template('dashboard.html', **kwargs)
-    
-    def get_login_template(self, company_id):
-        """Company login page template"""
-        return render_template('login.html', company_id=company_id)
-        
-        # Template'deki placeholder'ları gerçek company_id ile değiştir
-        return template.replace('COMPANY_ID_PLACEHOLDER', company_id)
-    
-    def get_admin_login_template(self, error=None):
-        """Admin login template"""
-        return render_template('admin_login.html', error=error)
-    
-    def get_admin_template(self):
-        """Professional Admin Panel Template for Company Management"""
-        return render_template('admin.html', **kwargs)
-    
-    def get_company_settings_template(self):
-        """Advanced Company Settings Template"""
-        return render_template('company_settings.html', **kwargs)
-    
-    def get_users_template(self):
-        """Company Users Management Template"""
-        return render_template('users.html', **kwargs)
-
-    def get_reports_template(self):
-        """Company Reports Template"""
-        return render_template('reports.html', **kwargs)
-    
-    def get_camera_management_template(self):
-        """Advanced Camera Management Template with Discovery and Testing"""
-        return render_template('camera_management.html', **kwargs)
+    # --- Template methods removed in favor of headless API ---
  
     def add_health_check(self):
         """İYİLEŞTİRİLDİ: Enhanced health check endpoint"""
@@ -2248,10 +1795,10 @@ class SmartSafeSaaSAPI:
                         'response': {'status': 'healthy', 'timestamp': 'ISO format'}
                     },
                     'dashboard': {
-                        'url': '/company/{company_id}/dashboard',
+                        'url': '/api/company/{company_id}/dashboard-summary',
                         'method': 'GET',
-                        'description': 'Company dashboard with real-time statistics',
-                        'features': ['Real-time stats', 'Mobile optimized', 'Export functionality']
+                        'description': 'Company dashboard summary with real-time statistics',
+                        'features': ['Real-time stats', 'Abonelik bilgileri', 'Kameralar', 'Son İhlaller']
                     },
                     'detection': {
                         'url': '/api/detection/start',
@@ -4571,598 +4118,19 @@ smartsafe_requests_total 100
             logger.warning(f"⚠️ Violation DB kayıt hatası (devam ediliyor): {e}")
             # Production'da DB hatası olsa bile detection devam etsin
 
-    def get_live_detection_template(self):
-        """SaaS Live Detection HTML Template"""
-        return '''
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canlı Tespit - SmartSafe AI</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #667eea;
-            --secondary-color: #764ba2;
-            --success-color: #28a745;
-            --warning-color: #ffc107;
-            --danger-color: #dc3545;
-            --info-color: #17a2b8;
-            --dark-color: #2c3e50;
-        }
 
-        body {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
-
-        .navbar {
-            background: rgba(255,255,255,0.95) !important;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-        }
-
-        .navbar-brand {
-            font-weight: 700;
-            color: var(--dark-color) !important;
-            font-size: 1.5rem;
-        }
-
-        .main-container {
-            margin-top: 20px;
-        }
-
-        .card {
-            border: none;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            backdrop-filter: blur(10px);
-            background: rgba(255,255,255,0.95);
-        }
-
-        .card-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: white;
-            border-radius: 15px 15px 0 0 !important;
-            padding: 20px;
-        }
-
-        .live-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            background: var(--success-color);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        .camera-stream {
-            width: 100%;
-            height: 400px;
-            border-radius: 10px;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2rem;
-        }
-
-        .camera-stream img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 10px;
-        }
-
-        .stats-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-        }
-
-        .stats-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--dark-color);
-        }
-
-        .stat-label {
-            color: #6c757d;
-            font-size: 0.9rem;
-        }
-
-        .btn-custom {
-            border-radius: 25px;
-            padding: 12px 30px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.3s ease;
-            border: none;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: white;
-        }
-
-        .btn-success-custom {
-            background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
-            color: white;
-        }
-
-        .btn-danger-custom {
-            background: linear-gradient(135deg, var(--danger-color) 0%, #e74c3c 100%);
-            color: white;
-        }
-
-        .alert-custom {
-            border-radius: 10px;
-            border: none;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-        }
-
-        .camera-controls {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .form-control, .form-select {
-            border-radius: 10px;
-            border: 2px solid #e9ecef;
-            padding: 12px 15px;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-        }
-
-        .violation-item {
-            background: rgba(220, 53, 69, 0.1);
-            border-left: 4px solid var(--danger-color);
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-        }
-
-        .compliance-good { color: var(--success-color); }
-        .compliance-warning { color: var(--warning-color); }
-        .compliance-danger { color: var(--danger-color); }
-
-        .system-status {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            color: white;
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="/company/{{ company_id }}/dashboard">
-                <i class="fas fa-shield-alt"></i> SmartSafe AI
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/company/{{ company_id }}/dashboard">
-                    <i class="fas fa-tachometer-alt"></i> Dashboard
-                </a>
-                <a class="nav-link" href="/company/{{ company_id }}/cameras">
-                    <i class="fas fa-video"></i> Kameralar
-                </a>
-                <a class="nav-link active" href="/api/company/{{ company_id }}/live-detection">
-                    <span class="live-indicator"></span> Canlı Tespit
-                </a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container main-container">
-        <div class="row">
-            <div class="col-12">
-                <div class="text-center mb-4">
-                    <h1 class="text-white display-4 fw-bold">
-                        <i class="fas fa-eye"></i> Canlı PPE Tespiti
-                    </h1>
-                    <p class="text-white-50 fs-5">{{ company_name }} - {{ sector|title }} Sektörü</p>
-                </div>
-                
-                <div class="system-status">
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <i class="fas fa-server"></i>
-                            <span class="ms-2">Sistem: <strong id="system-status">Hazır</strong></span>
-                        </div>
-                        <div class="col-md-3">
-                            <i class="fas fa-video"></i>
-                            <span class="ms-2">Aktif Kameralar: <strong id="active-cameras">0</strong></span>
-                        </div>
-                        <div class="col-md-3">
-                            <i class="fas fa-eye"></i>
-                            <span class="ms-2">Tespitler: <strong id="total-detections">0</strong></span>
-                        </div>
-                        <div class="col-md-3">
-                            <i class="fas fa-percentage"></i>
-                            <span class="ms-2">Uyum: <strong id="compliance-rate">--%</strong></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <!-- Ana Kamera Görüntüsü -->
-            <div class="col-lg-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-video"></i> Kamera Görüntüsü
-                            <span class="live-indicator"></span>
-                            <span id="camera-status">Bekleniyor...</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="camera-controls">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <label class="form-label text-white">Kamera Seç:</label>
-                                    <select class="form-select" id="camera-select">
-                                        <option value="">Kamera seçin...</option>
-                                        {% for camera in cameras %}
-                                        <option value="{{ camera.camera_id }}">
-                                            {{ camera.name }} ({{ camera.location }})
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label text-white">Güven Eşiği:</label>
-                                    <select class="form-select" id="confidence-select">
-                                        <option value="0.3">Düşük (0.3)</option>
-                                        <option value="0.5" selected>Orta (0.5)</option>
-                                        <option value="0.7">Yüksek (0.7)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="row mt-3">
-                                <div class="col-12 text-center">
-                                    <button class="btn btn-success-custom btn-custom me-2" onclick="startDetection()">
-                                        <i class="fas fa-play"></i> Tespiti Başlat
-                                    </button>
-                                    <button class="btn btn-danger-custom btn-custom" onclick="stopDetection()">
-                                        <i class="fas fa-stop"></i> Tespiti Durdur
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="camera-stream" id="camera-display">
-                            <div class="text-center">
-                                <i class="fas fa-camera fa-3x mb-3"></i>
-                                <p>Kamera seçin ve tespiti başlatın</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- İstatistikler ve Kontroller -->
-            <div class="col-lg-4">
-                <!-- Canlı İstatistikler -->
-                <div class="stats-card text-center">
-                    <div class="stat-value" id="people-count">0</div>
-                    <div class="stat-label">Tespit Edilen Kişi</div>
-                </div>
-                
-                <div class="stats-card text-center">
-                    <div class="stat-value compliance-good" id="compliant-count">0</div>
-                    <div class="stat-label">PPE Uyumlu</div>
-                </div>
-                
-                <div class="stats-card text-center">
-                    <div class="stat-value compliance-danger" id="violation-count">0</div>
-                    <div class="stat-label">İhlal Sayısı</div>
-                </div>
-
-                <!-- Son İhlaller -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-exclamation-triangle"></i> Son İhlaller
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="recent-violations">
-                            <p class="text-muted text-center">İhlal bulunamadı</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PPE Gereksinimleri -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-hard-hat"></i> PPE Gereksinimleri
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            {% for ppe in ppe_config %}
-                            <div class="col-6 mb-2">
-                                <div class="text-center p-2 bg-light rounded">
-                                    <i class="fas fa-check-circle text-success"></i>
-                                    <small class="d-block">{{ ppe|title }}</small>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        let currentCameraId = null;
-        let detectionActive = false;
-        let statsInterval = null;
-
-        // Tespit başlatma
-        function startDetection() {
-            const cameraSelect = document.getElementById('camera-select');
-            const confidenceSelect = document.getElementById('confidence-select');
-            
-            if (!cameraSelect.value) {
-                alert('Lütfen bir kamera seçin!');
-                return;
-            }
-            
-            if (detectionActive) {
-                alert('Tespit zaten aktif!');
-                return;
-            }
-            
-            currentCameraId = cameraSelect.value;
-            const confidence = parseFloat(confidenceSelect.value);
-            
-            // Tespit başlat
-            fetch('/api/company/{{ company_id }}/start-detection', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    camera_id: currentCameraId,
-                    detection_mode: 'ppe',
-                    confidence: confidence
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    detectionActive = true;
-                    document.getElementById('camera-status').textContent = 'Aktif';
-                    document.getElementById('system-status').textContent = 'Çalışıyor';
-                    
-                    // Video stream'i başlat - PPE overlay'li detection stream kullan
-                    const streamUrl = `/api/company/{{ company_id }}/cameras/${currentCameraId}/detection/stream`;
-                    document.getElementById('camera-display').innerHTML = 
-                        `<img src="${streamUrl}" alt="Kamera Görüntüsü" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
-                    
-                    // İstatistikleri güncellemeye başla
-                    startStatsUpdate();
-                    
-                    showAlert('Tespit başarıyla başlatıldı!', 'success');
-                } else {
-                    showAlert('Tespit başlatılamadı: ' + data.error, 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('Bir hata oluştu!', 'danger');
-            });
-        }
-
-        // Tespit durdurma
-        function stopDetection() {
-            if (!detectionActive) {
-                alert('Tespit zaten durmuş!');
-                return;
-            }
-            
-            fetch('/api/company/{{ company_id }}/stop-detection', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    detectionActive = false;
-                    currentCameraId = null;
-                    document.getElementById('camera-status').textContent = 'Durduruldu';
-                    document.getElementById('system-status').textContent = 'Hazır';
-                    
-                    // Video stream'i durdur
-                    document.getElementById('camera-display').innerHTML = `
-                        <div class="text-center">
-                            <i class="fas fa-camera fa-3x mb-3"></i>
-                            <p>Kamera seçin ve tespiti başlatın</p>
-                        </div>
-                    `;
-                    
-                    // İstatistik güncellemeyi durdur
-                    stopStatsUpdate();
-                    
-                    showAlert('Tespit durduruldu!', 'info');
-                } else {
-                    showAlert('Tespit durdurulamadı: ' + data.error, 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('Bir hata oluştu!', 'danger');
-            });
-        }
-
-        // İstatistik güncelleme
-        function startStatsUpdate() {
-            statsInterval = setInterval(updateStats, 2000); // Her 2 saniyede bir
-        }
-
-        function stopStatsUpdate() {
-            if (statsInterval) {
-                clearInterval(statsInterval);
-                statsInterval = null;
-            }
-        }
-
-        function updateStats() {
-            if (!detectionActive || !currentCameraId) return;
-            
-            // Canlı istatistikleri al
-            fetch(`/api/company/{{ company_id }}/live-stats`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const stats = data.stats;
-                        document.getElementById('active-cameras').textContent = stats.active_cameras;
-                        document.getElementById('total-detections').textContent = stats.recent_detections;
-                        document.getElementById('compliance-rate').textContent = stats.compliance_rate + '%';
-                        
-                        // Compliance rate renk
-                        const complianceElement = document.getElementById('compliance-rate');
-                        if (stats.compliance_rate >= 80) {
-                            complianceElement.className = 'compliance-good';
-                        } else if (stats.compliance_rate >= 60) {
-                            complianceElement.className = 'compliance-warning';
-                        } else {
-                            complianceElement.className = 'compliance-danger';
-                        }
-                    }
-                })
-                .catch(error => console.error('Stats update error:', error));
-            
-            // Detection durumu al
-            fetch(`/api/company/{{ company_id }}/detection-status/${currentCameraId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.recent_results.length > 0) {
-                        const latest = data.recent_results[data.recent_results.length - 1];
-                        
-                        document.getElementById('people-count').textContent = latest.people_detected || 0;
-                        document.getElementById('compliant-count').textContent = latest.ppe_compliant || 0;
-                        document.getElementById('violation-count').textContent = latest.ppe_violations ? latest.ppe_violations.length : 0;
-                        
-                        // İhlalleri göster
-                        updateViolations(latest.ppe_violations || []);
-                    }
-                })
-                .catch(error => console.error('Detection status error:', error));
-        }
-
-        function updateViolations(violations) {
-            const container = document.getElementById('recent-violations');
-            
-            if (violations.length === 0) {
-                container.innerHTML = '<p class="text-muted text-center">İhlal bulunamadı</p>';
-                return;
-            }
-            
-            let html = '';
-            violations.slice(0, 5).forEach((violation, index) => {
-                const missingPpe = violation.missing_ppe.join(', ');
-                html += `
-                    <div class="violation-item">
-                        <strong>Kişi ${index + 1}</strong>
-                        <div class="mt-1">
-                            <small class="text-danger">Eksik PPE: ${missingPpe}</small>
-                        </div>
-                        <div class="mt-1">
-                            <small class="text-muted">Güven: ${(violation.confidence * 100).toFixed(1)}%</small>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-        }
-
-        function showAlert(message, type) {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-            alertDiv.style.cssText = 'top: 100px; right: 20px; z-index: 1050; min-width: 300px;';
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            document.body.appendChild(alertDiv);
-            
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 5000);
-        }
-
-        // Sayfa yüklendiğinde
-        document.addEventListener('DOMContentLoaded', function() {
-            // İlk istatistikleri yükle
-            fetch(`/api/company/{{ company_id }}/live-stats`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const stats = data.stats;
-                        document.getElementById('active-cameras').textContent = stats.active_cameras;
-                        document.getElementById('total-detections').textContent = stats.recent_detections;
-                        document.getElementById('compliance-rate').textContent = stats.compliance_rate + '%';
-                    }
-                })
-                .catch(error => console.error('Initial stats error:', error));
-        });
-    </script>
-</body>
-</html>
-        '''
 
 def main():
     """Ana fonksiyon - Sadece development mode için"""
-    print("🌐 SmartSafe AI - SaaS Multi-Tenant API Server")
+    print("🌐 SmartSafe AI - SaaS Multi-Tenant API Engine")
     print("=" * 60)
-    print("✅ Multi-tenant şirket yönetimi")
-    print("✅ Şirket bazlı veri ayrımı")
-    print("✅ Güvenli oturum yönetimi")
-    print("✅ Kamera yönetimi")
-    print("✅ Responsive web arayüzü")
+    print("✅ Multi-tenant company management")
+    print("✅ Company-based data isolation")
+    print("✅ Secure API session management")
+    print("✅ Camera & DVR integration")
+    print("✅ Real-time YOLO PPE detection")
     print("=" * 60)
-    print("🚀 Development Server başlatılıyor...")
+    print("🚀 API Server starting...")
     
     try:
         api_server = SmartSafeSaaSAPI()
@@ -5203,22 +4171,11 @@ def create_emergency_app():
     
     @emergency_app.route('/')
     def emergency_home():
-        return """
-        <!DOCTYPE html>
-        <html><head><title>SmartSafe AI - Production Ready</title>
-        <style>body{font-family:Arial,sans-serif;margin:40px;background:#f5f5f5}
-        .container{max-width:800px;margin:0 auto;background:white;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
-        .status{color:#28a745;font-weight:bold}.warning{color:#ffc107}
-        .info{background:#e3f2fd;padding:15px;border-radius:5px;margin:20px 0}</style></head>
-        <body><div class="container">
-        <h1>🚀 SmartSafe AI - Production Ready</h1>
-        <p class="status">✅ System Status: OPERATIONAL</p>
-        <p class="warning">⚡ Running in optimized fallback mode</p>
-        <div class="info"><h3>🎯 Available Features:</h3>
-        <ul><li>✅ Health monitoring</li><li>✅ API endpoints</li><li>✅ Emergency fallback system</li>
-        <li>⚡ YOLOv8 PPE detection</li><li>🗄️ Database connectivity</li></ul></div>
-        <p><strong>SmartSafe AI</strong> - Enterprise PPE Detection Platform</p>
-        </div></body></html>"""
+        return jsonify({
+            "status": "operational",
+            "message": "SmartSafe AI API - Headless Mode",
+            "features": ["Health Monitoring", "API Endpoints", "PPE Detection Engine"]
+        })
     
     @emergency_app.route('/api/status')
     def api_status():
