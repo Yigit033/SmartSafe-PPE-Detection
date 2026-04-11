@@ -342,12 +342,23 @@ class SmartSafeSaaSAPI:
         env_limits = os.getenv("RATE_LIMITS", "").strip()
         if env_limits:
             default_limits = [s.strip() for s in env_limits.split(";") if s.strip()]
+        # Redis (or other shared storage) avoids limits' in-memory backend threading issues
+        # under concurrent Flask workers/threads ("threads can only be started once").
+        _rl_storage = os.getenv("RATELIMIT_STORAGE_URI", "").strip()
+        if not _rl_storage:
+            _fallback_redis = os.getenv("REDIS_URL", "").strip()
+            if _fallback_redis.startswith(("redis://", "rediss://")):
+                _rl_storage = _fallback_redis
+        if not _rl_storage:
+            _rl_storage = "memory://"
         self.limiter = Limiter(
             app=self.app,
             key_func=get_remote_address,
             default_limits=default_limits,
-            storage_uri="memory://"
+            storage_uri=_rl_storage,
         )
+        if _rl_storage != "memory://":
+            logger.info("Flask-Limiter using shared storage (non-memory)")
         
         # Multi-tenant database - Lazy initialization for production
         self.db = None
