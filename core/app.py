@@ -73,6 +73,7 @@ from integrations.cameras.camera_integration_manager import DVRConfig
 from detection.snapshot_manager import get_snapshot_manager
 from detection.violation_tracker import get_violation_tracker
 from integrations.dvr.dvr_ppe_integration import get_dvr_ppe_manager
+from services.notification_service import get_notification_service
 import cv2
 import numpy as np
 import base64
@@ -372,6 +373,9 @@ class SmartSafeSaaSAPI:
             logger.info("🔧 Development mode: SQLite schema active")
             self.database_type = 'sqlite'
         
+        # Notification Service
+        self.notification_service = get_notification_service()
+        
         # Enterprise modülleri başlat
         self.init_enterprise_modules()
         
@@ -519,6 +523,9 @@ class SmartSafeSaaSAPI:
                 self.db_adapter = get_db_adapter()
                 if self.db_adapter:
                     self.db_adapter.init_database()
+                    # Link db_adapter to notification service
+                    if self.notification_service:
+                        self.notification_service.db_adapter = self.db_adapter
             
             # MultiTenantDatabase'ı initialize et
             if self.db is None:
@@ -2120,7 +2127,7 @@ smartsafe_requests_total 100
         
         # DVR kanalları için stream hazır olana kadar daha uzun bekle
         _is_dvr = '_ch' in camera_id
-        _initial_wait = 5.0 if _is_dvr else 0.3
+        _initial_wait = 0.5 if _is_dvr else 0.1
         logger.info(f"⏳ Initial wait: {_initial_wait}s (DVR={_is_dvr}) for {camera_key}")
         time.sleep(_initial_wait)
 
@@ -2335,16 +2342,16 @@ smartsafe_requests_total 100
                                         # Kişi bbox'ını bul (snapshot için)
                                         p_bbox = new_ev.get('person_bbox', [0, 0, 10, 10])
                                         
-                                        # Kişi görünürlük kontrolü
+                                        # Kişi görünürlük kontrolü - Barajı %0.5'ten %0.1'e indir (uzak kameralar için)
                                         person_visible = True
                                         if p_bbox and len(p_bbox) == 4 and frame is not None:
                                             px1, py1, px2, py2 = p_bbox
-                                            if px1 < 0 or py1 < 0 or px2 > frame.shape[1] or py2 > frame.shape[0]:
-                                                person_visible = False
                                             person_area = (px2 - px1) * (py2 - py1)
-                                            frame_area = frame.shape[0] * frame.shape[1]
-                                            if person_area < (frame_area * 0.005):
+                                            frame_area = frame.shape[1] * frame.shape[0]
+                                            if person_area < (frame_area * 0.001):
                                                 person_visible = False
+                                        else:
+                                            person_visible = False
                                         
                                         # Sadece kişi görünürse crop snapshot çekilir, değilse snapshot alınmaz
                                         snapshot_path = None
@@ -2361,18 +2368,28 @@ smartsafe_requests_total 100
                                                     event_id=new_ev['event_id']
                                                 )
                                             
+                                            # Sadece geçerli bir snapshot varsa DB'ye kaydet ve bildir
                                             if snapshot_path:
                                                 new_ev['snapshot_path'] = snapshot_path
                                                 logger.info(f"📸 VIOLATION SNAPSHOT: {snapshot_path}")
+                                                
+                                                # violation_events tablosuna kaydet
+                                                if db_adapter.add_violation_event(new_ev):
+                                                    # Bildirim gönder
+                                                    try:
+                                                        notifier = get_notification_service(db_adapter)
+                                                        notifier.send_violation_notification(new_ev)
+                                                    except Exception as notify_err:
+                                                        logger.warning(f"⚠️ Bildirim gönderilemedi: {notify_err}")
+                                                else:
+                                                    logger.warning(
+                                                        f"⚠️ violation_events kaydı reddedildi (fail-fast) "
+                                                        f"event_id={new_ev.get('event_id')}"
+                                                    )
+                                            else:
+                                                logger.info(f"⏭️ Snapshot alınamadığı için ihlal atlandı (uzak/küçük kişi): {new_ev.get('event_id')}")
                                         except Exception as snap_err:
-                                            logger.warning(f"⚠️ Snapshot çekilemedi: {snap_err}")
-                                        
-                                        # violation_events tablosuna kaydet
-                                        if not db_adapter.add_violation_event(new_ev):
-                                            logger.warning(
-                                                f"⚠️ violation_events kaydı reddedildi (fail-fast) "
-                                                f"event_id={new_ev.get('event_id')}"
-                                            )
+                                            logger.warning(f"⚠️ Snapshot hatası: {snap_err}")
                                         
                                     except Exception as ev_err:
                                         logger.error(f"❌ Violation event kayıt hatası: {ev_err}")
@@ -3637,16 +3654,18 @@ smartsafe_requests_total 100
                 company_id = camera_info.get('company_id', '')
 
                 # Proxy stream zaten aynı stream_id'yi kullanıyor olabilir
-                status = sh.get_stream_status(stream_id)
-                if status and status.get('status') == 'active':
-                    logger.info(f"✅ DVR stream already active (proxy), reusing: {stream_id}")
+                # ÖNCELİKLE: Proxy stream kontrol et (SaaS modunda en yaygın durum)
+                proxy_sid = f"proxy:{company_id}:{stream_id}"
+                proxy_status = sh.get_stream_status(proxy_sid)
+                
+                if proxy_status and proxy_status.get('status') == 'active':
+                    stream_id = proxy_sid
+                    logger.info(f"✅ DVR stream already active as (proxy), reusing: {stream_id}")
                 else:
-                    # Proxy prefix'li stream de kontrol et
-                    proxy_sid = f"proxy:{company_id}:{stream_id}"
-                    proxy_status = sh.get_stream_status(proxy_sid)
-                    if proxy_status and proxy_status.get('status') == 'active':
-                        stream_id = proxy_sid
-                        logger.info(f"✅ DVR stream active as proxy stream, reusing: {stream_id}")
+                    # Alternatif: Düz stream_id kontrol et
+                    status = sh.get_stream_status(stream_id)
+                    if status and status.get('status') == 'active':
+                        logger.info(f"✅ DVR stream already active (plain), reusing: {stream_id}")
                     else:
                         logger.info(f"🔄 DVR stream not active, starting: {stream_id}")
                         sh.start_stream(

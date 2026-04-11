@@ -245,8 +245,18 @@ def create_blueprint(api):
                 return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
             
             data = request.get_json() or {}
-            network_range = data.get('network_range', '192.168.1.0/24')
+            network_range = data.get('network_range')
             auto_sync = data.get('auto_sync', True)  # Otomatik DB sync
+            
+            # Eğer range verilmediyse, hem yerel ağı hem de kullanıcının IP'sini içeren bloğu tara
+            if not network_range:
+                user_ip = request.remote_addr
+                if user_ip and user_ip != '127.0.0.1':
+                    parts = user_ip.split('.')
+                    network_range = f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
+                    logger.info(f"📍 Detected user IP {user_ip}, setting range to {network_range}")
+                else:
+                    network_range = '192.168.1.0/24' # Fallback
             
             logger.info(f"🔍 Starting unified camera discovery for company {company_id}")
             

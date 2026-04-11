@@ -328,6 +328,9 @@ class DatabaseAdapter:
                     account_type VARCHAR(20) DEFAULT 'full',
                     demo_expires_at TIMESTAMP,
                     demo_limits JSON,
+                    telegram_notifications BOOLEAN DEFAULT FALSE,
+                    telegram_bot_token TEXT,
+                    telegram_chat_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -449,6 +452,9 @@ class DatabaseAdapter:
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON",
                 "ALTER TABLE cameras ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
                 "ALTER TABLE dvr_channels ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_notifications BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT",
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT"
             ]
             
             for ddl in ddl_statements:

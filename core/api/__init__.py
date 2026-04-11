@@ -9,6 +9,7 @@ from .dvr import create_blueprint as create_dvr_bp
 from .camera import create_blueprint as create_camera_bp
 from .detection import create_blueprint as create_detection_bp
 from .onvif import create_blueprint as create_onvif_bp
+from .notification import create_blueprint as create_notification_bp
 
 
 def register_all_blueprints(api):
@@ -20,6 +21,7 @@ def register_all_blueprints(api):
         create_camera_bp(api),
         create_detection_bp(api),
         create_onvif_bp(api),
+        create_notification_bp(api),
     ]
     for bp in blueprints:
         api.app.register_blueprint(bp)

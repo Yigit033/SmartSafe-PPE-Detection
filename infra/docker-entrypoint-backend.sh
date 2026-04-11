@@ -5,5 +5,8 @@ export PATH="/root/.encore/bin:$PATH"
 cd /app
 node ./scripts/encore-sync-if-needed.cjs || true
 
+# Veritabanı migrasyonlarını otomatik olarak çalıştır
+node ./scripts/migrate.cjs || true
+
 # Encore'u 4477 portunda tüm arayüzlerde dinleyecek şekilde başlat
 exec encore run --listen 0.0.0.0:4477

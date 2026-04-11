@@ -43,14 +43,14 @@ export default function CameraSetupPage() {
 
   // Single / Manual Form Data
   const [formData, setFormData] = useState({
-    camera_name: "Smart Camera",
+    camera_name: "",
     camera_location: "Genel",
-    camera_ip: "160.75.85.3",
-    camera_port: 8000,
+    camera_ip: "",
+    camera_port: 80,
     camera_protocol: "http",
-    camera_path: "/video",
+    camera_path: "/live",
     camera_username: "admin",
-    camera_password: "Opsn810710.",
+    camera_password: "",
   });
 
   // Batch Form Data
@@ -67,11 +67,11 @@ export default function CameraSetupPage() {
   // DVR Form Data
   const [dvrData, setDvrData] = useState({
     dvr_id: `dvr_${Date.now()}`,
-    name: "Merkezi Kayıt Cihazı",
-    ip_address: "160.75.85.3",
+    name: "",
+    ip_address: "",
     port: 8000,
-    username: "admin",
-    password: "Opsn810710.",
+    username: "",
+    password: "",
     dvr_type: "hikvision",
     max_channels: 16,
     rtsp_port: 554,
@@ -93,55 +93,26 @@ export default function CameraSetupPage() {
     }, 300);
 
     try {
+      const range = batchData.ip_list.includes("/") ? batchData.ip_list : undefined;
       const data = await core.discoverCameras(companyId!, {
-        network_range: "192.168.1.0/24",
+        network_range: range,
         auto_sync: false,
       });
 
-      if (data.success && data.discovery_result?.cameras) {
-        setDiscoveredCameras(data.discovery_result.cameras);
+      // API standard discovery_result.cameras veya top-level cameras döndürebilir
+      const cameras = data.discovery_result?.cameras || data.cameras || [];
+      
+      if (data.success && cameras.length > 0) {
+        setDiscoveredCameras(cameras);
+      } else if (data.success && cameras.length === 0) {
+        setDiscoveredCameras([]);
       } else {
-        setDiscoveredCameras([
-          {
-            ip: "192.168.1.101",
-            port: 80,
-            model: "DS-2CD2143G0-I",
-            brand: "Hikvision",
-            onvif: true,
-          },
-          {
-            ip: "192.168.1.105",
-            port: 80,
-            model: "DH-IPC-HFW1230S",
-            brand: "Dahua",
-            onvif: true,
-          },
-          {
-            ip: "192.168.1.110",
-            port: 80,
-            model: "M3045-V",
-            brand: "Axis",
-            onvif: true,
-          },
-        ]);
+        // Hata durumunda boş liste
+        setDiscoveredCameras([]);
       }
     } catch (error) {
-      setDiscoveredCameras([
-        {
-          ip: "192.168.1.101",
-          port: 80,
-          model: "DS-2CD2143G0-I",
-          brand: "Hikvision",
-          onvif: true,
-        },
-        {
-          ip: "192.168.1.105",
-          port: 83,
-          model: "DH-IPC-HFW1230S",
-          brand: "Dahua",
-          onvif: true,
-        },
-      ]);
+      console.error("Discovery error:", error);
+      setDiscoveredCameras([]);
     } finally {
       clearInterval(interval);
       setScanProgress(100);
@@ -234,7 +205,7 @@ export default function CameraSetupPage() {
     setIsSaving(true);
     try {
       // 1. DVR'ı kaydet
-      const data = await core.addDVR(companyId!, dvrData);
+      const data = await api.dvr.create(companyId!, dvrData);
 
       if (!data.success) {
         alert(
@@ -329,8 +300,8 @@ export default function CameraSetupPage() {
             <span className="material-symbols-rounded text-sm">arrow_back</span>
             KAMERALARA DÖN
           </button>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4 italic uppercase">
-            <span className="bg-brand-teal p-3.5 rounded-2xl text-white non-italic rotate-3 shadow-xl shadow-brand-teal/20">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4 uppercase">
+            <span className="bg-brand-teal p-3.5 rounded-2xl text-white rotate-3 shadow-xl shadow-brand-teal/20">
               <span className="material-symbols-rounded text-3xl">sensors</span>
             </span>
             Kamera Kurulum Merkezi
@@ -397,7 +368,7 @@ export default function CameraSetupPage() {
           {mode === "select" && (
             <div className="p-16 flex-1 flex flex-col justify-center animate-fade-in">
               <div className="text-center space-y-4 mb-14">
-                <h2 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter">
+                <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">
                   KURULUM YÖNTEMİ SEÇİN
                 </h2>
                 <div className="h-1.5 w-24 bg-brand-teal mx-auto rounded-full mt-4"></div>
@@ -418,7 +389,7 @@ export default function CameraSetupPage() {
                       travel_explore
                     </span>
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase italic">
+                  <h3 className="text-xl font-black text-slate-900 uppercase  ">
                     Akıllı Keşif
                   </h3>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
@@ -436,7 +407,7 @@ export default function CameraSetupPage() {
                       add_a_photo
                     </span>
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase italic">
+                  <h3 className="text-xl font-black text-slate-900 uppercase">
                     Tekil Ekleme
                   </h3>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
@@ -454,7 +425,7 @@ export default function CameraSetupPage() {
                       view_module
                     </span>
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase italic">
+                  <h3 className="text-xl font-black text-slate-900 uppercase">
                     Toplu Ekleme
                   </h3>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
@@ -472,7 +443,7 @@ export default function CameraSetupPage() {
                       dns
                     </span>
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase italic">
+                  <h3 className="text-xl font-black text-slate-900 uppercase">
                     DVR / NVR
                   </h3>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
@@ -488,7 +459,7 @@ export default function CameraSetupPage() {
             <div className="p-14 animate-fade-in flex flex-col h-full">
               <div className="flex items-center justify-between border-b border-slate-100 pb-8 mb-8">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tight">
+                  <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">
                     Cihazlar Aranıyor
                   </h2>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">
@@ -510,6 +481,20 @@ export default function CameraSetupPage() {
                     YENİDEN TARA
                   </button>
                 )}
+              </div>
+
+              <div className="flex gap-4 mb-6">
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
+                    TARAMA ARALIĞI (BOŞ BIRAKIRSANIZ OTOMATİK BULUR)
+                  </label>
+                  <input
+                    value={batchData.ip_list.includes("/") ? batchData.ip_list : ""}
+                    onChange={(e) => setBatchData({ ...batchData, ip_list: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-xs font-black text-slate-900 focus:bg-white focus:border-brand-teal outline-none"
+                    placeholder="Örn: 192.168.1.0/24 (Boşsa Oto-Tespit)"
+                  />
+                </div>
               </div>
 
               <div className="mb-10">
@@ -534,7 +519,7 @@ export default function CameraSetupPage() {
                         </span>
                       </div>
                       <div>
-                        <h4 className="text-lg font-black text-slate-900 italic uppercase leading-none mb-2">
+                        <h4 className="text-lg font-black text-slate-900 uppercase leading-none mb-2">
                           {cam.brand || "BİLİNMEYEN"}
                         </h4>
                         <div className="flex items-center gap-2">
@@ -565,7 +550,7 @@ export default function CameraSetupPage() {
                     <span className="material-symbols-rounded text-6xl text-slate-300 mb-4">
                       videocam_off
                     </span>
-                    <p className="text-slate-400 font-black uppercase italic tracking-widest">
+                    <p className="text-slate-400 font-black uppercase tracking-widest">
                       Ağda Kamera Bulunamadı
                     </p>
                   </div>
@@ -591,7 +576,7 @@ export default function CameraSetupPage() {
             <div className="p-14 animate-fade-in flex flex-col h-full">
               <div className="flex items-center justify-between border-b border-slate-100 pb-8 mb-10">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-900 uppercase italic">
+                  <h2 className="text-3xl font-black text-slate-900 uppercase">
                     Tekil Yapılandırma
                   </h2>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">
@@ -807,7 +792,7 @@ export default function CameraSetupPage() {
           {mode === "batch" && (
             <div className="p-14 animate-fade-in flex flex-col h-full">
               <div className="border-b border-slate-100 pb-8 mb-10">
-                <h2 className="text-3xl font-black text-slate-900 uppercase italic">
+                <h2 className="text-3xl font-black text-slate-900 uppercase">
                   Toplu IP Yükleme
                 </h2>
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">
@@ -914,12 +899,68 @@ export default function CameraSetupPage() {
           {mode === "dvr" && (
             <div className="p-14 animate-fade-in flex flex-col h-full">
               <div className="border-b border-slate-100 pb-8 mb-10">
-                <h2 className="text-3xl font-black text-slate-900 uppercase italic">
+                <h2 className="text-3xl font-black text-slate-900 uppercase">
                   DVR / NVR Entegrasyonu
                 </h2>
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">
                   Merkezi kayıt cihazını bağlayın
                 </p>
+              </div>
+
+              <div className="flex gap-4 mb-10">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDvrData({
+                      ...dvrData,
+                      name: "Ek Bina DVR",
+                      ip_address: "160.75.85.3",
+                      port: 8000,
+                      rtsp_port: 554,
+                      username: "admin",
+                      password: "Opsn810710.",
+                      dvr_type: "hikvision",
+                    })
+                  }
+                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all text-left group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-brand-teal/10 text-brand-teal flex items-center justify-center group-hover:bg-brand-teal group-hover:text-white transition-all">
+                      <span className="material-symbols-rounded">domain</span>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase">EK BİNA</h4>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">160.75.85.3</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDvrData({
+                      ...dvrData,
+                      name: "Taşkışla DVR",
+                      ip_address: "10.64.221.50",
+                      port: 8000,
+                      rtsp_port: 554,
+                      username: "admin",
+                      password: "Opsn810710.",
+                      dvr_type: "hikvision",
+                    })
+                  }
+                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all text-left group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                      <span className="material-symbols-rounded">account_balance</span>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase">TAŞKIŞLA</h4>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">10.64.221.50</p>
+                    </div>
+                  </div>
+                </button>
               </div>
 
               <form
@@ -1091,7 +1132,7 @@ export default function CameraSetupPage() {
             <div className="p-14 animate-fade-in flex flex-col h-full bg-white/50 backdrop-blur-sm rounded-[3rem]">
               <div className="border-b border-slate-100 pb-8 mb-10 flex items-end justify-between">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-900 uppercase italic leading-none">
+                  <h2 className="text-3xl font-black text-slate-900 uppercase leading-none">
                     Kanal Seçimi
                   </h2>
                   <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-3">
@@ -1117,7 +1158,7 @@ export default function CameraSetupPage() {
                     </div>
                   </div>
                   <div className="text-center space-y-2">
-                    <p className="text-slate-900 font-black uppercase italic text-sm">
+                    <p className="text-slate-900 font-black uppercase text-sm">
                       Kanallar Keşfediliyor
                     </p>
                     <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">
@@ -1136,7 +1177,7 @@ export default function CameraSetupPage() {
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <p className="text-slate-900 font-black uppercase italic">
+                          <p className="text-slate-900 font-black uppercase">
                             Aktif kanal bulunamadı
                           </p>
                           <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">
@@ -1186,7 +1227,7 @@ export default function CameraSetupPage() {
 
                           <div className="space-y-1 relative z-10">
                             <h3
-                              className={`font-black uppercase italic leading-none transition-colors ${
+                              className={`font-black uppercase leading-none transition-colors ${
                                 selectedChannels.includes(
                                   channel.channel_number,
                                 )
@@ -1273,7 +1314,7 @@ export default function CameraSetupPage() {
               </div>
 
               <div className="space-y-4 max-w-lg">
-                <h2 className="text-5xl font-black text-slate-900 italic uppercase leading-none tracking-tighter">
+                <h2 className="text-5xl font-black text-slate-900 uppercase leading-none tracking-tighter">
                   KURULUM TAMAM!
                 </h2>
                 <div className="h-1.5 w-20 bg-emerald-400 mx-auto rounded-full"></div>
