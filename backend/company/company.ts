@@ -48,6 +48,15 @@ interface UpdateNotificationsRequest {
   email_notifications: boolean;
   sms_notifications: boolean;
   push_notifications: boolean;
+  violation_alerts: boolean;
+  telegram_notifications: boolean;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
+}
+
+interface ResolveChatRequest {
+  bot_token?: string;
+  chat_id_or_url: string;
 }
 
 interface CompanyStats {
@@ -288,8 +297,9 @@ export const list = api(
 
 interface GetCompanyResponse {
   success: boolean;
-  company?: any; // We can use 'any' here or define a full Company interface
+  company?: any;
   error?: string;
+  system_bot_username?: string;
 }
 
 /**
@@ -310,7 +320,11 @@ export const getById = api(
       if (res.rows.length === 0) {
         return { success: false, error: "Şirket bulunamadı" };
       }
-      return { success: true, company: res.rows[0] };
+      return { 
+        success: true, 
+        company: res.rows[0],
+        system_bot_username: process.env.DEFAULT_TELEGRAM_BOT_USERNAME 
+      };
     } catch (error) {
       console.error("Error getting company by id:", error);
       return { success: false, error: "Sunucu hatası" };
@@ -367,6 +381,10 @@ export const updateNotifications = api(
       email_notifications,
       sms_notifications,
       push_notifications,
+      violation_alerts,
+      telegram_notifications,
+      telegram_bot_token,
+      telegram_chat_id,
     } = params;
     try {
       await pool.query(
@@ -375,13 +393,21 @@ export const updateNotifications = api(
         email_notifications = $1, 
         sms_notifications = $2, 
         push_notifications = $3, 
+        violation_alerts = $4,
+        telegram_notifications = $5,
+        telegram_bot_token = $6,
+        telegram_chat_id = $7,
         updated_at = CURRENT_TIMESTAMP 
-        WHERE company_id = $4
+        WHERE company_id = $8
       `,
         [
           email_notifications,
           sms_notifications,
           push_notifications,
+          violation_alerts,
+          telegram_notifications,
+          telegram_bot_token || null,
+          telegram_chat_id || null,
           company_id,
         ],
       );
@@ -427,6 +453,57 @@ export const remove = api(
       return { success: false };
     } finally {
       client.release();
+    }
+  },
+);
+
+/**
+ * Telegram URL veya kullanıcı adından sayısal Chat ID'yi çözer
+ */
+export const resolveTelegramChatId = api(
+  { expose: true, method: "POST", path: "/company/resolve-telegram-chat" },
+  async (params: ResolveChatRequest): Promise<{ success: boolean; chat_id?: string; error?: string }> => {
+    let target = params.chat_id_or_url.trim();
+    
+    // URL temizleme
+    target = target.replace(/^https?:\/\/t\.me\//, "");
+    target = target.replace(/^t\.me\//, "");
+    
+    // Eğer davet linki (+...) ise, API üzerinden çözemeyiz (Telegram kısıtı)
+    if (target.includes("+")) {
+      return { 
+        success: false, 
+        error: "Davet linkleri (+...) API üzerinden doğrudan çözülemez. Lütfen botu gruba ekleyip sayısal ID'yi giriniz." 
+      };
+    }
+
+    // Kullanıcı adı ise başına @ ekle
+    if (!target.startsWith("@") && !/^-?\d+$/.test(target)) {
+      target = "@" + target;
+    }
+
+    // Halihazırda sayısal ID ise direkt dön
+    if (/^-?\d+$/.test(target)) {
+      return { success: true, chat_id: target };
+    }
+
+    const bot_token = params.bot_token || process.env.DEFAULT_TELEGRAM_BOT_TOKEN;
+    if (!bot_token) {
+      return { success: false, error: "Bot token tanımlı değil." };
+    }
+
+    try {
+      const url = `https://api.telegram.org/bot${bot_token}/getChat?chat_id=${target}`;
+      const response = await fetch(url);
+      const data: any = await response.json();
+
+      if (data.ok) {
+        return { success: true, chat_id: String(data.result.id) };
+      } else {
+        return { success: false, error: data.description || "Bulunamadı" };
+      }
+    } catch (error) {
+      return { success: false, error: "Telegram bağlantı hatası" };
     }
   },
 );

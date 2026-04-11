@@ -18,6 +18,7 @@ import numpy as np
 from database.database_adapter import get_db_adapter
 from detection.violation_tracker import get_violation_tracker
 from detection.snapshot_manager import get_snapshot_manager
+from services.notification_service import get_notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +371,14 @@ class DVRStreamProcessor:
                                             
                                             if not person_visible:
                                                 logger.warning(f"⚠️ DVR: Kişi frame'de yeterince görünür değil, snapshot atlandı")
-                                                if not self.db_adapter.add_violation_event(new_violation):
+                                                if self.db_adapter.add_violation_event(new_violation):
+                                                    # Send notification (text only since no portrait/snapshot)
+                                                    try:
+                                                        notifier = get_notification_service(self.db_adapter)
+                                                        notifier.send_violation_notification(new_violation)
+                                                    except Exception as notify_err:
+                                                        logger.warning(f"⚠️ DVR Bildirim gönderilemedi: {notify_err}")
+                                                else:
                                                     logger.warning(
                                                         f"⚠️ DVR: violation_events kaydı reddedildi (fail-fast) "
                                                         f"event_id={new_violation.get('event_id')}"
@@ -400,6 +408,12 @@ class DVRStreamProcessor:
                                                 logger.info(
                                                     f"🚨 DVR NEW VIOLATION: {new_violation['violation_type']} - {new_violation['event_id']}"
                                                 )
+                                                # Send notification
+                                                try:
+                                                    notifier = get_notification_service(self.db_adapter)
+                                                    notifier.send_violation_notification(new_violation)
+                                                except Exception as notify_err:
+                                                    logger.warning(f"⚠️ DVR Bildirim gönderilemedi: {notify_err}")
                                             else:
                                                 logger.warning(
                                                     f"⚠️ DVR: violation_events kaydı reddedildi (fail-fast) "

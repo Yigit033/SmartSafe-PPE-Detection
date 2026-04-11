@@ -381,10 +381,10 @@ class SH17ModelManager:
     }
 
     # Food model confidence cap — configurable via env var FOOD_PPE_CONFIDENCE
-    _FOOD_PPE_CONFIDENCE: float = float(os.environ.get('FOOD_PPE_CONFIDENCE', '0.10'))
+    _FOOD_PPE_CONFIDENCE: float = float(os.environ.get('FOOD_PPE_CONFIDENCE', '0.45'))
 
     # Haircap is notoriously hard for the food model; use a separate lower threshold
-    _HAIRCAP_RESCUE_CONF: float = float(os.environ.get('HAIRCAP_RESCUE_CONF', '0.005'))
+    _HAIRCAP_RESCUE_CONF: float = float(os.environ.get('HAIRCAP_RESCUE_CONF', '0.15'))
 
     def _detect_with_food_model(self, image, confidence):
         """Local food PPE model ile detection — SH17'ye ek sınıfları döndürür."""

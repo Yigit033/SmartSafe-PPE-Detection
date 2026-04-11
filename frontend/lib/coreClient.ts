@@ -42,6 +42,10 @@ export class CoreServiceClient {
     return this.call("GET", `/`);
   }
 
+  public async sendTestNotification(company_id: string): Promise<any> {
+    return this.call("POST", `/api/company/${company_id}/notification/test`);
+  }
+
   public async admin(): Promise<any> {
     return this.call("GET", `/admin`);
   }

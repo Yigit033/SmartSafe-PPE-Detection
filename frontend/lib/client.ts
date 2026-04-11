@@ -435,6 +435,7 @@ export namespace company {
             this.remove = this.remove.bind(this)
             this.updateNotifications = this.updateNotifications.bind(this)
             this.updateProfile = this.updateProfile.bind(this)
+            this.sendTestNotification = this.sendTestNotification.bind(this)
         }
 
         /**
@@ -513,6 +514,22 @@ export namespace company {
             const resp = await this.baseClient.callTypedAPI("PATCH", `/company/${encodeURIComponent(company_id)}`, JSON.stringify(params))
             return await resp.json() as {
     success: boolean
+}
+        }
+
+        /**
+         * Şirkete test bildirimi gönderir
+         */
+        public async sendTestNotification(company_id: string): Promise<{
+    success: boolean
+    message?: string
+    error?: string
+}> {
+            const resp = await this.baseClient.callTypedAPI("POST", `/company/${encodeURIComponent(company_id)}/notification/test`)
+            return await resp.json() as {
+    success: boolean
+    message?: string
+    error?: string
 }
         }
     }

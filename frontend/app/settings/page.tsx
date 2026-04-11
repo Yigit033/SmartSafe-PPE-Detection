@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
+import core from "@/lib/core";
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
@@ -10,6 +11,16 @@ export default function SettingsPage() {
   const [ppeRequirements, setPpeRequirements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [systemBotUsername, setSystemBotUsername] = useState<string>("");
+  const [notificationSettings, setNotificationSettings] = useState({
+    email_notifications: false,
+    sms_notifications: false,
+    push_notifications: false,
+    violation_alerts: true,
+    telegram_notifications: false,
+    telegram_bot_token: "",
+    telegram_chat_id: ""
+  });
   const companyId = getCompanyId();
 
   useEffect(() => {
@@ -22,6 +33,18 @@ export default function SettingsPage() {
       const data = await api.company.getById(companyId);
       if (data.success) {
         setCompany(data.company);
+        if ((data as any).system_bot_username) {
+          setSystemBotUsername((data as any).system_bot_username);
+        }
+        setNotificationSettings({
+          email_notifications: data.company.email_notifications || false,
+          sms_notifications: data.company.sms_notifications || false,
+          push_notifications: data.company.push_notifications || false,
+          violation_alerts: data.company.violation_alerts !== false, // Default true
+          telegram_notifications: data.company.telegram_notifications || false,
+          telegram_bot_token: data.company.telegram_bot_token || "",
+          telegram_chat_id: data.company.telegram_chat_id || ""
+        });
         // PPE gereksinimlerini ayıkla
         try {
           const reqs = typeof data.company.ppe_requirements === 'string' 
@@ -148,6 +171,35 @@ export default function SettingsPage() {
     }
   };
 
+  const handleUpdateNotifications = async () => {
+    setIsSaving(true);
+    try {
+      const data = await api.company.updateNotifications(companyId, notificationSettings);
+      if (data.success) {
+        alert("Bildirim ayarları başarıyla güncellendi!");
+        fetchCompanyData();
+      }
+    } catch (error) {
+      console.error("Error updating notifications:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    try {
+      const data = await core.sendTestNotification(companyId!);
+      if (data.success) {
+        alert("✅ Test bildirimi başarıyla gönderildi! Lütfen Telegram'ı kontrol edin.");
+      } else {
+        alert("❌ Hata: " + (data.error || "Bildirim gönderilemedi."));
+      }
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      alert("❌ Sistem hatası oluştu.");
+    }
+  };
+
   const togglePPE = (id: string) => {
     setPpeRequirements(prev => {
       const exists = prev.find((p: any) => p.id === id);
@@ -211,6 +263,28 @@ export default function SettingsPage() {
     { id: "subscription", name: "Abonelik", icon: "payments" },
     { id: "security", name: "Güvenlik", icon: "security" },
   ];
+
+  const cleanChatId = async (val: string) => {
+    let clean = val.trim();
+    setNotificationSettings(prev => ({ ...prev, telegram_chat_id: clean }));
+
+    // Eğer bir URL veya aday bir username ise Backend'den gerçek ID'yi çekmeyi dene
+    if (clean.includes("t.me") || (clean.length > 3 && !/^-?\d+$/.test(clean))) {
+      try {
+        const res = await (api.company as any).resolveTelegramChatId({
+          chat_id_or_url: clean,
+          bot_token: notificationSettings.telegram_bot_token || undefined
+        });
+        
+        if (res.success && res.chat_id) {
+          setNotificationSettings(prev => ({ ...prev, telegram_chat_id: res.chat_id! }));
+        }
+      } catch (e) {
+        // Hata durumunda sessizce devam et, kullanıcı manuel girebilir
+        console.debug("Telegram resolution failed:", e);
+      }
+    }
+  };
 
   if (isLoading && !company) {
     return (
@@ -410,48 +484,158 @@ export default function SettingsPage() {
               )}
 
               {activeSection === "notifications" && (
-                <div className="space-y-8 max-w-2xl">
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-6">
-                    <div className="flex items-center justify-between">
+                <div className="space-y-8 max-w-4xl p-8">
+                  <div className="p-8 rounded-3xl bg-slate-50 border border-slate-200 space-y-8">
+                    {/* İhlal Uyarıları (Global) */}
+                    <div className="flex items-center justify-between p-4 rounded-3xl bg-white border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-brand-teal">
-                          <span className="material-symbols-rounded">mail</span>
+                        <div className="h-14 w-14 rounded-2xl bg-brand-teal/10 flex items-center justify-center text-brand-teal">
+                          <span className="material-symbols-rounded text-2xl">notifications_active</span>
                         </div>
                         <div>
-                          <h5 className="text-sm font-black text-slate-900 uppercase">
-                            E-posta Bildirimleri
+                          <h5 className="text-sm font-black text-slate-900 uppercase italic">
+                            İhlal Uyarıları
                           </h5>
-                          <p className="text-xs text-slate-500 font-bold">
-                            İhlal durumlarında anlık e-posta gönder.
+                          <p className="text-[11px] text-slate-500 font-bold">
+                            Tüm ihlal bildirimlerini genel olarak aç/kapat.
                           </p>
                         </div>
                       </div>
                       <input
                         type="checkbox"
-                        className="w-12 h-6 bg-slate-200 rounded-full appearance-none checked:bg-brand-teal relative cursor-pointer before:absolute before:h-5 before:w-5 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:left-6 transition-all"
-                        defaultChecked
+                        className="w-14 h-7 bg-slate-200 rounded-full appearance-none checked:bg-brand-teal relative cursor-pointer before:absolute before:h-6 before:w-6 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:left-7 transition-all shadow-inner"
+                        checked={notificationSettings.violation_alerts}
+                        onChange={(e) => setNotificationSettings({...notificationSettings, violation_alerts: e.target.checked})}
                       />
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-brand-teal">
-                          <span className="material-symbols-rounded">sms</span>
+                    <div className="h-px bg-slate-200 ml-4 mr-4" />
+
+                    {/* Telegram Seksiyonu */}
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="h-14 w-14 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-500">
+                            <span className="material-symbols-rounded text-2xl">send</span>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-black text-slate-900 uppercase italic">
+                              Telegram Bildirimleri
+                            </h5>
+                            <p className="text-[11px] text-slate-500 font-bold">
+                              Anlık ihlal fotoğraflarını Telegram üzerinden al.
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h5 className="text-sm font-black text-slate-900 uppercase">
-                            SMS Bildirimleri
-                          </h5>
-                          <p className="text-xs text-slate-500 font-bold">
-                            Kritik ihlalleri telefonuna ilet.
-                          </p>
-                        </div>
+                        <input
+                          type="checkbox"
+                          className="w-14 h-7 bg-slate-200 rounded-full appearance-none checked:bg-sky-500 relative cursor-pointer before:absolute before:h-6 before:w-6 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:left-7 transition-all shadow-inner"
+                          checked={notificationSettings.telegram_notifications}
+                          onChange={(e) => setNotificationSettings({...notificationSettings, telegram_notifications: e.target.checked})}
+                        />
                       </div>
-                      <input
-                        type="checkbox"
-                        className="w-12 h-6 bg-slate-200 rounded-full appearance-none checked:bg-brand-teal relative cursor-pointer before:absolute before:h-5 before:w-5 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:left-6 transition-all"
-                      />
+
+                      {notificationSettings.telegram_notifications && (
+                        <div className="space-y-6 pl-18 animate-in fade-in slide-in-from-top-2 duration-300">
+                          
+                          {/* SİHİRLİ BAĞLANTI KUTUSU */}
+                          <div className="bg-gradient-to-br from-sky-400 to-sky-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-sky-500/20 relative overflow-hidden group">
+                            <div className="absolute -right-4 -bottom-4 opacity-20 group-hover:scale-110 transition-transform duration-700">
+                                <span className="material-symbols-rounded text-[120px] font-black">send</span>
+                            </div>
+
+                            <div className="relative z-10 space-y-4">
+                              <h4 className="text-lg font-black uppercase italic tracking-tighter">Hızlı Kurulum</h4>
+                              <p className="text-xs font-bold opacity-90 leading-relaxed max-w-[280px]">
+                                Hiçbir ayarla uğraşmadan, tek tıklamayla bildirimleri telefonunuza bağlayın.
+                              </p>
+                              
+                              <div className="flex flex-wrap gap-4">
+                                <button 
+                                  onClick={() => window.open(`https://t.me/${systemBotUsername || 'smartsafeaibot'}?start=${companyId}`, '_blank')}
+                                  className="bg-white text-sky-500 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3"
+                                >
+                                  <span className="material-symbols-rounded text-lg">person</span>
+                                  Kendi Hesabıma Bağla
+                                </button>
+
+                                <button 
+                                  onClick={() => window.open(`https://t.me/${systemBotUsername || 'smartsafeaibot'}?startgroup=${companyId}`, '_blank')}
+                                  className="bg-sky-400 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 border border-sky-300"
+                                >
+                                  <span className="material-symbols-rounded text-lg">group</span>
+                                  Gruba / Kanala Ekle
+                                </button>
+
+                                <button 
+                                  onClick={handleSendTestNotification}
+                                  className="bg-sky-700 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 border border-sky-600"
+                                >
+                                  <span className="material-symbols-rounded text-lg">send_and_archive</span>
+                                  Test Bağlantısı Yolla
+                                </button>
+                              </div>
+
+                              <div className="pt-2">
+                                <p className="text-[10px] font-medium opacity-80 italic text-white/90">
+                                  * Gruba ekledikten sonra botun mesaj yetkisi olduğundan emin olun. Bağlantı otomatik kurulacaktır.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* GELİŞMİŞ AYARLAR (Opsiyonel) */}
+                          <details className="group">
+                            <summary className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors list-none flex items-center gap-2">
+                              <span className="material-symbols-rounded text-sm group-open:rotate-180 transition-transform">expand_more</span>
+                              Manuel / Gelişmiş Ayarlar
+                            </summary>
+                            
+                            <div className="grid grid-cols-1 gap-4 pt-4 mt-2 border-t border-slate-100 italic transition-all">
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                  Bot Token (Cihaza Özel - Boş bırakılırsa sistem botu kullanılır)
+                                </label>
+                                <input
+                                  type="password"
+                                  value={notificationSettings.telegram_bot_token}
+                                  onChange={(e) => setNotificationSettings({...notificationSettings, telegram_bot_token: e.target.value})}
+                                  placeholder="Kendi botunuzu kullanmak isterseniz giriniz..."
+                                  className="w-full rounded-2xl bg-white border border-slate-200 px-6 py-4 text-xs font-black text-slate-900 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                  Chat ID (User veya Grup ID)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={notificationSettings.telegram_chat_id}
+                                  onChange={(e) => cleanChatId(e.target.value)}
+                                  placeholder="-100123456789 veya @kanaladi"
+                                  className="w-full rounded-2xl bg-white border border-slate-200 px-6 py-4 text-xs font-black text-slate-900 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all"
+                                />
+                                {notificationSettings.telegram_chat_id.includes("+") && (
+                                  <p className="text-[10px] text-amber-600 font-bold ml-1 animate-pulse">
+                                    ⚠️ Bu bir davet linki. Lütfen botu gruba ekleyip sayısal ID'yi (-100...) giriniz.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </details>
+                        </div>
+                      )}
                     </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <button
+                      onClick={handleUpdateNotifications}
+                      disabled={isSaving}
+                      className="bg-brand-teal text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-brand-teal/20 transition-all hover:bg-brand-teal/90 hover:-translate-y-0.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSaving ? "KAYDEDİLİRYOR..." : "BİLDİRİM AYARLARINI KAYDET"}
+                    </button>
                   </div>
                 </div>
               )}

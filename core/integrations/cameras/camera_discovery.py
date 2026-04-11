@@ -46,6 +46,20 @@ class IPCameraDiscovery:
                 'headers': ['Server: Foscam'],
                 'default_rtsp': 'rtsp://{ip}:554/videoMain'
             },
+            'mobile_ip_webcam': {
+                'ports': [8080, 8081],
+                'paths': ['/shot.jpg', '/video', '/status'],
+                'headers': ['Server: IP Webcam', 'Server: IP Webcam Pro'],
+                'default_rtsp': 'rtsp://{ip}:8080/video',
+                'is_mobile': True
+            },
+            'droidcam': {
+                'ports': [4747],
+                'paths': ['/video', '/status.json'],
+                'headers': ['DroidCam'],
+                'default_rtsp': 'http://{ip}:4747/video',
+                'is_mobile': True
+            },
             'generic': {
                 'ports': [554, 8080, 80],
                 'paths': ['/video.cgi', '/videostream.cgi', '/mjpeg'],
@@ -183,7 +197,8 @@ class IPCameraDiscovery:
         }
         
         # Port taraması
-        open_ports = self.scan_ports(ip, [80, 554, 8080, 8000, 37777, 88, 443], timeout)
+        scan_ports_list = [80, 554, 8080, 8000, 37777, 88, 443, 4747]
+        open_ports = self.scan_ports(ip, scan_ports_list, timeout)
         camera_info['detected_ports'] = open_ports
         
         if not open_ports:
