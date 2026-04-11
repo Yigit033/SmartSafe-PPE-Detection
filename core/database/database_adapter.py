@@ -450,6 +450,8 @@ class DatabaseAdapter:
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT 'full'",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMP",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON",
+                "ALTER TABLE cameras ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
+                "ALTER TABLE dvr_channels ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_notifications BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT"
@@ -1112,22 +1114,77 @@ class DatabaseAdapter:
             return False
 
     # DVR System Methods
-    def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> bool:
-        """Add DVR system to database"""
+    def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> Optional[str]:
+        """Add DVR system to database.
+
+        (company_id, ip_address) is unique. If a soft-deleted row exists for that IP,
+        restore it in place and return the existing ``dvr_id`` (preserves channel_ids
+        and violation_events FKs). Otherwise insert and return the new ``dvr_id``.
+        Returns None on failure.
+        """
         try:
             logger.info(f"🔧 Adding DVR system: {dvr_data.get('name')} for company: {company_id}")
 
-            dup = self.execute_query(
-                "SELECT dvr_id FROM dvr_systems WHERE company_id = %s AND ip_address = %s",
+            existing = self.execute_query(
+                """
+                SELECT dvr_id, status FROM dvr_systems
+                WHERE company_id = %s AND ip_address = %s
+                """,
                 (company_id, dvr_data["ip_address"]),
                 fetch_one=True,
             )
-            if dup:
-                logger.warning(
-                    "⚠️ Bu şirket için bu IP ile kayıtlı bir DVR zaten var; "
-                    f"company_id={company_id} ip={dvr_data.get('ip_address')}"
+            if existing:
+                existing_id = existing["dvr_id"]
+                status = (existing.get("status") or "").lower()
+                if status == "deleted":
+                    update_q = """
+                        UPDATE dvr_systems SET
+                            name = %s, port = %s, username = %s, password = %s,
+                            dvr_type = %s, protocol = %s, api_path = %s, rtsp_port = %s,
+                            max_channels = %s, status = %s, updated_at = NOW()
+                        WHERE company_id = %s AND dvr_id = %s
+                    """
+                    upd_params = (
+                        dvr_data["name"],
+                        dvr_data.get("port", 80),
+                        dvr_data.get("username", "admin"),
+                        dvr_data.get("password", ""),
+                        dvr_data.get("dvr_type", "generic"),
+                        dvr_data.get("protocol", "http"),
+                        dvr_data.get("api_path", "/api"),
+                        dvr_data.get("rtsp_port", 554),
+                        dvr_data.get("max_channels", 16),
+                        "active",
+                        company_id,
+                        existing_id,
+                    )
+                    result = self.execute_query(update_q, upd_params, fetch_all=False)
+                    if result is None or result <= 0:
+                        logger.error(
+                            f"❌ DVR restore failed: {dvr_data.get('name')} rowcount={result}"
+                        )
+                        return None
+                    ch_q = """
+                        UPDATE dvr_channels
+                        SET status = 'inactive', updated_at = NOW()
+                        WHERE company_id = %s AND dvr_id = %s AND status = 'deleted'
+                    """
+                    self.execute_query(ch_q, (company_id, existing_id), fetch_all=False)
+                    logger.info(
+                        f"✅ DVR system restored from soft-delete: {existing_id} "
+                        f"({dvr_data.get('name')})"
+                    )
+                    return existing_id
+                if existing_id != dvr_data.get("dvr_id"):
+                    logger.warning(
+                        "⚠️ Bu şirket için bu IP ile kayıtlı bir DVR zaten var; "
+                        f"company_id={company_id} ip={dvr_data.get('ip_address')}"
+                    )
+                    return None
+                logger.info(
+                    f"ℹ️ DVR zaten kayıtlı (aynı dvr_id ve IP): {existing_id}"
                 )
-                return False
+                return existing_id
 
             query = '''
                 INSERT INTO dvr_systems (
@@ -1135,7 +1192,7 @@ class DatabaseAdapter:
                     dvr_type, protocol, api_path, rtsp_port, max_channels, status
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             '''
-            
+
             params = (
                 dvr_data['dvr_id'],
                 company_id,
@@ -1151,32 +1208,33 @@ class DatabaseAdapter:
                 dvr_data.get('max_channels', 16),
                 'active'
             )
-            
+
             logger.info(f"🔧 SQL Query: {query}")
             logger.info(f"🔧 Parameters: {params}")
-            
+
             result = self.execute_query(query, params, fetch_all=False)
             logger.info(f"🔧 Query result: {result}")
-            
+
             if result is not None and result > 0:
                 logger.info(f"✅ DVR system added successfully: {dvr_data.get('name')}")
-                return True
-            else:
-                logger.error(f"❌ DVR system add failed: {dvr_data.get('name')} - rowcount: {result}")
-                return False
-            
+                return dvr_data["dvr_id"]
+            logger.error(
+                f"❌ DVR system add failed: {dvr_data.get('name')} - rowcount: {result}"
+            )
+            return None
+
         except Exception as e:
             logger.error(f"❌ Add DVR system error: {e}")
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
-            return False
+            return None
     
     def get_dvr_systems(self, company_id: str) -> List[Dict[str, Any]]:
         """Get all DVR systems for a company"""
         try:
             query = '''
                 SELECT * FROM dvr_systems 
-                WHERE company_id = %s 
+                WHERE company_id = %s AND status <> 'deleted'
                 ORDER BY created_at DESC
             '''
             
@@ -1195,7 +1253,7 @@ class DatabaseAdapter:
         try:
             query = '''
                 SELECT * FROM dvr_systems 
-                WHERE company_id = %s AND dvr_id = %s
+                WHERE company_id = %s AND dvr_id = %s AND status <> 'deleted'
             '''
             
             result = self.execute_query(query, (company_id, dvr_id), fetch_all=False)
@@ -1214,7 +1272,11 @@ class DatabaseAdapter:
             new_ip = dvr_data.get("ip_address")
             if new_ip:
                 conflict = self.execute_query(
-                    "SELECT dvr_id FROM dvr_systems WHERE company_id = %s AND ip_address = %s AND dvr_id <> %s",
+                    """
+                    SELECT dvr_id FROM dvr_systems
+                    WHERE company_id = %s AND ip_address = %s AND dvr_id <> %s
+                      AND status <> 'deleted'
+                    """,
                     (company_id, new_ip, dvr_id),
                     fetch_one=True,
                 )
@@ -1257,30 +1319,35 @@ class DatabaseAdapter:
             return False
     
     def delete_dvr_system(self, company_id: str, dvr_id: str) -> bool:
-        """Delete DVR system and all related data"""
+        """Soft-delete DVR system and related channels.
+
+        This must not hard-delete because violation_events may reference dvr_channels.
+        """
         try:
-            # First delete related streams
+            # Mark channels deleted first (keeps FK integrity for violation_events)
+            channel_query = '''
+                UPDATE dvr_channels
+                SET status = 'deleted', updated_at = NOW()
+                WHERE company_id = %s AND dvr_id = %s AND status <> 'deleted'
+            '''
+            self.execute_query(channel_query, (company_id, dvr_id), fetch_all=False)
+
+            # Mark DVR system deleted
+            dvr_query = '''
+                UPDATE dvr_systems
+                SET status = 'deleted', updated_at = NOW()
+                WHERE company_id = %s AND dvr_id = %s AND status <> 'deleted'
+            '''
+            result = self.execute_query(dvr_query, (company_id, dvr_id), fetch_all=False)
+
+            # Streams are ephemeral; safe to hard-delete
             stream_query = '''
-                DELETE FROM dvr_streams 
+                DELETE FROM dvr_streams
                 WHERE company_id = %s AND dvr_id = %s
             '''
             self.execute_query(stream_query, (company_id, dvr_id), fetch_all=False)
-            
-            # Then delete related channels
-            channel_query = '''
-                DELETE FROM dvr_channels 
-                WHERE company_id = %s AND dvr_id = %s
-            '''
-            self.execute_query(channel_query, (company_id, dvr_id), fetch_all=False)
-            
-            # Finally delete the DVR system
-            dvr_query = '''
-                DELETE FROM dvr_systems 
-                WHERE company_id = %s AND dvr_id = %s
-            '''
-            
-            result = self.execute_query(dvr_query, (company_id, dvr_id), fetch_all=False)
-            logger.info(f"✅ DVR system deleted: {dvr_id}")
+
+            logger.info(f"✅ DVR system soft-deleted: {dvr_id}")
             return result is not None
             
         except Exception as e:
@@ -1289,11 +1356,15 @@ class DatabaseAdapter:
     
     # DVR Channel Methods
     def delete_dvr_channel(self, company_id: str, dvr_id: str, channel_id: str) -> bool:
-        """Delete a DVR channel from database"""
+        """Soft-delete a DVR channel (keeps violation_events history)."""
         try:
-            query = f"DELETE FROM dvr_channels WHERE company_id = %s AND dvr_id = %s AND channel_id = %s"
-            self.execute_query(query, (company_id, dvr_id, channel_id))
-            logger.info(f"✅ DVR channel deleted: {channel_id}")
+            query = '''
+                UPDATE dvr_channels
+                SET status = 'deleted', updated_at = NOW()
+                WHERE company_id = %s AND dvr_id = %s AND channel_id = %s AND status <> 'deleted'
+            '''
+            self.execute_query(query, (company_id, dvr_id, channel_id), fetch_all=False)
+            logger.info(f"✅ DVR channel soft-deleted: {channel_id}")
             return True
         except Exception as e:
             logger.error(f"❌ Error deleting DVR channel {channel_id}: {e}")
@@ -1365,7 +1436,7 @@ class DatabaseAdapter:
         try:
             query = '''
                 SELECT * FROM dvr_channels 
-                WHERE company_id = %s AND dvr_id = %s 
+                WHERE company_id = %s AND dvr_id = %s AND status <> 'deleted'
                 ORDER BY channel_number
             '''
             
@@ -1891,7 +1962,7 @@ class DatabaseAdapter:
                        auth_type, resolution, fps, quality, audio_enabled,
                        night_vision, motion_detection, recording_enabled,
                        camera_type, status, last_detection, last_test_time,
-                       connection_retries, timeout, created_at, updated_at
+                       connection_retries, timeout, detection_zones, created_at, updated_at
                 FROM cameras 
                 WHERE camera_id = %s AND company_id = %s AND status != 'deleted'
             '''
@@ -1923,7 +1994,7 @@ class DatabaseAdapter:
                        TRUE as motion_detection, TRUE as recording_enabled, 
                        'dvr_channel' as camera_type, dc.status, NULL as last_detection, 
                        dc.last_test_time, 3 as connection_retries, 10 as timeout, 
-                       dc.created_at, dc.updated_at
+                       dc.detection_zones, dc.created_at, dc.updated_at
                 FROM dvr_channels dc
                 JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
                 WHERE dc.channel_id = %s AND dc.company_id = %s

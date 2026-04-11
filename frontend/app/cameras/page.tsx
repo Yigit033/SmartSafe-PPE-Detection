@@ -6,6 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
 import core from "@/lib/core";
+import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
+import {
+  normalizeDetectionZonesPayload,
+  polygonToVideoSpaceForOverlay,
+} from "@/lib/detectionZones";
 
 export default function CamerasPage() {
   return (
@@ -44,6 +49,9 @@ function CamerasContent() {
     Record<string, string>
   >({});
   const [loadedCameras, setLoadedCameras] = useState<string[]>([]);
+  const [streamLayoutByCamera, setStreamLayoutByCamera] = useState<
+    Record<string, { nw: number; nh: number; cw: number; ch: number }>
+  >({});
 
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [groups, setGroups] = useState<any[]>([]);
@@ -345,7 +353,7 @@ function CamerasContent() {
         const msg = inactive > 0
           ? `${data.count} aktif kanal bulundu (${inactive} kanalda kamera bağlı değil).`
           : `${data.count} kanal başarıyla keşfedildi!`;
-        alert(msg);
+        alert(`Keşif tamamlandı\n\n${msg}`);
         fetchCameras();
       } else {
         alert(`Hata: ${data.error || "Kanallar keşfedilemedi."}`);
@@ -361,7 +369,9 @@ function CamerasContent() {
   const deleteDvr = async (dvrId: string) => {
     if (
       !confirm(
-        "Bu DVR sistemini ve bağlı tüm kanalları silmek istediğinize emin misiniz?",
+        "Bu DVR’yi listeden kaldırmak istiyor musunuz?\n\n" +
+          "Kayıtlar veritabanından silinmez; geçmiş ihlal ve raporlar korunur. " +
+          "Aynı cihazı tekrar eklediğinizde kayıt geri yüklenebilir.",
       )
     )
       return;
@@ -369,11 +379,18 @@ function CamerasContent() {
     try {
       const data = await api.dvr.remove(companyId, dvrId);
       if (data.success) {
+        alert(
+          data.message ||
+            "DVR listeden kaldırıldı. Geçmiş kayıtlar korunur; kamera listesi güncellendi.",
+        );
         fetchDvrs();
         fetchCameras();
+      } else {
+        alert(`Hata: ${data.error || "DVR silinemedi."}`);
       }
     } catch (error) {
       console.error("Error deleting DVR:", error);
+      alert("Sunucuyla bağlantı kurulamadı.");
     } finally {
       setIsDeletingDvr(false);
     }
@@ -692,7 +709,17 @@ function CamerasContent() {
       ) : (
         <>
         <div className={`mt-12 grid gap-8 ${camerasPerPage === 1 ? "grid-cols-1 max-w-5xl mx-auto" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}>
-          {paginatedCameras.map((camera) => (
+          {paginatedCameras.map((camera) => {
+            const zonesPayload = normalizeDetectionZonesPayload(
+              camera.detection_zones,
+            );
+            const streamLay = streamLayoutByCamera[camera.camera_id];
+            const showRoiOverlay =
+              zonesPayload.polygons.length > 0 &&
+              zonesPayload.polygons[0].length > 0 &&
+              !failedCameras.includes(camera.camera_id);
+
+            return (
             <div
               key={camera.camera_id}
               className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg hover:shadow-2xl transition-all duration-500"
@@ -725,8 +752,20 @@ function CamerasContent() {
                   onLoad={(e) => {
                     const target = e.target as HTMLImageElement;
                     // Eğer broken image ikonu vs. yüklenirse diye basit bir check
-                    if (target.naturalWidth <= 1) return; 
-                    
+                    if (target.naturalWidth <= 1) return;
+
+                    if (target.naturalWidth > 0 && target.naturalHeight > 0) {
+                      setStreamLayoutByCamera((prev) => ({
+                        ...prev,
+                        [camera.camera_id]: {
+                          nw: target.naturalWidth,
+                          nh: target.naturalHeight,
+                          cw: target.clientWidth,
+                          ch: target.clientHeight,
+                        },
+                      }));
+                    }
+
                     setLoadedCameras((prev) => [...new Set([...prev, camera.camera_id])]);
                     setFailedCameras((prev) =>
                       prev.filter((id) => id !== camera.camera_id),
@@ -738,37 +777,22 @@ function CamerasContent() {
                   }}
                 />
 
-                {/* 🎯 Analiz Bölgesi Overlay */}
-                {camera.detection_zones &&
-                  camera.detection_zones.length > 0 &&
-                  camera.detection_zones[0].length > 0 &&
-                  !failedCameras.includes(camera.camera_id) && (
-                    <svg
-                      className="absolute inset-0 w-full h-full pointer-events-none z-10 opacity-70 group-hover:opacity-100 transition-opacity duration-500"
-                      viewBox="0 0 1 1"
-                      preserveAspectRatio="none"
-                    >
-                      <polygon
-                        points={camera.detection_zones[0]
-                          .map((p: any) => `${p.x},${p.y}`)
-                          .join(" ")}
-                        fill="rgba(20, 184, 166, 0.25)"
-                        stroke="#14b8a6"
-                        strokeWidth="0.015"
-                        strokeDasharray="0.04 0.02"
-                        className="drop-shadow-[0_0_12px_rgba(20,184,166,0.6)]"
-                      />
-                      {camera.detection_zones[0].map((p: any, idx: number) => (
-                        <circle
-                          key={idx}
-                          cx={p.x}
-                          cy={p.y}
-                          r="0.008"
-                          fill="#14b8a6"
-                        />
-                      ))}
-                    </svg>
-                  )}
+                {/* 🎯 Analiz Bölgesi Overlay (video uzayı, object-contain ile hizalı) */}
+                {showRoiOverlay && (
+                  <VideoRoiOverlay
+                    polygon={polygonToVideoSpaceForOverlay(
+                      zonesPayload.polygons[0],
+                      zonesPayload.coordSpace,
+                      streamLay?.cw ?? 0,
+                      streamLay?.ch ?? 0,
+                      streamLay?.nw ?? 0,
+                      streamLay?.nh ?? 0,
+                    )}
+                    naturalW={streamLay?.nw ?? 0}
+                    naturalH={streamLay?.nh ?? 0}
+                    className="absolute inset-0 z-10 h-full w-full opacity-70 transition-opacity duration-500 group-hover:opacity-100"
+                  />
+                )}
 
                 {failedCameras.includes(camera.camera_id) && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm">
@@ -913,7 +937,8 @@ function CamerasContent() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-12 flex items-center justify-center gap-3">

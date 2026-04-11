@@ -17,7 +17,10 @@
     "docker:stop": "npm run dev:down",
     "landing": "cd landing && npm run dev",
     "backend": "cd backend && node ./scripts/encore-sync-if-needed.cjs && encore run",
-    "backend:sync": "cd backend && node ./scripts/encore-sync-if-needed.cjs"
+    "backend:sync": "cd backend && node ./scripts/encore-sync-if-needed.cjs",
+    "migrate": "cd backend && npm run migrate",
+    "migrate:company": "cd backend && npm run migrate:company",
+    "migrate:violations": "cd backend && npm run migrate:violations"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

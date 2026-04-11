@@ -1,0 +1,33 @@
+# SmartSafe Core — NVIDIA GPU ile inference.
+# Linux host: NVIDIA Container Toolkit. Windows: Docker Desktop (WSL2) + NVIDIA sürücü; compose’ta gpus: all.
+# TORCH_DEVICE=auto — core/utils/torch_device.py
+#
+# Not: requirements.txt içinde torch pin yok; pip varsayılan olarak CPU tekerleği seçebilir. Bu yüzden cu124 indeksi kullanılır.
+
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir --upgrade "pip==24.3.1"
+
+COPY core/requirements.txt .
+# Ultralytics → torch bağımlılığı PyPI’dan CPU build çekebilir; CUDA 12.4 tekerlekleri bu indeksten çözülür.
+ARG PYTORCH_EXTRA_INDEX=https://download.pytorch.org/whl/cu124
+RUN pip install --no-cache-dir -r requirements.txt --extra-index-url "${PYTORCH_EXTRA_INDEX}" \
+    && python -c "import torch; v=torch.__version__; c=getattr(torch.version,'cuda',None); print('torch',v,'cuda',c); assert c, 'CUDA derlemesi gerekli (torch.version.cuda boş — pip muhtemelen CPU wheel kurdu)'"
+
+ENV FLASK_ENV=development
+ENV PYTHONUNBUFFERED=1
+ENV TORCH_DEVICE=auto
+ENV NVIDIA_VISIBLE_DEVICES=all
+
+EXPOSE 5577
+
+CMD ["python", "app.py"]

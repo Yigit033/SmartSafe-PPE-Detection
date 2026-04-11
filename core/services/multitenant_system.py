@@ -1480,7 +1480,8 @@ class MultiTenantDatabase:
                 cursor.execute(f'''
                     SELECT c.channel_id, c.name, s.ip_address, s.port, s.protocol, 
                            c.rtsp_path, s.username, s.password, c.status, 
-                           c.created_at, c.updated_at, s.dvr_id, c.channel_number
+                           c.created_at, c.updated_at, s.dvr_id, c.channel_number,
+                           c.detection_zones
                     FROM dvr_channels c
                     JOIN dvr_systems s ON c.dvr_id = s.dvr_id AND c.company_id = s.company_id
                     WHERE c.channel_id = {placeholder} AND c.company_id = {placeholder}
@@ -1546,12 +1547,16 @@ class MultiTenantDatabase:
                             'is_dvr': True,
                             'dvr_id': dvr_id,
                             'channel_number': channel_number,
+                            'detection_zones': res.get('detection_zones'),
                             'created_at': str(res.get('created_at')) if res.get('created_at') else '',
                             'updated_at': str(res.get('updated_at')) if res.get('updated_at') else ''
                         }
                     else:
-                        # SQLite path
-                        c_id, name, ip, port, proto, r_path, user, pswd, status, c_at, u_at, d_id, ch_num = row
+                        # Tuple satırı (PostgreSQL varsayılan cursor / SQLite): 14 sütun; migrate öncesi kısa satır
+                        _t = tuple(row)
+                        if len(_t) < 14:
+                            _t = _t + (None,) * (14 - len(_t))
+                        c_id, name, ip, port, proto, r_path, user, pswd, status, c_at, u_at, d_id, ch_num, det_z = _t[:14]
                         
                         # Get rtsp_port
                         cursor.execute(f"SELECT rtsp_port FROM dvr_systems WHERE dvr_id = {placeholder} AND company_id = {placeholder}", (d_id, company_id))
@@ -1588,6 +1593,7 @@ class MultiTenantDatabase:
                             'is_dvr': True,
                             'dvr_id': d_id,
                             'channel_number': ch_num,
+                            'detection_zones': det_z,
                             'created_at': str(c_at) if c_at else '',
                             'updated_at': str(u_at) if u_at else ''
                         }
@@ -1601,7 +1607,7 @@ class MultiTenantDatabase:
             cursor.execute(f'''
                 SELECT camera_id, camera_name, location, ip_address, port, protocol, stream_path,
                        rtsp_url, username, password, resolution, fps, status, last_detection,
-                       created_at, updated_at
+                       created_at, updated_at, detection_zones
                 FROM cameras 
                 WHERE camera_id = {placeholder} AND company_id = {placeholder} AND status != 'deleted'
             ''', (camera_id, company_id))
@@ -1626,6 +1632,7 @@ class MultiTenantDatabase:
                         'status': camera.get('status'),
                         'is_dvr': False,
                         'last_detection': str(camera.get('last_detection')) if camera.get('last_detection') else '',
+                        'detection_zones': camera.get('detection_zones'),
                         'created_at': str(camera.get('created_at')) if camera.get('created_at') else '',
                         'updated_at': str(camera.get('updated_at')) if camera.get('updated_at') else str(camera.get('created_at', ''))
                     }
@@ -1647,7 +1654,8 @@ class MultiTenantDatabase:
                         'is_dvr': False,
                         'last_detection': str(camera[13]) if len(camera) > 13 and camera[13] else '',
                         'created_at': str(camera[14]) if len(camera) > 14 and camera[14] else '',
-                        'updated_at': str(camera[15]) if len(camera) > 15 and camera[15] else (str(camera[14]) if len(camera) > 14 and camera[14] else '')
+                        'updated_at': str(camera[15]) if len(camera) > 15 and camera[15] else (str(camera[14]) if len(camera) > 14 and camera[14] else ''),
+                        'detection_zones': camera[16] if len(camera) > 16 else None,
                     }
                 self.close_connection(conn)
                 # Cache'e kaydet (1 dakika geçerli)

@@ -12,7 +12,7 @@ import threading
 import time
 import logging
 from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 import json
 from pathlib import Path
@@ -165,8 +165,14 @@ class DVRManager:
         
         logger.info("📺 DVR Manager initialized with database integration")
     
-    def add_dvr_system(self, dvr_config: DVRConfig, company_id: str) -> Tuple[bool, str]:
-        """Add DVR system with database persistence"""
+    def add_dvr_system(
+        self, dvr_config: DVRConfig, company_id: str
+    ) -> Tuple[bool, str, Optional[str], bool]:
+        """Add DVR system with database persistence.
+
+        Returns:
+            (success, user_message, canonical_dvr_id, restored_from_soft_delete)
+        """
         try:
             # Check if DVR already exists
             existing_dvr = self.db_adapter.get_dvr_system(company_id, dvr_config.dvr_id)
@@ -193,10 +199,16 @@ class DVRManager:
                     # Update memory cache
                     self.dvr_systems[dvr_config.dvr_id] = dvr_config
                     logger.info(f"✅ DVR system updated: {dvr_config.name}")
-                    return True, "DVR system updated successfully"
-                else:
-                    logger.error(f"❌ Failed to update DVR system in database: {dvr_config.name}")
-                    return False, "Database update error"
+                    return (
+                        True,
+                        "DVR ayarları güncellendi.",
+                        dvr_config.dvr_id,
+                        False,
+                    )
+                logger.error(
+                    f"❌ Failed to update DVR system in database: {dvr_config.name}"
+                )
+                return (False, "DVR güncellenemedi. Aynı IP başka bir kayıtta kullanılıyor olabilir.", None, False)
             else:
                 # Add new DVR system
                 logger.info(f"➕ Adding new DVR system: {dvr_config.name}")
@@ -214,19 +226,40 @@ class DVRManager:
                     'max_channels': dvr_config.max_channels
                 }
                 
-                success = self.db_adapter.add_dvr_system(company_id, dvr_data)
-                if success:
-                    # Add to memory cache
+                actual_dvr_id = self.db_adapter.add_dvr_system(company_id, dvr_data)
+                if actual_dvr_id:
+                    restored = actual_dvr_id != dvr_data["dvr_id"]
+                    if actual_dvr_id != dvr_config.dvr_id:
+                        dvr_config = replace(dvr_config, dvr_id=actual_dvr_id)
                     self.dvr_systems[dvr_config.dvr_id] = dvr_config
                     logger.info(f"✅ DVR system added: {dvr_config.name}")
-                    return True, "DVR system added successfully"
-                else:
-                    logger.error(f"❌ Failed to add DVR system to database: {dvr_config.name}")
-                    return False, "Database error"
+                    if restored:
+                        return (
+                            True,
+                            "Bu IP’de daha önce kaldırılmış bir DVR bulundu; kayıt ve kanal kimlikleri korunarak geri yüklendi. "
+                            "Geçmiş ihlal kayıtları etkilenmez. Kanalları güncellemek için keşif önerilir.",
+                            dvr_config.dvr_id,
+                            True,
+                        )
+                    return (
+                        True,
+                        "DVR sistemi kaydedildi. Sonraki adımda kanalları keşfedebilirsiniz.",
+                        dvr_config.dvr_id,
+                        False,
+                    )
+                logger.error(
+                    f"❌ Failed to add DVR system to database: {dvr_config.name}"
+                )
+                return (
+                    False,
+                    "Bu şirket için bu IP ile zaten kayıtlı aktif bir DVR var veya kayıt oluşturulamadı.",
+                    None,
+                    False,
+                )
                 
         except Exception as e:
             logger.error(f"❌ Add DVR system error: {e}")
-            return False, str(e)
+            return (False, str(e), None, False)
     
     def get_dvr_systems(self, company_id: str) -> List[Dict[str, Any]]:
         """Get DVR systems from database with channel count"""

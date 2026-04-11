@@ -21,6 +21,8 @@ try:
 except ImportError:
     YOLO = None
 
+from utils.torch_device import resolve_inference_device
+
 logger = logging.getLogger(__name__)
 
 class SH17ModelManager:
@@ -60,11 +62,8 @@ class SH17ModelManager:
             self.models_dir = str(resolved)
         else:
             self.models_dir = str(models_dir_path)
-        # Prefer GPU when available for faster inference; fall back to CPU otherwise.
-        if torch is not None and torch.cuda.is_available():
-            self.device = 'cuda'
-        else:
-            self.device = 'cpu'
+        # TORCH_DEVICE=auto|cpu|cuda|cuda:N — tek kaynak: utils/torch_device.py
+        self.device = resolve_inference_device(logger=logger)
         self.models = {}
         self.fallback_model = None
         
