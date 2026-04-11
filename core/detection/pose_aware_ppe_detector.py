@@ -32,6 +32,8 @@ try:
 except ImportError:
     torch = None
 
+from utils.torch_device import resolve_inference_device
+
 try:
     import supervision as sv
 except ImportError:
@@ -277,7 +279,7 @@ class PoseAwarePPEDetector:
         return sm
     
     def _load_pose_model(self, model_path: Optional[str] = None):
-        """Load YOLOv8-Pose model with CPU inference to avoid CUDA NMS issues"""
+        """YOLOv8-Pose yükler; cihaz ``TORCH_DEVICE`` ile SH17 ile hizalı, CUDA hata verirse CPU."""
         try:
             from ultralytics import YOLO
             
@@ -297,25 +299,29 @@ class PoseAwarePPEDetector:
                     "PPE objects use SH17/YOLOv9-e; pose model is for keypoints only."
                 )
             
-            # Prefer GPU if available, but fall back safely to CPU if any CUDA/NMS issue occurs.
-            target_device = 'cpu'
-            if torch is not None and torch.cuda.is_available():
-                try:
-                    self.pose_model.to('cuda')
-                    # Optional lightweight sanity check: run a tiny dummy inference
-                    dummy = np.zeros((64, 64, 3), dtype=np.uint8)
-                    _ = self.pose_model(dummy, conf=0.5, verbose=False, device='cuda')
-                    target_device = 'cuda'
-                    logger.info("🔧 Pose model set to CUDA inference (RTX GPU detected)")
-                except Exception as cuda_error:
-                    logger.warning(f"⚠️ Pose model CUDA path failed, falling back to CPU: {cuda_error}")
-                    self.pose_model.to('cpu')
-                    target_device = 'cpu'
+            # SH17 ile aynı TORCH_DEVICE politikası; CUDA warmup başarısızsa güvenli CPU.
+            target_device = resolve_inference_device(logger=logger)
+            if target_device == "cpu":
+                self.pose_model.to("cpu")
             else:
-                self.pose_model.to('cpu')
-                target_device = 'cpu'
+                try:
+                    self.pose_model.to(target_device)
+                    dummy = np.zeros((64, 64, 3), dtype=np.uint8)
+                    _ = self.pose_model(
+                        dummy, conf=0.5, verbose=False, device=target_device
+                    )
+                    logger.info(
+                        "🔧 Pose model CUDA warmup OK (%s)", target_device
+                    )
+                except Exception as cuda_error:
+                    logger.warning(
+                        "⚠️ Pose model CUDA başarısız, CPU'ya düşülüyor: %s",
+                        cuda_error,
+                    )
+                    self.pose_model.to("cpu")
+                    target_device = "cpu"
 
-            logger.info(f"🔧 Pose model device: {target_device}")
+            logger.info("🔧 Pose model device: %s", target_device)
                 
         except ImportError:
             logger.warning("⚠️ Ultralytics not installed. Install with: pip install ultralytics")

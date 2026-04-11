@@ -1,0 +1,30 @@
+# SmartSafe Core — NVIDIA GPU ile inference (host’ta NVIDIA Container Toolkit gerekir).
+# Kullanım: docker-compose.yml içinde `core.build.dockerfile: infra/Dockerfile.core.cuda`
+# ve isteğe bağlı `gpus: all` (Compose v2). Windows: Docker Desktop + WSL2 + NVIDIA sürücü.
+#
+# TORCH_DEVICE=auto (varsayılan) — core/utils/torch_device.py
+
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir --upgrade "pip==24.3.1"
+
+COPY core/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+ENV FLASK_ENV=development
+ENV PYTHONUNBUFFERED=1
+ENV TORCH_DEVICE=auto
+ENV NVIDIA_VISIBLE_DEVICES=all
+
+EXPOSE 5577
+
+CMD ["python", "app.py"]

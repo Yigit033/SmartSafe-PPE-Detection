@@ -158,12 +158,22 @@ CACHE_DURATION = 300  # 5 dakika cache süresi
 import os as _os
 import multiprocessing as _mp
 
-# Kaç kamera aynı anda inference yapabilir — CUDA varsa GPU paralelliği + 2, yoksa CPU çekirdeği
+# Kaç kamera aynı anda inference yapabilir — efektif cihaz TORCH_DEVICE / RENDER ile utils.torch_device'dan
+_effective_torch_device = "cpu"
 try:
-    import torch as _torch_check
-    _has_gpu = _torch_check.cuda.is_available()
-except ImportError:
-    _has_gpu = False
+    from utils.torch_device import resolve_inference_device
+
+    _effective_torch_device = resolve_inference_device(logger=logger)
+    _has_gpu = str(_effective_torch_device).startswith("cuda")
+except Exception:
+    try:
+        import torch as _torch_check
+
+        _has_gpu = _torch_check.cuda.is_available()
+        _effective_torch_device = "cuda" if _has_gpu else "cpu"
+    except ImportError:
+        _has_gpu = False
+        _effective_torch_device = "cpu"
 
 _cpu_cores = _mp.cpu_count()
 
@@ -185,7 +195,8 @@ _camera_slot_semaphore = _threading.Semaphore(MAX_CONCURRENT_CAMERAS)
 import logging as _log_tmp
 _log_tmp.getLogger(__name__).info(
     f"🎛️ Resource Manager: MAX_CAMERAS={MAX_CONCURRENT_CAMERAS}, "
-    f"INFERENCE_WORKERS={_MAX_INFERENCE_WORKERS}, GPU={_has_gpu}"
+    f"INFERENCE_WORKERS={_MAX_INFERENCE_WORKERS}, "
+    f"TORCH_DEVICE_EFFECTIVE={_effective_torch_device}, GPU_POOL={_has_gpu}"
 )
 
 
@@ -1963,9 +1974,11 @@ smartsafe_requests_total 100
         # Kamera başlat
         self.start_saas_camera(camera_key, camera_id, company_id, active_detectors_ref=ad)
         
-        # PPE Detection Model - SH17 or PoseAware fallback
+        # PPE Detection Model - SH17 or PoseAware fallback (cihaz SH17/pose ile aynı çözümleyici)
         pose_detector = None
-        device = 'cpu'
+        from utils.torch_device import resolve_inference_device
+
+        device = resolve_inference_device(logger=logger)
         # Sektöre göre varsayılan required_ppe — backend/company/sector_config.ts ile senkron
         SECTOR_DEFAULT_PPE = sector_default_ppe_map()
         def _normalize_sector(s: Optional[str]) -> str:
@@ -2102,6 +2115,13 @@ smartsafe_requests_total 100
 
         _roi_log_interval = float(os.environ.get("ROI_LOG_INTERVAL_SEC", "15"))
         _roi_log_last = 0.0
+
+        from utils.detection_observability import (
+            log_worker_observability_banner,
+            record_and_maybe_emit_latency,
+        )
+
+        log_worker_observability_banner(logger, camera_id, camera_key)
 
         while ad.get(camera_key, False):
             try:
@@ -2388,10 +2408,14 @@ smartsafe_requests_total 100
                         
                         processing_time = (time.time() - start_time) * 1000
                         detection_count += 1
-                        
+                        record_and_maybe_emit_latency(logger, camera_key, processing_time)
+
                         fps = 1000 / processing_time if processing_time > 0 else 0
                         
-                        current_device = 'SH17' if use_sh17 else (device if 'device' in dir() else 'cpu')
+                        if use_sh17 and getattr(self, "sh17_manager", None):
+                            current_device = f"SH17/{self.sh17_manager.device}"
+                        else:
+                            current_device = device
                         logger.info(f"🔍 Detection #{detection_count}: {people_detected} kişi, {ppe_compliant} uyumlu, {len(ppe_violations)} ihlal, {compliance_rate:.1f}% uyum, {processing_time:.1f}ms, {fps:.1f} FPS")
                         logger.info(f"🖥️ Device: {current_device}, Confidence: {optimized_confidence}")
                         logger.info(f"🔍 PPE Violations: {ppe_violations}")

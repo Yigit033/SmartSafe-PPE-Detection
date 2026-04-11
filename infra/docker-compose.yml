@@ -21,6 +21,15 @@ services:
       - FLASK_RELOADER_INTERVAL=0.75
       - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
       - YOLO_CONFIG_DIR=/tmp
+      # Torch: auto | cpu | cuda | cuda:N — core/utils/torch_device.py (RENDER=1 iken her zaman cpu)
+      - TORCH_DEVICE=auto
+      # NVIDIA GPU: build.dockerfile → infra/Dockerfile.core.cuda ve aşağıdaki gpus satırını açın.
+      # gpus: all
+      # Opsiyonel gözlemlenebilirlik (core/utils/detection_observability.py + ROI_DEBUG app.py):
+      # - DETECTION_OBSERVABILITY_BANNER=1   # worker başında env özeti + saha testi checklist logu
+      # - DETECTION_LATENCY_SUMMARY_SEC=60 # periyodik avg/min/max inference ms (0=kapalı)
+      # - ROI_DEBUG=1                      # video-feed’te ROI poligonu + yeşil/kırmızı kişi kutuları
+      # - ROI_LOG_INTERVAL_SEC=15          # ROI INFO log seyrekleştirme (varsayılan 15)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5577/health"]
       interval: 10s
