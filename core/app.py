@@ -4234,44 +4234,44 @@ smartsafe_requests_total 100
         return frame
 
     def save_detection_to_db(self, detection_data):
-        """Detection sonuçlarını veritabanına kaydet - Production uyumlu"""
+        """Detection özetini PostgreSQL detections tablosuna yazar; şema database_adapter ile tek kaynak."""
         try:
-            # Local (SQLite) ortamda legacy 'detections' şeması (people_detected, violations_count vb.)
-            # zaten _save_detection_to_reports ile dolduruluyor. Bu fonksiyonun ek person_count
-            # kolonunu kullanması sadece PostgreSQL/Supabase tarafında anlamlı.
             if not hasattr(self.db, 'db_adapter'):
                 return
 
             db_type = getattr(self.db.db_adapter, 'db_type', 'sqlite')
             if db_type == 'sqlite':
-                # SQLite'ta extra özet kayıt atlamayı tercih ediyoruz; mevcut şema bozulmuyor.
                 logger.debug("Skipping save_detection_to_db on sqlite (legacy detections schema is used).")
                 return
 
-            # PostgreSQL / Supabase tarafı: modern özet şema
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            placeholder = self.db.get_placeholder() if hasattr(self.db, 'get_placeholder') else '%s'
-            
-            cursor.execute(f'''
-                INSERT INTO detections (
-                    company_id, camera_id, timestamp, person_count, 
-                    ppe_compliant, compliance_rate, processing_time_ms
-                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
-            ''', (
-                detection_data['company_id'],
-                detection_data['camera_id'],
-                detection_data['timestamp'],
-                detection_data.get('person_count', detection_data.get('people_detected', 0)),
-                detection_data.get('ppe_compliant', True),
-                detection_data.get('compliance_rate', 100),
-                detection_data.get('processing_time_ms', 0)
-            ))
-            
-            conn.commit()
-            self.db.close_connection(conn)
-            logger.debug(f"✅ Detection kaydedildi (summary): {detection_data.get('camera_id', 'unknown')}")
+            adapter = self.db.db_adapter
+            if not hasattr(adapter, 'add_camera_detection_result'):
+                return
+
+            violations = detection_data.get('ppe_violations') or detection_data.get('violations') or []
+            violations_count = len(violations) if isinstance(violations, list) else int(violations or 0)
+            people = int(
+                detection_data.get('people_detected', detection_data.get('total_people', 0))
+            )
+            ppe_ok = int(detection_data.get('ppe_compliant', 0))
+
+            payload = {
+                'company_id': detection_data['company_id'],
+                'camera_id': detection_data['camera_id'],
+                'detection_type': str(detection_data.get('detection_mode', 'ppe')),
+                'confidence': float(detection_data.get('confidence_threshold', 0.0)),
+                'people_detected': people,
+                'ppe_compliant': ppe_ok,
+                'violations_count': violations_count,
+                'total_people': people,
+                'compliance_rate': detection_data.get('compliance_rate'),
+                'processing_time_ms': detection_data.get('processing_time_ms'),
+            }
+            if adapter.add_camera_detection_result(payload):
+                logger.debug(
+                    "✅ Detection kaydedildi (summary): %s",
+                    detection_data.get('camera_id', 'unknown'),
+                )
             
         except Exception as e:
             logger.warning(f"⚠️ Detection DB kayıt hatası (devam ediliyor): {e}")
