@@ -446,7 +446,9 @@ class DatabaseAdapter:
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS profile_image TEXT",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT 'full'",
                 "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMP",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON"
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON",
+                "ALTER TABLE cameras ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
+                "ALTER TABLE dvr_channels ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
             ]
             
             for ddl in ddl_statements:
@@ -1954,7 +1956,7 @@ class DatabaseAdapter:
                        auth_type, resolution, fps, quality, audio_enabled,
                        night_vision, motion_detection, recording_enabled,
                        camera_type, status, last_detection, last_test_time,
-                       connection_retries, timeout, created_at, updated_at
+                       connection_retries, timeout, detection_zones, created_at, updated_at
                 FROM cameras 
                 WHERE camera_id = %s AND company_id = %s AND status != 'deleted'
             '''
@@ -1986,7 +1988,7 @@ class DatabaseAdapter:
                        TRUE as motion_detection, TRUE as recording_enabled, 
                        'dvr_channel' as camera_type, dc.status, NULL as last_detection, 
                        dc.last_test_time, 3 as connection_retries, 10 as timeout, 
-                       dc.created_at, dc.updated_at
+                       dc.detection_zones, dc.created_at, dc.updated_at
                 FROM dvr_channels dc
                 JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
                 WHERE dc.channel_id = %s AND dc.company_id = %s

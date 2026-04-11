@@ -101,7 +101,8 @@ export const list = api(
         SELECT 
           camera_id, company_id, camera_name, location, ip_address, 
           port, protocol, stream_path, username, password, 
-          status, NULL as channel_number, NULL as dvr_id, group_id, 'ip_camera' as camera_type, created_at
+          status, NULL as channel_number, NULL as dvr_id, group_id, 'ip_camera' as camera_type,
+          COALESCE(detection_zones, '[]'::jsonb) as detection_zones, created_at
         FROM cameras 
         WHERE company_id = $1
         UNION ALL
@@ -109,7 +110,8 @@ export const list = api(
           dc.channel_id as camera_id, dc.company_id, dc.name as camera_name, 
           'DVR: ' || ds.name as location, ds.ip_address, ds.rtsp_port as port, 
           'rtsp' as protocol, dc.rtsp_path as stream_path, 
-          ds.username, ds.password, dc.status, dc.channel_number, ds.dvr_id, NULL as group_id, 'dvr_channel' as camera_type, dc.created_at
+          ds.username, ds.password, dc.status, dc.channel_number, ds.dvr_id, NULL as group_id, 'dvr_channel' as camera_type,
+          COALESCE(dc.detection_zones, '[]'::jsonb) as detection_zones, dc.created_at
         FROM dvr_channels dc
         JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
         WHERE dc.company_id = $1 AND dc.status <> 'deleted' AND ds.status <> 'deleted'
@@ -400,14 +402,32 @@ export const saveROI = api(
   }: {
     company_id: string;
     camera_id: string;
-    zones: any[];
+    zones: any[] | { coord_space?: string; zones: any[] };
   }): Promise<{ success: boolean; error?: string }> => {
     try {
-      await pool.query(
-        "UPDATE cameras SET detection_zones = $1, updated_at = CURRENT_TIMESTAMP WHERE company_id = $2 AND camera_id = $3",
-        [JSON.stringify(zones), company_id, camera_id],
+      const payload =
+        Array.isArray(zones)
+          ? JSON.stringify({ coord_space: "video", zones })
+          : JSON.stringify(zones);
+      const camRes = await pool.query(
+        "UPDATE cameras SET detection_zones = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE company_id = $2 AND camera_id = $3",
+        [payload, company_id, camera_id],
       );
-      return { success: true };
+      if ((camRes.rowCount ?? 0) > 0) {
+        return { success: true };
+      }
+      const dvrRes = await pool.query(
+        "UPDATE dvr_channels SET detection_zones = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE company_id = $2 AND channel_id = $3 AND status <> 'deleted'",
+        [payload, company_id, camera_id],
+      );
+      if ((dvrRes.rowCount ?? 0) > 0) {
+        return { success: true };
+      }
+      return {
+        success: false,
+        error:
+          "ROI kaydedilemedi: bu ID ile cameras veya dvr_channels kaydı bulunamadı.",
+      };
     } catch (error: any) {
       console.error("Error saving ROI:", error);
       return { success: false, error: error.message };

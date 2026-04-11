@@ -7,7 +7,12 @@ import {
   type ReactNode,
 } from "react";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
+import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import api from "@/lib/api";
+import {
+  normalizeDetectionZonesPayload,
+  polygonToVideoSpaceForOverlay,
+} from "@/lib/detectionZones";
 
 type Props = {
   camera: any;
@@ -29,6 +34,12 @@ export default function CameraLiveView({
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+  const [previewLayout, setPreviewLayout] = useState({
+    nw: 0,
+    nh: 0,
+    cw: 0,
+    ch: 0,
+  });
 
   const isCameraAiEnabled = useCallback(
     (item: any) => enabledAiCameras.includes(item.camera_id),
@@ -52,6 +63,10 @@ export default function CameraLiveView({
       startStream(camera.camera_id);
     }
   }, [camera?.camera_id, enabledAiCameras, startStream]);
+
+  useEffect(() => {
+    setPreviewLayout({ nw: 0, nh: 0, cw: 0, ch: 0 });
+  }, [streamUrl]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -83,6 +98,8 @@ export default function CameraLiveView({
       return null;
     }
   };
+
+  const zonesMeta = normalizeDetectionZonesPayload(camera?.detection_zones);
 
   const handleSaveZones = async (zones: any[][]) => {
     if (!camera?.camera_id) return;
@@ -183,46 +200,51 @@ export default function CameraLiveView({
           <div className="absolute inset-0 z-50 p-4 md:p-12">
             <ZoneDesigner
               imageUrl={streamUrl}
-              initialZones={camera?.detection_zones || []}
+              initialZones={zonesMeta.polygons}
+              zonesCoordSpace={zonesMeta.coordSpace}
               onSave={handleSaveZones}
               onClose={() => setIsZoneModalOpen(false)}
             />
           </div>
         ) : streamUrl ? (
-          <div className="relative w-full h-full flex items-center justify-center bg-black">
+          <div className="relative w-full h-full min-h-[40vh] bg-black">
             <img
               src={streamUrl}
               alt="Canlı Yayın"
-              className="w-full h-full object-contain max-h-[80vh]"
+              className="absolute inset-0 z-0 h-full w-full max-h-[80vh] object-contain"
+              onLoad={(e) => {
+                const t = e.target as HTMLImageElement;
+                if (t.naturalWidth > 0 && t.naturalHeight > 0) {
+                  setPreviewLayout({
+                    nw: t.naturalWidth,
+                    nh: t.naturalHeight,
+                    cw: t.clientWidth,
+                    ch: t.clientHeight,
+                  });
+                }
+              }}
               onError={async () => {
                 const diag = await fetchStreamDiagnostics(camera.camera_id);
                 if (diag) setStreamError(diag);
                 setStreamUrl(null);
               }}
             />
-            {camera?.detection_zones &&
-              camera.detection_zones.length > 0 &&
-              camera.detection_zones[0].length > 0 &&
+            {zonesMeta.polygons.length > 0 &&
+              zonesMeta.polygons[0].length > 0 &&
               !isCameraAiEnabled(camera) && (
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none z-10 opacity-60"
-                  viewBox="0 0 1 1"
-                  preserveAspectRatio="none"
-                >
-                  <polygon
-                    points={camera.detection_zones[0]
-                      .map((p: any) => `${p.x},${p.y}`)
-                      .join(" ")}
-                    fill="rgba(20, 184, 166, 0.15)"
-                    stroke="#14b8a6"
-                    strokeWidth="0.01"
-                    strokeDasharray="0.02 0.01"
-                    className="drop-shadow-[0_0_10px_rgba(20,184,166,0.5)]"
-                  />
-                  {camera.detection_zones[0].map((p: any, idx: number) => (
-                    <circle key={idx} cx={p.x} cy={p.y} r="0.005" fill="#14b8a6" />
-                  ))}
-                </svg>
+                <VideoRoiOverlay
+                  polygon={polygonToVideoSpaceForOverlay(
+                    zonesMeta.polygons[0],
+                    zonesMeta.coordSpace,
+                    previewLayout.cw,
+                    previewLayout.ch,
+                    previewLayout.nw,
+                    previewLayout.nh,
+                  )}
+                  naturalW={previewLayout.nw}
+                  naturalH={previewLayout.nh}
+                  className="absolute inset-0 z-10 h-full w-full max-h-[80vh] opacity-60"
+                />
               )}
           </div>
         ) : (

@@ -189,6 +189,53 @@ _log_tmp.getLogger(__name__).info(
 )
 
 
+def _draw_roi_debug_on_frame(frame: np.ndarray, roi_dbg: dict) -> None:
+    """
+    ROI_DEBUG: poligon + kişi kutuları (içerde yeşil, dışarıda kırmızı) ve özet metin.
+    frame BGR, yerinde çizilir.
+    """
+    if not roi_dbg or not isinstance(roi_dbg, dict):
+        return
+    poly = roi_dbg.get("polygon") or []
+    if len(poly) >= 6 and len(poly) % 2 == 0:
+        n = len(poly) // 2
+        pts = np.array(
+            [[poly[i * 2], poly[i * 2 + 1]] for i in range(n)],
+            dtype=np.int32,
+        ).reshape((-1, 1, 2))
+        cv2.polylines(frame, [pts], True, (255, 255, 0), 2, cv2.LINE_AA)
+
+    for p in roi_dbg.get("persons") or []:
+        bb = p.get("bbox")
+        if not bb or len(bb) != 4:
+            continue
+        try:
+            x1, y1, x2, y2 = int(bb[0]), int(bb[1]), int(bb[2]), int(bb[3])
+        except (TypeError, ValueError):
+            continue
+        if p.get("unknown"):
+            color = (0, 165, 255)
+        elif p.get("inside"):
+            color = (0, 255, 0)
+        else:
+            color = (0, 0, 255)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+    st = roi_dbg.get("stats") or {}
+    line = (
+        f"ROI DEBUG  total_persons={st.get('total_persons', 0)}  "
+        f"inside_roi={st.get('inside_roi', 0)}  outside_roi={st.get('outside_roi', 0)}"
+    )
+    fh = frame.shape[0]
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = float(max(0.5, min(fh / 720.0, 1.15) * 0.7))
+    thick = max(2, int(round(scale * 2)))
+    (tw, th), _ = cv2.getTextSize(line, font, scale, thick)
+    y0 = th + 14
+    cv2.rectangle(frame, (4, 4), (tw + 16, y0 + 8), (0, 0, 0), -1)
+    cv2.putText(frame, line, (10, y0), font, scale, (255, 255, 255), thick, cv2.LINE_AA)
+
+
 class SmartSafeSaaSAPI:
     """SmartSafe AI SaaS API Server"""
     
@@ -2020,12 +2067,25 @@ smartsafe_requests_total 100
         
         # OPTİMİZE EDİLDİ: Frame skip ve confidence ayarları
         # Kamera config'den al — her kamera için farklı hız ayarlanabilir
-        _camera_cfg = self.db.get_camera_by_id(camera_id, company_id) if camera_id else {}
+        _camera_cfg = {}
+        if camera_id:
+            _row = self.db.get_camera_by_id(camera_id, company_id)
+            if _row:
+                _camera_cfg = dict(_row) if not isinstance(_row, dict) else _row
+            elif hasattr(self.db, "get_dvr_channel_by_id"):
+                _dvr = self.db.get_dvr_channel_by_id(camera_id, company_id)
+                if _dvr:
+                    _camera_cfg = dict(_dvr) if not isinstance(_dvr, dict) else _dvr
         frame_skip = int(_camera_cfg.get('frame_skip', 0) or os.environ.get('FRAME_SKIP', 3))
         if frame_skip < 1:
             frame_skip = 3  # sentinel: 0 veya negatif → varsayılan
         optimized_confidence = max(0.5, confidence)  # Minimum 0.5 confidence
 
+        if os.environ.get("ROI_DEBUG", "").strip().lower() in ("1", "true", "yes", "on"):
+            logger.info(
+                "🧪 ROI_DEBUG: ROI poligonu + kişi kutuları (yeşil=içerde, kırmızı=dışarı); "
+                "her tespit turunda stdout/log satırı: total_persons, inside_roi, outside_roi."
+            )
 
         # Event-based ihlal takibi için ViolationTracker başlat
         violation_tracker = get_violation_tracker()
@@ -2039,6 +2099,9 @@ smartsafe_requests_total 100
         _initial_wait = 5.0 if _is_dvr else 0.3
         logger.info(f"⏳ Initial wait: {_initial_wait}s (DVR={_is_dvr}) for {camera_key}")
         time.sleep(_initial_wait)
+
+        _roi_log_interval = float(os.environ.get("ROI_LOG_INTERVAL_SEC", "15"))
+        _roi_log_last = 0.0
 
         while ad.get(camera_key, False):
             try:
@@ -2107,6 +2170,73 @@ smartsafe_requests_total 100
                         except Exception as detection_error:
                             logger.error(f"❌ Detection hatası: {detection_error}")
                             results = []
+
+                        results_pre_roi = list(results) if isinstance(results, list) else []
+                        _roi_debug_meta = None
+                        _roi_debug = os.environ.get("ROI_DEBUG", "").strip().lower() in (
+                            "1",
+                            "true",
+                            "yes",
+                            "on",
+                        )
+
+                        # Analiz bölgesi (normalize poligon): bbox alt-orta noktası ROI dışındaysa elenir.
+                        _dz = None
+                        try:
+                            from utils.detection_roi import (
+                                build_roi_debug_meta,
+                                filter_detections_by_roi,
+                            )
+
+                            _dz = _camera_cfg.get("detection_zones")
+                            if isinstance(results, list) and _dz is not None:
+                                results, _roi_stats, _roi_on = filter_detections_by_roi(
+                                    frame.shape, _dz, results
+                                )
+                                if _roi_on:
+                                    people_detected = sum(
+                                        1
+                                        for d in results
+                                        if isinstance(d, dict)
+                                        and d.get("class_name") == "person"
+                                    )
+                                    if people_detected == 0:
+                                        ppe_violations = []
+                                        ppe_compliant = 0
+                                    else:
+                                        ppe_compliant = min(
+                                            ppe_compliant, people_detected
+                                        )
+                                    _t_roi = time.time()
+                                    if _t_roi - _roi_log_last >= _roi_log_interval:
+                                        logger.info(
+                                            "🎯 ROI filtre | bbox’lı=%s içerde=%s dışarıda=%s | kişi=%s",
+                                            _roi_stats.get("total_with_bbox", 0),
+                                            _roi_stats.get("inside_roi", 0),
+                                            _roi_stats.get("outside_roi", 0),
+                                            people_detected,
+                                        )
+                                        _roi_log_last = _t_roi
+                            if (
+                                _roi_debug
+                                and isinstance(results_pre_roi, list)
+                                and _dz is not None
+                            ):
+                                _roi_debug_meta = build_roi_debug_meta(
+                                    frame.shape, _dz, results_pre_roi
+                                )
+                                if _roi_debug_meta is not None:
+                                    _st = _roi_debug_meta["stats"]
+                                    _msg = (
+                                        "[ROI_DEBUG] "
+                                        f"total_persons={_st['total_persons']} "
+                                        f"inside_roi={_st['inside_roi']} "
+                                        f"outside_roi={_st['outside_roi']}"
+                                    )
+                                    print(_msg, flush=True)
+                                    logger.info(_msg)
+                        except Exception as _roi_err:
+                            logger.warning(f"⚠️ ROI filtre atlandı: {_roi_err}")
                         
                         if not results and people_detected == 0:
                             continue
@@ -2285,6 +2415,7 @@ smartsafe_requests_total 100
                             'detection_mode': str(detection_mode),
                             'confidence_threshold': float(confidence),
                             'detections': results if isinstance(results, list) else [],  # bbox listesi overlay için
+                            'roi_debug': _roi_debug_meta,
                         }
                         
                         # Queue'ya ekle
@@ -3973,6 +4104,10 @@ smartsafe_requests_total 100
 
             reset_label_registry()
 
+            roi_dbg = detection_data.get("roi_debug")
+            if roi_dbg and isinstance(roi_dbg, dict):
+                _draw_roi_debug_on_frame(frame, roi_dbg)
+
             # 🎯 BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
             # Draw order: persons first, then positive PPE, then missing PPE
             # so that label deconfliction stacks missing labels above positive ones.
@@ -3998,7 +4133,10 @@ smartsafe_requests_total 100
                     confidence = detection.get('confidence', 0.0)
                     is_missing = bool(detection.get('missing', False))
                     is_person = class_name.lower() in ('person', 'kisi', 'insan')
-                    
+
+                    if roi_dbg and isinstance(roi_dbg, dict) and is_person:
+                        continue
+
                     if len(bbox) == 4:
                         try:
                             x1, y1, x2, y2 = [int(coord) for coord in bbox]
