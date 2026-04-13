@@ -18,6 +18,7 @@
     "landing": "cd landing && npm run dev",
     "backend": "cd backend && node ./scripts/encore-sync-if-needed.cjs && encore run",
     "backend:sync": "cd backend && node ./scripts/encore-sync-if-needed.cjs",
+    "generate": "docker exec smartsafe-backend-encore encore gen client --output=client.gen.ts && move backend\\client.gen.ts frontend\\lib\\client.ts",
     "migrate": "cd backend && npm run migrate",
     "migrate:company": "cd backend && npm run migrate:company",
     "migrate:violations": "cd backend && npm run migrate:violations"

@@ -140,7 +140,8 @@ class _ThreadSafeDict(dict):
             return val.copy() if isinstance(val, _np.ndarray) else val
 
 
-active_detectors = {}
+active_detectors = {}       # Stream/Worker status (used by Watchdog)
+active_ai_detectors = {}    # AI Inference status (used by UI for 'AI VIEW')
 detection_threads = {}
 camera_captures = {}       # Kamera yakalama nesneleri
 frame_buffers = _ThreadSafeDict()  # Frame buffer'ları — thread-safe
@@ -290,6 +291,9 @@ class SmartSafeSaaSAPI:
             # Railway.app specific optimizations
             self.app.config['PROPAGATE_EXCEPTIONS'] = True
             self.app.config['PREFERRED_URL_SCHEME'] = 'https'
+        
+        # Schedule Manager initialization
+        self.schedule_manager = None
         
 
         
@@ -478,7 +482,7 @@ class SmartSafeSaaSAPI:
             from integrations.cameras.stream_watchdog import init_stream_watchdog
             self._stream_watchdog = init_stream_watchdog(
                 frame_timestamps=frame_timestamps,
-                active_detectors=active_detectors,
+                active_detectors=active_ai_detectors,
                 restart_callback=self._watchdog_restart_camera,
             )
             self._stream_watchdog.start()
@@ -1968,6 +1972,120 @@ smartsafe_requests_total 100
             
         return people_detected, ppe_compliant, ppe_violations
 
+    # --- Schedule Management Methods ---
+    
+    def is_detection_running(self, camera_key):
+        """Kamera veya kanal için algılamanın aktif olup olmadığını döner.
+        
+        DB'yi single source of truth olarak kullanır.
+        Thread ölmüşse zombie state tespit edilir ve hem DB hem memory temizlenir.
+        """
+        # Önce DB'ye bak (process-safe)
+        try:
+            db_active = get_db_adapter().is_detection_active(camera_key)
+        except Exception:
+            db_active = active_ai_detectors.get(camera_key, False)
+        
+        if not db_active:
+            # DB'de yoksa memory'den de temizle
+            active_ai_detectors[camera_key] = False
+            return False
+        
+        # DB aktif diyor — thread gerçekten yaşıyor mu kontrol et
+        thread_info = detection_threads.get(camera_key, {})
+        thread_obj = thread_info.get('thread') if isinstance(thread_info, dict) else None
+        if thread_obj is not None and not thread_obj.is_alive():
+            # Zombie: DB True ama thread ölmüş → her yeri temizle
+            logger.warning(f"🧟 Zombie detection tespit edildi: {camera_key} — thread ölü. DB+memory temizleniyor.")
+            active_ai_detectors[camera_key] = False
+            active_detectors[camera_key] = False
+            try:
+                get_db_adapter().set_detection_active(camera_key, '', '', active=False)
+            except Exception:
+                pass
+            return False
+        
+        return True
+
+    def internal_start_detection(self, company_id, camera_id, camera_type, mode="ppe", confidence=0.5):
+        """Zamanlayıcı tarafından tetiklenen dâhili algılama başlatma."""
+        camera_key = f"{company_id}_{camera_id}"
+        
+        # Ensure DB is ready
+        if not self.ensure_database_initialized():
+            logger.error(f"❌ Database not ready for scheduled start: {camera_key}")
+            return False
+
+        if self.is_detection_running(camera_key):
+            logger.debug(f"ℹ️ {camera_key} zaten AI aktif, atlanıyor.")
+            return False
+
+        logger.info(f"🚀 Scheduled Start: {camera_key} ({camera_type})")
+        
+        # AI state set et — DB + memory
+        active_ai_detectors[camera_key] = True
+        active_detectors[camera_key] = True
+        try:
+            get_db_adapter().set_detection_active(camera_key, company_id, camera_id, mode, confidence, active=True)
+        except Exception as db_err:
+            logger.warning(f"⚠️ DB set_detection_active failed: {db_err}")
+        
+        # Thread başlat
+        detection_thread = threading.Thread(
+            target=self.saas_detection_worker,
+            args=(camera_key, camera_id, company_id, mode, confidence, active_detectors),
+            daemon=True
+        )
+        detection_thread.start()
+        
+        detection_threads[camera_key] = {
+            'thread': detection_thread,
+            'config': {
+                'mode': mode,
+                'confidence': confidence,
+                'started_at': datetime.now().isoformat(),
+                'source': 'schedule'
+            }
+        }
+        return True
+
+    def internal_stop_detection(self, company_id, camera_id):
+        """Zamanlayıcı tarafından tetiklenen dâhili algılama durdurma."""
+        camera_key = f"{company_id}_{camera_id}"
+        
+        if not self.is_detection_running(camera_key):
+            return False
+
+        logger.info(f"🛑 Scheduled Stop: {camera_key}")
+        active_ai_detectors[camera_key] = False
+        active_detectors[camera_key] = False
+        try:
+            get_db_adapter().set_detection_active(camera_key, '', '', active=False)
+        except Exception as db_err:
+            logger.warning(f"⚠️ DB set_detection_active(stop) failed: {db_err}")
+        
+        # Cleanup (detection.py'deki stop_detection mantığıyla paralel)
+        if camera_key in detection_threads:
+            del detection_threads[camera_key]
+            
+        if camera_key in camera_captures and camera_captures[camera_key] is not None:
+            try:
+                camera_captures[camera_key].release()
+            except: pass
+            del camera_captures[camera_key]
+            
+        if camera_key in frame_buffers:
+            del frame_buffers[camera_key]
+            
+        # DVR ise PPE bayrağını da indir
+        if "_ch" in camera_id:
+            try:
+                from integrations.dvr.dvr_stream_handler import get_stream_handler
+                get_stream_handler().set_ppe_detection_active(camera_id, False)
+            except Exception: pass
+            
+        return True
+
     def saas_detection_worker(self, camera_key, camera_id, company_id, detection_mode, confidence=0.5, active_detectors_ref=None):
         """SaaS Profesyonel Detection Worker - OPTİMİZE EDİLDİ. active_detectors_ref: blueprint'in yazdığı dict (reloader/çift app için zorunlu)."""
         logger.info(f"🚀 SaaS Detection başlatılıyor - Kamera: {camera_id}, Şirket: {company_id}")
@@ -1975,6 +2093,28 @@ smartsafe_requests_total 100
         ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
         self._active_detectors_ref = active_detectors_ref  # Kamera worker thread'leri için
         
+        # AI detection state'ini garanti et — worker başladığında True olmalı (memory + DB)
+        active_ai_detectors[camera_key] = True
+        try:
+            get_db_adapter().set_detection_active(camera_key, company_id, camera_id, detection_mode, confidence, active=True)
+        except Exception:
+            pass
+        
+        try:
+            self._saas_detection_worker_inner(camera_key, camera_id, company_id, detection_mode, confidence, ad)
+        except Exception as fatal_err:
+            logger.error(f"❌ SaaS Detection worker FATAL: {camera_key} — {fatal_err}", exc_info=True)
+        finally:
+            # Worker her koşulda (crash, normal çıkış) state'i temizlesin — DB + memory
+            active_ai_detectors[camera_key] = False
+            try:
+                get_db_adapter().set_detection_active(camera_key, '', '', active=False)
+            except Exception:
+                pass
+            logger.info(f"🧹 active_ai_detectors[{camera_key}] = False (worker cleanup — DB+memory)")
+    
+    def _saas_detection_worker_inner(self, camera_key, camera_id, company_id, detection_mode, confidence, ad):
+        """saas_detection_worker iç mantığı — finally cleanup dış katmanda."""
         # Detection sonuçları için queue oluştur
         detection_results[camera_key] = queue.Queue(maxsize=20)
         
@@ -2086,9 +2226,8 @@ smartsafe_requests_total 100
         detection_count = 0
         
         # OPTİMİZE EDİLDİ: Frame skip ve confidence ayarları
-        # Kamera config'den al — her kamera için farklı hız ayarlanabilir
         _camera_cfg = {}
-        if camera_id:
+        if camera_id and self.db is not None:
             _row = self.db.get_camera_by_id(camera_id, company_id)
             if _row:
                 _camera_cfg = dict(_row) if not isinstance(_row, dict) else _row
@@ -2096,10 +2235,11 @@ smartsafe_requests_total 100
                 _dvr = self.db.get_dvr_channel_by_id(camera_id, company_id)
                 if _dvr:
                     _camera_cfg = dict(_dvr) if not isinstance(_dvr, dict) else _dvr
+        
         frame_skip = int(_camera_cfg.get('frame_skip', 0) or os.environ.get('FRAME_SKIP', 3))
         if frame_skip < 1:
-            frame_skip = 3  # sentinel: 0 veya negatif → varsayılan
-        optimized_confidence = max(0.5, confidence)  # Minimum 0.5 confidence
+            frame_skip = 3
+        optimized_confidence = max(0.5, confidence)
 
         if os.environ.get("ROI_DEBUG", "").strip().lower() in ("1", "true", "yes", "on"):
             logger.info(
@@ -2111,8 +2251,8 @@ smartsafe_requests_total 100
         violation_tracker = get_violation_tracker()
         logger.info("✅ ViolationTracker başlatıldı (event-based)")
 
-        _active = ad.get(camera_key, False)
-        logger.info(f"🔍 SaaS Detection worker loop başlıyor: active_detectors.get({camera_key}) = {_active}")
+        _active = active_ai_detectors.get(camera_key, False)
+        logger.info(f"🔍 SaaS Detection worker loop başlıyor: active_ai_detectors.get({camera_key}) = {_active}")
         
         # DVR kanalları için stream hazır olana kadar daha uzun bekle
         _is_dvr = '_ch' in camera_id
@@ -2130,7 +2270,7 @@ smartsafe_requests_total 100
 
         log_worker_observability_banner(logger, camera_id, camera_key)
 
-        while ad.get(camera_key, False):
+        while active_ai_detectors.get(camera_key, False):
             try:
                 # Frame al
                 # Frame al — thread-safe
@@ -2490,9 +2630,11 @@ smartsafe_requests_total 100
         logger.info(
             f"🛑 SaaS Detection durduruldu - Kamera: {camera_id} | "
             f"active_detectors[{camera_key}]={_exit_val} | "
+            f"active_ai_detectors[{camera_key}]={active_ai_detectors.get(camera_key, 'N/A')} | "
             f"frame_count={frame_count} | detection_count={detection_count} | "
             f"id(ad)={id(ad)}"
         )
+        # NOT: active_ai_detectors cleanup artık dış katmandaki finally bloğunda yapılıyor
 
     def _save_detection_to_reports(self, company_id, camera_id, detection_type, 
                                   people_detected, ppe_compliant, violations_count, 
@@ -3439,17 +3581,28 @@ smartsafe_requests_total 100
         """
         try:
             # camera_key formatı: {company_id}_{camera_id}
-            parts = camera_key.split('_', 1)
-            if len(parts) < 2:
-                logger.error(f"[Watchdog] Geçersiz camera_key formatı: {camera_key}")
-                return False
-            
-            company_id = parts[0]
-            camera_id = parts[1]
+            # camera_key formatı: COMP_ID_CAMID
+            if camera_key.startswith("COMP_"):
+                # COMP_ID_... formatı için ilk iki parçayı şirket ID'si olarak al
+                temp_parts = camera_key.split('_', 2)
+                if len(temp_parts) >= 3:
+                    company_id = f"{temp_parts[0]}_{temp_parts[1]}"
+                    camera_id = temp_parts[2]
+                else:
+                    # Alternatif veya yetersiz format
+                    company_id = temp_parts[0]
+                    camera_id = temp_parts[1] if len(temp_parts) > 1 else camera_key
+            else:
+                parts = camera_key.split('_', 1)
+                if len(parts) < 2:
+                    logger.error(f"[Watchdog] Geçersiz camera_key formatı: {camera_key}")
+                    return False
+                company_id = parts[0]
+                camera_id = parts[1]
             
             logger.info(f"[Watchdog] 🔄 Kamera yeniden başlatılıyor: {camera_id} (şirket: {company_id})")
             
-            # Eski worker'ı durdur
+            # Eski worker'ı (reader thread) durdur
             active_detectors[camera_key] = False
             time.sleep(1)  # Eski thread'in kapanması için kısa bekleme
             
@@ -3461,7 +3614,7 @@ smartsafe_requests_total 100
                     pass
                 del camera_captures[camera_key]
             if camera_key in frame_buffers:
-                del frame_buffers[camera_key]
+                frame_buffers.pop(camera_key, None) # ThreadSafeDict handle
             
             # Yeniden başlat
             active_detectors[camera_key] = True
@@ -4375,6 +4528,26 @@ def create_app():
     global app
     try:
         api_server = SmartSafeSaaSAPI()
+        
+        # --- Startup: Stale active_detections temizliği ---
+        # Restart sonrası hiçbir detection thread çalışmıyor,
+        # önceki process'ten kalan DB kayıtları stale → hepsini sil
+        try:
+            _db = get_db_adapter()
+            cleared = _db.execute_query("DELETE FROM active_detections")
+            print(f"🧹 Startup cleanup: {cleared} stale active_detections silindi")
+        except Exception as cleanup_err:
+            print(f"⚠️ Startup active_detections cleanup failed (tablo henüz yok olabilir): {cleanup_err}")
+        
+        # --- Start Schedule Manager ---
+        try:
+            from services.schedule_manager import get_schedule_manager
+            api_server.schedule_manager = get_schedule_manager(api_server)
+            api_server.schedule_manager.start()
+            print("🕒 Schedule Manager started during app creation")
+        except Exception as sched_err:
+            print(f"⚠️ Schedule Manager startup failed: {sched_err}")
+            
         app = api_server.app
         print(f"✅ Global Flask app created successfully: {app}")
         print(f"📍 App name: {app.name}")
@@ -4420,13 +4593,18 @@ if __name__ == "__main__":
         except ValueError:
             _reloader_interval = 1.0
         try:
+            # IMPORTANT: use_reloader=False — reloader iki process başlatır ve
+            # in-memory dict'ler (active_ai_detectors, frame_buffers vb.)
+            # process'ler arası PAYLAŞILMAZ. Detection thread ana process'te,
+            # HTTP handler child process'te çalışır → API boş döner.
+            # Reloader kapatılmazsa frontend detection durumunu GÖREMEZ.
+            _use_reloader = os.getenv("FLASK_USE_RELOADER", "false").lower() in ("1", "true", "yes")
             app.run(
                 host=host,
                 port=port,
                 debug=True,
                 threaded=True,
-                use_reloader=True,
-                reloader_interval=_reloader_interval,
+                use_reloader=_use_reloader,
             )
         except Exception as e:
             logger.error(f"❌ Local server failed: {e}")

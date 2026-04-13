@@ -767,10 +767,24 @@ class DatabaseAdapter:
                 )
             ''')
 
+            # Active detections table for cross-process state synchronization
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS active_detections (
+                    camera_key VARCHAR(255) PRIMARY KEY,
+                    company_id VARCHAR(255) NOT NULL,
+                    camera_id VARCHAR(255) NOT NULL,
+                    detection_mode VARCHAR(100),
+                    confidence_threshold DECIMAL(5,2),
+                    status BOOLEAN DEFAULT TRUE,
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # PostgreSQL autocommit kullanıyorsa commit'e gerek yok
             if not (self.db_type == 'postgresql' and getattr(conn, 'autocommit', False)):
                 conn.commit()
-                logger.info("✅ Database tables created successfully")
+                logger.info("✅ Database tables created successfully (including active_detections)")
             return True
             
         except Exception as e:
@@ -2460,6 +2474,52 @@ class DatabaseAdapter:
         except Exception:
             return {}
 
+    # ── Active Detections State Management ──────────────────────────────────
+    
+    def set_detection_active(self, camera_key: str, company_id: str, camera_id: str, 
+                             mode: str = 'ppe', confidence: float = 0.5, active: bool = True):
+        """Kameranın algılama durumunu DB'ye kaydeder. Process'ler arası senkronizasyon için."""
+        try:
+            if active:
+                query = """
+                    INSERT INTO active_detections (camera_key, company_id, camera_id, detection_mode, confidence_threshold, status, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP)
+                    ON CONFLICT (camera_key) DO UPDATE SET 
+                        status = TRUE, 
+                        detection_mode = EXCLUDED.detection_mode,
+                        confidence_threshold = EXCLUDED.confidence_threshold,
+                        updated_at = CURRENT_TIMESTAMP
+                """
+                return self.execute_query(query, (camera_key, company_id, camera_id, mode, confidence))
+            else:
+                query = "DELETE FROM active_detections WHERE camera_key = %s"
+                return self.execute_query(query, (camera_key,))
+        except Exception as e:
+            logger.error(f"❌ set_detection_active error: {e}")
+            return False
+
+    def is_detection_active(self, camera_key: str) -> bool:
+        """Kameranın aktif olup olmadığını DB'den kontrol eder."""
+        try:
+            query = "SELECT status FROM active_detections WHERE camera_key = %s AND status = TRUE"
+            res = self.execute_query(query, (camera_key,), fetch_one=True)
+            return bool(res)
+        except Exception as e:
+            logger.error(f"❌ is_detection_active error: {e}")
+            return False
+
+    def get_active_detections_list(self, company_id: str) -> List[str]:
+        """Şirkete ait aktif kamera ID listesini DB'den döner."""
+        try:
+            query = "SELECT camera_id FROM active_detections WHERE company_id = %s AND status = TRUE"
+            rows = self.execute_query(query, (company_id,))
+            if not rows:
+                return []
+            return [row['camera_id'] for row in rows]
+        except Exception as e:
+            logger.error(f"❌ get_active_detections_list error: {e}")
+            return []
+
 
 class CameraDiscoveryManager:
     """Keşfedilen kameraları veritabanı ile senkronize etmek için manager"""
@@ -2851,6 +2911,9 @@ class CameraDiscoveryManager:
             print(f"❌ Database adapter - get_company_info hatası: {e}")
             self.logger.error(f"❌ Failed to get company info: {e}")
             return None
+
+    # ── Active Detections State Management ──────────────────────────────────
+    
 
 
 # ── Process-wide singletons (one PG pool per process, thread-safe) ─────────

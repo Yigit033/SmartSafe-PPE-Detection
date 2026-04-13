@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def _get_detection_state():
     from app import (
         active_detectors,
+        active_ai_detectors,
         detection_threads,
         camera_captures,
         frame_buffers,
@@ -25,6 +26,7 @@ def _get_detection_state():
     )
     return {
         'active_detectors': active_detectors,
+        'active_ai_detectors': active_ai_detectors,
         'detection_threads': detection_threads,
         'camera_captures': camera_captures,
         'frame_buffers': frame_buffers,
@@ -366,7 +368,16 @@ def create_blueprint(api):
             state['active_detectors'][camera_key] = True
             import app as _api_mod
             _api_mod.active_detectors[camera_key] = True
-            logger.info(f"✅ active_detectors[{camera_key}] = True | id(state)={id(state['active_detectors'])} id(app)={id(_api_mod.active_detectors)} same={state['active_detectors'] is _api_mod.active_detectors}")
+            # AI detection state'ini de set et — worker döngüsü bunu kontrol ediyor
+            _api_mod.active_ai_detectors[camera_key] = True
+            state['active_ai_detectors'][camera_key] = True
+            # DB'ye de yaz (process-safe single source of truth)
+            try:
+                from database.database_adapter import get_db_adapter
+                get_db_adapter().set_detection_active(camera_key, company_id, camera_id, detection_mode, confidence, active=True)
+            except Exception as db_err:
+                logger.warning(f"⚠️ DB set_detection_active failed in start: {db_err}")
+            logger.info(f"✅ active_detectors+active_ai_detectors+DB[{camera_key}] = True")
             active_detectors_ref = state['active_detectors']
             detection_thread = threading.Thread(
                 target=api.saas_detection_worker,
@@ -475,6 +486,8 @@ def create_blueprint(api):
                 try:
                     state['active_detectors'][camera_key] = True
                     _api_mod.active_detectors[camera_key] = True
+                    _api_mod.active_ai_detectors[camera_key] = True
+                    state['active_ai_detectors'][camera_key] = True
                     
                     active_detectors_ref = state['active_detectors']
                     detection_thread = threading.Thread(
@@ -499,6 +512,8 @@ def create_blueprint(api):
                 except Exception as cam_err:
                     state['active_detectors'][camera_key] = False
                     _api_mod.active_detectors[camera_key] = False
+                    state['active_ai_detectors'][camera_key] = False
+                    _api_mod.active_ai_detectors[camera_key] = False
                     results.append({'camera_id': camera_id, 'status': 'error', 'detail': str(cam_err)})
             
             return jsonify({
@@ -541,6 +556,13 @@ def create_blueprint(api):
                 if camera_key in state['active_detectors'] and state['active_detectors'][camera_key]:
                     logger.info(f"🛑 Stopping detection for camera: {camera_id}")
                     state['active_detectors'][camera_key] = False
+                    state['active_ai_detectors'][camera_key] = False
+                    # DB'den de sil (process-safe)
+                    try:
+                        from database.database_adapter import get_db_adapter
+                        get_db_adapter().set_detection_active(camera_key, '', '', active=False)
+                    except Exception as db_err:
+                        logger.warning(f"⚠️ DB set_detection_active(stop) failed: {db_err}")
                     # DVR önizleme akışındaki worker PPE bayrağını kapat (çift inference önlenir)
                     if "_ch" in camera_id:
                         try:
@@ -572,6 +594,13 @@ def create_blueprint(api):
                 for camera_key in list(state['active_detectors'].keys()):
                     if camera_key.startswith(prefix):
                         state['active_detectors'][camera_key] = False
+                        state['active_ai_detectors'][camera_key] = False
+                        # DB'den de sil
+                        try:
+                            from database.database_adapter import get_db_adapter
+                            get_db_adapter().set_detection_active(camera_key, '', '', active=False)
+                        except Exception:
+                            pass
                         keys_to_remove.append(camera_key)
                         cam_id = camera_key[len(prefix):]
                         if "_ch" in cam_id:
@@ -612,7 +641,7 @@ def create_blueprint(api):
             camera_key = f"{company_id}_{camera_id}"
             state = _get_detection_state()
             try:
-                is_active = camera_key in state['active_detectors'] and state['active_detectors'].get(camera_key, False)
+                is_active = camera_key in state['active_ai_detectors'] and state['active_ai_detectors'].get(camera_key, False)
             except Exception:
                 is_active = False
             
@@ -655,14 +684,10 @@ def create_blueprint(api):
 
     @bp.route('/api/company/<company_id>/active-detections')
     def active_detections_list(company_id):
-        """Şirkette aktif olan tüm detection kameralarının ID listesini döner."""
+        """Şirkette aktif olan tüm detection kameralarının ID listesini DB'den döner."""
         try:
-            state = _get_detection_state()
-            prefix = f"{company_id}_"
-            active_ids = [
-                k[len(prefix):] for k, v in state['active_detectors'].items()
-                if k.startswith(prefix) and v
-            ]
+            from database.database_adapter import get_db_adapter
+            active_ids = get_db_adapter().get_active_detections_list(company_id)
             return jsonify({'success': True, 'active_camera_ids': active_ids})
         except Exception as e:
             logger.error(f"❌ Active detections list error: {e}")
