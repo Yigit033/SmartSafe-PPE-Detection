@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import os
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
+
+
+def stream_log_url_detail_enabled() -> bool:
+    """When False, logs omit upstream host/path (STREAM_LOG_URL_DETAIL=0)."""
+    return os.getenv("STREAM_LOG_URL_DETAIL", "1").strip().lower() in ("1", "true", "yes", "on")
 
 
 _SENSITIVE_QUERY_KEYS = {
@@ -63,7 +69,53 @@ def redact_url(value: str | None) -> str:
         # Re-encode minimally (avoids importing urlencode to keep dependencies tiny)
         query = "&".join([f"{k}={v}" if v != "" else k for k, v in items])
 
-    return urlunsplit((parts.scheme, netloc, parts.path, query, parts.fragment))
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def format_upstream_url_for_log(
+    url: str | None,
+    *,
+    company_id: str | None = None,
+    camera_id: str | None = None,
+    label: str = "",
+) -> str:
+    """Log upstream camera/DVR URLs without leaking host/path when disabled.
+
+    STREAM_LOG_URL_DETAIL=1 (default): redact_url (credentials masked; host/path visible).
+    STREAM_LOG_URL_DETAIL=0: identifiers only — use in production log aggregation.
+    """
+    if not url:
+        return ""
+    if stream_log_url_detail_enabled():
+        return redact_url(str(url))
+    suffix = f" camera_id={camera_id}" if camera_id else ""
+    suffix += f" company_id={company_id}" if company_id else ""
+    extra = f" ({label})" if label else ""
+    return f"<upstream redacted{suffix}{extra}>"
+
+
+def sanitize_camera_record_for_log(record: dict | None) -> dict:
+    """Shallow copy of a camera/DVR row safe for logs (passwords never logged raw)."""
+    if not record or not isinstance(record, dict):
+        return {}
+    sensitive_keys = ("password", "passwd", "api_key", "apikey", "secret", "token")
+    location_keys = (
+        "ip_address",
+        "stream_path",
+        "rtsp_url",
+        "connection_url",
+        "gateway_url",
+        "username",
+    )
+    out: dict = {}
+    for k, v in record.items():
+        if k in sensitive_keys and v:
+            out[k] = "***"
+        elif not stream_log_url_detail_enabled() and k in location_keys and v:
+            out[k] = "<redacted>"
+        else:
+            out[k] = v
+    return out
 
 
 def strip_url_userinfo(value: str | None) -> str:
@@ -85,4 +137,3 @@ def strip_url_userinfo(value: str | None) -> str:
         _userinfo, hostport = netloc.rsplit("@", 1)
         netloc = hostport
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
-

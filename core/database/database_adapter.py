@@ -576,6 +576,8 @@ class DatabaseAdapter:
                     ppe_compliant INTEGER DEFAULT 0,
                     total_people INTEGER DEFAULT 0,
                     violations_count INTEGER DEFAULT 0,
+                    compliance_rate DECIMAL(5,2),
+                    processing_time_ms DECIMAL(12,3),
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
                 )
@@ -1071,11 +1073,17 @@ class DatabaseAdapter:
             cursor.execute("""
                 SELECT column_name FROM information_schema.columns 
                 WHERE table_name = 'detections' AND table_schema = 'public'
-                AND column_name IN ('people_detected', 'total_people')
+                AND column_name IN (
+                    'people_detected', 'total_people',
+                    'compliance_rate', 'processing_time_ms'
+                )
             """)
             existing_detection_columns = [row[0] for row in cursor.fetchall()]
             
-            required_detection_columns = ['people_detected', 'total_people']
+            required_detection_columns = [
+                'people_detected', 'total_people',
+                'compliance_rate', 'processing_time_ms',
+            ]
             missing_detection_columns = [c for c in required_detection_columns if c not in existing_detection_columns]
             
             if missing_detection_columns:
@@ -1086,6 +1094,10 @@ class DatabaseAdapter:
                             cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS people_detected INTEGER DEFAULT 0')
                         elif column == 'total_people':
                             cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS total_people INTEGER DEFAULT 0')
+                        elif column == 'compliance_rate':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS compliance_rate DECIMAL(5,2)')
+                        elif column == 'processing_time_ms':
+                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS processing_time_ms DECIMAL(12,3)')
                         logger.info(f"✅ Added column to detections: {column}")
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to add column {column} to detections: {e}")
@@ -1686,8 +1698,9 @@ class DatabaseAdapter:
             query = """
                 INSERT INTO detections (
                     company_id, camera_id, detection_type, confidence,
-                    people_detected, ppe_compliant, violations_count, total_people
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    people_detected, ppe_compliant, violations_count, total_people,
+                    compliance_rate, processing_time_ms
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             params = (
@@ -1698,7 +1711,9 @@ class DatabaseAdapter:
                 detection_data.get('people_detected', 0),
                 detection_data.get('ppe_compliant', 0),
                 detection_data.get('violations_count', 0),
-                detection_data.get('total_people', 0)
+                detection_data.get('total_people', 0),
+                detection_data.get('compliance_rate'),
+                detection_data.get('processing_time_ms'),
             )
             
             self.execute_query(query, params, fetch_all=False)
@@ -1729,7 +1744,7 @@ class DatabaseAdapter:
                     if isinstance(row, dict):
                         # Zaten dict formatında
                         detection = {
-                            'id': row.get('id'),
+                            'id': row.get('detection_id') or row.get('id'),
                             'camera_id': row.get('camera_id', camera_id),
                             'company_id': row.get('company_id', company_id),
                             'detection_type': row.get('detection_type', 'ppe'),
@@ -1738,8 +1753,10 @@ class DatabaseAdapter:
                             'people_detected': row.get('people_detected', 0),
                             'ppe_compliant': row.get('ppe_compliant', 0),
                             'violations_count': row.get('violations_count', 0),
-                            'total_people': row.get('people_detected', 0),
-                            'compliant_people': row.get('ppe_compliant', 0)
+                            'total_people': row.get('total_people', row.get('people_detected', 0)),
+                            'compliant_people': row.get('ppe_compliant', 0),
+                            'compliance_rate': row.get('compliance_rate'),
+                            'processing_time_ms': row.get('processing_time_ms'),
                         }
                     else:
                         # Tuple/list formatında (fallback)

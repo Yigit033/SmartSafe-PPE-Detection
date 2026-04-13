@@ -23,6 +23,8 @@ services:
       # Bind mount (özellikle Docker Desktop / Windows): inotify güvenilir değil; stat reloader sıklığı
       - FLASK_RELOADER_INTERVAL=0.75
       - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
+      # Flask-Limiter: Redis DB 1 (ayrı index; diğer Redis kullanımlarıyla çakışmayı azaltır)
+      - RATELIMIT_STORAGE_URI=redis://redis:6379/1
       - YOLO_CONFIG_DIR=/tmp
       # Torch: auto | cpu | cuda | cuda:N — core/utils/torch_device.py (RENDER=1 iken her zaman cpu)
       - TORCH_DEVICE=auto
@@ -39,6 +41,8 @@ services:
       start_period: 3s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # ⚛️ Next.js Frontend
@@ -147,6 +151,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # 🎯 SmartSafe Developer Hub (Port Hub)
   hub:
