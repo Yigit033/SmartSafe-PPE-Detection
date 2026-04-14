@@ -102,8 +102,24 @@ function Check-Docker {
     return $true
 }
 
+function Get-FreePort($startPort) {
+    $port = $startPort
+    while ($port -lt $startPort + 10) {
+        $occupied = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+        if (-not $occupied) { return $port }
+        $port++
+    }
+    return $startPort
+}
+
 $Window.Show()
 [System.Windows.Forms.Application]::DoEvents()
+
+# Boş portu bul ve Docker'a aktar
+Update-Status "Port Kontrol Ediliyor..." "Uygun ba$($g_yumusak)lant$($i_noktasiz) noktas$($i_noktasiz) aran$($i_noktasiz)yor..."
+$WEB_PORT = Get-FreePort 8088
+$env:WEB_PORT = $WEB_PORT
+$baseUrl = "http://localhost:$WEB_PORT"
 
 if (-not (Check-Docker)) {
     Update-Status "HATA!" "Docker kurulumu ba$($s_kucuk)ar$($i_noktasiz)s$($i_noktasiz)z oldu."
@@ -119,23 +135,21 @@ try { $null = Start-Process "docker" -ArgumentList "compose pull --quiet" -Windo
 Update-Status "Konteynerler Haz$($i_noktasiz)rlan$($i_noktasiz)yor..." "Servisler aya$($g_yumusak)a kald$($i_noktasiz)r$($i_noktasiz)l$($i_noktasiz)yor..."
 $null = Start-Process "docker" -ArgumentList "compose up -d --remove-orphans" -WindowStyle Hidden -Wait
 
-Update-Status "Sistem Ba$($s_kucuk)lat&#305;l&#305;yor..." "Veritaban$($i_noktasiz) ve AI Motoru bekleniyor..."
+Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Veritaban$($i_noktasiz) ve AI Motoru bekleniyor..."
 $max_retries = 120 # 2 dakika limit
 $count = 0
 $ready = $false
 
 while ($count -lt $max_retries) {
     try {
-        # Sadece portun açık olması yetmez, 502/503 olmamalı
-        $response = Invoke-WebRequest -Uri "http://localhost:8088" -UseBasicParsing -TimeoutSec 2 -ErrorAction Ignore
+        # Dinamik portu kontrol et
+        $response = Invoke-WebRequest -Uri $baseUrl -UseBasicParsing -TimeoutSec 2 -ErrorAction Ignore
         if ($response -and $response.StatusCode -eq 200) {
             $ready = $true
             break
         }
         Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Haz$($i_noktasiz)r olmas$($i_noktasiz) bekleniyor ($($count)s)..."
-    } catch {
-        # Bağlantı reddedildi veya başka hata
-    }
+    } catch { }
     $count += 2
     [System.Windows.Forms.Application]::DoEvents()
     Start-Sleep -Seconds 2
@@ -143,15 +157,18 @@ while ($count -lt $max_retries) {
 
 if ($ready) {
     Update-Status "Haz$($i_noktasiz)r!" "SmartSafe AI aç$($i_noktasiz)l$($i_noktasiz)yor..."
+    if ($WEB_PORT -ne 8088) {
+        Update-Status "Haz$($i_noktasiz)r!" "Not: Port çak$($i_noktasiz)$($s_kucuk)mas$($i_noktasiz) nedeniyle $WEB_PORT kullan$($i_noktasiz)l$($i_noktasiz)yor."
+        Start-Sleep -Seconds 2
+    }
+    
     Start-Sleep -Seconds 1
-    # Chrome yoksa Edge, o da yoksa varsayılan
-    $url = "http://localhost:8088"
     if (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe") {
-        Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--app=$url", "--start-maximized"
+        Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--app=$baseUrl", "--start-maximized"
     } elseif (Test-Path "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe") {
-        Start-Process "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList "--app=$url", "--start-maximized"
+        Start-Process "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList "--app=$baseUrl", "--start-maximized"
     } else {
-        Start-Process $url
+        Start-Process $baseUrl
     }
 } else {
     Update-Status "Zaman A$($s_kucuk)&#305;m&#305;!" "Sistem beklenenden yava$($s_kucuk) aç$($i_noktasiz)l$($i_noktasiz)yor. Lütfen birazdan manuel deneyin."
