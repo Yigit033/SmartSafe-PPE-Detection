@@ -11,10 +11,17 @@ import {
   normalizeDetectionZonesPayload,
   polygonToVideoSpaceForOverlay,
 } from "@/lib/detectionZones";
+import ScheduleModal from "@/components/camera/ScheduleModal";
 
 export default function CamerasPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-slate-400 text-sm">Yükleniyor...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-12 text-center text-slate-400 text-sm">
+          Yükleniyor...
+        </div>
+      }
+    >
       <CamerasContent />
     </Suspense>
   );
@@ -22,6 +29,8 @@ export default function CamerasPage() {
 
 function CamerasContent() {
   const [cameras, setCameras] = useState<any[]>([]);
+  const [managementCameras, setManagementCameras] = useState<any[]>([]);
+  const [isManagementLoading, setIsManagementLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,6 +61,7 @@ function CamerasContent() {
   const [streamLayoutByCamera, setStreamLayoutByCamera] = useState<
     Record<string, { nw: number; nh: number; cw: number; ch: number }>
   >({});
+  const [privacyModeCameras, setPrivacyModeCameras] = useState<string[]>([]);
 
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [groups, setGroups] = useState<any[]>([]);
@@ -59,7 +69,12 @@ function CamerasContent() {
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>("all");
   const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
   const [isManageDvrsOpen, setIsManageDvrsOpen] = useState(false);
+  const [editingCameraId, setEditingCameraId] = useState<string | null>(null);
+  const [editingCameraName, setEditingCameraName] = useState<string>("");
+  const [editingDvrId, setEditingDvrId] = useState<string | null>(null);
+  const [editingDvrName, setEditingDvrName] = useState<string>("");
   const [dvrs, setDvrs] = useState<any[]>([]);
+  const [expandedDvrIds, setExpandedDvrIds] = useState<string[]>([]);
   const [isDeletingDvr, setIsDeletingDvr] = useState(false);
   const [isDiscoveringDvr, setIsDiscoveringDvr] = useState<string | null>(null);
   const [groupFormData, setGroupFormData] = useState({
@@ -78,10 +93,18 @@ function CamerasContent() {
     },
   });
   const [editingGroup, setEditingGroup] = useState<any>(null);
+
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [selectedCameraForSchedule, setSelectedCameraForSchedule] =
+    useState<any>(null);
+
   const prevFiltersRef = useRef<{ search: string; group: string } | null>(null);
   const searchParams = useSearchParams();
   const camerasPerPage = parseInt(searchParams.get("limit") || "6", 10);
-  const currentPage = Math.max(0, parseInt(searchParams.get("page") || "1", 10) - 1);
+  const currentPage = Math.max(
+    0,
+    parseInt(searchParams.get("page") || "1", 10) - 1,
+  );
 
   const setLimit = (limit: number) => {
     const url = new URL(window.location.href);
@@ -90,20 +113,26 @@ function CamerasContent() {
     window.location.href = url.pathname + url.search;
   };
 
-  const setCurrentPage = useCallback((pageOrFn: number | ((prev: number) => number)) => {
-    const next = typeof pageOrFn === "function" ? pageOrFn(currentPage) : pageOrFn;
-    const url = new URL(window.location.href);
-    url.searchParams.set("page", String(next + 1));
-    window.location.href = url.pathname + url.search;
-  }, [currentPage]);
+  const setCurrentPage = useCallback(
+    (pageOrFn: number | ((prev: number) => number)) => {
+      const next =
+        typeof pageOrFn === "function" ? pageOrFn(currentPage) : pageOrFn;
+      const url = new URL(window.location.href);
+      url.searchParams.set("page", String(next + 1));
+      window.location.href = url.pathname + url.search;
+    },
+    [currentPage],
+  );
 
   const companyId = getCompanyId();
 
   useEffect(() => {
     setMounted(true);
     setRefreshKey(Date.now());
-    fetchCameras();
+    fetchCameras("active");
     fetchGroups();
+    const savedPrivacy = localStorage.getItem("privacyModeCameras");
+    if (savedPrivacy) setPrivacyModeCameras(JSON.parse(savedPrivacy));
   }, []);
 
   // Arka planda kalan sekmede MJPEG kareleri birikir; geri gelince OSD saati geride kalır.
@@ -115,9 +144,22 @@ function CamerasContent() {
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
+
+  // AI-Durum Senkronizasyonu (Polling)
+  // 20 saniyede bir arkada aktif kameraları sorgular, böylece ScheduleManager
+  // tarafından başlatılan kameralar UI'da otomatik olarak yeşile döner.
+  useEffect(() => {
+    if (!companyId) return;
+
+    // İlk mount'ta ve her 20s'de bir çalıştır
+    const interval = setInterval(() => {
+      syncAiStates(companyId, cameras);
+    }, 20000);
+
+    return () => clearInterval(interval);
+  }, [companyId, cameras]);
 
   const fetchGroups = async () => {
     const cid = getCompanyId();
@@ -134,18 +176,19 @@ function CamerasContent() {
     }
   };
 
-  const fetchCameras = async () => {
+  const fetchCameras = async (status?: string) => {
     const cid = getCompanyId();
     if (!cid) return;
     setLoadedCameras([]);
     setIsLoading(true);
     try {
-      const data = await api.camera.list(cid);
+      // @ts-ignore
+      const data = await api.camera.list(cid, status ? { status } : undefined);
       if (data.success) {
         setCameras(data.cameras);
-        syncAiStates(cid, data.cameras);
-      } else {
-        console.error("Cameras fetch failed");
+        if (!status || status === "active") {
+          syncAiStates(cid, data.cameras);
+        }
       }
     } catch (error: any) {
       console.error("Error fetching cameras:", error.message || error);
@@ -154,16 +197,57 @@ function CamerasContent() {
     }
   };
 
+  const fetchManagementCameras = async () => {
+    const cid = getCompanyId();
+    if (!cid) return;
+    setIsManagementLoading(true);
+    try {
+      // Parametresiz çağrı tüm kameraları getirir (hidden dahil)
+      // @ts-ignore
+      const data = await api.camera.list(cid);
+      if (data.success) {
+        setManagementCameras(data.cameras);
+      }
+    } catch (error: any) {
+      console.error(
+        "Error fetching management cameras:",
+        error.message || error,
+      );
+    } finally {
+      setIsManagementLoading(false);
+    }
+  };
 
   const syncAiStates = async (cid: string, _cams: any[]) => {
     try {
       const data = await core.getActiveDetections(cid);
-      if (data.success && data.active_camera_ids && data.active_camera_ids.length > 0) {
+      if (
+        data.success &&
+        data.active_camera_ids &&
+        data.active_camera_ids.length > 0
+      ) {
         setEnabledAiCameras(data.active_camera_ids);
       }
     } catch {
       // backend unreachable — keep default empty
     }
+  };
+
+  const toggleAllPrivacy = () => {
+    const next =
+      privacyModeCameras.length === cameras.length
+        ? []
+        : cameras.map((c) => c.camera_id);
+    setPrivacyModeCameras(next);
+    localStorage.setItem("privacyModeCameras", JSON.stringify(next));
+  };
+
+  const toggleCameraPrivacy = (id: string) => {
+    const next = privacyModeCameras.includes(id)
+      ? privacyModeCameras.filter((cid) => cid !== id)
+      : [...privacyModeCameras, id];
+    setPrivacyModeCameras(next);
+    localStorage.setItem("privacyModeCameras", JSON.stringify(next));
   };
 
   const openAddModal = () => {
@@ -271,7 +355,11 @@ function CamerasContent() {
 
     try {
       const data = editingGroup
-        ? await api.camera.updateGroup(cid, editingGroup.group_id, groupFormData)
+        ? await api.camera.updateGroup(
+            cid,
+            editingGroup.group_id,
+            groupFormData,
+          )
         : await api.camera.createGroup(cid, groupFormData);
 
       if (data.success) {
@@ -316,7 +404,7 @@ function CamerasContent() {
       const data = await api.camera.removeGroup(cid, group_id);
       if (data.success) {
         fetchGroups();
-        fetchCameras();
+        fetchCameras("active");
       } else {
         alert("Grup silinemedi: " + (data.error || "Bilinmeyen hata"));
       }
@@ -350,11 +438,12 @@ function CamerasContent() {
       const data = await response.json();
       if (data.success) {
         const inactive = data.inactive_count || 0;
-        const msg = inactive > 0
-          ? `${data.count} aktif kanal bulundu (${inactive} kanalda kamera bağlı değil).`
-          : `${data.count} kanal başarıyla keşfedildi!`;
+        const msg =
+          inactive > 0
+            ? `${data.count} aktif kanal bulundu (${inactive} kanalda kamera bağlı değil).`
+            : `${data.count} kanal başarıyla keşfedildi!`;
         alert(`Keşif tamamlandı\n\n${msg}`);
-        fetchCameras();
+        fetchCameras("active");
       } else {
         alert(`Hata: ${data.error || "Kanallar keşfedilemedi."}`);
       }
@@ -384,7 +473,7 @@ function CamerasContent() {
             "DVR listeden kaldırıldı. Geçmiş kayıtlar korunur; kamera listesi güncellendi.",
         );
         fetchDvrs();
-        fetchCameras();
+        fetchCameras("active");
       } else {
         alert(`Hata: ${data.error || "DVR silinemedi."}`);
       }
@@ -396,9 +485,80 @@ function CamerasContent() {
     }
   };
 
+  const toggleDvrExpand = (dvrId: string) => {
+    setExpandedDvrIds((prev) =>
+      prev.includes(dvrId)
+        ? prev.filter((id) => id !== dvrId)
+        : [...prev, dvrId],
+    );
+  };
+
+  const handleInlineCameraSave = async (cameraId: string) => {
+    if (!companyId || !editingCameraName.trim()) return;
+    try {
+      const data = await api.camera.update(companyId, cameraId, {
+        camera_name: editingCameraName,
+      });
+      if (data.success) {
+        setEditingCameraId(null);
+        if (isManageDvrsOpen) {
+          fetchManagementCameras();
+        } else {
+          fetchCameras("active");
+        }
+      } else {
+        alert("Güncellenemedi: " + (data.error || "Bilinmeyen hata"));
+      }
+    } catch (error) {
+      console.error("Error updating camera inline:", error);
+    }
+  };
+
+  const handleInlineDvrSave = async (dvrId: string) => {
+    if (!companyId || !editingDvrName.trim()) return;
+    try {
+      // @ts-ignore
+      const data = await api.dvr.update(companyId, dvrId, {
+        name: editingDvrName,
+      });
+      if (data.success) {
+        setEditingDvrId(null);
+        fetchDvrs();
+      } else {
+        alert("Güncellenemedi: " + (data.error || "Bilinmeyen hata"));
+      }
+    } catch (error) {
+      console.error("Error updating DVR inline:", error);
+    }
+  };
+
+  const toggleCameraStatus = async (camera: any) => {
+    const cid = getCompanyId();
+    if (!cid) return;
+    const newStatus = camera.status === "active" ? "inactive" : "active";
+    try {
+      const data = await api.camera.update(cid, camera.camera_id, {
+        status: newStatus,
+      });
+      if (data.success) {
+        fetchCameras("active"); // Panorama anında güncellensin
+        if (isManageDvrsOpen) {
+          fetchManagementCameras(); // Modal içeriği de güncellensin
+        }
+      } else {
+        alert("Durum güncellenemedi: " + (data.error || "Bilinmeyen hata"));
+      }
+    } catch (error) {
+      console.error("Error updating camera status:", error);
+    }
+  };
+
   useEffect(() => {
     if (isManageDvrsOpen) {
       fetchDvrs();
+      fetchManagementCameras(); // Ayrı state üzerinden tüm listeyi çek
+    } else {
+      fetchCameras("active"); // Modal kapandığında panoramayı tazeleyerek güncel durumu göster
     }
   }, [isManageDvrsOpen]);
 
@@ -417,12 +577,16 @@ function CamerasContent() {
 
     try {
       const data = editingCamera
-        ? await api.camera.update(companyId, editingCamera.camera_id, bodyData as any)
+        ? await api.camera.update(
+            companyId,
+            editingCamera.camera_id,
+            bodyData as any,
+          )
         : await api.camera.create(companyId, bodyData as any);
 
       if (data.success) {
         setIsModalOpen(false);
-        fetchCameras();
+        fetchCameras("active");
       }
     } catch (error) {
       console.error("Error submitting camera:", error);
@@ -441,7 +605,7 @@ function CamerasContent() {
       if (data.success) {
         setIsDeleteModalOpen(false);
         setCameraToDelete(null);
-        fetchCameras();
+        fetchCameras("active");
       }
     } catch (error) {
       console.error("Error deleting camera:", error);
@@ -655,6 +819,17 @@ function CamerasContent() {
             YÖNETİMİ
           </button>
           <button
+            onClick={toggleAllPrivacy}
+            className={`flex items-center gap-2 rounded-xl border px-6 py-3.5 text-xs font-black transition-all cursor-pointer shadow-sm ${privacyModeCameras.length === cameras.length ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+          >
+            <span className="material-symbols-rounded">
+              {privacyModeCameras.length === cameras.length
+                ? "visibility_off"
+                : "visibility"}
+            </span>
+            GİZLİLİK MODU
+          </button>
+          <button
             onClick={() => setIsManageGroupsOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
           >
@@ -678,7 +853,7 @@ function CamerasContent() {
             onClick={() => setActiveGroupFilter("all")}
             className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeGroupFilter === "all" ? "bg-slate-900 text-white shadow-lg" : "bg-white border text-slate-400 hover:border-slate-300"}`}
           >
-            TÜMÜ ({cameras.length})
+            TÜMÜ ({filteredCameras.length})
           </button>
           {groups.map((group) => (
             <button
@@ -708,301 +883,360 @@ function CamerasContent() {
         </div>
       ) : (
         <>
-        <div className={`mt-12 grid gap-8 ${camerasPerPage === 1 ? "grid-cols-1 max-w-5xl mx-auto" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}>
-          {paginatedCameras.map((camera) => {
-            const zonesPayload = normalizeDetectionZonesPayload(
-              camera.detection_zones,
-            );
-            const streamLay = streamLayoutByCamera[camera.camera_id];
-            const showRoiOverlay =
-              zonesPayload.polygons.length > 0 &&
-              zonesPayload.polygons[0].length > 0 &&
-              !failedCameras.includes(camera.camera_id);
+          <div
+            className={`mt-12 grid gap-8 ${camerasPerPage === 1 ? "grid-cols-1 max-w-5xl mx-auto" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}
+          >
+            {paginatedCameras.map((camera) => {
+              const zonesPayload = normalizeDetectionZonesPayload(
+                camera.detection_zones,
+              );
+              const streamLay = streamLayoutByCamera[camera.camera_id];
+              const showRoiOverlay =
+                zonesPayload.polygons.length > 0 &&
+                zonesPayload.polygons[0].length > 0 &&
+                !failedCameras.includes(camera.camera_id);
 
-            return (
-            <div
-              key={camera.camera_id}
-              className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg hover:shadow-2xl transition-all duration-500"
-            >
-              <div className="relative aspect-video bg-slate-900 overflow-hidden group-hover:ring-4 ring-brand-teal/10 transition-all duration-500">
-                <img
-                  src={
-                    isCameraAiEnabled(camera)
-                      ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
-                      : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
-                  }
-                  alt={camera.camera_name}
-                  className={`w-full h-full transition-all duration-700 group-hover:scale-105 ${
-                    failedCameras.includes(camera.camera_id)
-                      ? "opacity-0"
-                      : "object-contain bg-slate-950 opacity-100"
-                  }`}
-                  onError={() => {
-                    setFailedCameras((prev) => [
-                      ...new Set([...prev, camera.camera_id]),
-                    ]);
-                    fetchStreamDiagnostics(camera.camera_id).then((diag) => {
-                      if (!diag) return;
-                      setFailedCameraDiagnostics((prev) => ({
-                        ...prev,
-                        [camera.camera_id]: diag,
-                      }));
-                    });
-                  }}
-                  onLoad={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    // Eğer broken image ikonu vs. yüklenirse diye basit bir check
-                    if (target.naturalWidth <= 1) return;
+              return (
+                <div
+                  key={camera.camera_id}
+                  className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg hover:shadow-2xl transition-all duration-500"
+                >
+                  <div className="relative aspect-video bg-slate-900 overflow-hidden group-hover:ring-4 ring-brand-teal/10 transition-all duration-500">
+                    <img
+                      src={
+                        isCameraAiEnabled(camera)
+                          ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
+                          : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
+                      }
+                      alt={camera.camera_name}
+                      className={`w-full h-full transition-all duration-700 group-hover:scale-105 ${
+                        failedCameras.includes(camera.camera_id)
+                          ? "opacity-0"
+                          : "object-contain bg-slate-950 opacity-100"
+                      }`}
+                      onError={() => {
+                        setFailedCameras((prev) => [
+                          ...new Set([...prev, camera.camera_id]),
+                        ]);
+                        fetchStreamDiagnostics(camera.camera_id).then(
+                          (diag) => {
+                            if (!diag) return;
+                            setFailedCameraDiagnostics((prev) => ({
+                              ...prev,
+                              [camera.camera_id]: diag,
+                            }));
+                          },
+                        );
+                      }}
+                      onLoad={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        // Eğer broken image ikonu vs. yüklenirse diye basit bir check
+                        if (target.naturalWidth <= 1) return;
 
-                    if (target.naturalWidth > 0 && target.naturalHeight > 0) {
-                      setStreamLayoutByCamera((prev) => ({
-                        ...prev,
-                        [camera.camera_id]: {
-                          nw: target.naturalWidth,
-                          nh: target.naturalHeight,
-                          cw: target.clientWidth,
-                          ch: target.clientHeight,
-                        },
-                      }));
-                    }
+                        if (
+                          target.naturalWidth > 0 &&
+                          target.naturalHeight > 0
+                        ) {
+                          setStreamLayoutByCamera((prev) => ({
+                            ...prev,
+                            [camera.camera_id]: {
+                              nw: target.naturalWidth,
+                              nh: target.naturalHeight,
+                              cw: target.clientWidth,
+                              ch: target.clientHeight,
+                            },
+                          }));
+                        }
 
-                    setLoadedCameras((prev) => [...new Set([...prev, camera.camera_id])]);
-                    setFailedCameras((prev) =>
-                      prev.filter((id) => id !== camera.camera_id),
-                    );
-                    setFailedCameraDiagnostics((prev) => {
-                      const { [camera.camera_id]: _omit, ...rest } = prev;
-                      return rest;
-                    });
-                  }}
-                />
+                        setLoadedCameras((prev) => [
+                          ...new Set([...prev, camera.camera_id]),
+                        ]);
+                        setFailedCameras((prev) =>
+                          prev.filter((id) => id !== camera.camera_id),
+                        );
+                        setFailedCameraDiagnostics((prev) => {
+                          const { [camera.camera_id]: _omit, ...rest } = prev;
+                          return rest;
+                        });
+                      }}
+                    />
 
-                {/* 🎯 Analiz Bölgesi Overlay (video uzayı, object-contain ile hizalı) */}
-                {showRoiOverlay && (
-                  <VideoRoiOverlay
-                    polygon={polygonToVideoSpaceForOverlay(
-                      zonesPayload.polygons[0],
-                      zonesPayload.coordSpace,
-                      streamLay?.cw ?? 0,
-                      streamLay?.ch ?? 0,
-                      streamLay?.nw ?? 0,
-                      streamLay?.nh ?? 0,
+                    {/* 🎯 Analiz Bölgesi Overlay (video uzayı, object-contain ile hizalı) */}
+                    {showRoiOverlay && (
+                      <VideoRoiOverlay
+                        polygon={polygonToVideoSpaceForOverlay(
+                          zonesPayload.polygons[0],
+                          zonesPayload.coordSpace,
+                          streamLay?.cw ?? 0,
+                          streamLay?.ch ?? 0,
+                          streamLay?.nw ?? 0,
+                          streamLay?.nh ?? 0,
+                        )}
+                        naturalW={streamLay?.nw ?? 0}
+                        naturalH={streamLay?.nh ?? 0}
+                        className="absolute inset-0 z-10 h-full w-full opacity-70 transition-opacity duration-500 group-hover:opacity-100"
+                      />
                     )}
-                    naturalW={streamLay?.nw ?? 0}
-                    naturalH={streamLay?.nh ?? 0}
-                    className="absolute inset-0 z-10 h-full w-full opacity-70 transition-opacity duration-500 group-hover:opacity-100"
-                  />
-                )}
 
-                {failedCameras.includes(camera.camera_id) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-                    <span className="material-symbols-rounded text-white/40 text-5xl mb-2 animate-pulse">
-                      videocam_off
-                    </span>
-                    <p className="text-[10px] font-black text-white px-4 py-2 bg-red-500/80 rounded-xl uppercase tracking-widest shadow-2xl">
-                      KAMERA BULUNAMADI
-                    </p>
-                    {failedCameraDiagnostics[camera.camera_id] && (
-                      <p className="mt-2 text-[10px] font-mono text-white/70 px-3 text-center max-w-[90%]">
-                        {failedCameraDiagnostics[camera.camera_id]}
-                      </p>
+                    {privacyModeCameras.includes(camera.camera_id) && (
+                      <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 backdrop-blur-[1px] transition-all duration-500">
+                        <div className="p-4 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
+                          <span className="material-symbols-rounded text-2xl text-white/20">
+                            visibility_off
+                          </span>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                )}
 
-                <div className="absolute top-4 left-4 flex gap-2">
-                  <div
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white shadow-lg transition-all duration-500 ${
-                      failedCameras.includes(camera.camera_id)
-                        ? "bg-slate-700 opacity-100"
-                        : loadedCameras.includes(camera.camera_id)
-                          ? "bg-red-500 opacity-100"
-                          : "opacity-0"
-                    }`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full bg-white ${failedCameras.includes(camera.camera_id) ? "" : "animate-pulse"}`}
-                    ></span>
-                    <span className="text-[8px] font-black uppercase tracking-tighter text-white">
-                      {failedCameras.includes(camera.camera_id)
-                        ? "BAĞLANTI YOK"
-                        : "CANLI"}
-                    </span>
+                    {failedCameras.includes(camera.camera_id) && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+                        <span className="material-symbols-rounded text-white/40 text-5xl mb-2 animate-pulse">
+                          videocam_off
+                        </span>
+                        <p className="text-[10px] font-black text-white px-4 py-2 bg-red-500/80 rounded-xl uppercase tracking-widest shadow-2xl">
+                          KAMERA BULUNAMADI
+                        </p>
+                        {failedCameraDiagnostics[camera.camera_id] && (
+                          <p className="mt-2 text-[10px] font-mono text-white/70 px-3 text-center max-w-[90%]">
+                            {failedCameraDiagnostics[camera.camera_id]}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="absolute top-4 left-4 flex gap-2">
+                      <div
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white shadow-lg transition-all duration-500 ${
+                          failedCameras.includes(camera.camera_id)
+                            ? "bg-slate-700 opacity-100"
+                            : loadedCameras.includes(camera.camera_id)
+                              ? "bg-red-500 opacity-100"
+                              : "opacity-0"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full bg-white ${failedCameras.includes(camera.camera_id) ? "" : "animate-pulse"}`}
+                        ></span>
+                        <span className="text-[8px] font-black uppercase tracking-tighter text-white">
+                          {failedCameras.includes(camera.camera_id)
+                            ? "BAĞLANTI YOK"
+                            : "CANLI"}
+                        </span>
+                      </div>
+                      {isCameraAiEnabled(camera) && (
+                        <div className="bg-brand-teal px-2.5 py-1 rounded-lg text-white shadow-lg animate-pulse">
+                          <span className="text-[8px] font-black uppercase tracking-tighter italic">
+                            AI ANALİZ AKTİF
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCameraAi(
+                          camera.camera_id,
+                          isCameraAiEnabled(camera),
+                        );
+                      }}
+                      className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all duration-500 shadow-xl cursor-pointer ${isCameraAiEnabled(camera) ? "bg-brand-teal/90 border-brand-teal text-white" : "bg-slate-900/60 border-white/10 text-white/50"}`}
+                    >
+                      <span className="material-symbols-rounded text-sm">
+                        {isCameraAiEnabled(camera) ? "stream" : "visibility"}
+                      </span>
+                      <span className="text-[9px] font-black uppercase tracking-widest">
+                        AI VIEW
+                      </span>
+                    </button>
+
+                    <div className="absolute bottom-4 left-4 right-4 z-50 flex items-end justify-between transition-all duration-300">
+                      <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-xl">
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">
+                          IP ADDRESS
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-900">
+                          {camera.ip_address}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/camera/${encodeURIComponent(camera.camera_id)}`,
+                            )
+                          }
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-brand-teal text-white shadow-lg cursor-pointer transition-all hover:bg-brand-teal/90 active:scale-95 hover:shadow-brand-teal/20"
+                          title="Tam Ekran"
+                        >
+                          <span className="material-symbols-rounded text-xl">
+                            fullscreen
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => toggleCameraPrivacy(camera.camera_id)}
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-all duration-300 shadow-sm hover:shadow-lg cursor-pointer active:scale-95 ${privacyModeCameras.includes(camera.camera_id) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                          title="Gizlilik Modu"
+                        >
+                          <span className="material-symbols-rounded text-xl">
+                            {privacyModeCameras.includes(camera.camera_id)
+                              ? "visibility_off"
+                              : "visibility"}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => openEditModal(camera)}
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-slate-600 border border-slate-200 cursor-pointer hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-slate-900/20 active:scale-95"
+                          title="Düzenle"
+                        >
+                          <span className="material-symbols-rounded text-xl">
+                            edit
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedCameraForSchedule(camera);
+                            setIsScheduleModalOpen(true);
+                          }}
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-brand-teal/20 active:scale-95"
+                          title="Çalışma Saatleri"
+                        >
+                          <span className="material-symbols-rounded text-xl">
+                            history_toggle_off
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCamera(camera)}
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-red-500 border border-slate-200 cursor-pointer hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-red-500/20 active:scale-95"
+                          title="Sil"
+                        >
+                          <span className="material-symbols-rounded text-xl">
+                            delete
+                          </span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  {isCameraAiEnabled(camera) && (
-                    <div className="bg-brand-teal px-2.5 py-1 rounded-lg text-white shadow-lg animate-pulse">
-                      <span className="text-[8px] font-black uppercase tracking-tighter italic">
-                        AI ANALİZ AKTİF
+                  <div className="p-6">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight group-hover:text-brand-teal transition-colors">
+                      {camera.camera_name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-1 text-slate-400">
+                      <span className="material-symbols-rounded text-xs">
+                        location_on
+                      </span>
+                      <span className="text-[10px] font-black tracking-widest">
+                        {camera.location}
                       </span>
                     </div>
-                  )}
+
+                    {/* Group Selector */}
+                    <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="material-symbols-rounded text-slate-300 text-sm flex-shrink-0">
+                          folder
+                        </span>
+                        <select
+                          value={camera.group_id || ""}
+                          onChange={(e) =>
+                            handleAssignToGroup(
+                              camera.camera_id,
+                              e.target.value === "" ? null : e.target.value,
+                            )
+                          }
+                          className="bg-transparent text-[10px] font-bold text-slate-500 uppercase tracking-tight outline-none cursor-pointer hover:text-brand-teal transition-colors w-full"
+                        >
+                          <option value="">Grup Yok</option>
+                          {groups.map((g) => (
+                            <option key={g.group_id} value={g.group_id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-12 flex items-center justify-center gap-3">
+            {totalPages > 1 && (
+              <>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+                >
+                  <span className="material-symbols-rounded text-sm">
+                    chevron_left
+                  </span>
+                  Önceki
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
+                        i === currentPage
+                          ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/30"
+                          : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
                 </div>
 
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleCameraAi(camera.camera_id, isCameraAiEnabled(camera));
-                  }}
-                  className={`absolute top-4 right-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all duration-500 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 shadow-xl cursor-pointer ${isCameraAiEnabled(camera) ? "bg-emerald-500/90 border-emerald-400 text-white" : "bg-slate-900/60 border-white/10 text-white/50"}`}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+                  }
+                  disabled={currentPage === totalPages - 1}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
                 >
+                  Sonraki
                   <span className="material-symbols-rounded text-sm">
-                    {isCameraAiEnabled(camera)
-                      ? "visibility"
-                      : "visibility_off"}
-                  </span>
-                  <span className="text-[9px] font-black uppercase tracking-widest">
-                    AI VIEW
+                    chevron_right
                   </span>
                 </button>
+              </>
+            )}
 
-                <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                  <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-xl">
-                    <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">
-                      IP ADDRESS
-                    </p>
-                    <p className="text-[10px] font-bold text-slate-900">
-                      {camera.ip_address}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(
-                          `/camera/${encodeURIComponent(camera.camera_id)}`,
-                        )
-                      }
-                      className="p-2.5 rounded-xl bg-brand-teal text-white shadow-xl cursor-pointer"
-                    >
-                      <span className="material-symbols-rounded text-lg">
-                        fullscreen
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => openEditModal(camera)}
-                      className="p-2.5 rounded-xl bg-white text-slate-600 border border-slate-200 cursor-pointer"
-                    >
-                      <span className="material-symbols-rounded text-lg">
-                        edit
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCamera(camera)}
-                      className="p-2.5 rounded-xl bg-white text-red-500 border border-slate-200 cursor-pointer"
-                    >
-                      <span className="material-symbols-rounded text-lg">
-                        delete
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="p-6">
-                <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tight group-hover:text-brand-teal transition-colors">
-                  {camera.camera_name}
-                </h3>
-                <div className="flex items-center gap-1.5 mt-1 text-slate-400">
-                  <span className="material-symbols-rounded text-xs">
-                    location_on
-                  </span>
-                  <span className="text-[10px] font-black uppercase italic tracking-widest">
-                    {camera.location}
-                  </span>
-                </div>
-
-                {/* Group Selector */}
-                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="material-symbols-rounded text-slate-300 text-sm flex-shrink-0">
-                      folder
-                    </span>
-                    <select
-                      value={camera.group_id || ""}
-                      onChange={(e) =>
-                        handleAssignToGroup(
-                          camera.camera_id,
-                          e.target.value === "" ? null : e.target.value,
-                        )
-                      }
-                      className="bg-transparent text-[10px] font-bold text-slate-500 uppercase tracking-tight outline-none cursor-pointer hover:text-brand-teal transition-colors w-full"
-                    >
-                      <option value="">Grup Yok</option>
-                      {groups.map((g) => (
-                        <option key={g.group_id} value={g.group_id}>
-                          {g.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 border border-slate-200 rounded-2xl ml-4 shadow-inner">
+              <button
+                onClick={() => setLimit(1)}
+                className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 1 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
+              >
+                <span className="material-symbols-rounded text-sm">
+                  rectangle
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+                  1
+                </span>
+              </button>
+              <button
+                onClick={() => setLimit(6)}
+                className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 6 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
+              >
+                <span className="material-symbols-rounded text-sm">
+                  grid_view
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+                  6
+                </span>
+              </button>
             </div>
-            );
-          })}
-        </div>
 
-        <div className="mt-12 flex items-center justify-center gap-3">
-          {totalPages > 1 && (
-            <>
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                disabled={currentPage === 0}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
-              >
-                <span className="material-symbols-rounded text-sm">chevron_left</span>
-                Önceki
-              </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentPage(i)}
-                    className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
-                      i === currentPage
-                        ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/30"
-                        : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
-                }
-                disabled={currentPage === totalPages - 1}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
-              >
-                Sonraki
-                <span className="material-symbols-rounded text-sm">chevron_right</span>
-              </button>
-            </>
-          )}
-
-          <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 border border-slate-200 rounded-2xl ml-4 shadow-inner">
-            <button
-              onClick={() => setLimit(1)}
-              className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 1 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
-            >
-              <span className="material-symbols-rounded text-sm">rectangle</span>
-              <span className="text-[10px] font-black uppercase tracking-widest leading-none">1</span>
-            </button>
-            <button
-              onClick={() => setLimit(6)}
-              className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 6 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
-            >
-              <span className="material-symbols-rounded text-sm">grid_view</span>
-              <span className="text-[10px] font-black uppercase tracking-widest leading-none">6</span>
-            </button>
+            <span className="ml-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
+              {filteredCameras.length} KAMERA • SAYFA {currentPage + 1}/
+              {totalPages || 1}
+            </span>
           </div>
-
-          <span className="ml-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
-            {filteredCameras.length} KAMERA • SAYFA {currentPage + 1}/{totalPages || 1}
-          </span>
-        </div>
         </>
       )}
 
@@ -1400,7 +1634,7 @@ function CamerasContent() {
                   </p>
                   <button
                     onClick={() => router.push("/cameras/setup")}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90"
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90 transition-all cursor-pointer shadow-sm hover:shadow-lg hover:shadow-brand-teal/20 active:scale-95"
                   >
                     <span className="material-symbols-rounded text-sm">
                       add
@@ -1418,51 +1652,269 @@ function CamerasContent() {
                     </div>
                   ) : (
                     dvrs.map((dvr) => (
-                      <div
-                        key={dvr.dvr_id}
-                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors border border-slate-200/50"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                            <span className="material-symbols-rounded">
-                              dns
-                            </span>
-                          </div>
-                          <div>
-                            <h4 className="font-black text-slate-900 uppercase italic text-xs mb-0.5">
-                              {dvr.name}
-                            </h4>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                              {dvr.ip_address} • {dvr.max_channels} KANAL •{" "}
-                              {dvr.dvr_type}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => discoverChannels(dvr.dvr_id)}
-                            disabled={isDiscoveringDvr === dvr.dvr_id}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all disabled:opacity-50"
-                          >
-                            {isDiscoveringDvr === dvr.dvr_id ? (
-                              <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-                            ) : (
-                              <span className="material-symbols-rounded text-sm">
-                                search
+                      <div key={dvr.dvr_id} className="flex flex-col gap-2">
+                        <div
+                          className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl transition-all border border-slate-200/50 ${expandedDvrIds.includes(dvr.dvr_id) ? "rounded-b-none border-b-transparent" : "hover:bg-slate-100"}`}
+                        >
+                          <div className="flex items-center gap-4 flex-1">
+                            <button
+                              onClick={() => toggleDvrExpand(dvr.dvr_id)}
+                              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 cursor-pointer active:scale-90 ${expandedDvrIds.includes(dvr.dvr_id) ? "rotate-90 bg-brand-teal text-white shadow-md shadow-brand-teal/20" : "text-slate-400 hover:bg-slate-200 hover:text-slate-600"}`}
+                            >
+                              <span className="material-symbols-rounded text-base">
+                                chevron_right
                               </span>
-                            )}
-                            KEŞFET
-                          </button>
-                          <button
-                            onClick={() => deleteDvr(dvr.dvr_id)}
-                            disabled={isDeletingDvr}
-                            className="p-2 text-red-300 hover:text-red-500 hover:bg-white rounded-lg transition-all disabled:opacity-50"
-                          >
-                            <span className="material-symbols-rounded text-lg">
-                              delete
-                            </span>
-                          </button>
+                            </button>
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                              <span className="material-symbols-rounded text-xl">
+                                dns
+                              </span>
+                            </div>
+                            <div className="flex-1">
+                              {editingDvrId === dvr.dvr_id ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={editingDvrName}
+                                    onChange={(e) => setEditingDvrName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter")
+                                        handleInlineDvrSave(dvr.dvr_id);
+                                      if (e.key === "Escape")
+                                        setEditingDvrId(null);
+                                    }}
+                                    className="h-8 bg-white border border-brand-teal rounded-lg px-2 text-[10px] font-black text-slate-900 w-full focus:outline-none shadow-sm shadow-brand-teal/10"
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      handleInlineDvrSave(dvr.dvr_id)
+                                    }
+                                    className="w-7 h-7 flex items-center justify-center text-brand-teal hover:bg-brand-teal/10 rounded-lg shrink-0 cursor-pointer"
+                                    title="Kaydet"
+                                  >
+                                    <span className="material-symbols-rounded text-sm">
+                                      check
+                                    </span>
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingDvrId(null)}
+                                    className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0 cursor-pointer"
+                                    title="Vazgeç"
+                                  >
+                                    <span className="material-symbols-rounded text-sm">
+                                      close
+                                    </span>
+                                  </button>
+                                </div>
+                              ) : (
+                                  <h4 className="font-black text-slate-900 text-[10px] mb-0.5">
+                                    {dvr.name}
+                                  </h4>
+                              )}
+                              <p className="text-[8px] font-bold text-slate-400 tracking-tight">
+                                {dvr.ip_address} • {dvr.max_channels} KANAL •{" "}
+                                {dvr.dvr_type}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => discoverChannels(dvr.dvr_id)}
+                              disabled={isDiscoveringDvr === dvr.dvr_id}
+                              className="flex items-center justify-center gap-2 px-4 h-9 rounded-xl bg-white border border-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                            >
+                              {isDiscoveringDvr === dvr.dvr_id ? (
+                                <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <span className="material-symbols-rounded text-base">
+                                  search
+                                </span>
+                              )}
+                              KEŞFET
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingDvrId(dvr.dvr_id);
+                                setEditingDvrName(dvr.name || "");
+                              }}
+                              className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer active:scale-95 border border-transparent"
+                              title="DVR Adını Düzenle"
+                            >
+                              <span className="material-symbols-rounded text-lg">
+                                edit
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => deleteDvr(dvr.dvr_id)}
+                              disabled={isDeletingDvr}
+                              className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer disabled:opacity-50 active:scale-95 border border-transparent hover:border-red-100"
+                            >
+                              <span className="material-symbols-rounded text-lg">
+                                delete
+                              </span>
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Collapsible Channels Section */}
+                        {expandedDvrIds.includes(dvr.dvr_id) && (
+                          <div className="bg-slate-50/50 border-x border-b border-slate-200/50 rounded-b-2xl p-4 pt-0 -mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="space-y-1 mt-4">
+                              <div className="px-2 mb-2 flex items-center justify-between">
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                  KEŞFEDİLEN KANALLAR
+                                </span>
+                                <span className="text-[8px] font-bold text-slate-300">
+                                  {(() => {
+                                    const dvrCams = managementCameras.filter(
+                                      (c) => c.dvr_id === dvr.dvr_id,
+                                    );
+                                    return dvrCams.length;
+                                  })()}{" "}
+                                  ADET
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-1">
+                                {managementCameras.filter(
+                                  (c) => c.dvr_id === dvr.dvr_id,
+                                ).length === 0 ? (
+                                  <div className="py-4 text-center">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase italic">
+                                      Henüz kanal keşfedilmedi. Keşfet butonunu
+                                      kullanın.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  managementCameras
+                                    .filter((c) => c.dvr_id === dvr.dvr_id)
+                                    .sort(
+                                      (a, b) =>
+                                        (a.channel_number || 0) -
+                                        (b.channel_number || 0),
+                                    )
+                                    .map((camera) => (
+                                      <div
+                                        key={camera.camera_id}
+                                        className="flex items-center justify-between p-2.5 bg-white border border-slate-100 rounded-xl hover:border-slate-300 transition-all group/channel"
+                                      >
+                                        <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                          <div
+                                            className={`w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-[10px] font-black ${camera.status === "active" ? "bg-brand-teal text-white shadow-sm" : "bg-slate-100 text-slate-400 border border-slate-200"}`}
+                                          >
+                                            {camera.channel_number || "?"}
+                                          </div>
+                                          <div className="flex-1 overflow-hidden">
+                                            {editingCameraId ===
+                                            camera.camera_id ? (
+                                              <input
+                                                autoFocus
+                                                type="text"
+                                                value={editingCameraName}
+                                                onChange={(e) =>
+                                                  setEditingCameraName(
+                                                    e.target.value,
+                                                  )
+                                                }
+                                                onKeyDown={(e) => {
+                                                  if (e.key === "Enter")
+                                                    handleInlineCameraSave(
+                                                      camera.camera_id,
+                                                    );
+                                                  if (e.key === "Escape")
+                                                    setEditingCameraId(null);
+                                                }}
+                                                className="w-full bg-slate-50 border border-brand-teal text-[10px] font-black text-slate-900 px-2 py-1 rounded-lg outline-none"
+                                              />
+                                            ) : (
+                                              <>
+                                                <p className="text-[10px] font-black text-slate-900 truncate">
+                                                  {camera.camera_name}
+                                                </p>
+                                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                  CH {camera.channel_number} •{" "}
+                                                  {camera.status === "active"
+                                                    ? "AKTİF"
+                                                    : "GİZLİ"}
+                                                </p>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1 transition-opacity">
+                                          {editingCameraId ===
+                                          camera.camera_id ? (
+                                            <>
+                                              <button
+                                                onClick={() =>
+                                                  handleInlineCameraSave(
+                                                    camera.camera_id,
+                                                  )
+                                                }
+                                                className="w-8 h-8 flex items-center justify-center text-brand-teal hover:bg-brand-teal/10 rounded-lg transition-all cursor-pointer"
+                                                title="Kaydet"
+                                              >
+                                                <span className="material-symbols-rounded text-lg">
+                                                  check
+                                                </span>
+                                              </button>
+                                              <button
+                                                onClick={() =>
+                                                  setEditingCameraId(null)
+                                                }
+                                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                                                title="Vazgeç"
+                                              >
+                                                <span className="material-symbols-rounded text-lg">
+                                                  close
+                                                </span>
+                                              </button>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <button
+                                                onClick={() =>
+                                                  toggleCameraStatus(camera)
+                                                }
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${camera.status === "active" ? "text-slate-400 hover:text-red-500 hover:bg-red-50" : "text-brand-teal hover:bg-brand-teal/10"}`}
+                                                title={
+                                                  camera.status === "active"
+                                                    ? "Gizle"
+                                                    : "Göster"
+                                                }
+                                              >
+                                                <span className="material-symbols-rounded text-lg">
+                                                  {camera.status === "active"
+                                                    ? "visibility"
+                                                    : "visibility_off"}
+                                                </span>
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  setEditingCameraId(
+                                                    camera.camera_id,
+                                                  );
+                                                  setEditingCameraName(
+                                                    camera.camera_name || "",
+                                                  );
+                                                }}
+                                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
+                                                title="Düzenle"
+                                              >
+                                                <span className="material-symbols-rounded text-lg">
+                                                  edit
+                                                </span>
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -1470,6 +1922,19 @@ function CamerasContent() {
               </div>
             </div>
           </div>,
+          document.body,
+        )}
+      {mounted &&
+        createPortal(
+          <ScheduleModal
+            isOpen={isScheduleModalOpen}
+            onClose={() => {
+              setIsScheduleModalOpen(false);
+              setSelectedCameraForSchedule(null);
+            }}
+            camera={selectedCameraForSchedule}
+            companyId={companyId}
+          />,
           document.body,
         )}
     </div>

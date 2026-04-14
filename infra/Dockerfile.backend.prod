@@ -1,0 +1,25 @@
+# SmartSafe Backend (Encore) - Production Optimized
+FROM node:20-bookworm-slim
+
+# Gerekli araçları kuralım
+RUN apt-get update && apt-get install -y curl bash binutils && rm -rf /var/lib/apt/lists/*
+
+# Encore kuralım
+RUN curl -L https://encore.dev/install.sh | bash
+ENV PATH="/root/.encore/bin:$PATH"
+
+WORKDIR /app
+
+# Bağımlılıkları kopyala ve kur
+COPY backend/package*.json ./
+RUN npm install
+
+# Kaynak kodu kopyala
+COPY backend/ .
+
+# Encore production modunda çalıştırılacak
+# --env=production flag'i ile production ayarlarını çeker.
+# Geliştirici paneli (9400) kapatılmıştır.
+EXPOSE 4477
+
+ENTRYPOINT ["encore", "run", "--listen", "0.0.0.0:4477"]

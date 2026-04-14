@@ -211,3 +211,43 @@ export const remove = api(
     }
   },
 );
+interface UpdateDVRRequest {
+  company_id: string;
+  dvr_id: string;
+  name?: string;
+  ip_address?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  dvr_type?: string;
+}
+
+/**
+ * Bir DVR sistemini günceller
+ */
+export const update = api(
+  { expose: true, method: "PATCH", path: "/company/:company_id/dvr/:dvr_id" },
+  async (
+    params: UpdateDVRRequest,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { company_id, dvr_id, ...updates } = params;
+      const keys = Object.keys(updates);
+      if (keys.length === 0) return { success: true };
+
+      const setClause = keys
+        .map((key, i) => `${key} = $${i + 3}`)
+        .join(", ");
+      const values = keys.map((key) => (updates as any)[key]);
+
+      await pool.query(
+        `UPDATE dvr_systems SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND dvr_id = $2`,
+        [company_id, dvr_id, ...values],
+      );
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error updating DVR system:", error);
+      return { success: false, error: error.message };
+    }
+  },
+);

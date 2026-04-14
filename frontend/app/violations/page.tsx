@@ -32,10 +32,19 @@ export default function ViolationsPage() {
   // Calendar states
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [privacyMode, setPrivacyMode] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    const savedPrivacy = localStorage.getItem("violationsPrivacyMode");
+    if (savedPrivacy === "true") setPrivacyMode(true);
   }, []);
+
+  const togglePrivacy = () => {
+    const next = !privacyMode;
+    setPrivacyMode(next);
+    localStorage.setItem("violationsPrivacyMode", String(next));
+  };
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -313,10 +322,20 @@ export default function ViolationsPage() {
 
         <div className="flex flex-wrap items-center justify-end gap-3">
           <button
+            onClick={togglePrivacy}
+            className={`flex items-center gap-2 rounded-xl border px-5 py-2.5 text-xs font-black transition-all cursor-pointer shadow-sm ${privacyMode ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+          >
+            <span className="material-symbols-rounded">
+              {privacyMode ? "visibility_off" : "visibility"}
+            </span>
+            GİZLİLİK MODU
+          </button>
+
+          <button
             type="button"
             onClick={deleteAllViolations}
             disabled={deletingAll}
-            className="bg-white text-red-600 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-colors flex items-center gap-2 border border-red-200 disabled:opacity-50 disabled:pointer-events-none"
+            className="bg-white text-red-600 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-colors flex items-center gap-2 border border-red-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
           >
             <span className="material-symbols-rounded text-sm">
               {deletingAll ? "hourglass_empty" : "delete_sweep"}
@@ -326,7 +345,7 @@ export default function ViolationsPage() {
           {selectedDate && (
             <button
               onClick={() => setSelectedDate(null)}
-              className="bg-red-50 text-red-500 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100"
+              className="bg-red-50 text-red-500 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100 cursor-pointer"
             >
               <span className="material-symbols-rounded text-sm">
                 event_busy
@@ -365,7 +384,7 @@ export default function ViolationsPage() {
                       ),
                     )
                   }
-                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"
+                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors cursor-pointer"
                 >
                   <svg
                     className="w-5 h-5"
@@ -391,7 +410,7 @@ export default function ViolationsPage() {
                       ),
                     )
                   }
-                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"
+                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors cursor-pointer"
                 >
                   <svg
                     className="w-5 h-5"
@@ -449,7 +468,7 @@ export default function ViolationsPage() {
                         ),
                       )
                     }
-                    className={`h-10 relative flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all ${
+                    className={`h-10 relative flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isSelected
                         ? "bg-brand-orange text-white shadow-lg shadow-orange-100"
                         : "hover:bg-slate-50 text-slate-600"
@@ -564,6 +583,17 @@ export default function ViolationsPage() {
                         {event.count} KARE
                       </div>
                     )}
+
+                    {/* Privacy Overlay */}
+                    {privacyMode && (
+                      <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 backdrop-blur-[1px] transition-all duration-500">
+                        <div className="p-3 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
+                          <span className="material-symbols-rounded text-xl text-white/20">
+                            visibility_off
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Info Area */}
@@ -621,6 +651,17 @@ export default function ViolationsPage() {
                         <div className="absolute top-6 left-6 scale-125 origin-top-left">
                           {getViolationBadges(selectedEvent.violation_type)}
                         </div>
+
+                        {/* Privacy Overlay Large */}
+                        {privacyMode && (
+                          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-[2px] transition-all duration-500">
+                            <div className="p-6 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
+                              <span className="material-symbols-rounded text-4xl text-white/10">
+                                visibility_off
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Details Section */}
@@ -636,7 +677,7 @@ export default function ViolationsPage() {
                           </div>
                           <button
                             onClick={() => setIsModalOpen(false)}
-                            className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
+                            className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all cursor-pointer"
                           >
                             <svg
                               className="w-6 h-6"
@@ -745,11 +786,11 @@ export default function ViolationsPage() {
                         <div className="mt-auto pt-8 flex gap-4">
                           <button
                             onClick={() => setIsModalOpen(false)}
-                            className="flex-1 bg-slate-900 text-white text-[10px] font-black py-5 rounded-2xl uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"
+                            className="flex-1 bg-slate-900 text-white text-[10px] font-black py-5 rounded-2xl uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 cursor-pointer"
                           >
                             KAPAT
                           </button>
-                          <button className="bg-brand-orange text-white p-5 rounded-2xl hover:bg-brand-orange/90 transition-all shadow-xl shadow-orange-100">
+                          <button className="bg-brand-orange text-white p-5 rounded-2xl hover:bg-brand-orange/90 transition-all shadow-xl shadow-orange-100 cursor-pointer">
                             <svg
                               className="w-6 h-6"
                               fill="none"

@@ -1,0 +1,81 @@
+services:
+  core:
+    image: smartsafe/smartsafeai-core:latest
+    container_name: smartsafeai-core
+    restart: always
+    environment:
+      - RENDER=true
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://encore:password@postgres:5432/smartsafe
+    networks:
+      - smartsafe-network
+    depends_on:
+      - postgres
+      - backend
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  backend:
+    image: smartsafe/smartsafeai-backend:latest
+    container_name: smartsafeai-backend
+    restart: always
+    environment:
+      - ENCORE_ENV=production
+      - DATABASE_URL=postgresql://encore:password@postgres:5432/smartsafe
+    networks:
+      - smartsafe-network
+    depends_on:
+      - postgres
+
+  frontend:
+    image: smartsafe/smartsafeai-frontend:latest
+    container_name: smartsafeai-frontend
+    restart: always
+    networks:
+      - smartsafe-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: smartsafeai-nginx
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+      - core
+    networks:
+      - smartsafe-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartsafeai-postgres
+    environment:
+      POSTGRES_USER: encore
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: smartsafe
+    volumes:
+      - smartsafe-db:/var/lib/postgresql/data
+    networks:
+      - smartsafe-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartsafeai-redis
+    networks:
+      - smartsafe-network
+
+networks:
+  smartsafe-network:
+    driver: bridge
+
+volumes:
+  smartsafe-db:

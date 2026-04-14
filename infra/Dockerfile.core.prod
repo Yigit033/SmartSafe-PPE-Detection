@@ -1,0 +1,60 @@
+# SmartSafe Core - Production Optimized
+# Bytecode derleme ile kod gizleme ve yüksek performans sağlar.
+
+# 1. Aşama: Build (Derleme ve Bağımlılıklar)
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Bağımlılıklar
+COPY core/requirements.txt .
+RUN pip install --no-cache-dir --upgrade "pip==24.3.1"
+ARG PYTORCH_EXTRA_INDEX=https://download.pytorch.org/whl/cu124
+RUN pip install --no-cache-dir -r requirements.txt --extra-index-url "${PYTORCH_EXTRA_INDEX}"
+
+# Kodları kopyala
+COPY core/ .
+
+# Kod gizleme: Tüm Python dosyalarını bytecode'a (.pyc) derle ve orijinalleri sil
+# Bu işlem kodun doğrudan okunmasını engeller.
+RUN python -m compileall -b . && \
+    find . -name "*.py" -type f -delete && \
+    find . -name "__pycache__" -type d -exec rm -rf {} +
+
+# 2. Aşama: Runtime (Hafif Çalışma Ortamı)
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+
+# ÖNCE kütüphaneleri al (Bu katman 1.25GB ve requirements.txt değişmedikçe cache'den gelir)
+COPY --from=builder /opt/conda /opt/conda
+
+# SONRA sistem bağımlılıklarını kur (Bu katman küçük)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    ffmpeg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# EN SON derlenmiş kodları al (En sık bu değişir ve çok küçüktür)
+COPY --from=builder /app /app
+
+ENV FLASK_ENV=production
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=0
+ENV TORCH_DEVICE=auto
+ENV NVIDIA_VISIBLE_DEVICES=all
+
+# Gunicorn ile production sunucusu
+# 4 thread - Video stream için async yetenekleri
+EXPOSE 5577
+
+ENTRYPOINT ["gunicorn", "--bind", "0.0.0.0:5577", "--workers", "1", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "app:app"]

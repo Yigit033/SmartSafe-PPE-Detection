@@ -40,6 +40,7 @@ export default function CameraLiveView({
     cw: 0,
     ch: 0,
   });
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
   const isCameraAiEnabled = useCallback(
     (item: any) => enabledAiCameras.includes(item.camera_id),
@@ -124,7 +125,7 @@ export default function CameraLiveView({
       className="relative w-full min-h-[calc(100vh-8rem)] flex flex-col rounded-[2rem] border border-white/10 bg-black shadow-2xl overflow-hidden"
       lang="tr"
     >
-      <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 pointer-events-none md:top-8 md:left-8 md:right-8">
+      <div className="absolute top-4 left-4 right-4 z-50 flex flex-wrap items-center justify-between gap-3 pointer-events-none md:top-8 md:left-8 md:right-8">
         <div className="flex flex-col gap-1 pointer-events-auto min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <div className="bg-red-500 px-3 py-1 rounded-full text-white flex items-center gap-2 shadow-xl shrink-0">
@@ -168,6 +169,28 @@ export default function CameraLiveView({
             >
               <span className="material-symbols-rounded text-sm">refresh</span>
               YENİLE
+            </button>
+          </div>
+          <div className="flex items-center gap-2 md:gap-3 bg-white/10 backdrop-blur-md px-3 py-2 rounded-2xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setIsPrivacyMode(!isPrivacyMode)}
+              className="flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+              title="Gizlilik Modu"
+            >
+              <span className="material-symbols-rounded text-lg">
+                {isPrivacyMode ? "visibility_off" : "visibility"}
+              </span>
+            </button>
+            <div className={`h-4 w-px bg-white/10`} />
+            <button
+              type="button"
+              onClick={() => setIsPrivacyMode(!isPrivacyMode)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isPrivacyMode ? "bg-slate-500" : "bg-white/20"}`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isPrivacyMode ? "translate-x-5" : "translate-x-1"}`}
+              />
             </button>
           </div>
           <div className="flex items-center gap-2 md:gap-3 bg-white/10 backdrop-blur-md px-3 py-2 rounded-2xl border border-white/10">
@@ -229,6 +252,15 @@ export default function CameraLiveView({
                 setStreamUrl(null);
               }}
             />
+            {isPrivacyMode && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/95 backdrop-blur-[1px]">
+                <div className="p-8 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
+                  <span className="material-symbols-rounded text-6xl text-white/20">
+                    visibility_off
+                  </span>
+                </div>
+              </div>
+            )}
             {zonesMeta.polygons.length > 0 &&
               zonesMeta.polygons[0].length > 0 &&
               !isCameraAiEnabled(camera) && (

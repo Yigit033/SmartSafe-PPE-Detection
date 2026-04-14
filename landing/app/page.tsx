@@ -387,8 +387,8 @@ export default function LandingPage() {
                 </a>
               </li>
               <li className="nav-item">
-                <a className="nav-link" href="#contact">
-                  İletişim
+                <a className="nav-link" href="#download">
+                  İndir
                 </a>
               </li>
               <li className="nav-item">
@@ -949,6 +949,77 @@ export default function LandingPage() {
                     </div>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Download Section */}
+      <section id="download" className="py-5 bg-light">
+        <div className="container" data-aos="fade-up">
+          <div className="glass-card p-5 rounded-4 text-center border-0 shadow-sm bg-white position-relative overflow-hidden">
+            <div className="position-absolute top-0 end-0 p-4 opacity-10">
+              <i className="fab fa-windows display-1"></i>
+            </div>
+            
+            <div className="mb-4">
+              <div className="d-inline-block p-3 rounded-circle bg-primary bg-opacity-10 mb-4">
+                <i className="fas fa-download text-primary fs-1"></i>
+              </div>
+              <h2 className="display-4 fw-bold mb-3">Professional Installer</h2>
+              <p className="lead text-muted mb-4 max-w-2xl mx-auto">
+                SmartSafe AI Windows Installer paketini indirin. 
+                Sihirbaz tüm bağımlılıkları ve ayarları sizin için otomatik yapacaktır.
+              </p>
+            </div>
+            
+            <div className="row justify-content-center mb-5">
+              <div className="col-lg-10">
+                <div className="row g-4 mb-5">
+                  <div className="col-md-4">
+                    <div className="p-4 rounded-4 bg-light h-100">
+                      <i className="fas fa-magic text-primary mb-3 fs-3"></i>
+                      <h5 className="fw-bold">Otomatik Kurulum</h5>
+                      <p className="small text-muted mb-0">Tek bir .exe dosyası ile tüm sistem kurulur.</p>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="p-4 rounded-4 bg-light h-100">
+                      <i className="fas fa-microchip text-success mb-3 fs-3"></i>
+                      <h5 className="fw-bold">Donanım Denetimi</h5>
+                      <p className="small text-muted mb-0">GPU ve Docker uyumluluğunu anında test eder.</p>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="p-4 rounded-4 bg-light h-100">
+                      <i className="fas fa-user-shield text-warning mb-3 fs-3"></i>
+                      <h5 className="fw-bold">Güvenli Veri</h5>
+                      <p className="small text-muted mb-0">Tüm AI işlemleri yerel cihazınızda gerçekleşir.</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="d-flex flex-column align-items-center">
+                  <a 
+                    href="/download/SmartSafe-AI-Setup.exe" 
+                    className="btn btn-primary btn-lg px-5 py-3 rounded-pill shadow-lg mb-3"
+                    style={{ minWidth: '300px' }}
+                  >
+                    <i className="fab fa-windows me-2"></i> Windows Installer İndir (.exe)
+                  </a>
+                  <p className="text-muted small">
+                    <i className="fas fa-info-circle me-1"></i> Windows 10/11 x64 | 2.4 MB
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-top">
+              <div className="d-flex flex-wrap justify-content-center gap-4 text-muted small">
+                <span><i className="fas fa-check text-success me-2"></i>SSL Secured</span>
+                <span><i className="fas fa-check text-success me-2"></i>No Adware</span>
+                <span><i className="fas fa-check text-success me-2"></i>Verified Publisher</span>
               </div>
             </div>
           </div>

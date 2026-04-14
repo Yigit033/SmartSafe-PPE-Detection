@@ -85,6 +85,17 @@ interface UpdateCameraRequest {
   group_id?: string | null;
 }
 
+interface CameraSchedule {
+  id?: number;
+  company_id: string;
+  camera_id: string;
+  camera_type: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_enabled: boolean;
+}
+
 /**
  * Şirkete ait kameraları listeler
  */
@@ -92,10 +103,22 @@ export const list = api(
   { expose: true, method: "GET", path: "/company/:company_id/cameras" },
   async ({
     company_id,
+    status,
   }: {
     company_id: string;
+    status?: string;
   }): Promise<{ success: boolean; cameras: Camera[] }> => {
     try {
+      let whereClause = "WHERE company_id = $1";
+      const params: any[] = [company_id];
+
+      if (status) {
+        whereClause += " AND status = $2";
+        params.push(status);
+      } else {
+        whereClause += " AND status <> 'deleted'";
+      }
+
       const res = await pool.query(
         `
         SELECT 
@@ -104,7 +127,7 @@ export const list = api(
           status, NULL as channel_number, NULL as dvr_id, group_id, 'ip_camera' as camera_type,
           COALESCE(detection_zones, '[]'::jsonb) as detection_zones, created_at
         FROM cameras 
-        WHERE company_id = $1
+        ${whereClause}
         UNION ALL
         SELECT 
           dc.channel_id as camera_id, dc.company_id, dc.name as camera_name, 
@@ -114,13 +137,13 @@ export const list = api(
           COALESCE(dc.detection_zones, '[]'::jsonb) as detection_zones, dc.created_at
         FROM dvr_channels dc
         JOIN dvr_systems ds ON dc.dvr_id = ds.dvr_id
-        WHERE dc.company_id = $1 AND dc.status <> 'deleted' AND ds.status <> 'deleted'
+        ${whereClause.replace("company_id", "dc.company_id").replace("status", "dc.status")} AND ds.status <> 'deleted'
         ORDER BY
           channel_number ASC NULLS FIRST,
           camera_name ASC,
           created_at ASC
         `,
-        [company_id],
+        params,
       );
       return { success: true, cameras: res.rows };
     } catch (error) {
@@ -222,17 +245,56 @@ export const update = api(
       );
       if (keys.length === 0) return { success: true };
 
-      const setClause = keys
+      // 1. Önce IP kameralarda (cameras tablosu) dene
+      const camSetClause = keys
         .map((key, index) => `${key} = $${index + 3}`)
         .join(", ");
-      const values = keys.map((key) => (updates as any)[key]);
+      const camValues = keys.map((key) => (updates as any)[key]);
 
-      await pool.query(
-        `UPDATE cameras SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND camera_id = $2`,
-        [company_id, camera_id, ...values],
+      const camRes = await pool.query(
+        `UPDATE cameras SET ${camSetClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND camera_id = $2`,
+        [company_id, camera_id, ...camValues],
       );
 
-      return { success: true };
+      if ((camRes.rowCount ?? 0) > 0) {
+        return { success: true };
+      }
+
+      // 2. Bulunamazsa DVR kanallarında (dvr_channels tablosu) dene
+      // Kolon isimleri farklı olabilir: cameras.camera_name -> dvr_channels.name
+      const dvrKeys = keys.map(k => k === "camera_name" ? "name" : k);
+      
+      // dvr_channels tablosunda olup olmadığını bildiğimiz kolonları filtrele (güvenlik için)
+      const validDvrKeys = ["name", "status"]; 
+      const filteredDvrKeys: string[] = [];
+      const filteredDvrValues: any[] = [];
+      
+      dvrKeys.forEach((key, index) => {
+        if (validDvrKeys.includes(key)) {
+          filteredDvrKeys.push(key);
+          filteredDvrValues.push(keys.map(k => (updates as any)[k])[index]);
+        }
+      });
+
+      if (filteredDvrKeys.length > 0) {
+        const dvrSetClause = filteredDvrKeys
+          .map((key, index) => `${key} = $${index + 3}`)
+          .join(", ");
+
+        const dvrRes = await pool.query(
+          `UPDATE dvr_channels SET ${dvrSetClause}, updated_at = CURRENT_TIMESTAMP WHERE company_id = $1 AND channel_id = $2`,
+          [company_id, camera_id, ...filteredDvrValues],
+        );
+
+        if ((dvrRes.rowCount ?? 0) > 0) {
+          return { success: true };
+        }
+      }
+
+      return { 
+        success: false, 
+        error: "Kamera bulunamadı (ne cameras ne de dvr_channels tablosunda)." 
+      };
     } catch (error: any) {
       console.error("Error updating camera:", error);
       return { success: false, error: error.message };
@@ -594,6 +656,84 @@ export const assignToGroup = api(
       return { success: true };
     } catch (error: any) {
       console.error("Error assigning camera to group:", error);
+      return { success: false, error: error.message };
+    }
+  },
+);
+
+/**
+ * Bir kameraya ait tüm zaman çizelgelerini listeler
+ */
+export const listSchedules = api(
+  { expose: true, method: "GET", path: "/company/:company_id/cameras/:camera_id/schedules" },
+  async (params: { company_id: string; camera_id: string }): Promise<{ success: boolean; schedules: CameraSchedule[] }> => {
+    try {
+      const res = await pool.query(
+        "SELECT * FROM camera_schedules WHERE company_id = $1 AND camera_id = $2 ORDER BY day_of_week ASC, start_time ASC",
+        [params.company_id, params.camera_id],
+      );
+      return { success: true, schedules: res.rows };
+    } catch (error: any) {
+      console.error("Error listing schedules:", error);
+      return { success: false, schedules: [] };
+    }
+  },
+);
+
+/**
+ * Yeni bir zaman çizelgesi ekler veya mevcut olanı günceller
+ */
+export const saveSchedule = api(
+  { expose: true, method: "POST", path: "/company/:company_id/cameras/:camera_id/schedules" },
+  async (params: { 
+    company_id: string; 
+    camera_id: string; 
+    camera_type: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    is_enabled?: boolean;
+    id?: number;
+  }): Promise<{ success: boolean; id?: number; error?: string }> => {
+    try {
+      if (params.id) {
+        // Güncelleme
+        await pool.query(
+          `UPDATE camera_schedules SET 
+            day_of_week = $1, start_time = $2, end_time = $3, 
+            is_enabled = $4, updated_at = CURRENT_TIMESTAMP 
+          WHERE id = $5 AND company_id = $6`,
+          [params.day_of_week, params.start_time, params.end_time, params.is_enabled !== false, params.id, params.company_id]
+        );
+        return { success: true, id: params.id };
+      } else {
+        // Yeni Kayıt
+        const res = await pool.query(
+          `INSERT INTO camera_schedules (
+            company_id, camera_id, camera_type, day_of_week, start_time, end_time, is_enabled
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+          [params.company_id, params.camera_id, params.camera_type, params.day_of_week, params.start_time, params.end_time, params.is_enabled !== false]
+        );
+        return { success: true, id: res.rows[0].id };
+      }
+    } catch (error: any) {
+      console.error("Error saving schedule:", error);
+      return { success: false, error: error.message };
+    }
+  },
+);
+
+/**
+ * Bir zaman çizelgesini siler
+ */
+export const deleteSchedule = api(
+  { expose: true, method: "DELETE", path: "/company/:company_id/cameras/:camera_id/schedules/:id" },
+  async (params: { company_id: string; camera_id: string; id: number }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await pool.query("DELETE FROM camera_schedules WHERE id = $1 AND company_id = $2 AND camera_id = $3", [params.id, params.company_id, params.camera_id]);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error deleting schedule:", error);
       return { success: false, error: error.message };
     }
   },

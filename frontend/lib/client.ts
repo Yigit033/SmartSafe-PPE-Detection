@@ -171,6 +171,25 @@ export namespace camera {
         "ppe_config"?: any
     }
 
+    export interface Schedule {
+        id: number
+        "camera_id": string
+        "camera_type": string
+        "day_of_week": number
+        "start_time": string
+        "end_time": string
+        "is_enabled": boolean
+        "created_at": string
+    }
+
+    export interface SaveScheduleRequest {
+        "day_of_week": number
+        "start_time": string
+        "end_time": string
+        "is_enabled": boolean
+        "camera_type": string
+    }
+
     export class ServiceClient {
         private baseClient: BaseClient
 
@@ -187,6 +206,9 @@ export namespace camera {
             this.saveROI = this.saveROI.bind(this)
             this.update = this.update.bind(this)
             this.updateGroup = this.updateGroup.bind(this)
+            this.listSchedules = this.listSchedules.bind(this)
+            this.saveSchedule = this.saveSchedule.bind(this)
+            this.deleteSchedule = this.deleteSchedule.bind(this)
         }
 
         /**
@@ -254,12 +276,16 @@ export namespace camera {
         /**
          * Şirkete ait kameraları listeler
          */
-        public async list(company_id: string): Promise<{
+        public async list(company_id: string, params?: { status?: string }): Promise<{
     success: boolean
     cameras: Camera[]
 }> {
+            const url = new URL(this.baseClient["baseURL"] + `/company/${encodeURIComponent(company_id)}/cameras`);
+            if (params?.status) {
+                url.searchParams.append("status", params.status);
+            }
             // Now make the actual call to the API
-            const resp = await this.baseClient.callTypedAPI("GET", `/company/${encodeURIComponent(company_id)}/cameras`)
+            const resp = await this.baseClient.callTypedAPI("GET", url.pathname + url.search)
             return await resp.json() as {
     success: boolean
     cameras: Camera[]
@@ -345,6 +371,38 @@ export namespace camera {
         public async updateGroup(company_id: string, group_id: string, params: UpdateGroupRequest): Promise<SuccessResponse> {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI("PATCH", `/company/${encodeURIComponent(company_id)}/cameras/groups/${encodeURIComponent(group_id)}`, JSON.stringify(params))
+            return await resp.json() as SuccessResponse
+        }
+
+        /**
+         * Kameranın zaman çizelgelerini listeler
+         */
+        public async listSchedules(company_id: string, camera_id: string): Promise<{
+            success: boolean
+            schedules: Schedule[]
+            error?: string
+        }> {
+            const resp = await this.baseClient.callTypedAPI("GET", `/company/${encodeURIComponent(company_id)}/cameras/${encodeURIComponent(camera_id)}/schedules`)
+            return await resp.json() as {
+                success: boolean
+                schedules: Schedule[]
+                error?: string
+            }
+        }
+
+        /**
+         * Zaman çizelgesi kaydeder veya günceller
+         */
+        public async saveSchedule(company_id: string, camera_id: string, params: SaveScheduleRequest): Promise<SuccessResponse> {
+            const resp = await this.baseClient.callTypedAPI("POST", `/company/${encodeURIComponent(company_id)}/cameras/${encodeURIComponent(camera_id)}/schedules`, JSON.stringify(params))
+            return await resp.json() as SuccessResponse
+        }
+
+        /**
+         * Zaman çizelgesini siler
+         */
+        public async deleteSchedule(company_id: string, camera_id: string, schedule_id: number): Promise<SuccessResponse> {
+            const resp = await this.baseClient.callTypedAPI("DELETE", `/company/${encodeURIComponent(company_id)}/cameras/${encodeURIComponent(camera_id)}/schedules/${encodeURIComponent(schedule_id)}`)
             return await resp.json() as SuccessResponse
         }
     }
@@ -611,6 +669,21 @@ export namespace dvr {
             return await resp.json() as {
     success: boolean
     message?: string
+    error?: string
+}
+        }
+
+        /**
+         * Bir DVR sistemini günceller
+         */
+        public async update(company_id: string, dvr_id: string, params: any): Promise<{
+    success: boolean
+    error?: string
+}> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI("PATCH", `/company/${encodeURIComponent(company_id)}/dvr/${encodeURIComponent(dvr_id)}`, JSON.stringify(params))
+            return await resp.json() as {
+    success: boolean
     error?: string
 }
         }

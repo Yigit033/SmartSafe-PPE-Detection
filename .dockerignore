@@ -18,3 +18,27 @@ backend/node_modules
 docker-compose.yml
 infra/backups
 infra/ssl
+
+# Büyük veri klasörlerini dışla (Build context'i şişirenler)
+storage/
+core/storage/
+core/logs/
+core/weights/
+core/temp/
+*.mp4
+*.mkv
+*.avi
+*.jpg
+*.png
+temp/
+logs/
+bin/
+obj/
+dist/
+build/
+.agent/
+.gemini/
+.brain/
+.brain_logs/
+.brain_snapshots/
+.brain_checkpoints/
