@@ -253,45 +253,58 @@ class DatabaseAdapter:
         """
         DATABASE INITIALIZATION (Managed by Encore Migrations)
         In production, schema is managed ONLY by Encore Migrations.
-        This method performs health check and basic maintenance.
+        This method performs health check and waits for all critical tables.
         """
         try:
-            logger.info("🔍 Checking database readiness (Encore Migrations)...")
+            logger.info("🔍 Checking database readiness and migrations...")
             
-            # Wait for DB visibility
-            max_retries = 15
-            for attempt in range(max_retries):
+            # 1. Wait for DB server to be reachable
+            max_db_retries = 20
+            for attempt in range(max_db_retries):
                 if self.health_check():
-                    logger.info("✅ Database is reachable.")
                     break
-                logger.warning(f"⏳ Waiting for database... ({attempt+1}/{max_retries})")
-                time.sleep(2)
+                logger.warning(f"⏳ Waiting for database connection... ({attempt+1}/{max_db_retries})")
+                time.sleep(3)
             else:
-                logger.error("❌ Database not reachable after retries.")
+                logger.error("❌ Database server not reachable.")
                 return False
 
-            conn = self.get_connection()
-            if not conn: return False
+            # 2. Wait for Encore Migrations to create all critical tables
+            critical_tables = ['companies', 'cameras', 'users', 'camera_schedules', 'active_detections']
+            max_migration_retries = 30 # Wait longer for migrations
             
-            try:
-                cursor = conn.cursor()
-                # Sanity check: verify 'companies' exists (Encore migration signal)
-                cursor.execute("""
-                    SELECT count(*) FROM information_schema.tables 
-                    WHERE table_schema = 'public' AND table_name = 'companies'
-                """)
-                if cursor.fetchone()[0] == 0:
-                    logger.warning("⚠️ 'companies' table not found. Waiting for Encore migrations...")
-                    return False
+            for attempt in range(max_migration_retries):
+                conn = self.get_connection()
+                if not conn:
+                    time.sleep(2)
+                    continue
                 
-                # Active detections table cleanup (Maintenance)
-                cursor.execute("DELETE FROM active_detections WHERE updated_at < NOW() - INTERVAL '6 hours'")
-                conn.commit()
-                
-                logger.info("✅ Database schema verified. AI Core is ready.")
-                return True
-            finally:
-                self.close_connection(conn)
+                try:
+                    cursor = conn.cursor()
+                    missing_tables = []
+                    
+                    for table in critical_tables:
+                        cursor.execute("""
+                            SELECT count(*) FROM information_schema.tables 
+                            WHERE table_schema = 'public' AND table_name = %s
+                        """, (table,))
+                        if cursor.fetchone()[0] == 0:
+                            missing_tables.append(table)
+                    
+                    if not missing_tables:
+                        # All tables exist, do some basic maintenance
+                        cursor.execute("DELETE FROM active_detections WHERE updated_at < NOW() - INTERVAL '6 hours'")
+                        conn.commit()
+                        logger.info("✅ Database schema verified (all tables present). AI Core is ready.")
+                        return True
+                    else:
+                        logger.warning(f"⏳ Waiting for migrations... Missing tables: {', '.join(missing_tables)} (Attempt {attempt+1}/{max_migration_retries})")
+                        time.sleep(5)
+                finally:
+                    self.close_connection(conn)
+            
+            logger.error("❌ Database migrations did not complete in time.")
+            return False
                 
         except Exception as e:
             logger.error(f"❌ Database initialization check failed: {e}")

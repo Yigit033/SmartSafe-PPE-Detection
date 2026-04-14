@@ -10,6 +10,15 @@ OutputBaseFilename=SmartSafe-AI-Setup
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=admin
+ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0
+UninstallDisplayIcon={app}\nginx\ssl\favicon.ico
+CloseApplications=force
+RestartApplications=no
+
+[InstallDelete]
+; Kurulumdan önce eski betikleri temizle ki çakışma olmasın
+Type: filesandordirs; Name: "{app}\scripts\*"
 
 [Languages]
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"

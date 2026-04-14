@@ -11,7 +11,12 @@ echo "SmartSafe AI Windows Installer Derleniyor..."
 echo "---------------------------------------------------"
 
 # Derleme komutunu calistir
-& $ISCC "setup.iss"
+Push-Location "infra"
+try {
+    & $ISCC "setup.iss"
+} finally {
+    Pop-Location
+}
 
 if ($LASTEXITCODE -eq 0) {
     echo "---------------------------------------------------"

@@ -1,3 +1,11 @@
+# Karakter kodları ile Türkçe güvenliği
+$S_buyuk = [char]350
+$s_kucuk = [char]351
+$I_noktali = [char]304
+$i_noktasiz = [char]305
+$G_yumusak = [char]286
+$g_yumusak = [char]287
+
 $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -12,79 +20,142 @@ $xaml = @"
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             
-            <!-- Header/Logo -->
             <StackPanel Grid.Row="0" Margin="0,40,0,20">
                 <TextBlock Text="SmartSafe AI" Foreground="White" FontSize="32" FontWeight="Bold" HorizontalAlignment="Center">
                     <TextBlock.Effect>
                         <DropShadowEffect Color="#00FFFF" BlurRadius="15" ShadowDepth="0"/>
                     </TextBlock.Effect>
                 </TextBlock>
-                <TextBlock Text="Advanced PPE Detection" Foreground="#888" FontSize="14" HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                <TextBlock Text="Geli$($s_kucuk)mi$($s_kucuk) $($I_noktali)SG Tespit Sistemi" Foreground="#888" FontSize="14" HorizontalAlignment="Center" Margin="0,5,0,0"/>
             </StackPanel>
 
-            <!-- Status -->
             <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="40,0">
-                <TextBlock Name="StatusText" Text="Başlatılıyor..." Foreground="#EEE" FontSize="16" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                <TextBlock Name="StatusText" Text="Ba$($s_kucuk)lat&#305;l&#305;yor..." Foreground="#EEE" FontSize="16" HorizontalAlignment="Left" Margin="0,0,0,10"/>
                 <ProgressBar Name="Progress" Height="6" Background="#333" Foreground="#00FFFF" IsIndeterminate="True" BorderThickness="0" Margin="0,0,0,20">
                     <ProgressBar.Clip>
                         <RectangleGeometry Rect="0,0,320,6" RadiusX="3" RadiusY="3" />
                     </ProgressBar.Clip>
                 </ProgressBar>
-                <TextBlock Name="SubStatusText" Text="Sistem kontrolleri yapılıyor..." Foreground="#666" FontSize="12" HorizontalAlignment="Left"/>
+                <TextBlock Name="SubStatusText" Text="Sistem kontrolleri yap&#305;l&#305;yor..." Foreground="#666" FontSize="12" HorizontalAlignment="Left"/>
             </StackPanel>
 
-            <!-- Footer -->
-            <TextBlock Grid.Row="2" Text="v0.4.6 Production Release" Foreground="#444" FontSize="10" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+            <TextBlock Grid.Row="2" Text="v0.4.7 Production" Foreground="#444" FontSize="10" HorizontalAlignment="Center" Margin="0,0,0,20"/>
         </Grid>
     </Border>
 </Window>
 "@
 
-# WPF Yukle
-Add-Type -AssemblyName PresentationFramework
+# Bağımlılıkları tamamen sessizce yükle
+$null = Add-Type -AssemblyName PresentationFramework
+$null = Add-Type -AssemblyName System.Windows.Forms
+
 $reader = [System.Xml.XmlReader]::Create([System.IO.StringReader]::new($xaml))
 $Window = [System.Windows.Markup.XamlReader]::Load($reader)
 
-# Elementleri bul
 $StatusText = $Window.FindName("StatusText")
 $SubStatusText = $Window.FindName("SubStatusText")
-$Progress = $Window.FindName("Progress")
-
-# Arka plan islemlerini baslat
-$Window.Show()
 
 function Update-Status($main, $sub) {
     $StatusText.Text = $main
     $SubStatusText.Text = $sub
-    [System.Windows.Forms.Application]::DoEvents()
+    $null = [System.Windows.Forms.Application]::DoEvents()
 }
 
-# 1. Guncelleme Kontrolu
-Update-Status "Güncellemeler Denetleniyor..." "Docker Hub üzerinden son sürüm kontrol ediliyor..."
-Start-Process "docker" -ArgumentList "compose pull --quiet" -WindowStyle Hidden -Wait
+function Check-Docker {
+    try {
+        $check = Get-Command "docker" -ErrorAction SilentlyContinue
+        if ($check) {
+            # Docker kurulu, çalışıyor mu?
+            Update-Status "Docker Kontrol Ediliyor..." "Ba$($g_yumusak)lant$($i_noktasiz) sorgulan$($i_noktasiz)yor..."
+            $daemon = docker info --format '{{.ID}}' 2>$null
+            if (-not $daemon) {
+                Update-Status "Docker Ba$($s_kucuk)lat&#305;l&#305;yor..." "Docker Desktop aç&#305;l&#305;yor, lütfen bekleyin..."
+                Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -WindowStyle Hidden
+                # Daemon'un gelmesi için biraz bekle
+                $waitCount = 0
+                while (-not (docker info 2>$null) -and $waitCount -lt 30) {
+                    Start-Sleep -Seconds 2
+                    $waitCount++
+                    [System.Windows.Forms.Application]::DoEvents()
+                }
+            }
+            return $true 
+        }
+    } catch {}
 
-# 2. Baslatma
-Update-Status "Sistem Başlatılıyor..." "Konteynerlar optimize ediliyor..."
-Start-Process "docker" -ArgumentList "compose up -d" -WindowStyle Hidden -Wait
+    Update-Status "Docker Bulunamad$($i_noktasiz)!" "Eksik bile$($s_kucuk)enler indiriliyor..."
+    $installerPath = "$env:TEMP\DockerDesktopInstaller.exe"
+    $url = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
+    
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($url, $installerPath)
+        Update-Status "Docker Kuruluyor..." "Bu i$($s_kucuk)lem 3-5 dakika sürebilir..."
+        $null = Start-Process -FilePath $installerPath -ArgumentList "install", "--quiet", "--accept-license", "--install-privileged-helper" -Wait
+        
+        Update-Status "Docker Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Sistem servisi haz$($i_noktasiz)rlan$($i_noktasiz)yor..."
+        Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -WindowStyle Hidden
+        Start-Sleep -Seconds 15
+    } catch {
+        return $false
+    }
+    return $true
+}
 
-# 3. Hazirlik Kontrolu (Postgres/Backend bekleyelim)
-Update-Status "Ağ Bağlantısı Bekleniyor..." "Veritabanı ve AI motoru el sıkışıyor..."
-$max_retries = 30
+$Window.Show()
+[System.Windows.Forms.Application]::DoEvents()
+
+if (-not (Check-Docker)) {
+    Update-Status "HATA!" "Docker kurulumu ba$($s_kucuk)ar$($i_noktasiz)s$($i_noktasiz)z oldu."
+    Start-Sleep -Seconds 5
+    $Window.Close()
+    exit
+}
+
+# Adımlar
+Update-Status "Güncellemeler Denetleniyor..." "Bulut senkronizasyonu yap$($i_noktasiz)l$($i_noktasiz)yor..."
+try { $null = Start-Process "docker" -ArgumentList "compose pull --quiet" -WindowStyle Hidden -Wait } catch {}
+
+Update-Status "Konteynerler Haz$($i_noktasiz)rlan$($i_noktasiz)yor..." "Servisler aya$($g_yumusak)a kald$($i_noktasiz)r$($i_noktasiz)l$($i_noktasiz)yor..."
+$null = Start-Process "docker" -ArgumentList "compose up -d --remove-orphans" -WindowStyle Hidden -Wait
+
+Update-Status "Sistem Ba$($s_kucuk)lat&#305;l&#305;yor..." "Veritaban$($i_noktasiz) ve AI Motoru bekleniyor..."
+$max_retries = 120 # 2 dakika limit
 $count = 0
+$ready = $false
+
 while ($count -lt $max_retries) {
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:8088" -Method Head -ErrorAction SilentlyContinue
-        if ($response.StatusCode -eq 200) { break }
-    } catch {}
-    $count++
-    Start-Sleep -Seconds 1
+        # Sadece portun açık olması yetmez, 502/503 olmamalı
+        $response = Invoke-WebRequest -Uri "http://localhost:8088" -UseBasicParsing -TimeoutSec 2 -ErrorAction Ignore
+        if ($response -and $response.StatusCode -eq 200) {
+            $ready = $true
+            break
+        }
+        Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Haz$($i_noktasiz)r olmas$($i_noktasiz) bekleniyor ($($count)s)..."
+    } catch {
+        # Bağlantı reddedildi veya başka hata
+    }
+    $count += 2
+    [System.Windows.Forms.Application]::DoEvents()
+    Start-Sleep -Seconds 2
 }
 
-# 4. Uygulamayi Pencere Olarak Ac
-Update-Status "Arayüz Yükleniyor..." "SmartSafe AI Desktop açılıyor..."
-Start-Sleep -Seconds 1
-
-# Edge'i "App" modunda ac ve terminali gizle
-Start-Process "msedge" -ArgumentList "--app=http://localhost:8088", "--window-size=1280,800", "--window-name=SmartSafeAI" -WindowStyle Hidden
+if ($ready) {
+    Update-Status "Haz$($i_noktasiz)r!" "SmartSafe AI aç$($i_noktasiz)l$($i_noktasiz)yor..."
+    Start-Sleep -Seconds 1
+    # Chrome yoksa Edge, o da yoksa varsayılan
+    $url = "http://localhost:8088"
+    if (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe") {
+        Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--app=$url", "--start-maximized"
+    } elseif (Test-Path "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe") {
+        Start-Process "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList "--app=$url", "--start-maximized"
+    } else {
+        Start-Process $url
+    }
+} else {
+    Update-Status "Zaman A$($s_kucuk)&#305;m&#305;!" "Sistem beklenenden yava$($s_kucuk) aç$($i_noktasiz)l$($i_noktasiz)yor. Lütfen birazdan manuel deneyin."
+    Start-Sleep -Seconds 5
+}
 
 $Window.Close()
