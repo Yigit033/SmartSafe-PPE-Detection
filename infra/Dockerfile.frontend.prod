@@ -1,0 +1,40 @@
+# SmartSafe Frontend - Production Optimized
+# 'standalone' output kullanarak minimum boyut ve yüksek hız sağlar.
+
+# 1. Aşama: Build (Derleme)
+FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Bağımlılıkları kopyala ve kur
+COPY frontend/package*.json ./
+# Build zamanı versiyonu al
+ARG APP_VERSION=1.0.0
+ENV NEXT_PUBLIC_VERSION=$APP_VERSION
+
+RUN npm install
+
+# Kaynak kodları kopyala
+COPY frontend/ .
+
+# Build işlemi (.next/standalone klasörünü oluşturur)
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npx next build --webpack
+
+# 2. Aşama: Runtime (Çalışma Ortamı)
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Sadece gerekli dosyaları kopyala
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# Next.js standalone sunucusu 3000 portunda çalışır (config'de 3377 olması bir şey değiştirmez, burada 3377'ye çekebiliriz)
+ENV PORT=3377
+EXPOSE 3377
+
+CMD ["node", "server.js"]

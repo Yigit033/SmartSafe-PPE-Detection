@@ -217,8 +217,9 @@ export default function CameraSetupPage() {
       }
 
       const effectiveDvrId = data.dvr_id || dvrData.dvr_id;
-      if (data.dvr_id && data.dvr_id !== dvrData.dvr_id) {
-        setDvrData((prev) => ({ ...prev, dvr_id: data.dvr_id }));
+      const returnedDvrId = data.dvr_id;
+      if (returnedDvrId && returnedDvrId !== dvrData.dvr_id) {
+        setDvrData((prev) => ({ ...prev, dvr_id: returnedDvrId }));
       }
 
       // 2. Kanalları Keşfet (sunucunun döndürdüğü gerçek dvr_id ile)

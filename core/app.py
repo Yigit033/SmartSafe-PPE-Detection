@@ -1460,30 +1460,6 @@ class SmartSafeSaaSAPI:
                                     pass
                                 detection_results[camera_key].put_nowait(detection_data)
 
-                            # === NEW: Persist detection to DB for dynamic widgets ===
-                            try:
-                                from database.database_adapter import get_db_adapter
-                                db = get_db_adapter()
-                                # Normalize fields
-                                total_people = detection_data.get('total_people', detection_data.get('people_detected', 0))
-                                compliance_rate = detection_data.get('analysis', {}).get('compliance_rate', detection_data.get('compliance_rate', 0))
-                                compliant_people = detection_data.get('analysis', {}).get('ppe_compliant',
-                                                         int(total_people * (compliance_rate or 0) / 100))
-                                violations_count = detection_data.get('analysis', {}).get('violations_count',
-                                                            len(detection_data.get('violations', [])))
-
-                                db.add_camera_detection_result({
-                                    'company_id': company_id,
-                                    'camera_id': camera_id,
-                                    'detection_type': 'ppe',
-                                    'confidence': (compliance_rate or 0) / 100.0,
-                                    'people_detected': total_people,
-                                    'ppe_compliant': compliant_people,
-                                    'violations_count': violations_count,
-                                    'total_people': total_people
-                                })
-                            except Exception as persist_error:
-                                logger.warning(f"⚠️ Detection persist warning: {persist_error}")
 
                             # === SaaS Resolution Status tracking (no snapshots) ===
                             try:
@@ -2620,14 +2596,22 @@ smartsafe_requests_total 100
                                 pass
                             detection_results[camera_key].put_nowait(detection_data)
                         
-                        # Veritabanına kaydet (her 10 tespit) - SQLite'ta legacy şema kullanıldığı için
-                        # sadece production PostgreSQL için özet kayıt atılır.
-                        if detection_count % 10 == 0:
-                            self.save_detection_to_db(detection_data)
+                        # Veritabanına kaydet (Production PostgreSQL için özet kayıt)
+                        # Sıklık: Eğer insan varsa her 2 tespitte bir, insan yoksa her 20 tespitte bir yaz (Grafik sürekliliği için)
+                        should_save = False
+                        if people_detected > 0:
+                            if detection_count % 2 == 0:
+                                should_save = True
+                        else:
+                            if detection_count % 20 == 0:
+                                should_save = True
                         
-                        # NOT: İhlal kayıtları ViolationTracker tarafından event-based olarak
-                        # yukarıda (tracker_new_violations) zaten DB'ye yazılıyor.
-                        # Burada tekrar yazmak duplicate kayıt oluşturur — kaldırıldı.
+                        # İhlal varsa mutlaka kaydet (Eventual consistency)
+                        if len(ppe_violations) > 0:
+                            should_save = True
+
+                        if should_save:
+                            self.save_detection_to_db(detection_data)
                     
                     time.sleep(0.01)  # CPU'yu rahatlatmak için
                 else:

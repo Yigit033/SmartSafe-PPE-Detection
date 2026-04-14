@@ -73,6 +73,13 @@ interface CompanyStats {
     violations: number;
     compliance: number;
   };
+  /** Son 7 günün uyum grafiği verisi */
+  compliance_trend: { day: string; rate: number }[];
+  hourly_compliance: { hour: number; rate: number }[];
+  /** İstatistiksel ihlal tipleri dağılımı (son 30 gün) */
+  violation_types: { type: string; count: number }[];
+  /** Bugünün saatlik ihlal dağılımı */
+  hourly_violations: { hour: number; count: number }[];
 }
 
 /**
@@ -82,17 +89,14 @@ export const getStats = api(
   { expose: true, method: "GET", path: "/company/:company_id/stats" },
   async ({ company_id }: { company_id: string }): Promise<CompanyStats> => {
     try {
-      // Kapasite (dashboard: aktif / max)
+      // 0. Şirket kapasitesi
       const capRes = await pool.query(
         "SELECT COALESCE(max_cameras, 25)::int AS max_cameras FROM companies WHERE company_id = $1",
         [company_id],
       );
-      const max_cameras = parseInt(
-        capRes.rows[0]?.max_cameras ?? "25",
-        10,
-      );
+      const max_cameras = parseInt(capRes.rows[0]?.max_cameras ?? "25", 10);
 
-      // 1. Aktif: düz kameralar + DVR kanalları (ikisi de status = 'active')
+      // 1. Aktif kameralar & DVR kanalları
       const camerasRes = await pool.query(
         `SELECT
            (SELECT COUNT(*)::bigint FROM cameras WHERE company_id = $1 AND status = 'active')
@@ -102,7 +106,7 @@ export const getStats = api(
       );
       const active_cameras = parseInt(String(camerasRes.rows[0].count), 10);
 
-      // 2. Trend için: 7 günden eski kayıt sayısı (IP + DVR kanalı) — önceki mantık, genişletildi
+      // 2. Geçen haftaki kamera sayısı (Trend için)
       const lastWeekCamerasRes = await pool.query(
         `SELECT
            (SELECT COUNT(*)::bigint FROM cameras WHERE company_id = $1 AND created_at < CURRENT_DATE - INTERVAL '7 days')
@@ -110,56 +114,101 @@ export const getStats = api(
          AS count`,
         [company_id],
       );
-      const last_week_cameras = parseInt(
-        String(lastWeekCamerasRes.rows[0].count),
-        10,
-      );
+      const last_week_cameras = parseInt(String(lastWeekCamerasRes.rows[0].count), 10);
 
-      // 3. Bugünkü İhlaller (violation_events tablosundan)
-      const todayViolationsRes = await pool.query(
-        "SELECT COUNT(*) as count FROM violation_events WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE",
+      // 3. İhlal sayıları (Bugün, Dün, Aylık)
+      const violationCountsRes = await pool.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE) as today,
+          COUNT(*) FILTER (WHERE (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE - INTERVAL '1 day') as yesterday,
+          COUNT(*) FILTER (WHERE (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days') as monthly
+         FROM violation_events
+         WHERE company_id = $1`,
         [company_id],
       );
-      const today_violations = parseInt(todayViolationsRes.rows[0].count);
+      const today_violations = parseInt(violationCountsRes.rows[0].today);
+      const yesterday_violations = parseInt(violationCountsRes.rows[0].yesterday);
+      const monthly_violations = parseInt(violationCountsRes.rows[0].monthly);
 
-      // 4. Dünkü İhlaller
-      const yesterdayViolationsRes = await pool.query(
-        "SELECT COUNT(*) as count FROM violation_events WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE - INTERVAL '1 day'",
-        [company_id],
-      );
-      const yesterday_violations = parseInt(
-        yesterdayViolationsRes.rows[0].count,
-      );
-
-      // 5. Aylık İhlaller
-      const monthlyViolationsRes = await pool.query(
-        "SELECT COUNT(*) as count FROM violation_events WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days'",
-        [company_id],
-      );
-      const monthly_violations = parseInt(monthlyViolationsRes.rows[0].count);
-
-      // 6. Aktif Çalışan Sayısı (Unique track_id)
-      const activeWorkersRes = await pool.query(
-        "SELECT COUNT(DISTINCT track_id) as count FROM detections WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE AND track_id IS NOT NULL",
-        [company_id],
-      );
-      const active_workers = parseInt(activeWorkersRes.rows[0].count);
-
-      // 7. Compliance Rate (Uyum Oranı)
-      const complianceRes = await pool.query(
-        `SELECT 
+      // 4. Aktif Çalışan Sayısı & Uyum Oranı (Bugün)
+      const dailyMetricsRes = await pool.query(
+        `SELECT
+          COUNT(DISTINCT track_id) as active_workers,
           CASE 
             WHEN SUM(people_detected) > 0 
             THEN (SUM(ppe_compliant)::FLOAT / NULLIF(SUM(people_detected), 0)::FLOAT * 100.0)
             ELSE 0 
           END as avg_compliance
-        FROM detections 
-        WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
+         FROM detections
+         WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
         [company_id],
       );
-      const avg_compliance_rate = parseFloat(
-        complianceRes.rows[0].avg_compliance || "0",
+      const active_workers = parseInt(dailyMetricsRes.rows[0].active_workers);
+      const avg_compliance_rate = parseFloat(dailyMetricsRes.rows[0].avg_compliance || "0");
+
+      // 5. Compliance Trend (Son 7 Günlük)
+      const complianceTrendRes = await pool.query(
+        `SELECT 
+           TO_CHAR(DATE(timestamp), 'YYYY-MM-DD') as day,
+           AVG(CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END) as rate
+         FROM detections 
+         WHERE company_id = $1 AND timestamp > CURRENT_DATE - INTERVAL '7 days'
+         GROUP BY DATE(timestamp)
+         ORDER BY day ASC`,
+        [company_id],
       );
+      const compliance_trend = complianceTrendRes.rows.map(r => ({
+        day: r.day,
+        rate: Math.round(parseFloat(r.rate || "0") * 10) / 10
+      }));
+
+      // 5b. Saatlik Compliance Trend (Bugün)
+      const hourlyComplianceRes = await pool.query(
+        `SELECT 
+           EXTRACT(HOUR FROM timestamp) as hour,
+           AVG(CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END) as rate
+         FROM detections 
+         WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE
+         GROUP BY hour
+         ORDER BY hour ASC`,
+        [company_id],
+      );
+      const hourly_compliance = hourlyComplianceRes.rows.map(r => ({
+        hour: parseInt(r.hour),
+        rate: Math.round(parseFloat(r.rate || "0") * 10) / 10
+      }));
+
+      // 6. Violation Types Dağılımı (Son 30 Gün)
+      const violationTypesRes = await pool.query(
+        `SELECT 
+           violation_type, 
+           COUNT(*) as count 
+         FROM violation_events 
+         WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY violation_type
+         ORDER BY count DESC`,
+        [company_id],
+      );
+      const violation_types = violationTypesRes.rows.map(r => ({
+        type: r.violation_type,
+        count: parseInt(r.count)
+      }));
+
+      // 7. Saatlik İhlal Dağılımı (Bugün)
+      const hourlyViolationsRes = await pool.query(
+        `SELECT 
+           EXTRACT(HOUR FROM TO_TIMESTAMP(start_time))::int as hour,
+           COUNT(*) as count
+         FROM violation_events
+         WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE
+         GROUP BY hour
+         ORDER BY hour ASC`,
+        [company_id],
+      );
+      const hourly_violations = hourlyViolationsRes.rows.map(r => ({
+        hour: r.hour,
+        count: parseInt(r.count)
+      }));
 
       // Trend hesaplamaları
       const cameras_trend = active_cameras - last_week_cameras;
@@ -175,8 +224,12 @@ export const getStats = api(
         trends: {
           cameras: cameras_trend,
           violations: violations_trend,
-          compliance: 0, // Şimdilik statik
+          compliance: 0, // Opsiyonel: Geçen haftaya göre fark hesaplanabilir
         },
+        compliance_trend,
+        hourly_compliance,
+        violation_types,
+        hourly_violations
       };
     } catch (error) {
       console.error("Error fetching company stats:", error);
@@ -184,6 +237,7 @@ export const getStats = api(
     }
   },
 );
+
 
 /**
  * Yeni bir şirket ve bu şirkete bağlı bir Admin kullanıcısı oluşturur.

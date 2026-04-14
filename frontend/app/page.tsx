@@ -9,6 +9,9 @@ import {
 } from "@/lib/violationAssets";
 
 import api from "@/lib/api";
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+} from 'recharts';
 
 function ViolationThumb({ url }: { url: string | null }) {
   const [failed, setFailed] = useState(false);
@@ -49,7 +52,9 @@ interface StatsData {
   monthly_violations: number;
   avg_compliance_rate: number;
   active_workers: number;
-  trends: {
+  compliance_trend?: { day: string; rate: number }[];
+  hourly_compliance?: { hour: number; rate: number }[];
+  trends?: {
     cameras: number;
     violations: number;
     compliance: number;
@@ -60,6 +65,7 @@ export default function Home() {
   const [data, setData] = useState<StatsData | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState<"daily" | "weekly">("weekly");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -293,38 +299,100 @@ export default function Home() {
                 Tesis genelindeki PPE uyumluluk oranı analizi.
               </p>
               <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
-                <button className="px-3 py-1 bg-white shadow-sm rounded-md text-[10px] font-black text-slate-900 border border-slate-200 cursor-pointer">
+                <button 
+                  onClick={() => setTimeRange("daily")}
+                  className={`px-3 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${
+                    timeRange === "daily" 
+                      ? "bg-white shadow-sm text-slate-900 border border-slate-200" 
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
                   GÜNLÜK
                 </button>
-                <button className="px-3 py-1 text-[10px] font-black text-slate-500 hover:text-slate-900 cursor-pointer">
+                <button 
+                  onClick={() => setTimeRange("weekly")}
+                  className={`px-3 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${
+                    timeRange === "weekly" 
+                      ? "bg-white shadow-sm text-slate-900 border border-slate-200" 
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
                   HAFTALIK
                 </button>
               </div>
             </div>
-            <div className="flex h-[320px] items-center justify-center rounded-xl bg-slate-50 border-2 border-dashed border-slate-200">
-              <div className="text-center group cursor-pointer">
-                <div className="mb-3 flex justify-center">
-                  <svg
-                    className="h-10 w-10 text-slate-300 group-hover:text-brand-teal transition-colors"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    />
-                  </svg>
+            <div className="flex h-[320px] items-center justify-center rounded-xl bg-slate-50 border border-slate-100 p-2">
+              {loading ? (
+                <div className="text-center group cursor-pointer">
+                  <div className="mb-3 flex justify-center">
+                    <svg
+                      className="h-10 w-10 text-slate-300 animate-pulse"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-bold text-slate-400">
+                    Veriler hazırlanıyor...
+                  </p>
                 </div>
-                <p className="text-sm font-bold text-slate-400 group-hover:text-slate-600 transition-colors">
-                  Analitik grafik motoru yükleniyor...
-                </p>
-                <p className="mt-1 text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                  Ağ geçidi aktif: v2.0.4
-                </p>
-              </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart 
+                    data={
+                      timeRange === "daily" 
+                        ? (data?.hourly_compliance || []).map(d => ({ label: String(d.hour), rate: d.rate }))
+                        : (data?.compliance_trend || []).map(d => ({ label: String(d.day), rate: d.rate }))
+                    }
+                  >
+                    <defs>
+                      <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#008080" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#008080" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="label" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
+                      dy={10}
+                      tickFormatter={(val) => {
+                        if (timeRange === "daily") return `${val}:00`;
+                        return String(val).split('-').slice(1).join('/');
+                      }}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
+                      tickFormatter={(val) => `%${val}`}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip 
+                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: 800}}
+                      labelFormatter={(val) => timeRange === "daily" ? `Saat: ${val}:00` : `Tarih: ${val}`}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="rate" 
+                      stroke="#008080" 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill="url(#colorRate)" 
+                      animationDuration={1000}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </section>
@@ -451,6 +519,19 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {/* Footer / Version Info */}
+      <footer className="flex items-center justify-between pt-8 mt-4 border-t border-slate-100">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+          © 2026 SmartSafe AI • TÜM HAKLARI SAKLIDIR
+        </p>
+        <div className="flex items-center gap-3">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            SÜRÜM: v{process.env.NEXT_PUBLIC_VERSION || "1.0.0"}
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }

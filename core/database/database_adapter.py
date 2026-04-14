@@ -229,582 +229,74 @@ class DatabaseAdapter:
                         logger.warning(f"⚠️ Connection pool error: {pool_error}, using direct connection")
                 
                 # Fallback to direct connection via secure connector
-                try:
-                    secure_connector = get_secure_db_connector()
-                    if secure_connector:
-                        return secure_connector.get_connection()
-                    else:
-                        # Direct PostgreSQL attempt
-                        database_url = self.config.database_url
-                        if database_url and database_url.startswith('postgresql://'):
-                            try:
-                                logger.info("🔌 Attempting direct psycopg2 connection as fallback")
-                                conn = psycopg2.connect(database_url)
-                                return conn
-                            except Exception as direct_err:
-                                logger.warning(f"⚠️ Direct PostgreSQL connection failed: {direct_err}")
-
-                        logger.warning("⚠️ Secure connector not available")
-                        # Return None to allow for error reporting
-                        return None
-                except Exception as e:
-                    logger.warning(f"⚠️ PostgreSQL connection failed: {e}")
-                    return None
+                # Fallback to direct connection
+                database_url = self.config.database_url
+                if database_url:
+                    try:
+                        # Handle potential issues with postgresql:// vs postgres://
+                        if database_url.startswith('postgres://'):
+                            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+                            
+                        logger.info("🔌 Attempting direct psycopg2 connection as fallback")
+                        conn = psycopg2.connect(database_url, connect_timeout=10)
+                        return conn
+                    except Exception as direct_err:
+                        logger.warning(f"⚠️ Direct PostgreSQL connection failed: {direct_err}")
+                
+                logger.warning("⚠️ No database configuration available for connection")
+                return None
         except Exception as e:
             logger.error(f"❌ Database connection error: {e}")
             return None
     
-    def init_database(self):
-        """Initialize database tables - PostgreSQL Only"""
+    def init_database(self) -> bool:
+        """
+        DATABASE INITIALIZATION (Managed by Encore Migrations)
+        In production, schema is managed ONLY by Encore Migrations.
+        This method performs health check and basic maintenance.
+        """
         try:
-            conn = self.get_connection()
-            if conn is None:
-                logger.error("❌ Database initialization failed: No connection available")
-                return False
+            logger.info("🔍 Checking database readiness (Encore Migrations)...")
             
-            # PostgreSQL schema synchronization
-            schema_ok = self._check_and_sync_schema(conn)
-            if schema_ok:
-                return True
+            # Wait for DB visibility
+            max_retries = 15
+            for attempt in range(max_retries):
+                if self.health_check():
+                    logger.info("✅ Database is reachable.")
+                    break
+                logger.warning(f"⏳ Waiting for database... ({attempt+1}/{max_retries})")
+                time.sleep(2)
             else:
-                logger.warning("⚠️ Schema sync failed, continuing with table creation")
+                logger.error("❌ Database not reachable after retries.")
+                return False
+
+            conn = self.get_connection()
+            if not conn: return False
             
-            # PostgreSQL fresh connection setup
             try:
-                # Fresh connection al
-                self.close_connection(conn)
-                conn = self.get_connection()
-                logger.info("🔄 PostgreSQL fresh connection established")
-                logger.info("🔧 PostgreSQL autocommit already enabled in secure connector")
+                cursor = conn.cursor()
+                # Sanity check: verify 'companies' exists (Encore migration signal)
+                cursor.execute("""
+                    SELECT count(*) FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = 'companies'
+                """)
+                if cursor.fetchone()[0] == 0:
+                    logger.warning("⚠️ 'companies' table not found. Waiting for Encore migrations...")
+                    return False
                 
-            except Exception as e:
-                logger.warning(f"⚠️ PostgreSQL setup warning: {e}")
-                try:
-                    conn = self.get_connection()
-                except Exception:
-                    pass
-            
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-            logger.info("🔧 Creating database tables...")
-            # Start creating tables
-            
-            # Companies table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS companies (
-                    company_id VARCHAR(255) PRIMARY KEY,
-                    company_name VARCHAR(255) NOT NULL,
-                    sector VARCHAR(100) NOT NULL,
-                    contact_person VARCHAR(255) NOT NULL,
-                    email VARCHAR(255) UNIQUE NOT NULL,
-                    phone VARCHAR(50),
-                    address TEXT,
-                    max_cameras INTEGER DEFAULT 25,
-                    subscription_type VARCHAR(50) DEFAULT 'starter',
-                    billing_cycle VARCHAR(20) DEFAULT 'monthly',
-                    subscription_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    subscription_end TIMESTAMP,
-                    next_billing_date TIMESTAMP,
-                    auto_renewal BOOLEAN DEFAULT TRUE,
-                    payment_method VARCHAR(50),
-                    payment_status VARCHAR(20) DEFAULT 'active',
-                    current_balance DECIMAL(10,2) DEFAULT 0.00,
-                    total_paid DECIMAL(10,2) DEFAULT 0.00,
-                    last_payment_date TIMESTAMP,
-                    last_payment_amount DECIMAL(10,2),
-                    status VARCHAR(50) DEFAULT 'active',
-                    api_key VARCHAR(255) UNIQUE,
-                    required_ppe TEXT,
-                    profile_image TEXT,
-                    logo_url TEXT,
-                    sector_config JSON,
-                    ppe_requirements JSON,
-                    compliance_settings JSON,
-                    email_notifications BOOLEAN DEFAULT TRUE,
-                    sms_notifications BOOLEAN DEFAULT FALSE,
-                    push_notifications BOOLEAN DEFAULT TRUE,
-                    violation_alerts BOOLEAN DEFAULT TRUE,
-                    system_alerts BOOLEAN DEFAULT TRUE,
-                    report_notifications BOOLEAN DEFAULT TRUE,
-                    account_type VARCHAR(20) DEFAULT 'full',
-                    demo_expires_at TIMESTAMP,
-                    demo_limits JSON,
-                    telegram_notifications BOOLEAN DEFAULT FALSE,
-                    telegram_bot_token TEXT,
-                    telegram_chat_id TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Create sector performance metrics table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sector_performance_metrics (
-                    id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255),
-                    sector_id VARCHAR(100),
-                    date DATE,
-                    total_detections INTEGER DEFAULT 0,
-                    compliance_rate DECIMAL(5,2),
-                    violations_count INTEGER DEFAULT 0,
-
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Create sector PPE configs table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sector_ppe_configs (
-                    sector_id VARCHAR(100) PRIMARY KEY,
-                    sector_name VARCHAR(255),
-                    mandatory_ppe JSON,
-                    optional_ppe JSON,
-                    detection_settings JSON,
-                    compliance_requirements JSON,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Create DVR systems table
-            # Create DVR systems table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS dvr_systems (
-                    dvr_id VARCHAR(255) PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    ip_address VARCHAR(45) NOT NULL,
-                    port INTEGER DEFAULT 80,
-                    username VARCHAR(100) DEFAULT 'admin',
-                    password VARCHAR(255) DEFAULT '',
-                    dvr_type VARCHAR(50) DEFAULT 'generic',
-                    protocol VARCHAR(10) DEFAULT 'http',
-                    api_path VARCHAR(100) DEFAULT '/api',
-                    rtsp_port INTEGER DEFAULT 554,
-                    max_channels INTEGER DEFAULT 16,
-                    status VARCHAR(50) DEFAULT 'inactive',
-                    last_test_time TIMESTAMP,
-                    connection_retries INTEGER DEFAULT 3,
-                    timeout INTEGER DEFAULT 10,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # Create DVR channels table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS dvr_channels (
-                    channel_id VARCHAR(255) PRIMARY KEY,
-                    dvr_id VARCHAR(255) NOT NULL,
-                    company_id VARCHAR(255) NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    channel_number INTEGER NOT NULL,
-                    status VARCHAR(50) DEFAULT 'inactive',
-                    resolution_width INTEGER DEFAULT 1920,
-                    resolution_height INTEGER DEFAULT 1080,
-                    fps INTEGER DEFAULT 25,
-                    rtsp_path VARCHAR(255) DEFAULT '',
-                    http_path VARCHAR(255) DEFAULT '',
-                    last_test_time TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # Create DVR streams table for active streams
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS dvr_streams (
-                    stream_id VARCHAR(255) PRIMARY KEY,
-                    dvr_id VARCHAR(255) NOT NULL,
-                    company_id VARCHAR(255) NOT NULL,
-                    channel_id VARCHAR(255) NOT NULL,
-                    stream_url TEXT NOT NULL,
-                    status VARCHAR(50) DEFAULT 'active',
-                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    end_time TIMESTAMP,
-                    fps DECIMAL(5,2) DEFAULT 0,
-                    frame_count INTEGER DEFAULT 0,
-                    error_count INTEGER DEFAULT 0,
-                    last_frame_time TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE,
-                    FOREIGN KEY (channel_id) REFERENCES dvr_channels (channel_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # PostgreSQL - Batch DDL operations to avoid transaction issues
-            ddl_statements = [
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS sector_config JSON",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS ppe_requirements JSON", 
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS compliance_settings JSON",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT TRUE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS sms_notifications BOOLEAN DEFAULT FALSE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS push_notifications BOOLEAN DEFAULT TRUE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS violation_alerts BOOLEAN DEFAULT TRUE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS system_alerts BOOLEAN DEFAULT TRUE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS report_notifications BOOLEAN DEFAULT TRUE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS profile_image TEXT",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT 'full'",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMP",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS demo_limits JSON",
-                "ALTER TABLE cameras ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
-                "ALTER TABLE dvr_channels ADD COLUMN IF NOT EXISTS detection_zones JSONB DEFAULT '[]'::jsonb",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_notifications BOOLEAN DEFAULT FALSE",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT",
-                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT"
-            ]
-            
-            for ddl in ddl_statements:
-                try:
-                    cursor.execute(ddl)
-                    logger.debug(f"✅ DDL executed: {ddl[:50]}...")
-                except Exception as e:
-                    logger.warning(f"⚠️ DDL skipped: {ddl[:50]}... -> {e}")
-            
-            # Users table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id VARCHAR(255) PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    username VARCHAR(100) NOT NULL,
-                    email VARCHAR(255) UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    role VARCHAR(50) DEFAULT 'operator',
-                    permissions JSON,
-                    last_login TIMESTAMP,
-                    status VARCHAR(50) DEFAULT 'active',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE,
-                    UNIQUE(company_id, username)
-                )
-            ''')
-            
-            # Cameras table - Enhanced for real camera support
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS cameras (
-                    camera_id VARCHAR(255) PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    group_id VARCHAR(255),
-                    camera_name VARCHAR(255) NOT NULL,
-                    location VARCHAR(255) NOT NULL,
-                    ip_address VARCHAR(45),
-                    port INTEGER DEFAULT 8080,
-                    rtsp_url TEXT,
-                    username VARCHAR(100),
-                    password VARCHAR(255),
-                    protocol VARCHAR(10) DEFAULT 'http',
-                    stream_path VARCHAR(255) DEFAULT '/video',
-                    auth_type VARCHAR(50) DEFAULT 'basic',
-                    resolution VARCHAR(20) DEFAULT '1920x1080',
-                    fps INTEGER DEFAULT 25,
-                    quality INTEGER DEFAULT 80,
-                    audio_enabled BOOLEAN DEFAULT FALSE,
-                    night_vision BOOLEAN DEFAULT FALSE,
-                    motion_detection BOOLEAN DEFAULT TRUE,
-                    recording_enabled BOOLEAN DEFAULT TRUE,
-                    camera_type VARCHAR(50) DEFAULT 'ip_camera',
-                    status VARCHAR(50) DEFAULT 'active',
-                    last_detection TIMESTAMP,
-                    last_test_time TIMESTAMP,
-                    connection_retries INTEGER DEFAULT 3,
-                    timeout INTEGER DEFAULT 10,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE,
-                    UNIQUE(company_id, camera_name)
-                )
-            ''')
-            
-            # Camera Groups table - Added for specific PPE configurations
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS camera_groups (
-                    group_id VARCHAR(255) PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    ppe_config JSON,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # Sessions table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sessions (
-                    session_id VARCHAR(255) PRIMARY KEY,
-                    user_id VARCHAR(255) NOT NULL,
-                    company_id VARCHAR(255) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP NOT NULL,
-                    ip_address VARCHAR(45),
-                    user_agent TEXT,
-                    status VARCHAR(50) DEFAULT 'active',
-                    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # Eski detections tablosu kaldırıldı - Reports için yeni tablo kullanılıyor
-            
-            # Reports & Alerts tables
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS violations (
-                    violation_id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    camera_id VARCHAR(255) NOT NULL,
-                    worker_id VARCHAR(255),
-                    missing_ppe VARCHAR(255) NOT NULL,
-                    violation_type VARCHAR(255) NOT NULL,
-                    confidence DECIMAL(5,2) DEFAULT 0,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS detections (
-                    detection_id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    camera_id VARCHAR(255) NOT NULL,
-                    detection_type VARCHAR(255) NOT NULL,
-                    confidence DECIMAL(5,2) DEFAULT 0,
-                    people_detected INTEGER DEFAULT 0,
-                    ppe_compliant INTEGER DEFAULT 0,
-                    total_people INTEGER DEFAULT 0,
-                    violations_count INTEGER DEFAULT 0,
-                    compliance_rate DECIMAL(5,2),
-                    processing_time_ms DECIMAL(12,3),
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS reports (
-                    report_id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    report_type VARCHAR(255) NOT NULL,
-                    report_data JSON NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS alerts (
-                    alert_id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    camera_id VARCHAR(255),
-                    alert_type VARCHAR(255) NOT NULL,
-                    severity VARCHAR(50) NOT NULL,
-                    title VARCHAR(255) NOT NULL,
-                    message TEXT NOT NULL,
-                    status VARCHAR(50) DEFAULT 'active',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    resolved_at TIMESTAMP,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # DVR Detection Results & Sessions tables
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS dvr_detection_results (
-                    id SERIAL PRIMARY KEY,
-                    stream_id VARCHAR(255) NOT NULL,
-                    company_id VARCHAR(255) NOT NULL,
-                    total_people INTEGER DEFAULT 0,
-                    compliant_people INTEGER DEFAULT 0,
-                    violations_count INTEGER DEFAULT 0,
-                    missing_ppe TEXT,
-                    detection_confidence DECIMAL(5,2) DEFAULT 0.0,
-                    detection_time DECIMAL(10,4) DEFAULT 0.0,
-                    frame_timestamp TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS dvr_detection_sessions (
-                    session_id VARCHAR(255) PRIMARY KEY,
-                    dvr_id VARCHAR(255) NOT NULL,
-                    company_id VARCHAR(255) NOT NULL,
-                    channels TEXT NOT NULL,
-                    detection_mode VARCHAR(100) NOT NULL,
-                    status VARCHAR(50) DEFAULT 'active',
-                    start_time TIMESTAMP,
-                    end_time TIMESTAMP,
-                    total_frames_processed INTEGER DEFAULT 0,
-                    total_violations_detected INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (dvr_id) REFERENCES dvr_systems (dvr_id) ON DELETE CASCADE,
-                    FOREIGN KEY (company_id) REFERENCES companies (company_id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # Subscription & Billing history tables
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS subscription_history (
-                    id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) REFERENCES companies(company_id) ON DELETE CASCADE,
-                    subscription_type VARCHAR(50) NOT NULL,
-                    billing_cycle VARCHAR(20) NOT NULL,
-                    start_date TIMESTAMP NOT NULL,
-                    end_date TIMESTAMP NOT NULL,
-                    monthly_price DECIMAL(10,2) NOT NULL,
-                    yearly_price DECIMAL(10,2),
-                    actual_paid DECIMAL(10,2) NOT NULL,
-                    payment_method VARCHAR(50),
-                    payment_status VARCHAR(20) NOT NULL,
-                    change_reason VARCHAR(100),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS billing_history (
-                    id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) REFERENCES companies(company_id) ON DELETE CASCADE,
-                    invoice_number VARCHAR(50) UNIQUE NOT NULL,
-                    billing_date TIMESTAMP NOT NULL,
-                    due_date TIMESTAMP NOT NULL,
-                    amount DECIMAL(10,2) NOT NULL,
-                    tax_amount DECIMAL(10,2) DEFAULT 0.00,
-                    total_amount DECIMAL(10,2) NOT NULL,
-                    currency VARCHAR(3) DEFAULT 'USD',
-                    payment_status VARCHAR(20) DEFAULT 'pending',
-                    payment_method VARCHAR(50),
-                    paid_date TIMESTAMP,
-                    invoice_pdf_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # ========================================
-            # VIOLATION EVENTS TABLE - Event-based violation tracking
-            # ========================================
-            # Violation events tracking
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS violation_events (
-                    event_id VARCHAR(255) PRIMARY KEY,
-                    company_id VARCHAR(255) REFERENCES companies(company_id) ON DELETE CASCADE,
-                    camera_id VARCHAR(255),
-                    person_id VARCHAR(255) NOT NULL,
-                    violation_type VARCHAR(100) NOT NULL,
-                    start_time DOUBLE PRECISION NOT NULL,
-                    end_time DOUBLE PRECISION,
-                    duration_seconds INTEGER,
-                    snapshot_path TEXT,
-                    resolution_snapshot_path TEXT,
-                    severity VARCHAR(20) DEFAULT 'warning',
-                    status VARCHAR(20) DEFAULT 'active',
-                    source_type VARCHAR(20) NOT NULL,
-                    dvr_channel_id VARCHAR(255) REFERENCES dvr_channels (channel_id) ON DELETE CASCADE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT violation_events_source_shape_chk CHECK (
-                        (source_type = 'camera' AND camera_id IS NOT NULL AND dvr_channel_id IS NULL)
-                        OR
-                        (source_type = 'dvr_channel' AND dvr_channel_id IS NOT NULL AND camera_id IS NULL)
-                    )
-                )
-            ''')
-            self.ensure_violation_events_pr1_expand(cursor)
-            self.ensure_violation_events_pr3_contract(cursor)
-
-            # ========================================
-            # PERSON VIOLATIONS TABLE - Monthly violation tracking per person
-            # ========================================
-            # Person violations & Monthly penalties tables
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS person_violations (
-                    id SERIAL PRIMARY KEY,
-                    person_id VARCHAR(255) NOT NULL,
-                    company_id VARCHAR(255) REFERENCES companies(company_id) ON DELETE CASCADE,
-                    month VARCHAR(7) NOT NULL,
-                    violation_type VARCHAR(100) NOT NULL,
-                    violation_count INTEGER DEFAULT 0,
-                    total_duration_seconds INTEGER DEFAULT 0,
-                    penalty_amount DECIMAL(10,2) DEFAULT 0.0,
-                    last_violation_date TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(person_id, company_id, month, violation_type)
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS monthly_penalties (
-                    id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) REFERENCES companies(company_id) ON DELETE CASCADE,
-                    person_id VARCHAR(255),
-                    month VARCHAR(7) NOT NULL,
-                    total_violations INTEGER DEFAULT 0,
-                    total_duration_seconds INTEGER DEFAULT 0,
-                    total_penalty DECIMAL(10,2) DEFAULT 0.0,
-                    penalty_details JSON,
-                    status VARCHAR(20) DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(company_id, person_id, month)
-                )
-            ''')
-
-            # Create payment methods table
-            # Payment methods table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS payment_methods (
-                    id SERIAL PRIMARY KEY,
-                    company_id VARCHAR(255) REFERENCES companies(company_id) ON DELETE CASCADE,
-                    payment_type VARCHAR(50) NOT NULL,
-                    card_last4 VARCHAR(4),
-                    card_brand VARCHAR(20),
-                    expiry_month INTEGER,
-                    expiry_year INTEGER,
-                    is_default BOOLEAN DEFAULT FALSE,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # Active detections table for cross-process state synchronization
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS active_detections (
-                    camera_key VARCHAR(255) PRIMARY KEY,
-                    company_id VARCHAR(255) NOT NULL,
-                    camera_id VARCHAR(255) NOT NULL,
-                    detection_mode VARCHAR(100),
-                    confidence_threshold DECIMAL(5,2),
-                    status BOOLEAN DEFAULT TRUE,
-                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            # PostgreSQL autocommit kullanıyorsa commit'e gerek yok
-            if not (self.db_type == 'postgresql' and getattr(conn, 'autocommit', False)):
+                # Active detections table cleanup (Maintenance)
+                cursor.execute("DELETE FROM active_detections WHERE updated_at < NOW() - INTERVAL '6 hours'")
                 conn.commit()
-                logger.info("✅ Database tables created successfully (including active_detections)")
-            return True
-            
+                
+                logger.info("✅ Database schema verified. AI Core is ready.")
+                return True
+            finally:
+                self.close_connection(conn)
+                
         except Exception as e:
-            logger.error(f"❌ Database initialization failed: {e}")
-            try:
-                if conn:
-                    conn.rollback()
-                    logger.info("🔄 Transaction rolled back due to error")
-            except Exception as rollback_error:
-                logger.warning(f"⚠️ Rollback error: {rollback_error}")
+            logger.error(f"❌ Database initialization check failed: {e}")
             return False
-        finally:
-            # Close connection properly
-            try:
-                if conn:
-                    self.close_connection(conn)
-            except Exception:
-                pass
+
     
     def execute_query(
         self,
@@ -916,228 +408,7 @@ class DatabaseAdapter:
         logger.error(f"❌ Database query failed after {max_retries} attempts")
         return None
 
-    def ensure_violation_events_pr1_expand(self, cursor) -> None:
-        """
-        PR1 Expand: source_type, dvr_channel_id, camera_id nullable (+ PostgreSQL FK).
-        Idempotent; Encore migration ile aynı hedef şema (Python-only init senaryosu).
-        """
-        try:
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name = 'violation_events'
-                )
-            """)
-            if not cursor.fetchone()[0]:
-                return
-            cursor.execute(
-                "ALTER TABLE violation_events ADD COLUMN IF NOT EXISTS source_type VARCHAR(20)"
-            )
-            cursor.execute(
-                "ALTER TABLE violation_events ADD COLUMN IF NOT EXISTS dvr_channel_id VARCHAR(255)"
-            )
-            cursor.execute(
-                "ALTER TABLE violation_events ALTER COLUMN camera_id DROP NOT NULL"
-            )
-            cursor.execute("""
-                DO $$
-                BEGIN
-                  IF NOT EXISTS (
-                    SELECT 1 FROM pg_constraint WHERE conname = 'violation_events_dvr_channel_id_fkey'
-                  ) THEN
-                    ALTER TABLE violation_events
-                      ADD CONSTRAINT violation_events_dvr_channel_id_fkey
-                      FOREIGN KEY (dvr_channel_id) REFERENCES dvr_channels (channel_id);
-                  END IF;
-                END $$;
-            """)
-            
-        except Exception as e:
-            logger.warning(f"⚠️ ensure_violation_events_pr1_expand: {e}")
 
-    def ensure_violation_events_pr3_contract(self, cursor) -> None:
-        """
-        PR3 Contract: DVR satırlarında camera_id temizliği; PostgreSQL'de ayrıca NOT NULL,
-        CHECK ve partial index (migration 3 ile uyumlu).
-        """
-        try:
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name = 'violation_events'
-                )
-            """)
-            if not cursor.fetchone()[0]:
-                return
-            cursor.execute(
-                "UPDATE violation_events SET camera_id = NULL WHERE source_type = 'dvr_channel'"
-            )
-            try:
-                cursor.execute(
-                    "ALTER TABLE violation_events ALTER COLUMN source_type SET NOT NULL"
-                )
-            except Exception as ne:
-                logger.warning(
-                    f"⚠️ violation_events source_type NOT NULL (PR2 gerekli olabilir): {ne}"
-                )
-            cursor.execute("""
-                DO $$
-                BEGIN
-                  IF NOT EXISTS (
-                    SELECT 1 FROM pg_constraint WHERE conname = 'violation_events_source_shape_chk'
-                  ) THEN
-                    ALTER TABLE violation_events
-                      ADD CONSTRAINT violation_events_source_shape_chk CHECK (
-                        (source_type = 'camera' AND camera_id IS NOT NULL AND dvr_channel_id IS NULL)
-                        OR
-                        (source_type = 'dvr_channel' AND dvr_channel_id IS NOT NULL AND camera_id IS NULL)
-                      );
-                  END IF;
-                END $$;
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_violation_events_active_camera
-                ON violation_events (company_id, start_time DESC)
-                WHERE source_type = 'camera' AND status = 'active'
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_violation_events_active_dvr
-                ON violation_events (company_id, dvr_channel_id, start_time DESC)
-                WHERE source_type = 'dvr_channel' AND status = 'active'
-            """)
-        except Exception as e:
-            logger.warning(f"⚠️ ensure_violation_events_pr3_contract: {e}")
-    
-    def _check_and_sync_schema(self, conn) -> bool:
-        """PostgreSQL schema'sını kontrol et ve senkronize et"""
-        try:
-            cursor = conn.cursor()
-            
-            # 1. Temel tabloların varlığını kontrol et
-            cursor.execute("""
-                SELECT table_name FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name IN ('companies', 'users', 'cameras', 'sessions', 'detections', 'violations')
-            """)
-            existing_tables = [row[0] for row in cursor.fetchall()]
-            
-            required_tables = ['companies', 'users', 'cameras', 'sessions', 'detections', 'violations']
-            missing_tables = [t for t in required_tables if t not in existing_tables]
-            
-            if missing_tables:
-                logger.warning(f"⚠️ Missing tables: {missing_tables}, will create them")
-                return False
-            
-            # 2. companies tablosundaki kritik kolonları kontrol et
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'companies' AND table_schema = 'public'
-                AND column_name IN ('account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle', 'profile_image', 'ppe_requirements', 'compliance_settings')
-            """)
-            existing_columns = [row[0] for row in cursor.fetchall()]
-            
-            required_columns = ['account_type', 'demo_expires_at', 'demo_limits', 'billing_cycle', 'profile_image', 'ppe_requirements', 'compliance_settings']
-            missing_columns = [c for c in required_columns if c not in existing_columns]
-            
-            if missing_columns:
-                logger.info(f"🔧 Adding missing columns to companies table: {missing_columns}")
-                
-                # Eksik kolonları ekle
-                column_definitions = {
-                    'account_type': 'VARCHAR(20) DEFAULT \'full\'',
-                    'demo_expires_at': 'TIMESTAMP',
-                    'demo_limits': 'JSON',
-                    'billing_cycle': 'VARCHAR(20) DEFAULT \'monthly\'',
-                    'next_billing_date': 'TIMESTAMP',
-                    'auto_renewal': 'BOOLEAN DEFAULT TRUE',
-                    'payment_method': 'VARCHAR(50)',
-                    'payment_status': 'VARCHAR(20) DEFAULT \'active\'',
-                    'current_balance': 'DECIMAL(10,2) DEFAULT 0.00',
-                    'total_paid': 'DECIMAL(10,2) DEFAULT 0.00',
-                    'last_payment_date': 'TIMESTAMP',
-                    'last_payment_amount': 'DECIMAL(10,2)',
-                    'profile_image': 'TEXT',
-                    'ppe_requirements': 'JSON',
-                    'compliance_settings': 'JSON'
-                }
-                
-                for column in missing_columns:
-                    if column in column_definitions:
-                        try:
-                            cursor.execute(f'ALTER TABLE companies ADD COLUMN IF NOT EXISTS {column} {column_definitions[column]}')
-                            logger.info(f"✅ Added column: {column}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Failed to add column {column}: {e}")
-            
-            # 3. detections tablosundaki eksik kolonları kontrol et
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'detections' AND table_schema = 'public'
-                AND column_name IN (
-                    'people_detected', 'total_people',
-                    'compliance_rate', 'processing_time_ms'
-                )
-            """)
-            existing_detection_columns = [row[0] for row in cursor.fetchall()]
-            
-            required_detection_columns = [
-                'people_detected', 'total_people',
-                'compliance_rate', 'processing_time_ms',
-            ]
-            missing_detection_columns = [c for c in required_detection_columns if c not in existing_detection_columns]
-            
-            if missing_detection_columns:
-                logger.info(f"🔧 Adding missing columns to detections table: {missing_detection_columns}")
-                for column in missing_detection_columns:
-                    try:
-                        if column == 'people_detected':
-                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS people_detected INTEGER DEFAULT 0')
-                        elif column == 'total_people':
-                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS total_people INTEGER DEFAULT 0')
-                        elif column == 'compliance_rate':
-                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS compliance_rate DECIMAL(5,2)')
-                        elif column == 'processing_time_ms':
-                            cursor.execute('ALTER TABLE detections ADD COLUMN IF NOT EXISTS processing_time_ms DECIMAL(12,3)')
-                        logger.info(f"✅ Added column to detections: {column}")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Failed to add column {column} to detections: {e}")
-
-            # 3b. violation_events PR1 genişletme (migration ile aynı; Python-only deploy senaryosu)
-            try:
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT 1 FROM information_schema.tables
-                        WHERE table_schema = 'public' AND table_name = 'violation_events'
-                    )
-                """)
-                if cursor.fetchone()[0]:
-                    self.ensure_violation_events_pr1_expand(cursor)
-                    self.ensure_violation_events_pr3_contract(cursor)
-            except Exception as e:
-                logger.warning(f"⚠️ violation_events PR1 expand (schema sync): {e}")
-            
-            # 4. Ek tabloları kontrol et
-            cursor.execute("""
-                SELECT table_name FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name IN ('subscription_history', 'billing_history', 'payment_methods', 'alerts')
-            """)
-            existing_extra_tables = [row[0] for row in cursor.fetchall()]
-            
-            extra_tables = ['subscription_history', 'billing_history', 'payment_methods', 'alerts']
-            missing_extra_tables = [t for t in extra_tables if t not in existing_extra_tables]
-            
-            if missing_extra_tables:
-                logger.info(f"🔧 Creating missing extra tables: {missing_extra_tables}")
-                # Bu tabloları oluşturmak için normal init_database akışına devam et
-                return False
-            
-            logger.info("✅ PostgreSQL schema is up to date")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Schema sync error: {e}")
-            return False
 
     # DVR System Methods
     def add_dvr_system(self, company_id: str, dvr_data: Dict[str, Any]) -> Optional[str]:
@@ -1699,8 +970,9 @@ class DatabaseAdapter:
                 INSERT INTO detections (
                     company_id, camera_id, detection_type, confidence,
                     people_detected, ppe_compliant, violations_count, total_people,
-                    compliance_rate, processing_time_ms
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    compliance_rate, compliant_people, violation_people, 
+                    track_id, processing_time_ms
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             params = (
@@ -1713,6 +985,9 @@ class DatabaseAdapter:
                 detection_data.get('violations_count', 0),
                 detection_data.get('total_people', 0),
                 detection_data.get('compliance_rate'),
+                detection_data.get('compliant_people', detection_data.get('ppe_compliant', 0)),
+                detection_data.get('violation_people', detection_data.get('violations_count', 0)),
+                detection_data.get('track_id'),
                 detection_data.get('processing_time_ms'),
             )
             
