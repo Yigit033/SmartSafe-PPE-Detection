@@ -217,6 +217,7 @@ def _draw_roi_debug_on_frame(frame: np.ndarray, roi_dbg: dict) -> None:
         ).reshape((-1, 1, 2))
         cv2.polylines(frame, [pts], True, (255, 255, 0), 2, cv2.LINE_AA)
 
+    # Backwards-compatible: `persons` is the legacy list (single layer).
     for p in roi_dbg.get("persons") or []:
         bb = p.get("bbox")
         if not bb or len(bb) != 4:
@@ -232,6 +233,56 @@ def _draw_roi_debug_on_frame(frame: np.ndarray, roi_dbg: dict) -> None:
         else:
             color = (0, 0, 255)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+    # New (optional): layered bbox debug (raw vs final).
+    # raw_persons: pre-tracking / pre-ROI (red)
+    # final_persons: post-tracking / post-ROI (green)
+    raw_list = roi_dbg.get("raw_persons") or []
+    final_list = roi_dbg.get("final_persons") or []
+    if raw_list or final_list:
+        for p in raw_list:
+            bb = p.get("bbox")
+            if not bb or len(bb) != 4:
+                continue
+            try:
+                x1, y1, x2, y2 = int(bb[0]), int(bb[1]), int(bb[2]), int(bb[3])
+            except (TypeError, ValueError):
+                continue
+            # raw = thin red
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 1)
+
+        for p in final_list:
+            bb = p.get("bbox")
+            if not bb or len(bb) != 4:
+                continue
+            try:
+                x1, y1, x2, y2 = int(bb[0]), int(bb[1]), int(bb[2]), int(bb[3])
+            except (TypeError, ValueError):
+                continue
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            # Small label: track_id + roi_score (if present)
+            try:
+                tid = p.get("track_id")
+                rs = p.get("roi_score")
+                label = ""
+                if tid is not None:
+                    label += f"id={tid}"
+                if rs is not None:
+                    label += ("" if not label else " ") + f"roi={float(rs):.2f}"
+                if label:
+                    cv2.putText(
+                        frame,
+                        label,
+                        (x1 + 2, max(12, y1 - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        (255, 255, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
+            except Exception:
+                pass
 
     st = roi_dbg.get("stats") or {}
     line = (
@@ -2217,6 +2268,28 @@ smartsafe_requests_total 100
                             "yes",
                             "on",
                         )
+                        _bbox_debug = os.environ.get("BBOX_DEBUG", "").strip().lower() in (
+                            "1",
+                            "true",
+                            "yes",
+                            "on",
+                        )
+
+                        # Person-centric tracking (optional): assign stable track_id to person bboxes.
+                        # This improves overlay stability and unlocks bbox reliability metrics.
+                        try:
+                            from utils.person_tracking import assign_track_ids_to_person_detections
+
+                            if isinstance(results, list) and results:
+                                persons_now = [
+                                    d
+                                    for d in results
+                                    if isinstance(d, dict) and d.get("class_name") == "person"
+                                ]
+                                if persons_now:
+                                    assign_track_ids_to_person_detections(camera_key, persons_now)
+                        except Exception:
+                            pass
 
                         # Analiz bölgesi (normalize poligon): bbox alt-orta noktası ROI dışındaysa elenir.
                         _dz = None
@@ -2224,7 +2297,10 @@ smartsafe_requests_total 100
                             from utils.detection_roi import (
                                 build_roi_debug_meta,
                                 filter_detections_by_roi,
+                                get_roi_contour_pixels,
+                                roi_score_for_bbox,
                             )
+                            from utils.bbox_observability import record_bbox_frame
 
                             _dz = _camera_cfg.get("detection_zones")
                             if isinstance(results, list) and _dz is not None:
@@ -2256,13 +2332,51 @@ smartsafe_requests_total 100
                                         )
                                         _roi_log_last = _t_roi
                             if (
-                                _roi_debug
+                                (_roi_debug or _bbox_debug)
                                 and isinstance(results_pre_roi, list)
                                 and _dz is not None
                             ):
-                                _roi_debug_meta = build_roi_debug_meta(
-                                    frame.shape, _dz, results_pre_roi
-                                )
+                                # Legacy ROI meta (polygon + inside/outside) stays available.
+                                _roi_debug_meta = build_roi_debug_meta(frame.shape, _dz, results_pre_roi)
+
+                                # Extended bbox debug meta (raw vs final) — optional.
+                                if _bbox_debug:
+                                    contour = get_roi_contour_pixels(frame.shape, _dz)
+                                    raw_persons = [
+                                        d
+                                        for d in results_pre_roi
+                                        if isinstance(d, dict) and d.get("class_name") == "person"
+                                    ]
+                                    final_persons = [
+                                        d
+                                        for d in (results if isinstance(results, list) else [])
+                                        if isinstance(d, dict) and d.get("class_name") == "person"
+                                    ]
+                                    raw_out = []
+                                    for p in raw_persons:
+                                        bb = p.get("bbox")
+                                        if not bb:
+                                            continue
+                                        raw_out.append({"bbox": bb})
+                                    fin_out = []
+                                    for p in final_persons:
+                                        bb = p.get("bbox")
+                                        if not bb:
+                                            continue
+                                        tid = p.get("track_id")
+                                        roi_score = None
+                                        if contour is not None:
+                                            try:
+                                                roi_score, _inside, _inter = roi_score_for_bbox(
+                                                    bb, contour, frame.shape
+                                                )
+                                            except Exception:
+                                                roi_score = None
+                                        fin_out.append({"bbox": bb, "track_id": tid, "roi_score": roi_score})
+
+                                    if isinstance(_roi_debug_meta, dict):
+                                        _roi_debug_meta["raw_persons"] = raw_out
+                                        _roi_debug_meta["final_persons"] = fin_out
                                 if _roi_debug_meta is not None:
                                     _st = _roi_debug_meta["stats"]
                                     _msg = (
@@ -2273,6 +2387,22 @@ smartsafe_requests_total 100
                                     )
                                     print(_msg, flush=True)
                                     logger.info(_msg)
+
+                            # BBox reliability metrics (env-gated) — person-centric.
+                            try:
+                                persons_now = [
+                                    d
+                                    for d in (results if isinstance(results, list) else [])
+                                    if isinstance(d, dict) and d.get("class_name") == "person"
+                                ]
+                                record_bbox_frame(
+                                    logger,
+                                    camera_key,
+                                    frame_shape=frame.shape,
+                                    person_detections=persons_now,
+                                )
+                            except Exception:
+                                pass
                         except Exception as _roi_err:
                             logger.warning(f"⚠️ ROI filtre atlandı: {_roi_err}")
                         
@@ -2282,6 +2412,32 @@ smartsafe_requests_total 100
                         # İhlal listesini normalize et (dict formatına çevir, string'leri sar)
                         normalized_ppe_violations, simple_ppe_violations = self._normalize_ppe_violations(ppe_violations)
                         ppe_violations = simple_ppe_violations
+
+                        # ── Decision Engine (runtime reliability gating) ────────────────────
+                        # If bbox/tracking/ROI confidence is low, DO NOT emit violation events.
+                        decision_summary = {"state": "ACCEPT", "reasons": []}
+                        try:
+                            from utils.detection_decision import decide_frame
+                            contour = None
+                            try:
+                                if _dz is not None:
+                                    contour = get_roi_contour_pixels(frame.shape, _dz)
+                            except Exception:
+                                contour = None
+                            persons_for_decision = [
+                                d
+                                for d in (results if isinstance(results, list) else [])
+                                if isinstance(d, dict) and d.get("class_name") == "person"
+                            ]
+                            decision_summary = decide_frame(
+                                camera_key,
+                                persons=persons_for_decision,
+                                frame_shape=frame.shape,
+                                contour=contour,
+                                roi_score_fn=roi_score_for_bbox if contour is not None else None,
+                            )
+                        except Exception:
+                            decision_summary = {"state": "ACCEPT", "reasons": ["decision_error"]}
 
                         # Eğer kişi var ama hiç ihlal yoksa, tüm kişiler uyumlu kabul edilmeli.
                         # Bu yalnızca pose-aware uyumluluk hesabi 0 bırakmışsa (PPE konfig yok) çalışır.
@@ -2293,7 +2449,7 @@ smartsafe_requests_total 100
                         # yazılır (her frame'de spam yerine).
                         tracker_new_violations: list = []
                         tracker_ended_violations: list = []
-                        if people_detected > 0 and ppe_violations:
+                        if people_detected > 0 and ppe_violations and decision_summary.get("state") == "ACCEPT":
                             try:
                                 # results listesinden person bbox'larını çıkar
                                 persons_from_result = [
@@ -2302,6 +2458,8 @@ smartsafe_requests_total 100
                                 ]
                                 if persons_from_result:
                                     for p_idx, person_det in enumerate(persons_from_result):
+                                        if person_det.get("decision") not in (None, "ACCEPT"):
+                                            continue
                                         p_bbox = person_det.get('bbox', [0, 0, 10, 10])
                                         new_v, ended_v = violation_tracker.process_detection(
                                             camera_id=camera_id,
@@ -2323,6 +2481,16 @@ smartsafe_requests_total 100
                                     tracker_ended_violations.extend(ended_v)
                             except Exception as vt_err:
                                 logger.warning(f"⚠️ ViolationTracker güncelleme hatası: {vt_err}")
+                        elif decision_summary.get("state") != "ACCEPT" and ppe_violations:
+                            # Reliability gate: show overlay/metrics but avoid producing false alerts.
+                            logger.info(
+                                "🛡️ DECISION_GATE [%s] state=%s accept=%s uncertain=%s reject=%s — violation events suppressed",
+                                camera_key,
+                                decision_summary.get("state"),
+                                decision_summary.get("people_accept"),
+                                decision_summary.get("people_uncertain"),
+                                decision_summary.get("people_reject"),
+                            )
 
                         # ── VIOLATION DB & SNAPSHOT KAYIT ──────────────────────────────────
                         # DVR yoluyla aynı kalitede: snapshot + violation_events + person stats
@@ -2468,6 +2636,7 @@ smartsafe_requests_total 100
                             'confidence_threshold': float(confidence),
                             'detections': results if isinstance(results, list) else [],  # bbox listesi overlay için
                             'roi_debug': _roi_debug_meta,
+                            'decision': decision_summary,
                         }
                         
                         # Queue'ya ekle

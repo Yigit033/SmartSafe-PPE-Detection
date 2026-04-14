@@ -171,6 +171,79 @@ def point_inside_polygon(pt: Tuple[float, float], contour: np.ndarray) -> bool:
     return r >= 0
 
 
+def intersection_ratio_bbox_roi(
+    bbox: Any,
+    contour: np.ndarray,
+    frame_shape: Tuple[int, ...],
+) -> Optional[float]:
+    """Return intersection_area(bbox ∩ ROI) / area(bbox) in [0,1].
+
+    Implementation uses a compact raster mask over the bbox region to handle
+    arbitrary (possibly concave) polygons robustly.
+    """
+    if contour is None or len(frame_shape) < 2:
+        return None
+    if not bbox or len(bbox) < 4:
+        return None
+    try:
+        x1, y1, x2, y2 = [int(float(bbox[i])) for i in range(4)]
+    except Exception:
+        return None
+
+    h, w = int(frame_shape[0]), int(frame_shape[1])
+    x1 = max(0, min(x1, w - 1))
+    y1 = max(0, min(y1, h - 1))
+    x2 = max(x1 + 1, min(x2, w))
+    y2 = max(y1 + 1, min(y2, h))
+
+    bw = x2 - x1
+    bh = y2 - y1
+    area = float(bw * bh)
+    if area <= 1.0:
+        return None
+
+    # Create a small mask for the bbox region; fill polygon in global coords then crop.
+    mask = np.zeros((h, w), dtype=np.uint8)
+    try:
+        cv2.fillPoly(mask, [contour], 255)
+    except Exception:
+        return None
+    roi_crop = mask[y1:y2, x1:x2]
+    if roi_crop.size == 0:
+        return None
+    inter = float(int(np.count_nonzero(roi_crop)))
+    return max(0.0, min(1.0, inter / area))
+
+
+def roi_score_for_bbox(
+    bbox: Any,
+    contour: np.ndarray,
+    frame_shape: Tuple[int, ...],
+    *,
+    w_bottom_center: float = 0.65,
+    w_intersection: float = 0.35,
+) -> Tuple[Optional[float], Optional[bool], Optional[float]]:
+    """Score-based ROI decision helpers.
+
+    Returns (roi_score, bottom_center_inside, intersection_ratio).
+    - roi_score in [0,1] when computable; None when ROI/bbox invalid.
+    """
+    pt = bbox_bottom_center(bbox)
+    if pt is None:
+        return None, None, None
+    try:
+        inside = bool(point_inside_polygon(pt, contour))
+    except Exception:
+        inside = None
+
+    inter = intersection_ratio_bbox_roi(bbox, contour, frame_shape)
+    if inside is None or inter is None:
+        return None, inside, inter
+    bc = 1.0 if inside else 0.0
+    score = (w_bottom_center * bc) + (w_intersection * float(inter))
+    return max(0.0, min(1.0, float(score))), inside, float(inter)
+
+
 def filter_detections_by_roi(
     frame_shape: Tuple[int, ...],
     detection_zones_raw: Any,
