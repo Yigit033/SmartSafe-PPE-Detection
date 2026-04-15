@@ -16,10 +16,19 @@ export default function RootLayout({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
+  // Hydration safety:
+  // - We avoid rendering auth-gated UI until after mount so server/client first paint match.
+  // - Browser extensions (e.g. Grammarly) may inject attributes into <body>, so we suppress warnings there.
+  const [mounted, setMounted] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const isPublicPage = pathname === "/login" || pathname === "/register";
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     const user = localStorage.getItem("user");
     if (!user && !isPublicPage) {
       router.push("/login");
@@ -28,10 +37,22 @@ export default function RootLayout({
     } else {
       setIsReady(true);
     }
-  }, [isPublicPage, router]);
+  }, [isPublicPage, mounted, router]);
 
   // Render content based on readiness
   const renderContent = () => {
+    // Until mounted, render a stable shell to prevent hydration mismatch.
+    if (!mounted) {
+      return (
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 border-4 border-brand-teal border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 font-black text-xs uppercase tracking-widest">
+            Sistem Yükleniyor...
+          </p>
+        </div>
+      );
+    }
+
     if (!isReady && !isPublicPage) {
       return (
         <div className="flex flex-col items-center gap-4">
@@ -72,7 +93,8 @@ export default function RootLayout({
         <title>SmartSafe AI | Dashboard</title>
       </head>
       <body
-        className={`${inter.className} ${!isReady && !isPublicPage ? "bg-slate-50 flex items-center justify-center min-h-screen" : "antialiased bg-slate-50 text-slate-900"}`}
+        suppressHydrationWarning
+        className={`${inter.className} ${!mounted || (!isReady && !isPublicPage) ? "bg-slate-50 flex items-center justify-center min-h-screen" : "antialiased bg-slate-50 text-slate-900"}`}
       >
         {renderContent()}
       </body>
