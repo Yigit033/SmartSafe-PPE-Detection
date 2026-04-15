@@ -1406,7 +1406,7 @@ class DatabaseAdapter:
             pk = info.get("channel_id") or info.get("camera_id")
             if pk:
                 return str(pk)
-        if sid.startswith("dvr_") and "_ch" in sid:
+        if sid.upper().startswith("DVR_") and "_ch" in sid.lower():
             stripped = sid[4:]
             info2 = self.get_dvr_channel_by_id(stripped, company_id)
             if info2:

@@ -357,6 +357,8 @@ class SmartSafeSaaSAPI:
             'http://localhost:8000',
             'http://localhost:5577',
             'http://127.0.0.1:5577',
+            'http://localhost:8088',
+            'http://127.0.0.1:8088',
             'https://getsmartsafeai.com',  # Production frontend domain
             'https://www.getsmartsafeai.com',  # WWW variant
             'https://app.getsmartsafeai.com',  # Backend custom domain

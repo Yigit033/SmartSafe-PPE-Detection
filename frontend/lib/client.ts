@@ -280,12 +280,10 @@ export namespace camera {
     success: boolean
     cameras: Camera[]
 }> {
-            const url = new URL(this.baseClient["baseURL"] + `/company/${encodeURIComponent(company_id)}/cameras`);
-            if (params?.status) {
-                url.searchParams.append("status", params.status);
-            }
+            const path = `/company/${encodeURIComponent(company_id)}/cameras`;
+            const query = params?.status ? `?status=${encodeURIComponent(params.status)}` : "";
             // Now make the actual call to the API
-            const resp = await this.baseClient.callTypedAPI("GET", url.pathname + url.search)
+            const resp = await this.baseClient.callTypedAPI("GET", path + query)
             return await resp.json() as {
     success: boolean
     cameras: Camera[]
