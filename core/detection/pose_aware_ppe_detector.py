@@ -1009,6 +1009,7 @@ class PoseAwarePPEDetector:
             logger.warning("🔍 PPE grouped: no PPE items matched any PPE_CONFIG type")
 
         enhanced_persons: List[Dict] = []
+        frame_h, frame_w = frame_shape[:2]
 
         for idx, person in enumerate(persons):
             regions = person['anatomical_regions']
@@ -1026,6 +1027,22 @@ class PoseAwarePPEDetector:
                 if region_bbox is None:
                     # Fallback: full body bölgesini kullan
                     region_bbox = regions.get('full_body', person_bbox)
+
+                # Haircap association is very sensitive to head region tightness.
+                # Expand head region slightly for haircap only to reduce false "IoU_head=0.000".
+                if ppe_type == 'haircap' and region_name == 'head' and region_bbox and len(region_bbox) == 4:
+                    try:
+                        x1, y1, x2, y2 = [float(v) for v in region_bbox]
+                        w = max(1.0, x2 - x1)
+                        h = max(1.0, y2 - y1)
+                        pad = 0.40  # 40% expansion on each side (tuned for small head_region from pose)
+                        ex1 = max(0.0, x1 - w * pad)
+                        ey1 = max(0.0, y1 - h * pad)
+                        ex2 = min(float(frame_w), x2 + w * pad)
+                        ey2 = min(float(frame_h), y2 + h * pad)
+                        region_bbox = [ex1, ey1, ex2, ey2]
+                    except Exception:
+                        pass
 
                 best_match = self._find_best_ppe_match(
                     ppe_by_type.get(ppe_type, []),
