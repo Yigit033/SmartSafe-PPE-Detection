@@ -110,7 +110,7 @@ function Check-Docker {
         Update-Status "Docker Kuruluyor..." "Bu i$($s_kucuk)lem 3-5 dakika s$($u_kucuk)rebilir..."
         $null = Start-Process -FilePath $installerPath -ArgumentList "install", "--quiet", "--accept-license", "--install-privileged-helper" -Wait
         
-        Update-Status "Docker Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Sistem servisi haz$($i_noktasiz)rlan$($i_noktasiz)yor..."
+        Update-Status "Docker Ba$($s_kucuk)lat$($i_noktasiz)l$($i_noktasiz)yor..." "Sistem servisi haz$($i_noktasiz)rlan$($i_noktasiz)yor..."
         Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -WindowStyle Hidden
         Start-Sleep -Seconds 15
     } catch {
@@ -152,7 +152,7 @@ try { $null = Start-Process "docker" -ArgumentList "compose pull --quiet" -Windo
 Update-Status "Konteynerler Haz$($i_noktasiz)rlan$($i_noktasiz)yor..." "Servisler aya$($g_yumusak)a kald$($i_noktasiz)r$($i_noktasiz)l$($i_noktasiz)yor..."
 $null = Start-Process "docker" -ArgumentList "compose up -d --remove-orphans" -WindowStyle Hidden -Wait
 
-Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Veritaban$($i_noktasiz) ve AI Motoru bekleniyor..."
+Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktasiz)l$($i_noktasiz)yor..." "Veritaban$($i_noktasiz) ve AI Motoru bekleniyor..."
 $max_retries = 120 # 2 dakika limit
 $count = 0
 $ready = $false
@@ -165,7 +165,7 @@ while ($count -lt $max_retries) {
             $ready = $true
             break
         }
-        Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Haz$($i_noktasiz)r olmas$($i_noktasiz) bekleniyor ($($count)s)..."
+        Update-Status "Sistem Ba$($s_kucuk)lat$($i_noktasiz)l$($i_noktasiz)yor..." "Haz$($i_noktasiz)r olmas$($i_noktasiz) bekleniyor ($($count)s)..."
     } catch { }
     $count += 2
     [System.Windows.Forms.Application]::DoEvents()
