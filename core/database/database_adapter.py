@@ -270,7 +270,7 @@ class DatabaseAdapter:
                 return False
 
             # 2. Wait for Encore Migrations to create all critical tables
-            critical_tables = ['companies', 'cameras', 'users', 'camera_schedules', 'active_detections']
+            critical_tables = ['companies', 'cameras', 'users', 'camera_schedules']
             max_migration_retries = 30 # Wait longer for migrations
             
             for attempt in range(max_migration_retries):
@@ -292,8 +292,7 @@ class DatabaseAdapter:
                             missing_tables.append(table)
                     
                     if not missing_tables:
-                        # All tables exist, do some basic maintenance
-                        cursor.execute("DELETE FROM active_detections WHERE updated_at < NOW() - INTERVAL '6 hours'")
+                        # All tables exist
                         conn.commit()
                         logger.info("✅ Database schema verified (all tables present). AI Core is ready.")
                         return True

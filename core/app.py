@@ -4693,16 +4693,6 @@ def create_app():
     try:
         api_server = SmartSafeSaaSAPI()
         
-        # --- Startup: Stale active_detections temizliği ---
-        # Restart sonrası hiçbir detection thread çalışmıyor,
-        # önceki process'ten kalan DB kayıtları stale → hepsini sil
-        try:
-            _db = get_db_adapter()
-            cleared = _db.execute_query("DELETE FROM active_detections")
-            print(f"🧹 Startup cleanup: {cleared} stale active_detections silindi")
-        except Exception as cleanup_err:
-            print(f"⚠️ Startup active_detections cleanup failed (tablo henüz yok olabilir): {cleanup_err}")
-        
         # --- Start Schedule Manager ---
         try:
             from services.schedule_manager import get_schedule_manager

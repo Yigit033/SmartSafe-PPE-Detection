@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "encore:sync": "node ./scripts/encore-sync-if-needed.cjs",
-    "dev": "node ./scripts/encore-sync-if-needed.cjs && encore run",
+    "dev": "node ./scripts/encore-sync-if-needed.cjs && npm run migrate && encore run",
     "migrate": "node ./scripts/migrate.cjs"
   },
   "devDependencies": {
