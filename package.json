@@ -18,7 +18,7 @@
     "backend": "cd backend && node ./scripts/encore-sync-if-needed.cjs && encore run",
     "backend:sync": "cd backend && node ./scripts/encore-sync-if-needed.cjs",
     "generate": "docker exec smartsafe-backend-encore encore gen client --output=client.gen.ts && move backend\\client.gen.ts frontend\\lib\\client.ts",
-    "migrate": "cd backend && npm run migrate"
+    "migrate": "docker exec smartsafe-backend-encore npm run migrate"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
