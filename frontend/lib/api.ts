@@ -12,7 +12,9 @@ const isLocalhost =
 // Geliştirme modunda http://localhost:4477, Üretim (Nginx) modunda /api kullanılır.
 const defaultBaseURL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  (process.env.NODE_ENV === "production" ? "/api" : Local);
+  (process.env.NODE_ENV === "production" 
+    ? (typeof window !== "undefined" ? window.location.origin + "/api" : "/api") 
+    : Local);
 
 /**
  * Creates a client for API calls.

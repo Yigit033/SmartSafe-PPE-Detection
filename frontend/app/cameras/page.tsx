@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
-import core from "@/lib/core";
+import core, { getCoreBaseUrl } from "@/lib/core";
 import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import {
   normalizeDetectionZonesPayload,
@@ -429,13 +429,7 @@ function CamerasContent() {
   const discoverChannels = async (dvrId: string) => {
     setIsDiscoveringDvr(dvrId);
     try {
-      const response = await fetch(
-        `http://127.0.0.1:5577/api/company/${companyId}/dvr/${dvrId}/discover`,
-        {
-          method: "POST",
-        },
-      );
-      const data = await response.json();
+      const data = await core.discoverDVRChannels(companyId, dvrId);
       if (data.success) {
         const inactive = data.inactive_count || 0;
         const msg =
@@ -904,9 +898,9 @@ function CamerasContent() {
                   <div className="relative aspect-video bg-slate-900 overflow-hidden group-hover:ring-4 ring-brand-teal/10 transition-all duration-500">
                     <img
                       src={
-                        isCameraAiEnabled(camera)
-                          ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
-                          : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
+                         isCameraAiEnabled(camera)
+                          ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
+                          : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
                       }
                       alt={camera.camera_name}
                       className={`w-full h-full transition-all duration-700 group-hover:scale-105 ${
@@ -1677,7 +1671,9 @@ function CamerasContent() {
                                     autoFocus
                                     type="text"
                                     value={editingDvrName}
-                                    onChange={(e) => setEditingDvrName(e.target.value)}
+                                    onChange={(e) =>
+                                      setEditingDvrName(e.target.value)
+                                    }
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter")
                                         handleInlineDvrSave(dvr.dvr_id);
@@ -1708,9 +1704,9 @@ function CamerasContent() {
                                   </button>
                                 </div>
                               ) : (
-                                  <h4 className="font-black text-slate-900 text-[10px] mb-0.5">
-                                    {dvr.name}
-                                  </h4>
+                                <h4 className="font-black text-slate-900 text-[10px] mb-0.5">
+                                  {dvr.name}
+                                </h4>
                               )}
                               <p className="text-[8px] font-bold text-slate-400 tracking-tight">
                                 {dvr.ip_address} • {dvr.max_channels} KANAL •{" "}
