@@ -206,6 +206,11 @@ class PoseAwarePPEDetector:
         self._frame_counter: int = 0
         self._last_ppe_detections: List[Dict] = []
 
+        # Association debug: dump a single frame's key bboxes (once per process).
+        # Enable via env: PPE_ASSOC_BBOX_DUMP=1
+        # Goal: definitively verify coordinate alignment for person/head/haircap boxes.
+        self._assoc_bbox_dump_done: bool = False
+
         # GPU memory guard: cap inference resolution to avoid CUDA OOM
         self._max_inference_height: int = 640
         self._oom_cooldown_until: float = 0.0
@@ -1110,6 +1115,44 @@ class PoseAwarePPEDetector:
                                 f"IoU_head={iou_r:.3f}, IoU_person={iou_p:.3f}, "
                                 f"matched={'YES' if best_match is not None else 'NO'}"
                             )
+
+                        # One-shot bbox dump to close the loop on geometry:
+                        # person_bbox, pose-derived head region, and haircap bbox from food model.
+                        # Enable via env: PPE_ASSOC_BBOX_DUMP=1
+                        if (not self._assoc_bbox_dump_done) and os.getenv("PPE_ASSOC_BBOX_DUMP", "0") == "1":
+                            try:
+                                head_bbox = regions.get("head") if isinstance(regions, dict) else None
+
+                                # Pick the candidate most overlapping the person bbox (even if region match fails).
+                                best_cand = None
+                                best_piou = -1.0
+                                for cand in candidates:
+                                    cb = cand.get("bbox", [])
+                                    if len(cb) != 4:
+                                        continue
+                                    piou = self._calculate_iou(cb, person_bbox)
+                                    if piou > best_piou:
+                                        best_piou = piou
+                                        best_cand = cand
+
+                                logger.info(
+                                    "📦 ASSOC_BBOX_DUMP person=%s person_bbox=%s head_region=%s haircap_bbox=%s "
+                                    "haircap_conf=%.3f iou_head=%.4f iou_person=%.4f",
+                                    idx,
+                                    [round(float(v), 1) for v in (person_bbox or [])] if person_bbox else None,
+                                    [round(float(v), 1) for v in (head_bbox or [])] if head_bbox else None,
+                                    [round(float(v), 1) for v in ((best_cand or {}).get("bbox") or [])] if best_cand else None,
+                                    float((best_cand or {}).get("confidence", 0.0)),
+                                    self._calculate_iou((best_cand or {}).get("bbox", []), head_bbox)
+                                    if (best_cand and head_bbox)
+                                    else 0.0,
+                                    self._calculate_iou((best_cand or {}).get("bbox", []), person_bbox)
+                                    if best_cand
+                                    else 0.0,
+                                )
+                            finally:
+                                # Regardless of any dump issues, never spam logs.
+                                self._assoc_bbox_dump_done = True
 
                 if logger.isEnabledFor(logging.DEBUG) and ppe_type in ('face_mask', 'safety_suit', 'haircap'):
                     candidates = ppe_by_type.get(ppe_type, [])
