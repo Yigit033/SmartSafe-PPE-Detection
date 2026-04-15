@@ -18,5 +18,7 @@ EXPOSE 3377
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=development
 
-# Frontend'i geliştirme modunda başlatıyoruz (webpack modu - Docker hot-reload için)
-CMD ["npx", "next", "dev", "--webpack", "--hostname", "0.0.0.0", "--port", "3377"]
+COPY infra/docker-entrypoint-frontend.sh /docker-entrypoint-frontend.sh
+RUN chmod +x /docker-entrypoint-frontend.sh && sed -i 's/\r$//' /docker-entrypoint-frontend.sh
+
+ENTRYPOINT ["/docker-entrypoint-frontend.sh"]
