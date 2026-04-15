@@ -1475,7 +1475,7 @@ class MultiTenantDatabase:
             placeholder = self.get_placeholder()
 
             # 1. DVR Kanalı kontrolü
-            if camera_id and str(camera_id).startswith('dvr_'):
+            if camera_id and str(camera_id).upper().startswith('DVR_'):
                 logger.info(f"🔍 Searching DVR channel: {camera_id}")
                 cursor.execute(f'''
                     SELECT c.channel_id, c.name, s.ip_address, s.port, s.protocol, 

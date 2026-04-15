@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
-import core, { getCoreBaseUrl } from "@/lib/core";
+import core from "@/lib/core";
 import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import {
   normalizeDetectionZonesPayload,
