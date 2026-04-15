@@ -80,6 +80,17 @@ async function runMigrations() {
     await client.connect();
     console.log("Connected to PostgreSQL for migrations.");
 
+    // Create tracking table if not exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        id SERIAL PRIMARY KEY,
+        service TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(service, filename)
+      );
+    `);
+
     const roots = discoverMigrationDirs();
     if (roots.length === 0) {
       console.warn("No service migrations directories found under backend.");
@@ -94,22 +105,45 @@ async function runMigrations() {
     for (const { service, dir } of roots) {
       const files = listSqlFiles(dir);
       if (files.length === 0) {
-        console.log(`[${service}] (no .sql files)`);
         continue;
       }
 
       for (const file of files) {
+        // Check if already applied
+        const { rows } = await client.query(
+          "SELECT id FROM _migrations WHERE service = $1 AND filename = $2",
+          [service, file]
+        );
+
+        if (rows.length > 0) {
+          // Already applied
+          continue;
+        }
+
         const rel = `${service}/migrations/${file}`;
         console.log(`Running migration: ${rel}`);
         const sql = fs.readFileSync(path.join(dir, file), "utf8");
-        await client.query(sql);
-        console.log(`Successfully completed: ${rel}`);
+        
+        try {
+          await client.query("BEGIN");
+          await client.query(sql);
+          await client.query(
+            "INSERT INTO _migrations (service, filename) VALUES ($1, $2)",
+            [service, file]
+          );
+          await client.query("COMMIT");
+          console.log(`Successfully completed: ${rel}`);
+        } catch (execErr) {
+          await client.query("ROLLBACK");
+          console.error(`Error in ${rel}:`, execErr.message);
+          throw execErr;
+        }
       }
     }
 
-    console.log("All migrations executed successfully.");
+    console.log("All pending migrations executed successfully.");
   } catch (err) {
-    console.error("Migration error:", err.message);
+    console.error("Migration fatal error:", err.message);
     process.exit(1);
   } finally {
     await client.end();
