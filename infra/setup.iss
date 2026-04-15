@@ -30,15 +30,16 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "docker-compose.prod.yml"; DestDir: "{app}"; DestName: "docker-compose.yml"; Flags: ignoreversion
 Source: "nginx\*"; DestDir: "{app}\nginx"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "scripts\launch.vbs"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\launcher.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\baslat.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; Ana kisayol - Terminalsiz baslatma
-Name: "{group}\SmartSafe AI"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\scripts\launcher.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\nginx\ssl\favicon.ico"
-Name: "{commondesktop}\SmartSafe AI"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\scripts\launcher.ps1"""; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\nginx\ssl\favicon.ico"
+; Ana kisayol - Sifir terminal (VBS uzerinden)
+Name: "{group}\SmartSafe AI"; Filename: "wscript.exe"; Parameters: """{app}\scripts\launch.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\nginx\ssl\favicon.ico"
+Name: "{commondesktop}\SmartSafe AI"; Filename: "wscript.exe"; Parameters: """{app}\scripts\launch.vbs"""; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\nginx\ssl\favicon.ico"
 
 [Run]
 ; Kurulum sonunda terminalsiz baslat
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\scripts\launcher.ps1"""; WorkingDir: "{app}"; Description: "Uygulamayı Şimdi Başlat"; Flags: postinstall nowait skipifsilent
+Filename: "wscript.exe"; Parameters: """{app}\scripts\launch.vbs"""; WorkingDir: "{app}"; Description: "Uygulamayı Şimdi Başlat"; Flags: postinstall nowait skipifsilent

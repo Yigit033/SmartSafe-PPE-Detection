@@ -1,7 +1,9 @@
 import { CoreServiceClient } from "./coreClient";
 
 // Environment variable for Core backend URL
-const CORE_URL = process.env.NEXT_PUBLIC_CORE_URL || "http://localhost:5577";
+const CORE_URL = 
+    process.env.NEXT_PUBLIC_CORE_URL || 
+    (process.env.NODE_ENV === "production" ? "/core" : "http://localhost:5577");
 
 /**
  * Global Core Client instance.
