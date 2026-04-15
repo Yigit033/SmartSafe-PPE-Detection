@@ -711,6 +711,100 @@ class SH17ModelManager:
                        f"(types: {[d['model_type'] for d in haircap_detections]})")
         return haircap_detections
 
+    def _filter_food_haircap_candidates(self, sh17_detections: List[Dict], food_detections: List[Dict]) -> List[Dict]:
+        """
+        Food model 'haircap' false-positive'lerini baskıla.
+
+        Neden gerekli?
+        - Food model bazen frame'in alakasız bir bölgesinde devasa bir bbox'u 'haircap' diye etiketleyebiliyor.
+        - Bu durumda `detect_ppe()` içindeki `has_haircap` True oluyor ve head-crop rescue hiç çalışmıyor.
+
+        Strateji:
+        - Haircap bbox'u en azından bir SH17 'head' bbox'u ile zayıf da olsa geometrik ilişki göstermeli.
+          (IoU veya center-in-expanded-head)
+        - Aksi halde haircap'i drop et ki rescue devreye girebilsin.
+        """
+        if not food_detections:
+            return []
+
+        head_boxes: List[List[float]] = [
+            d.get("bbox") for d in (sh17_detections or [])
+            if d.get("class_name") == "head" and isinstance(d.get("bbox"), list) and len(d.get("bbox")) == 4
+        ]
+        if not head_boxes:
+            # Head yoksa, filter uygulamayalım (kötü/kaybolmuş head detection’da haircap’i tamamen öldürmeyelim).
+            return food_detections
+
+        def _iou(a: List[float], b: List[float]) -> float:
+            try:
+                ax1, ay1, ax2, ay2 = map(float, a)
+                bx1, by1, bx2, by2 = map(float, b)
+            except Exception:
+                return 0.0
+            ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+            ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+            iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+            inter = iw * ih
+            if inter <= 0.0:
+                return 0.0
+            area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+            area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+            denom = area_a + area_b - inter
+            return (inter / denom) if denom > 0.0 else 0.0
+
+        def _center_in_expanded_head(hb: List[float], head: List[float], pad: float = 0.35) -> bool:
+            # pad: head bbox'u oran olarak genişlet, center'ın içinde olup olmadığına bak
+            try:
+                x1, y1, x2, y2 = map(float, hb)
+                cx = (x1 + x2) / 2.0
+                cy = (y1 + y2) / 2.0
+                hx1, hy1, hx2, hy2 = map(float, head)
+                hw, hh = max(0.0, hx2 - hx1), max(0.0, hy2 - hy1)
+                ex1 = hx1 - hw * pad
+                ey1 = hy1 - hh * pad
+                ex2 = hx2 + hw * pad
+                ey2 = hy2 + hh * pad
+                return (ex1 <= cx <= ex2) and (ey1 <= cy <= ey2)
+            except Exception:
+                return False
+
+        filtered: List[Dict] = []
+        dropped = 0
+        for det in food_detections:
+            if det.get("class_name") != "haircap":
+                filtered.append(det)
+                continue
+
+            hb = det.get("bbox") or []
+            if not (isinstance(hb, list) and len(hb) == 4):
+                dropped += 1
+                continue
+
+            best_iou = 0.0
+            any_center_ok = False
+            for head in head_boxes:
+                best_iou = max(best_iou, _iou(hb, head))
+                if _center_in_expanded_head(hb, head):
+                    any_center_ok = True
+
+            # Tolerant thresholds: haircap çok küçük olabilir. Ama "alakasız dev bbox"ları elemek için yeterli.
+            if best_iou >= 0.005 or any_center_ok:
+                filtered.append(det)
+            else:
+                dropped += 1
+                logger.info(
+                    "🍽️ Food haircap dropped (no head overlap): conf=%.3f bbox=%s best_iou=%.4f heads=%d model_type=%s",
+                    float(det.get("confidence", 0.0)),
+                    [round(float(v), 1) for v in hb],
+                    best_iou,
+                    len(head_boxes),
+                    det.get("model_type"),
+                )
+
+        if dropped:
+            logger.info(f"🍽️ Food haircap filter: dropped={dropped} kept={len(filtered)} (heads={len(head_boxes)})")
+        return filtered
+
     def detect_ppe(self, image, sector='base', confidence=0.5):
         """PPE tespiti — SH17 + food sektörü için dual-model desteği."""
         is_food = sector in ('food', 'food_beverage')
@@ -738,6 +832,9 @@ class SH17ModelManager:
                 self._clear_gpu_cache()
                 food_results = self._detect_with_food_model(image, confidence)
                 if food_results:
+                    # Food model haircap false-positive'leri rescue'yu kilitleyebilir.
+                    # Bu yüzden haircap adaylarını SH17 head bboxes ile tutarlı olacak şekilde filtrele.
+                    food_results = self._filter_food_haircap_candidates(sh17_results, food_results)
                     sh17_results.extend(food_results)
                     logger.debug(f"🍽️ Food merge: +{len(food_results)} food tespit → toplam {len(sh17_results)}")
 
