@@ -11,11 +11,18 @@ echo "SmartSafe AI Windows Installer Derleniyor..."
 echo "---------------------------------------------------"
 
 # Derleme komutunu calistir
-Push-Location "infra"
-try {
+if (Test-Path "setup.iss") {
     & $ISCC "setup.iss"
-} finally {
-    Pop-Location
+} elseif (Test-Path "infra/setup.iss") {
+    Push-Location "infra"
+    try {
+        & $ISCC "setup.iss"
+    } finally {
+        Pop-Location
+    }
+} else {
+    echo "[HATA] setup.iss bulunamadi!"
+    exit 1
 }
 
 if ($LASTEXITCODE -eq 0) {

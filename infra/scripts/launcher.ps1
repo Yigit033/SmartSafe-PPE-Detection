@@ -5,6 +5,23 @@ $I_noktali = [char]304
 $i_noktasiz = [char]305
 $G_yumusak = [char]286
 $g_yumusak = [char]287
+$u_kucuk = [char]252
+$o_kucuk = [char]246
+$c_kucuk = [char]231
+$version = "v0.4.16"
+$searchPaths = @(
+    (Join-Path $PSScriptRoot "VERSION"),
+    (Join-Path (Split-Path $PSScriptRoot -Parent) "VERSION"),
+    (Join-Path (Get-Location) "VERSION"),
+    (Join-Path (Get-Location) "infra\VERSION")
+)
+
+foreach ($path in $searchPaths) {
+    if (Test-Path $path) {
+        $version = "v$((Get-Content $path -TotalCount 1).Trim())"
+        break
+    }
+}
 
 $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -39,7 +56,7 @@ $xaml = @"
                 <TextBlock Name="SubStatusText" Text="Sistem kontrolleri yap&#305;l&#305;yor..." Foreground="#666" FontSize="12" HorizontalAlignment="Left"/>
             </StackPanel>
 
-            <TextBlock Grid.Row="2" Text="v0.4.7 Production" Foreground="#444" FontSize="10" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+            <TextBlock Grid.Row="2" Text="$version Production" Foreground="#444" FontSize="10" HorizontalAlignment="Center" Margin="0,0,0,20"/>
         </Grid>
     </Border>
 </Window>
@@ -90,7 +107,7 @@ function Check-Docker {
     try {
         $webClient = New-Object System.Net.WebClient
         $webClient.DownloadFile($url, $installerPath)
-        Update-Status "Docker Kuruluyor..." "Bu i$($s_kucuk)lem 3-5 dakika sürebilir..."
+        Update-Status "Docker Kuruluyor..." "Bu i$($s_kucuk)lem 3-5 dakika s$($u_kucuk)rebilir..."
         $null = Start-Process -FilePath $installerPath -ArgumentList "install", "--quiet", "--accept-license", "--install-privileged-helper" -Wait
         
         Update-Status "Docker Ba$($s_kucuk)lat$($i_noktali)l$($i_noktasiz)yor..." "Sistem servisi haz$($i_noktasiz)rlan$($i_noktasiz)yor..."
@@ -128,8 +145,8 @@ if (-not (Check-Docker)) {
     exit
 }
 
-# Adımlar
-Update-Status "Güncellemeler Denetleniyor..." "Bulut senkronizasyonu yap$($i_noktasiz)l$($i_noktasiz)yor..."
+# Ad$($i_noktasiz)mlar
+Update-Status "G$($u_kucuk)ncellemeler Denetleniyor..." "Bulut senkronizasyonu yap$($i_noktasiz)l$($i_noktasiz)yor..."
 try { $null = Start-Process "docker" -ArgumentList "compose pull --quiet" -WindowStyle Hidden -Wait } catch {}
 
 Update-Status "Konteynerler Haz$($i_noktasiz)rlan$($i_noktasiz)yor..." "Servisler aya$($g_yumusak)a kald$($i_noktasiz)r$($i_noktasiz)l$($i_noktasiz)yor..."
@@ -171,7 +188,7 @@ if ($ready) {
         Start-Process $baseUrl
     }
 } else {
-    Update-Status "Zaman A$($s_kucuk)&#305;m&#305;!" "Sistem beklenenden yava$($s_kucuk) aç$($i_noktasiz)l$($i_noktasiz)yor. Lütfen birazdan manuel deneyin."
+    Update-Status "Zaman A$($s_kucuk)$($i_noktasiz)m$($i_noktasiz)!" "Sistem beklenenden yava$($s_kucuk) aç$($i_noktasiz)l$($i_noktasiz)yor. L$($u_kucuk)tfen birazdan manuel deneyin."
     Start-Sleep -Seconds 5
 }
 

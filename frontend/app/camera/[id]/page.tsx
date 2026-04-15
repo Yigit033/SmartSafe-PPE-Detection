@@ -67,11 +67,11 @@ function CameraDetailContent() {
       newAiStatus ? [...prev, id] : prev.filter((x) => x !== id),
     );
     try {
-      await fetch(`http://127.0.0.1:5000/api/company/${cid}/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ camera_id: id }),
-      });
+      if (newAiStatus) {
+        await core.startDetection(cid, id);
+      } else {
+        await core.stopDetection(cid, id);
+      }
       await syncAiStates(cid);
     } catch (e) {
       console.error(e);

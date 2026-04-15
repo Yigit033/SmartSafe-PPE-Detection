@@ -22,4 +22,7 @@ COPY backend/ .
 # Geliştirici paneli (9400) kapatılmıştır.
 EXPOSE 4477
 
-ENTRYPOINT ["encore", "run", "--listen", "0.0.0.0:4477"]
+COPY infra/docker-entrypoint-backend.sh /docker-entrypoint-backend.sh
+RUN chmod +x /docker-entrypoint-backend.sh && sed -i 's/\r$//' /docker-entrypoint-backend.sh
+
+ENTRYPOINT ["/docker-entrypoint-backend.sh"]

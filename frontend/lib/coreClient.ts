@@ -30,6 +30,10 @@ export class CoreServiceClient {
     this.baseUrl = baseUrl;
   }
 
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   private async call(method: string, path: string, body?: any) {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,

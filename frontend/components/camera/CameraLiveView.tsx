@@ -1,14 +1,10 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
 import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import api from "@/lib/api";
+import core from "@/lib/core";
 import {
   normalizeDetectionZonesPayload,
   polygonToVideoSpaceForOverlay,
@@ -52,8 +48,8 @@ export default function CameraLiveView({
       setStreamError(null);
       const isAi = isCameraAiEnabled({ camera_id: id });
       const url = isAi
-        ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${id}?t=${Date.now()}`
-        : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
+        ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${id}?t=${Date.now()}`
+        : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${id}/proxy-stream?t=${Date.now()}`;
       setStreamUrl(url);
     },
     [companyId, isCameraAiEnabled],
@@ -76,25 +72,20 @@ export default function CameraLiveView({
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [camera?.camera_id, startStream]);
 
   const fetchStreamDiagnostics = async (cameraId: string) => {
     if (!companyId) return null;
     try {
-      const r = await fetch(
-        `http://127.0.0.1:5577/api/company/${companyId}/cameras/${cameraId}/stream-status`,
-        { cache: "no-store" },
-      );
-      const body = await r.json().catch(() => null);
+      const body = await core.getStreamDiagnostics(companyId, cameraId);
       const st = body && body.status ? body.status : {};
       const state = st.status || "unknown";
       const code =
         st.last_error_code || (body?.error?.code as string) || "UNKNOWN";
       const reason =
         st.status_reason || (body?.error?.message as string) || "unknown";
-      return `State=${state} | Code=${code} | Reason=${reason} | HTTP=${r.status}`;
+      return `State=${state} | Code=${code} | Reason=${reason}`;
     } catch {
       return null;
     }
@@ -140,7 +131,9 @@ export default function CameraLiveView({
           </div>
           <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest truncate">
             {camera.location}{" "}
-            {camera.camera_type === "dvr_channel" ? "· DVR kanalı" : "· IP kamera"}
+            {camera.camera_type === "dvr_channel"
+              ? "· DVR kanalı"
+              : "· IP kamera"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-4 pointer-events-auto">
@@ -204,8 +197,8 @@ export default function CameraLiveView({
                 await onToggleAi(camera.camera_id, isAi);
                 const nextAiEnabled = !isAi;
                 const url = nextAiEnabled
-                  ? `http://127.0.0.1:5577/api/company/${companyId}/video-feed/${camera.camera_id}?t=${Date.now()}`
-                  : `http://127.0.0.1:5577/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${Date.now()}`;
+                  ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${camera.camera_id}?t=${Date.now()}`
+                  : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${Date.now()}`;
                 setStreamUrl(url);
               }}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCameraAiEnabled(camera) ? "bg-brand-teal" : "bg-white/20"}`}

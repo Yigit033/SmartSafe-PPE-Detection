@@ -1,6 +1,6 @@
 {
   "name": "smart-safe-ai",
-  "version": "0.4.12",
+  "version": "0.4.19",
   "description": "SmartSafe AI - PPE Detection System",
   "main": "core/app.py",
   "scripts": {
@@ -13,7 +13,7 @@
     "dev:logs": "docker-compose -f infra/docker-compose.yml logs -f",
     "docker:stop": "npm run dev:down",
     "landing": "cd landing && npm run dev",
-    "prod": "node infra/scripts/version-manager.mjs && cd infra && powershell ./publish.ps1",
+    "prod": "node infra/scripts/version-manager.mjs && cd infra && powershell ./publish.ps1 && cd .. && npm run exe",
     "exe": "cd infra && powershell ./build_installer.ps1",
     "backend": "cd backend && node ./scripts/encore-sync-if-needed.cjs && encore run",
     "backend:sync": "cd backend && node ./scripts/encore-sync-if-needed.cjs",
