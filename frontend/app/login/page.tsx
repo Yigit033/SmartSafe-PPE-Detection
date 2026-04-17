@@ -4,6 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
+import { 
+  ShieldCheck, 
+  CheckCircle2, 
+  Eye, 
+  EyeOff, 
+  AlertCircle, 
+  ArrowRight 
+} from "lucide-react";
 
 import api from "@/lib/api";
 
@@ -52,19 +60,7 @@ function LoginContent() {
       {/* Brand area */}
       <div className="text-center mb-8">
         <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-teal text-white shadow-lg shadow-brand-teal/20 mb-4 font-black">
-          <svg
-            className="h-10 w-10"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-            />
-          </svg>
+          <ShieldCheck className="h-10 w-10" />
         </div>
         <h1 className="text-4xl font-black text-slate-900 tracking-tight">
           Smart<span className="text-brand-teal">Safe</span>
@@ -81,9 +77,7 @@ function LoginContent() {
         <form onSubmit={handleLogin} className="space-y-6 relative">
           {success && (
             <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 px-4 py-3 rounded-xl text-xs font-bold leading-relaxed flex items-center gap-2">
-              <span className="material-symbols-rounded text-sm">
-                check_circle
-              </span>
+              <CheckCircle2 className="w-4 h-4" />
               {success}
             </div>
           )}
@@ -128,16 +122,18 @@ function LoginContent() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-teal transition-colors"
               >
-                <span className="material-symbols-rounded text-[20px]">
-                  {showPassword ? "visibility_off" : "visibility"}
-                </span>
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5 focus:text-brand-teal" />
+                ) : (
+                  <Eye className="w-5 h-5 focus:text-brand-teal" />
+                )}
               </button>
             </div>
           </div>
 
           {error && (
             <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 tracking-tight">
-              <span className="material-symbols-rounded text-sm">error</span>
+              <AlertCircle className="w-4 h-4" />
               {error}
             </div>
           )}
@@ -153,9 +149,7 @@ function LoginContent() {
               ) : (
                 <>
                   SİSTEME GİRİŞ YAP{" "}
-                  <span className="material-symbols-rounded text-lg group-hover:translate-x-1 transition-transform">
-                    arrow_forward
-                  </span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </span>

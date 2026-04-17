@@ -1,16 +1,17 @@
 "use client";
 
 import { Suspense, useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCompanyId } from "@/lib/session";
-import { goToCamerasPage } from "@/lib/camerasNavigation";
 import CameraLiveView from "@/components/camera/CameraLiveView";
+import { ArrowLeft } from "lucide-react";
 
 import api from "@/lib/api";
 import core from "@/lib/core";
 
 function CameraDetailContent() {
+  const router = useRouter();
   const params = useParams();
   const rawId = params?.id;
   const cameraId = Array.isArray(rawId) ? rawId[0] : rawId;
@@ -104,7 +105,7 @@ function CameraDetailContent() {
         <p className="text-slate-700 font-bold">Kamera bulunamadı.</p>
         <button
           type="button"
-          onClick={() => goToCamerasPage()}
+          onClick={() => router.push("/cameras")}
           className="text-brand-teal font-black uppercase text-sm tracking-widest"
         >
           ← Kamera listesine dön
@@ -118,10 +119,10 @@ function CameraDetailContent() {
       <div className="flex items-center gap-4">
         <button
           type="button"
-          onClick={() => goToCamerasPage()}
+          onClick={() => router.push("/cameras")}
           className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50"
         >
-          <span className="material-symbols-rounded text-lg">arrow_back</span>
+          <ArrowLeft className="w-4 h-4" />
           Kameralar
         </button>
       </div>

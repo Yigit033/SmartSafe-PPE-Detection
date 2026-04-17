@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
+import { 
+  X, 
+  Plus, 
+  Trash2, 
+  CalendarCheck, 
+  CalendarOff, 
+  CalendarDays, 
+  Loader2, 
+  PlusCircle 
+} from "lucide-react";
 
 interface Schedule {
   id: number;
@@ -102,7 +112,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
         <div className="bg-brand-teal p-8 flex items-center justify-between text-white shrink-0">
           <div className="flex items-center gap-4">
             <div className="bg-white/20 backdrop-blur-md p-3 rounded-2xl">
-              <span className="material-symbols-rounded text-2xl">history_toggle_off</span>
+              <CalendarCheck className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-base font-black tracking-widest uppercase italic leading-none mb-1">OTOMASYON TAKVİMİ</h3>
@@ -115,7 +125,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
             onClick={onClose} 
             className="w-10 h-10 flex items-center justify-center hover:bg-white/20 rounded-full transition-all duration-300"
           >
-            <span className="material-symbols-rounded text-2xl">close</span>
+            <X className="w-6 h-6" />
           </button>
         </div>
 
@@ -125,7 +135,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
           {/* Add New Section - Card Style */}
           <div className="bg-slate-50/80 rounded-[2rem] p-8 border border-slate-100 shadow-inner">
             <div className="flex items-center gap-2 mb-6">
-              <span className="material-symbols-rounded text-brand-teal text-lg">add_circle</span>
+              <PlusCircle className="w-4 h-4 text-brand-teal" />
               <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Planlanan Dilim Ekle</h4>
             </div>
             
@@ -167,7 +177,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
                 className="bg-brand-teal text-white rounded-2xl h-[52px] flex items-center justify-center text-[11px] font-black uppercase tracking-widest hover:bg-brand-teal/90 disabled:opacity-50 transition-all shadow-xl shadow-brand-teal/20 active:scale-95 group"
               >
                 {isSaving ? (
-                  <span className="material-symbols-rounded animate-spin">sync</span>
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <div className="flex items-center gap-2">
                     PROGRAMA EKLE
@@ -193,7 +203,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
               </div>
             ) : schedules.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-100 space-y-4">
-                <span className="material-symbols-rounded text-slate-200 text-5xl">event_busy</span>
+                <CalendarOff className="w-12 h-12 text-slate-200" />
                 <div className="text-center">
                   <p className="text-xs font-bold text-slate-400">Henüz otomatik çalışma kuralı tanımlanmamış.</p>
                   <p className="text-[10px] font-medium text-slate-300 mt-1 uppercase tracking-tighter">Yukarıdaki formu kullanarak ilk planınızı ekleyin.</p>
@@ -205,7 +215,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
                   <div key={s.id} className="group flex items-center justify-between p-6 rounded-3xl border border-slate-100 bg-white hover:border-brand-teal/20 hover:shadow-xl transition-all duration-500">
                     <div className="flex items-center gap-6">
                       <div className="h-14 w-14 rounded-2xl bg-brand-teal/5 flex items-center justify-center text-brand-teal group-hover:bg-brand-teal group-hover:text-white transition-all duration-500">
-                        <span className="material-symbols-rounded text-2xl">calendar_month</span>
+                        <CalendarDays className="w-6 h-6" />
                       </div>
                       <div>
                         <div className="text-sm font-black text-slate-900 tracking-tight">
@@ -230,7 +240,7 @@ export default function ScheduleModal({ isOpen, onClose, camera, companyId }: Sc
                         className="w-12 h-12 flex items-center justify-center text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300"
                         title="Programı Kaldır"
                       >
-                        <span className="material-symbols-rounded">delete_outline</span>
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
                   </div>

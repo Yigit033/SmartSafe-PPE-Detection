@@ -119,9 +119,9 @@ export const getStats = api(
       // 3. İhlal sayıları (Bugün, Dün, Aylık)
       const violationCountsRes = await pool.query(
         `SELECT
-          COUNT(*) FILTER (WHERE (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE) as today,
-          COUNT(*) FILTER (WHERE (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE - INTERVAL '1 day') as yesterday,
-          COUNT(*) FILTER (WHERE (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days') as monthly
+          COUNT(*) FILTER (WHERE (start_time)::DATE = CURRENT_DATE) as today,
+          COUNT(*) FILTER (WHERE (start_time)::DATE = CURRENT_DATE - INTERVAL '1 day') as yesterday,
+          COUNT(*) FILTER (WHERE (start_time)::DATE > CURRENT_DATE - INTERVAL '30 days') as monthly
          FROM violation_events
          WHERE company_id = $1`,
         [company_id],
@@ -184,7 +184,7 @@ export const getStats = api(
            violation_type, 
            COUNT(*) as count 
          FROM violation_events 
-         WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE > CURRENT_DATE - INTERVAL '30 days'
+         WHERE company_id = $1 AND (start_time)::DATE > CURRENT_DATE - INTERVAL '30 days'
          GROUP BY violation_type
          ORDER BY count DESC`,
         [company_id],
@@ -197,10 +197,10 @@ export const getStats = api(
       // 7. Saatlik İhlal Dağılımı (Bugün)
       const hourlyViolationsRes = await pool.query(
         `SELECT 
-           EXTRACT(HOUR FROM TO_TIMESTAMP(start_time))::int as hour,
+           EXTRACT(HOUR FROM start_time)::int as hour,
            COUNT(*) as count
          FROM violation_events
-         WHERE company_id = $1 AND (TO_TIMESTAMP(start_time))::DATE = CURRENT_DATE
+         WHERE company_id = $1 AND (start_time)::DATE = CURRENT_DATE
          GROUP BY hour
          ORDER BY hour ASC`,
         [company_id],

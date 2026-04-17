@@ -3,12 +3,22 @@
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
 import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
+import MjpegCanvas from "@/components/camera/MjpegCanvas";
 import api from "@/lib/api";
 import core from "@/lib/core";
 import {
   normalizeDetectionZonesPayload,
   polygonToVideoSpaceForOverlay,
 } from "@/lib/detectionZones";
+import { 
+  RefreshCcw, 
+  Eye, 
+  EyeOff, 
+  VideoOff, 
+  BoxSelect, 
+  Play, 
+  Activity 
+} from "lucide-react";
 
 type Props = {
   camera: any;
@@ -147,7 +157,7 @@ export default function CameraLiveView({
               onClick={() => setIsZoneModalOpen(true)}
               className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 text-white hover:bg-white text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer border border-white/10"
             >
-              <span className="material-symbols-rounded text-sm">polyline</span>
+              <BoxSelect className="w-4 h-4" />
               GÜNCELLE
             </button>
           </div>
@@ -160,20 +170,25 @@ export default function CameraLiveView({
               onClick={() => startStream(camera.camera_id)}
               className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 text-white hover:bg-white text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer border border-white/10"
             >
-              <span className="material-symbols-rounded text-sm">refresh</span>
+              <RefreshCcw className="w-4 h-4" />
               YENİLE
             </button>
           </div>
           <div className="flex items-center gap-2 md:gap-3 bg-white/10 backdrop-blur-md px-3 py-2 rounded-2xl border border-white/10">
+            <span className="text-[10px] font-black text-white/60 tracking-widest uppercase hidden sm:inline">
+              GİZLİLİK
+            </span>
             <button
               type="button"
               onClick={() => setIsPrivacyMode(!isPrivacyMode)}
               className="flex items-center gap-2 text-white/60 hover:text-white transition-colors"
               title="Gizlilik Modu"
             >
-              <span className="material-symbols-rounded text-lg">
-                {isPrivacyMode ? "visibility_off" : "visibility"}
-              </span>
+              {isPrivacyMode ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
             <div className={`h-4 w-px bg-white/10`} />
             <button
@@ -224,20 +239,12 @@ export default function CameraLiveView({
           </div>
         ) : streamUrl ? (
           <div className="relative w-full h-full min-h-[40vh] bg-black">
-            <img
+            <MjpegCanvas
               src={streamUrl}
-              alt="Canlı Yayın"
               className="absolute inset-0 z-0 h-full w-full max-h-[80vh] object-contain"
-              onLoad={(e) => {
-                const t = e.target as HTMLImageElement;
-                if (t.naturalWidth > 0 && t.naturalHeight > 0) {
-                  setPreviewLayout({
-                    nw: t.naturalWidth,
-                    nh: t.naturalHeight,
-                    cw: t.clientWidth,
-                    ch: t.clientHeight,
-                  });
-                }
+              fps={30}
+              onDimensions={(nw, nh, cw, ch) => {
+                setPreviewLayout({ nw, nh, cw, ch });
               }}
               onError={async () => {
                 const diag = await fetchStreamDiagnostics(camera.camera_id);
@@ -248,9 +255,7 @@ export default function CameraLiveView({
             {isPrivacyMode && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/95 backdrop-blur-[1px]">
                 <div className="p-8 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
-                  <span className="material-symbols-rounded text-6xl text-white/20">
-                    visibility_off
-                  </span>
+                  <EyeOff className="w-16 h-16 text-white/20" />
                 </div>
               </div>
             )}
@@ -274,9 +279,7 @@ export default function CameraLiveView({
           </div>
         ) : (
           <div className="text-white/20 text-center px-4">
-            <span className="material-symbols-rounded text-[120px] animate-pulse">
-              videocam_off
-            </span>
+            <VideoOff className="w-32 h-32 animate-pulse mx-auto" />
             <p className="mt-4 font-black tracking-widest uppercase italic">
               SİNYAL YOK
             </p>

@@ -6,6 +6,32 @@ import { getCompanyId } from "@/lib/session";
 import { goToCamerasPage } from "@/lib/camerasNavigation";
 import api from "@/lib/api";
 import core from "@/lib/core";
+import { 
+  ArrowLeft, 
+  Scan, 
+  Pointer, 
+  Search, 
+  SquarePen, 
+  LayoutGrid, 
+  Settings2, 
+  CheckCircle2, 
+  Compass, 
+  Camera, 
+  HardDrive, 
+  ScanQrCode, 
+  Video, 
+  VideoOff, 
+  Wifi, 
+  Check, 
+  X, 
+  Building2, 
+  Landmark, 
+  MinusSquare, 
+  CheckSquare, 
+  BadgeCheck, 
+  Star,
+  Loader2
+} from "lucide-react";
 
 type SetupMode =
   | "select"
@@ -298,12 +324,12 @@ export default function CameraSetupPage() {
             onClick={() => router.back()}
             className="flex items-center gap-1 text-slate-400 hover:text-brand-teal transition-colors text-[10px] font-black uppercase mb-2"
           >
-            <span className="material-symbols-rounded text-sm">arrow_back</span>
+            <ArrowLeft className="w-4 h-4" />
             KAMERALARA DÖN
           </button>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4 uppercase">
             <span className="bg-brand-teal p-3.5 rounded-2xl text-white rotate-3 shadow-xl shadow-brand-teal/20">
-              <span className="material-symbols-rounded text-3xl">sensors</span>
+              <Scan className="w-8 h-8" />
             </span>
             Kamera Kurulum Merkezi
           </h1>
@@ -314,12 +340,12 @@ export default function CameraSetupPage() {
         {/* Step Indicator (Left) */}
         <div className="lg:col-span-3 space-y-3 sticky top-8">
           {[
-            { id: "select", icon: "touch_app", label: "Yöntem Seçimi" },
-            { id: "discover", icon: "search", label: "Otomatik Keşif" },
-            { id: "single", icon: "edit_note", label: "Tekil Kurulum" },
-            { id: "batch", icon: "view_module", label: "Toplu Ekleme" },
-            { id: "dvr", icon: "settings_input_component", label: "DVR / NVR" },
-            { id: "success", icon: "check_circle", label: "Tamamlandı" },
+            { id: "select", icon: Pointer, label: "Yöntem Seçimi" },
+            { id: "discover", icon: Search, label: "Otomatik Keşif" },
+            { id: "single", icon: SquarePen, label: "Tekil Kurulum" },
+            { id: "batch", icon: LayoutGrid, label: "Toplu Ekleme" },
+            { id: "dvr", icon: Settings2, label: "DVR / NVR" },
+            { id: "success", icon: CheckCircle2, label: "Tamamlandı" },
           ].map((step, idx) => {
             const isSelectable =
               (mode === "discover" && step.id === "discover") ||
@@ -346,7 +372,7 @@ export default function CameraSetupPage() {
                       : "bg-slate-200 text-slate-400"
                   }`}
                 >
-                  <span className="material-symbols-rounded">{step.icon}</span>
+                  <step.icon className="w-6 h-6" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
@@ -386,9 +412,7 @@ export default function CameraSetupPage() {
                   className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="h-20 w-20 bg-brand-teal text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
-                    <span className="material-symbols-rounded text-4xl">
-                      travel_explore
-                    </span>
+                    <Compass className="w-10 h-10" />
                   </div>
                   <h3 className="text-xl font-black text-slate-900 uppercase  ">
                     Akıllı Keşif
@@ -404,9 +428,7 @@ export default function CameraSetupPage() {
                   className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-slate-800 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="h-20 w-20 bg-slate-800 text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
-                    <span className="material-symbols-rounded text-4xl">
-                      add_a_photo
-                    </span>
+                    <Camera className="w-10 h-10" />
                   </div>
                   <h3 className="text-xl font-black text-slate-900 uppercase">
                     Tekil Ekleme
@@ -422,9 +444,7 @@ export default function CameraSetupPage() {
                   className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-blue-600 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="h-20 w-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
-                    <span className="material-symbols-rounded text-4xl">
-                      view_module
-                    </span>
+                    <LayoutGrid className="w-10 h-10" />
                   </div>
                   <h3 className="text-xl font-black text-slate-900 uppercase">
                     Toplu Ekleme
@@ -440,9 +460,7 @@ export default function CameraSetupPage() {
                   className="flex flex-col items-center p-8 rounded-[3rem] bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="h-20 w-20 bg-indigo-600 text-white rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-xl mb-6">
-                    <span className="material-symbols-rounded text-4xl">
-                      dns
-                    </span>
+                    <HardDrive className="w-10 h-10" />
                   </div>
                   <h3 className="text-xl font-black text-slate-900 uppercase">
                     DVR / NVR
@@ -515,9 +533,7 @@ export default function CameraSetupPage() {
                   >
                     <div className="flex items-center gap-6">
                       <div className="h-16 w-16 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-400 group-hover:bg-brand-teal group-hover:text-white transition-all shadow-inner">
-                        <span className="material-symbols-rounded text-3xl">
-                          {cam.onvif ? "qr_code_scanner" : "videocam"}
-                        </span>
+                        {cam.onvif ? <ScanQrCode className="w-8 h-8" /> : <Video className="w-8 h-8" />}
                       </div>
                       <div>
                         <h4 className="text-lg font-black text-slate-900 uppercase leading-none mb-2">
@@ -548,9 +564,7 @@ export default function CameraSetupPage() {
                 ))}
                 {!isSearching && discoveredCameras.length === 0 && (
                   <div className="text-center py-24 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-                    <span className="material-symbols-rounded text-6xl text-slate-300 mb-4">
-                      videocam_off
-                    </span>
+                    <VideoOff className="w-16 h-16 text-slate-300 mb-4 mx-auto" />
                     <p className="text-slate-400 font-black uppercase tracking-widest">
                       Ağda Kamera Bulunamadı
                     </p>
@@ -590,11 +604,9 @@ export default function CameraSetupPage() {
                   className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-white border-2 border-slate-100 text-slate-600 font-black text-[10px] tracking-widest hover:border-slate-800 transition-all shadow-sm active:scale-95"
                 >
                   {isTesting ? (
-                    <div className="h-4 w-4 border-2 border-slate-300 border-t-brand-teal rounded-full animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin text-brand-teal" />
                   ) : (
-                    <span className="material-symbols-rounded text-lg">
-                      wifi_tethering
-                    </span>
+                    <Wifi className="w-5 h-5" />
                   )}
                   TEST ET
                 </button>
@@ -607,9 +619,7 @@ export default function CameraSetupPage() {
                   <div
                     className={`h-10 w-10 rounded-[1rem] flex items-center justify-center ${testResult.success ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}
                   >
-                    <span className="material-symbols-rounded">
-                      {testResult.success ? "check" : "close"}
-                    </span>
+                    {testResult.success ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
                   </div>
                   <span className="text-[11px] font-black uppercase tracking-widest leading-relaxed">
                     {testResult.message}
@@ -927,7 +937,7 @@ export default function CameraSetupPage() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-2xl bg-brand-teal/10 text-brand-teal flex items-center justify-center group-hover:bg-brand-teal group-hover:text-white transition-all">
-                      <span className="material-symbols-rounded">domain</span>
+                      <Building2 className="w-6 h-6" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black text-slate-900 uppercase">EK BİNA</h4>
@@ -954,7 +964,7 @@ export default function CameraSetupPage() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                      <span className="material-symbols-rounded">account_balance</span>
+                      <Landmark className="w-6 h-6" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black text-slate-900 uppercase">TAŞKIŞLA</h4>
@@ -1153,9 +1163,7 @@ export default function CameraSetupPage() {
                   <div className="relative">
                     <div className="h-24 w-24 rounded-full border-4 border-slate-50 border-t-brand-teal animate-spin" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="material-symbols-rounded text-brand-teal animate-pulse">
-                        search
-                      </span>
+                      <Search className="w-8 h-8 text-brand-teal animate-pulse" />
                     </div>
                   </div>
                   <div className="text-center space-y-2">
@@ -1173,9 +1181,7 @@ export default function CameraSetupPage() {
                     {dvrChannels.length === 0 ? (
                       <div className="col-span-full py-20 text-center space-y-6">
                         <div className="h-24 w-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
-                          <span className="material-symbols-rounded text-4xl text-slate-300">
-                            videocam_off
-                          </span>
+                          <VideoOff className="w-10 h-10 text-slate-300" />
                         </div>
                         <div className="space-y-1">
                           <p className="text-slate-900 font-black uppercase">
@@ -1213,13 +1219,11 @@ export default function CameraSetupPage() {
                                   : "bg-white text-slate-300 shadow-sm"
                               }`}
                             >
-                              <span className="material-symbols-rounded text-2xl">
-                                {selectedChannels.includes(
-                                  channel.channel_number,
-                                )
-                                  ? "check_circle"
-                                  : "videocam"}
-                              </span>
+                              {selectedChannels.includes(channel.channel_number) ? (
+                                <CheckCircle2 className="w-6 h-6" />
+                              ) : (
+                                <Video className="w-6 h-6" />
+                              )}
                             </span>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
                               CH {channel.channel_number}
@@ -1272,11 +1276,11 @@ export default function CameraSetupPage() {
                       }
                       className="text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-brand-teal transition-colors flex items-center gap-2"
                     >
-                      <span className="material-symbols-rounded text-sm">
-                        {selectedChannels.length === dvrChannels.length
-                          ? "deselect"
-                          : "select_all"}
-                      </span>
+                      {selectedChannels.length === dvrChannels.length ? (
+                        <MinusSquare className="w-4 h-4" />
+                      ) : (
+                        <CheckSquare className="w-4 h-4" />
+                      )}
                       {selectedChannels.length === dvrChannels.length
                         ? "TÜMÜNÜ BIRAK"
                         : "TÜMÜNÜ SEÇ"}
@@ -1305,12 +1309,10 @@ export default function CameraSetupPage() {
 
               <div className="relative">
                 <div className="h-48 w-48 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.2)] animate-scale-in">
-                  <span className="material-symbols-rounded text-[100px]">
-                    verified
-                  </span>
+                  <BadgeCheck className="w-24 h-24" />
                 </div>
                 <div className="absolute -top-4 -right-4 h-14 w-14 bg-white rounded-2xl shadow-xl flex items-center justify-center text-emerald-500 animate-bounce delay-300">
-                  <span className="material-symbols-rounded">stars</span>
+                  <Star className="w-7 h-7 fill-emerald-500" />
                 </div>
               </div>
 

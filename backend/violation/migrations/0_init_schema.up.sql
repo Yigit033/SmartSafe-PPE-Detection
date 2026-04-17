@@ -74,3 +74,22 @@ CREATE TABLE IF NOT EXISTS dvr_detection_sessions (
     end_time TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS violation_events (
+    event_id VARCHAR(255) PRIMARY KEY,
+    company_id VARCHAR(255) NOT NULL REFERENCES companies(company_id) ON DELETE CASCADE,
+    camera_id VARCHAR(255),
+    person_id VARCHAR(255),
+    violation_type VARCHAR(255) NOT NULL,
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP,
+    duration_seconds INTEGER,
+    snapshot_path TEXT,
+    severity VARCHAR(50) DEFAULT 'warning',
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_violation_events_company_time ON violation_events(company_id, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_violation_events_status ON violation_events(status) WHERE status = 'active';

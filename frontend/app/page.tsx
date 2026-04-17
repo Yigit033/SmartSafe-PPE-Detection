@@ -7,6 +7,7 @@ import {
   formatViolationEventTitle,
   violationSnapshotUrl,
 } from "@/lib/violationAssets";
+import { ImageOff } from "lucide-react";
 
 import api from "@/lib/api";
 import { 
@@ -24,9 +25,7 @@ function ViolationThumb({ url }: { url: string | null }) {
       <div
         className={`flex items-center justify-center ${frame}`}
       >
-        <span className="material-symbols-rounded text-2xl text-slate-500">
-          image_not_supported
-        </span>
+        <ImageOff className="w-8 h-8 text-slate-500" />
       </div>
     );
   }

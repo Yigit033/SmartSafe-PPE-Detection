@@ -8,6 +8,8 @@ import {
   containerPixelToVideoNorm,
   containerNormToVideoNorm,
 } from "@/lib/detectionZones";
+import { X, BoxSelect, Grab } from "lucide-react";
+import MjpegCanvas from "@/components/camera/MjpegCanvas";
 
 interface ZoneDesignerProps {
   imageUrl: string;
@@ -256,7 +258,7 @@ export default function ZoneDesigner({
       <div className="bg-slate-800/80 p-6 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="bg-brand-teal p-3 rounded-2xl text-white shadow-xl shadow-brand-teal/20">
-            <span className="material-symbols-rounded text-2xl">crop_free</span>
+            <BoxSelect className="w-6 h-6" />
           </div>
           <div>
             <h4 className="text-base font-black text-white uppercase italic tracking-tighter">
@@ -271,7 +273,7 @@ export default function ZoneDesigner({
           onClick={onClose}
           className="p-3 rounded-2xl bg-white/5 text-white/40 hover:bg-red-500 hover:text-white transition-all duration-300"
         >
-          <span className="material-symbols-rounded">close</span>
+          <X className="w-6 h-6" />
         </button>
       </div>
 
@@ -283,12 +285,13 @@ export default function ZoneDesigner({
         onMouseLeave={handleMouseUp}
       >
         {imageUrl && (
-          <img
-            ref={imgRef}
+          <MjpegCanvas
             src={imageUrl}
-            alt="Stream"
             className="absolute inset-0 w-full h-full object-contain opacity-50 grayscale pointer-events-none"
-            onLoad={onImgLoad}
+            fps={15} // Editörde yüksek FPS'e gerek yok, network tasarrufu sağlar
+            onDimensions={(nw, nh) => {
+              setIntrinsic({ w: nw, h: nh });
+            }}
           />
         )}
         <canvas

@@ -4,6 +4,40 @@ import { useState, useEffect } from "react";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
 import core from "@/lib/core";
+import { 
+  Building2, 
+  Hammer, 
+  Bell, 
+  CreditCard, 
+  ShieldCheck, 
+  Lock, 
+  User, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  BellRing, 
+  SendHorizontal, 
+  Users, 
+  ChevronDown, 
+  AlertTriangle, 
+  Factory, 
+  Check, 
+  HardHat, 
+  Shirt, 
+  Hand, 
+  Eye, 
+  Footprints, 
+  VenetianMask, 
+  UserSquare, 
+  Accessibility, 
+  Shield, 
+  Headphones, 
+  Waves,
+  Box,
+  LogOut,
+  Rocket,
+  OctagonAlert
+} from "lucide-react";
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
@@ -212,28 +246,28 @@ export default function SettingsPage() {
     });
   };
 
-  const ppeOptionsMap: Record<string, { name: string; icon: string }> = {
-    helmet: { name: "Kask/Baret", icon: "engineering" },
-    safety_helmet: { name: "Güvenlik Kaskı", icon: "engineering" },
-    vest: { name: "Güvenlik Yeleği", icon: "checkroom" },
-    safety_vest: { name: "Yelek", icon: "checkroom" },
-    gloves: { name: "Koruyucu Eldiven", icon: "back_hand" },
-    glasses: { name: "Güvenlik Gözlüğü", icon: "visibility" },
-    safety_glasses: { name: "Gözlük", icon: "visibility" },
-    shoes: { name: "Emniyet Ayakkabısı", icon: "ice_skating" },
-    boots: { name: "Emniyet Botu", icon: "ice_skating" },
-    safety_shoes: { name: "İş Ayakkabısı", icon: "ice_skating" },
-    mask: { name: "Maske", icon: "medical_mask" },
-    face_mask: { name: "Maske", icon: "medical_mask" },
-    hairnet: { name: "Bone", icon: "face_6" },
-    apron: { name: "Önlük", icon: "accessibility_new" },
-    safety_suit: { name: "İş Tulumu", icon: "settings_accessibility" },
-    headset: { name: "Koruyucu Kulaklık", icon: "headset" },
-    earmuffs: { name: "Kulaklık", icon: "headset" },
-    gas_mask: { name: "Gaz Maskesi", icon: "masks" },
-    life_jacket: { name: "Can Yeleği", icon: "water_lux" },
-    insulated_gloves: { name: "İzole Eldiven", icon: "back_hand" },
-    dielectric_boots: { name: "Dielektrik Bot", icon: "ice_skating" },
+  const ppeOptionsMap: Record<string, { name: string; icon: any }> = {
+    helmet: { name: "Kask/Baret", icon: HardHat },
+    safety_helmet: { name: "Güvenlik Kaskı", icon: HardHat },
+    vest: { name: "Güvenlik Yeleği", icon: Shirt },
+    safety_vest: { name: "Yelek", icon: Shirt },
+    gloves: { name: "Koruyucu Eldiven", icon: Hand },
+    glasses: { name: "Güvenlik Gözlüğü", icon: Eye },
+    safety_glasses: { name: "Gözlük", icon: Eye },
+    shoes: { name: "Emniyet Ayakkabısı", icon: Footprints },
+    boots: { name: "Emniyet Botu", icon: Footprints },
+    safety_shoes: { name: "İş Ayakkabısı", icon: Footprints },
+    mask: { name: "Maske", icon: VenetianMask },
+    face_mask: { name: "Maske", icon: VenetianMask },
+    hairnet: { name: "Bone", icon: UserSquare },
+    apron: { name: "Önlük", icon: Accessibility },
+    safety_suit: { name: "İş Tulumu", icon: Shield },
+    headset: { name: "Koruyucu Kulaklık", icon: Headphones },
+    earmuffs: { name: "Kulaklık", icon: Headphones },
+    gas_mask: { name: "Gaz Maskesi", icon: VenetianMask },
+    life_jacket: { name: "Can Yeleği", icon: Waves },
+    insulated_gloves: { name: "İzole Eldiven", icon: Hand },
+    dielectric_boots: { name: "Dielektrik Bot", icon: Footprints },
   };
 
   const getDisplayPpes = () => {
@@ -250,18 +284,18 @@ export default function SettingsPage() {
         id,
         // Önce sektörden gelen ismi (Gemi Kaskı vb.) kullan, yoksa genel havuzdan al
         name: req?.name || defined?.name || id.charAt(0).toUpperCase() + id.slice(1),
-        icon: defined?.icon || "inventory_2",
+        icon: defined?.icon || Box,
         mandatory: !!req?.mandatory
       };
     });
   };
 
   const sections = [
-    { id: "profile", name: "Şirket Profili", icon: "domain" },
-    { id: "ppe", name: "PPE Konfigürasyonu", icon: "construction" },
-    { id: "notifications", name: "Bildirimler", icon: "notifications" },
-    { id: "subscription", name: "Abonelik", icon: "payments" },
-    { id: "security", name: "Güvenlik", icon: "security" },
+    { id: "profile", name: "Şirket Profili", icon: Building2 },
+    { id: "ppe", name: "PPE Konfigürasyonu", icon: Hammer },
+    { id: "notifications", name: "Bildirimler", icon: Bell },
+    { id: "subscription", name: "Abonelik", icon: CreditCard },
+    { id: "security", name: "Güvenlik", icon: ShieldCheck },
   ];
 
   const cleanChatId = async (val: string) => {
@@ -319,15 +353,13 @@ export default function SettingsPage() {
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
-                <span
-                  className={`material-symbols-rounded text-xl transition-transform ${
+                <section.icon
+                  className={`w-5 h-5 transition-transform ${
                     activeSection === section.id
                       ? "scale-110"
                       : "opacity-80 group-hover:scale-110 group-hover:opacity-100"
                   }`}
-                >
-                  {section.icon}
-                </span>
+                />
                 <span className="uppercase tracking-widest leading-tight flex-1">
                   {section.name}
                 </span>
@@ -383,9 +415,7 @@ export default function SettingsPage() {
                           value={company?.company_id || ""}
                           className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-10 py-4 text-sm font-black text-slate-400 outline-none cursor-not-allowed"
                         />
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">
-                          lock
-                        </span>
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                       </div>
                     </div>
 
@@ -399,9 +429,7 @@ export default function SettingsPage() {
                           defaultValue={company?.company_name || ""}
                           className="w-full rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all"
                         />
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg">
-                          domain
-                        </span>
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal w-5 h-5" />
                       </div>
                     </div>
 
@@ -415,9 +443,7 @@ export default function SettingsPage() {
                           defaultValue={company?.contact_person || ""}
                           className="w-full rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all"
                         />
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg">
-                          person
-                        </span>
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal w-5 h-5" />
                       </div>
                     </div>
 
@@ -431,9 +457,7 @@ export default function SettingsPage() {
                           defaultValue={company?.email || ""}
                           className="w-full rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all"
                         />
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg">
-                          mail
-                        </span>
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal w-5 h-5" />
                       </div>
                     </div>
 
@@ -447,9 +471,7 @@ export default function SettingsPage() {
                           defaultValue={company?.phone || ""}
                           className="w-full rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all"
                         />
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-lg">
-                          call
-                        </span>
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal w-5 h-5" />
                       </div>
                     </div>
 
@@ -465,9 +487,7 @@ export default function SettingsPage() {
                           defaultValue={company?.address || ""}
                           className="w-full rounded-2xl bg-white border border-slate-200 px-10 py-4 text-sm font-black text-slate-900 focus:border-brand-teal focus:ring-4 focus:ring-brand-teal/10 outline-none transition-all"
                         />
-                        <span className="material-symbols-rounded absolute left-4 top-10 text-brand-teal text-lg">
-                          location_on
-                        </span>
+                        <MapPin className="absolute left-4 top-10 text-brand-teal w-5 h-5" />
                       </div>
                     </div>
                   </div>
@@ -490,7 +510,7 @@ export default function SettingsPage() {
                     <div className="flex items-center justify-between p-4 rounded-3xl bg-white border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-4">
                         <div className="h-14 w-14 rounded-2xl bg-brand-teal/10 flex items-center justify-center text-brand-teal">
-                          <span className="material-symbols-rounded text-2xl">notifications_active</span>
+                          <BellRing className="w-6 h-6" />
                         </div>
                         <div>
                           <h5 className="text-sm font-black text-slate-900 uppercase italic">
@@ -516,7 +536,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className="h-14 w-14 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-500">
-                            <span className="material-symbols-rounded text-2xl">send</span>
+                            <SendHorizontal className="w-6 h-6" />
                           </div>
                           <div>
                             <h5 className="text-sm font-black text-slate-900 uppercase italic">
@@ -541,7 +561,7 @@ export default function SettingsPage() {
                           {/* SİHİRLİ BAĞLANTI KUTUSU */}
                           <div className="bg-gradient-to-br from-sky-400 to-sky-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-sky-500/20 relative overflow-hidden group">
                             <div className="absolute -right-4 -bottom-4 opacity-20 group-hover:scale-110 transition-transform duration-700">
-                                <span className="material-symbols-rounded text-[120px] font-black">send</span>
+                                <SendHorizontal className="text-[120px] font-black" />
                             </div>
 
                             <div className="relative z-10 space-y-4">
@@ -555,7 +575,7 @@ export default function SettingsPage() {
                                   onClick={() => window.open(`https://t.me/${systemBotUsername || 'smartsafeaibot'}?start=${companyId}`, '_blank')}
                                   className="bg-white text-sky-500 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3"
                                 >
-                                  <span className="material-symbols-rounded text-lg">person</span>
+                                  <User className="w-5 h-5" />
                                   Kendi Hesabıma Bağla
                                 </button>
 
@@ -563,7 +583,7 @@ export default function SettingsPage() {
                                   onClick={() => window.open(`https://t.me/${systemBotUsername || 'smartsafeaibot'}?startgroup=${companyId}`, '_blank')}
                                   className="bg-sky-400 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 border border-sky-300"
                                 >
-                                  <span className="material-symbols-rounded text-lg">group</span>
+                                  <Users className="w-5 h-5" />
                                   Gruba / Kanala Ekle
                                 </button>
 
@@ -571,7 +591,7 @@ export default function SettingsPage() {
                                   onClick={handleSendTestNotification}
                                   className="bg-sky-700 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 border border-sky-600"
                                 >
-                                  <span className="material-symbols-rounded text-lg">send_and_archive</span>
+                                  <SendHorizontal className="w-5 h-5" />
                                   Test Bağlantısı Yolla
                                 </button>
                               </div>
@@ -587,7 +607,7 @@ export default function SettingsPage() {
                           {/* GELİŞMİŞ AYARLAR (Opsiyonel) */}
                           <details className="group">
                             <summary className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors list-none flex items-center gap-2">
-                              <span className="material-symbols-rounded text-sm group-open:rotate-180 transition-transform">expand_more</span>
+                              <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
                               Manuel / Gelişmiş Ayarlar
                             </summary>
                             
@@ -643,9 +663,7 @@ export default function SettingsPage() {
               {activeSection === "ppe" && (
                 <div className="space-y-10 max-w-4xl">
                   <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex gap-4">
-                    <span className="material-symbols-rounded text-amber-500 text-3xl">
-                      warning
-                    </span>
+                    <AlertTriangle className="text-amber-500 w-8 h-8" />
                     <div>
                       <h5 className="text-sm font-black text-amber-800 uppercase italic">
                         Zorunlu PPE Seçimi
@@ -679,12 +697,8 @@ export default function SettingsPage() {
                           <option value="marine">🚢 Denizcilik / Tersane</option>
                           <option value="aviation">✈️ Havacılık</option>
                         </select>
-                        <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal text-xl z-20 pointer-events-none">
-                          factory
-                        </span>
-                        <span className="material-symbols-rounded absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl z-20 pointer-events-none group-hover:text-brand-teal transition-colors font-black">
-                          expand_more
-                        </span>
+                        <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal w-5 h-5 z-20 pointer-events-none" />
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 z-20 pointer-events-none group-hover:text-brand-teal transition-colors font-black" />
                       </div>
                     </div>
                     <div className="flex-[1.5] text-slate-500">
@@ -710,9 +724,7 @@ export default function SettingsPage() {
                           />
                           {/* Background Decoration */}
                           <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
-                            <span className="material-symbols-rounded text-8xl font-black">
-                              {option.icon}
-                            </span>
+                            <option.icon className="w-24 h-24 font-black" />
                           </div>
 
                           <div className="flex items-center gap-4 relative z-10 w-full">
@@ -721,9 +733,7 @@ export default function SettingsPage() {
                                 ? "bg-brand-teal text-white border-brand-teal" 
                                 : "bg-slate-50 text-slate-400 border-slate-200 group-hover:text-brand-teal group-hover:bg-brand-teal/5"
                             }`}>
-                              <span className="material-symbols-rounded text-2xl">
-                                {option.icon}
-                              </span>
+                              <option.icon className="w-6 h-6" />
                             </div>
                             <div className="flex-1 pr-8">
                               <h6 className="text-[12px] leading-tight font-black text-slate-900 uppercase italic break-words">
@@ -737,11 +747,9 @@ export default function SettingsPage() {
                           <div className={`absolute top-1/2 -translate-y-1/2 right-6 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all z-20 shadow-sm ${
                             isMandatory ? "bg-brand-teal border-brand-teal" : "border-slate-200"
                           }`}>
-                            <span className={`material-symbols-rounded text-white text-[10px] transition-all font-black ${
+                            <Check className={`text-white w-4 h-4 transition-all font-black ${
                               isMandatory ? "scale-100" : "scale-0"
-                            }`}>
-                              check
-                            </span>
+                            }`} />
                           </div>
                         </label>
                       );
@@ -800,9 +808,7 @@ export default function SettingsPage() {
 
                     <div className="bg-gradient-to-br from-brand-orange to-orange-600 rounded-3xl p-8 text-white space-y-6 shadow-xl shadow-brand-orange/20">
                       <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-                        <span className="material-symbols-rounded text-3xl font-black">
-                          rocket_launch
-                        </span>
+                        <Rocket className="w-8 h-8" />
                       </div>
                       <h4 className="text-xl font-black uppercase italic tracking-tight">
                         Kurumsal Güce Geçin!
@@ -858,9 +864,7 @@ export default function SettingsPage() {
                     <div className="p-8 rounded-3xl bg-red-50 border border-red-100 space-y-4">
                       <div className="flex gap-4 items-start">
                         <div className="p-3 bg-red-500 rounded-2xl text-white">
-                          <span className="material-symbols-rounded">
-                            dangerous
-                          </span>
+                          <OctagonAlert className="w-6 h-6" />
                         </div>
                         <div>
                           <h4 className="text-lg font-black text-red-600 uppercase italic">

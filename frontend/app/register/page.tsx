@@ -4,6 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
+import { 
+  Building2, 
+  User, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  Factory, 
+  ChevronDown, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  Rocket, 
+  AlertCircle 
+} from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -56,19 +70,7 @@ export default function RegisterPage() {
         <div className="bg-gradient-to-br from-brand-teal to-brand-teal/80 p-8 text-white text-center">
           <div className="flex justify-center mb-4">
             <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md">
-              <svg
-                className="w-8 h-8 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
-              </svg>
+              <Building2 className="w-8 h-8 text-white" />
             </div>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Şirket Kaydı</h1>
@@ -80,9 +82,7 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-center gap-3 animate-shake">
-              <span className="material-symbols-rounded text-red-500">
-                error
-              </span>
+              <AlertCircle className="w-5 h-5 text-red-500" />
               <p className="text-red-700 text-sm font-medium">{error}</p>
             </div>
           )}
@@ -124,9 +124,7 @@ export default function RegisterPage() {
                 ŞİRKET ADI *
               </label>
               <div className="relative group">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                  apartment
-                </span>
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
                 <input
                   required
                   type="text"
@@ -145,9 +143,7 @@ export default function RegisterPage() {
                 YETKİLİ KİŞİ *
               </label>
               <div className="relative group">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                  person
-                </span>
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
                 <input
                   required
                   type="text"
@@ -166,9 +162,7 @@ export default function RegisterPage() {
                 TELEFON
               </label>
               <div className="relative group">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                  call
-                </span>
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
                 <input
                   type="tel"
                   name="phone"
@@ -186,9 +180,7 @@ export default function RegisterPage() {
                 E-POSTA *
               </label>
               <div className="relative group">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                  mail
-                </span>
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
                 <input
                   required
                   type="email"
@@ -208,9 +200,7 @@ export default function RegisterPage() {
               ADRES
             </label>
             <div className="relative group">
-              <span className="absolute left-4 top-4 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                location_on
-              </span>
+              <MapPin className="absolute left-4 top-4 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
               <textarea
                 name="address"
                 value={formData.address}
@@ -229,9 +219,7 @@ export default function RegisterPage() {
                 SEKTÖR *
               </label>
               <div className="relative group">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                  factory
-                </span>
+                <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
                 <select
                   required
                   name="sector"
@@ -250,9 +238,7 @@ export default function RegisterPage() {
                   <option value="marine">Denizcilik / Tersane</option>
                   <option value="aviation">Havacılık</option>
                 </select>
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-500 pointer-events-none">
-                  expand_more
-                </span>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none w-5 h-5" />
               </div>
             </div>
 
@@ -262,9 +248,7 @@ export default function RegisterPage() {
                 ŞİFRE *
               </label>
               <div className="relative group">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-rounded text-slate-400 group-focus-within:text-brand-teal transition-colors text-[20px]">
-                  lock
-                </span>
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-teal transition-colors w-5 h-5" />
                 <input
                   required
                   type={showPassword ? "text" : "password"}
@@ -279,9 +263,11 @@ export default function RegisterPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-teal transition-colors"
                 >
-                  <span className="material-symbols-rounded text-[20px]">
-                    {showPassword ? "visibility_off" : "visibility"}
-                  </span>
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -296,7 +282,7 @@ export default function RegisterPage() {
               <div className="h-5 w-5 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : (
               <>
-                <span className="material-symbols-rounded">rocket_launch</span>
+                <Rocket className="w-5 h-5" />
                 Kayıt Ol & Başlat
               </>
             )}

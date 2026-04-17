@@ -4,6 +4,24 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
+import { 
+  Eye, 
+  EyeOff, 
+  Trash2, 
+  Loader2, 
+  CalendarOff, 
+  CalendarDays, 
+  ChevronLeft, 
+  ChevronRight, 
+  Camera, 
+  Clock, 
+  AlertCircle,
+  HardHat,
+  Shirt,
+  Footprints,
+  ShieldAlert,
+  Download
+} from "lucide-react";
 
 interface ViolationEvent {
   event_id: string;
@@ -322,12 +340,19 @@ export default function ViolationsPage() {
 
         <div className="flex flex-wrap items-center justify-end gap-3">
           <button
-            onClick={togglePrivacy}
-            className={`flex items-center gap-2 rounded-xl border px-5 py-2.5 text-xs font-black transition-all cursor-pointer shadow-sm ${privacyMode ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+            type="button"
+            onClick={() => setPrivacyMode(!privacyMode)}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 border cursor-pointer ${
+              privacyMode
+                ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
           >
-            <span className="material-symbols-rounded">
-              {privacyMode ? "visibility_off" : "visibility"}
-            </span>
+            {privacyMode ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
             GİZLİLİK MODU
           </button>
 
@@ -337,9 +362,11 @@ export default function ViolationsPage() {
             disabled={deletingAll}
             className="bg-white text-red-600 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-colors flex items-center gap-2 border border-red-200 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
           >
-            <span className="material-symbols-rounded text-sm">
-              {deletingAll ? "hourglass_empty" : "delete_sweep"}
-            </span>
+            {deletingAll ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
             {deletingAll ? "SİLİNİYOR…" : "TÜM İHLALLERİ SİL"}
           </button>
           {selectedDate && (
@@ -347,9 +374,7 @@ export default function ViolationsPage() {
               onClick={() => setSelectedDate(null)}
               className="bg-red-50 text-red-500 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100 cursor-pointer"
             >
-              <span className="material-symbols-rounded text-sm">
-                event_busy
-              </span>
+              <CalendarOff className="w-4 h-4" />
               FİLTREYİ KALDIR
             </button>
           )}
@@ -386,19 +411,7 @@ export default function ViolationsPage() {
                   }
                   className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors cursor-pointer"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2.5}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() =>
@@ -412,19 +425,7 @@ export default function ViolationsPage() {
                   }
                   className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors cursor-pointer"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2.5}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -588,9 +589,7 @@ export default function ViolationsPage() {
                     {privacyMode && (
                       <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 backdrop-blur-[1px] transition-all duration-500">
                         <div className="p-3 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
-                          <span className="material-symbols-rounded text-xl text-white/20">
-                            visibility_off
-                          </span>
+                          <EyeOff className="w-6 h-6 text-white/20" />
                         </div>
                       </div>
                     )}
@@ -653,15 +652,13 @@ export default function ViolationsPage() {
                         </div>
 
                         {/* Privacy Overlay Large */}
-                        {privacyMode && (
-                          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-[2px] transition-all duration-500">
-                            <div className="p-6 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
-                              <span className="material-symbols-rounded text-4xl text-white/10">
-                                visibility_off
-                              </span>
+                          {privacyMode && (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-[2px] transition-all duration-500">
+                              <div className="p-6 rounded-full border border-white/10 bg-black/40 shadow-2xl animate-pulse">
+                                <EyeOff className="w-12 h-12 text-white/10" />
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
                       </div>
 
                       {/* Details Section */}
@@ -698,25 +695,7 @@ export default function ViolationsPage() {
                         <div className="space-y-6 flex-1">
                           <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
                             <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm">
-                              <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                                />
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                              </svg>
+                              <Camera className="w-6 h-6" />
                             </div>
                             <div>
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
@@ -731,19 +710,7 @@ export default function ViolationsPage() {
 
                           <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
                             <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm">
-                              <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                              </svg>
+                              <Clock className="w-6 h-6" />
                             </div>
                             <div>
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
