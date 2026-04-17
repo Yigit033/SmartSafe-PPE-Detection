@@ -15,6 +15,7 @@ services:
       - ../core:/app
       - ../storage:/app/storage
     environment:
+      - PPE_ASSOC_BBOX_DUMP=1
       - ENV=local
       - FLASK_ENV=development
       - PORT=5577
