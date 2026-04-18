@@ -1,0 +1,4 @@
+# Optional: Hugging Face dataset ingestion (CPPE-5 downloader).
+# Prefer a dedicated venv if your global env pins older `transformers` against `huggingface_hub`.
+datasets>=3.0.0
+tqdm>=4.64.0

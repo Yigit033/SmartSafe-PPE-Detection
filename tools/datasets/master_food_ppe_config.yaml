@@ -29,6 +29,7 @@ global_aliases:
 
   # goggles / safety glasses
   goggles: goggles
+  googles: goggles   # Roboflow typo seen on some food-PPE exports (e.g. Hashem universe)
   safety_glasses: goggles
   safetyglasses: goggles
   glasses: goggles   # WARNING: only safe if dataset is PPE goggles (not regular eyewear)
@@ -48,17 +49,20 @@ global_aliases:
 
 # Build inputs: these names must match folders under datasets/raw/<name>/
 sources:
-  - name: ppe_food_manufacturing_v5
-    allow: [apron, haircap, gloves, mask, goggles]
+
+  # Optional small food-PPE anchor (download: --name ppe_food_hashem). `person` boxes are dropped (not in allow).
+  - name: ppe_food_hashem
+    allow: [apron, haircap, gloves]
 
   # Add more sources here as you download them
   - name: idp_v2_finaldataset_v12
     allow: [haircap, gloves, mask, apron]
 
-  - name: food_ppe_hashem_v5
+  - name: food_ppe_safety_system
     allow: [apron, haircap]
 
-  - name: cppe5_mirror_v4
+  # CPPE-5 from Hugging Face (see tools/datasets/download_cppe5_hf.py) — reproducible vs Roboflow mirrors.
+  - name: cppe5_hf
     allow: [goggles, mask, gloves]
 
 output:

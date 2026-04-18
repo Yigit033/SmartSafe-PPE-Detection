@@ -17,25 +17,40 @@ roboflow:
     version: 5
     format: yolov8
 
+  # Hashem — small food-PPE set (~367 imgs). Universe: https://universe.roboflow.com/hashem-xyi2s/ppe-food-manufacturing-phttq
+  # If download fails, open the project's "Dataset" tab and set `version` to the latest export id.
+  - name: ppe_food_hashem
+    workspace: hashem-xyi2s
+    project: ppe-food-manufacturing-phttq
+    version: 1
+    format: yolov8
+
   # IDP - FinalDataset-Version2 (endüstriyel hacim)  [opsiyonel: manuel indiriyorsan eklemeyebilirsin]
   - name: idp_v2_finaldataset_v12
-    workspace: idp-w9qas
+    # Universe URL: https://universe.roboflow.com/idp-kwqac/finaldataset-version2
+    workspace: idp-kwqac
     project: finaldataset-version2
     version: 12
     # SDK uyumluluğu için güvenli seçim; YOLO11 ile eğitmeye engel değildir.
     format: yolov8
 
-  # Food context specialist (apron/hairnet odaklı)
-  - name: food_ppe_hashem_v5
-    workspace: hashem-xyi2s
-    project: ppe-food-manufacturing-phttq
-    version: 5
+  # 2. Safety Food System (Gerçek Food Context - ~10k Görüntü)
+  # Hashem yerine gelen, Apron ve Haircap için uzmanlaşmış devasa set.
+  - name: food_ppe_safety_system
+    workspace: safety-food-system
+    project: safety-food
+    version: 1
     format: yolov8
 
-  # CPPE-5 mirror (goggles/mask/gloves anchor)
+  # CPPE-5 mirror (Roboflow Universe — may rot). Prefer HF: tools/datasets/download_cppe5_hf.py -> datasets/raw/cppe5_hf/
   - name: cppe5_mirror_v4
     workspace: vishwa-sharma-itcln
     project: cppe-5-ppe-detection
     version: 4
     format: yolov8
+
+# Hugging Face (not consumed by download_roboflow.py; documented for humans / CI)
+# CPPE-5 canonical: https://huggingface.co/datasets/xuan-yuan/cppe-5
+#   python tools/datasets/download_cppe5_hf.py --clean
+# Optional Roboflow fallback slug (if you insist on zip): workspace muhammad-amin-shahid / project ppe-5 / version 1
 
