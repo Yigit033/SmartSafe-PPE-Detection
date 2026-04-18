@@ -1,0 +1,41 @@
+# Dataset kaynakları tek noktadan yönetilsin diye.
+# İndirme script'i: tools/datasets/download_roboflow.py
+#
+# Notlar:
+# - Her kaynak kendi klasörüne iner (datasets/raw/<name>/)
+# - "format": roboflow python SDK'nın desteklediği export formatı (örn: yolov8)
+# - API key'i repo'ya yazma. Ortam değişkeni kullan: ROBOFLOW_API_KEY
+#
+# Canonical hedef sınıflar:
+#   apron, goggles, haircap (hairnet/bone), mask, gloves
+
+roboflow:
+  # Örnek (repo içindeki mevcut food datasetinin kaynağı)
+  - name: ppe_food_manufacturing_v5
+    workspace: rahma-5lrz6
+    project: ppe-food-manufacturing
+    version: 5
+    format: yolov8
+
+  # IDP - FinalDataset-Version2 (endüstriyel hacim)  [opsiyonel: manuel indiriyorsan eklemeyebilirsin]
+  - name: idp_v2_finaldataset_v12
+    workspace: idp-w9qas
+    project: finaldataset-version2
+    version: 12
+    # SDK uyumluluğu için güvenli seçim; YOLO11 ile eğitmeye engel değildir.
+    format: yolov8
+
+  # Food context specialist (apron/hairnet odaklı)
+  - name: food_ppe_hashem_v5
+    workspace: hashem-xyi2s
+    project: ppe-food-manufacturing-phttq
+    version: 5
+    format: yolov8
+
+  # CPPE-5 mirror (goggles/mask/gloves anchor)
+  - name: cppe5_mirror_v4
+    workspace: vishwa-sharma-itcln
+    project: cppe-5-ppe-detection
+    version: 4
+    format: yolov8
+

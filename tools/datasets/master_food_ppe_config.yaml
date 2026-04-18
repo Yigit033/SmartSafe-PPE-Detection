@@ -1,0 +1,80 @@
+# Master Food PPE dataset build config
+#
+# Canonical classes (fixed contract):
+#   0: apron
+#   1: goggles
+#   2: haircap   (hairnet/bone)
+#   3: mask
+#   4: gloves
+#
+# Notes:
+# - Mapping is NAME-based (safer than hardcoding ids).
+# - `allow` limits which source classes are kept from each dataset (selective extraction).
+
+canonical_names:
+  0: apron
+  1: goggles
+  2: haircap
+  3: mask
+  4: gloves
+
+# Global name normalization (lowercased comparisons)
+global_aliases:
+  # haircap / hairnet / bone
+  hairnet: haircap
+  hair_net: haircap
+  bonnet: haircap
+  haircap: haircap
+  hair_cap: haircap
+
+  # goggles / safety glasses
+  goggles: goggles
+  safety_glasses: goggles
+  safetyglasses: goggles
+  glasses: goggles   # WARNING: only safe if dataset is PPE goggles (not regular eyewear)
+
+  # mask
+  mask: mask
+  face_mask: mask
+  facemask: mask
+
+  # gloves
+  gloves: gloves
+  glove: gloves
+
+  # apron
+  apron: apron
+  gown: apron        # WARNING: only if gown visually matches apron in that dataset
+
+# Build inputs: these names must match folders under datasets/raw/<name>/
+sources:
+  - name: ppe_food_manufacturing_v5
+    allow: [apron, haircap, gloves, mask, goggles]
+
+  # Add more sources here as you download them
+  - name: idp_v2_finaldataset_v12
+    allow: [haircap, gloves, mask, apron]
+
+  - name: food_ppe_hashem_v5
+    allow: [apron, haircap]
+
+  - name: cppe5_mirror_v4
+    allow: [goggles, mask, gloves]
+
+output:
+  staging_dir: datasets/staging/master_food_ppe_v1
+
+qc:
+  crops_per_class: 50
+  max_image_edge: 1280  # for QC crops load speed (optional)
+
+split:
+  # "none" keeps original dataset split folders if present.
+  # "random" re-splits at image level (NOT recommended for CCTV frame data).
+  # "by_source" puts entire sources into train/val/test buckets (leakage-resistant).
+  strategy: none
+  train_ratio: 0.8
+  val_ratio: 0.2
+  test_ratio: 0.0
+  seed: 1337
+
