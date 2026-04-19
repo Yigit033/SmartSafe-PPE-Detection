@@ -1,1 +1,14 @@
 storage/violations/*
+
+# Python bytecode (never commit)
+__pycache__/
+*.py[cod]
+
+# --- Local datasets & training artifacts (keep repo clean) ---
+datasets/raw/
+datasets/staging/
+training/runs/
+
+# --- Large model artifacts (store locally, not in git) ---
+models/candidates/*.pt
+models/**/weights/*.pt
