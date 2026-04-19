@@ -242,13 +242,7 @@ export default function Home() {
             </div>
             <div className="mt-6 flex items-center gap-3">
               <span
-                className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${
-                  stat.trend === 0
-                    ? "text-slate-500 bg-slate-100"
-                    : stat.trend > 0
-                      ? "text-emerald-600 bg-emerald-100"
-                      : "text-red-600 bg-red-100"
-                }`}
+                className="flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider text-slate-500 bg-slate-100"
               >
                 {stat.trend === 0
                   ? "-"

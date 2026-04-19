@@ -844,6 +844,14 @@ class DatabaseAdapter:
             
             # PostgreSQL native placeholders are already in the query
             
+            dt_time = result_data.get('detection_time')
+            if isinstance(dt_time, (int, float)):
+                dt_time = datetime.fromtimestamp(dt_time)
+                
+            fr_time = result_data.get('frame_timestamp')
+            if isinstance(fr_time, (int, float)):
+                fr_time = datetime.fromtimestamp(fr_time)
+
             params = (
                 result_data['stream_id'],
                 result_data['company_id'],
@@ -852,9 +860,9 @@ class DatabaseAdapter:
                 result_data['violations_count'],
                 result_data['missing_ppe'],
                 result_data['detection_confidence'],
-                result_data['detection_time'],
-                result_data['frame_timestamp'],
-                datetime.now().isoformat()
+                dt_time,
+                fr_time,
+                datetime.now()
             )
             
             self.execute_query(query, params, fetch_all=False)
@@ -1486,14 +1494,23 @@ class DatabaseAdapter:
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             '''
             
+            # start_time ve end_time sayısal (unix) ise datetime objesine çevir
+            st = event_data.get('start_time')
+            if isinstance(st, (int, float)):
+                st = datetime.fromtimestamp(st)
+                
+            et = event_data.get('end_time')
+            if isinstance(et, (int, float)):
+                et = datetime.fromtimestamp(et)
+
             params = (
                 event_data['event_id'],
                 company_id,
                 insert_camera_id,
                 event_data['person_id'],
                 event_data['violation_type'],
-                event_data['start_time'],
-                event_data.get('end_time'),
+                st,
+                et,
                 event_data.get('duration_seconds'),
                 event_data.get('snapshot_path'),
                 event_data.get('severity', 'warning'),
@@ -1519,8 +1536,12 @@ class DatabaseAdapter:
                 WHERE event_id = %s
             '''
             
+            et = update_data.get('end_time')
+            if isinstance(et, (int, float)):
+                et = datetime.fromtimestamp(et)
+
             params = (
-                update_data.get('end_time'),
+                et,
                 update_data.get('duration_seconds'),
                 update_data.get('status', 'resolved'),
                 update_data.get('resolution_snapshot_path'),

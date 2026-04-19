@@ -154,6 +154,59 @@ export const list = api(
 );
 
 /**
+ * Kameranın çalışan stream path'ini bulur
+ */
+async function findWorkingStreamPath(
+  ip: string,
+  port: number,
+  protocol: string,
+  username?: string,
+  password?: string,
+): Promise<string | null> {
+  const commonPaths = [
+    "/video",
+    "/shot.jpg",
+    "/mjpeg",
+    "/live",
+    "/stream",
+    "/video.mjpg",
+    "/video.mjpeg",
+    "/camera",
+    "/webcam",
+    "/",
+  ];
+
+  const headers: Record<string, string> = {};
+  if (username && password) {
+    const auth = Buffer.from(`${username}:${password}`).toString("base64");
+    headers["Authorization"] = `Basic ${auth}`;
+  }
+
+  for (const path of commonPaths) {
+    const url = `${protocol}://${ip}:${port}${path}`;
+    try {
+      // @ts-ignore
+      const response = await fetch(url, {
+        headers,
+        method: "GET",
+        // @ts-ignore
+        signal: AbortSignal.timeout(2000), // 2 saniye timeout
+      });
+
+      // 200 OK veya 401/403 (yetki hatası olsa bile endpoint var demektir)
+      if (response.status === 200 || response.status === 401 || response.status === 403) {
+        console.log(`✅ Found working endpoint: ${url} (Status: ${response.status})`);
+        return path;
+      }
+    } catch (e) {
+      // Hata durumunda devam et
+    }
+  }
+
+  return null;
+}
+
+/**
  * Yeni bir kamera ekler
  */
 export const create = api(
@@ -187,6 +240,28 @@ export const create = api(
       };
     }
 
+    // 2. Çalışan stream path'ini bul (Otomatik Koruma/Keşif - Sadece HTTP/HTTPS için)
+    let workingPath = params.camera_path || "/video";
+    const protocol = params.camera_protocol || "http";
+    
+    if (protocol.startsWith("http")) {
+      console.log(`🔍 Checking working stream path for ${params.camera_ip}...`);
+      const detectedPath = await findWorkingStreamPath(
+        params.camera_ip,
+        params.camera_port || 8080,
+        protocol,
+        params.camera_username,
+        params.camera_password
+      );
+
+      if (detectedPath) {
+        workingPath = detectedPath;
+        console.log(`🎯 Using detected path: ${workingPath}`);
+      } else {
+        console.log(`⚠️ No working path detected, using fallback: ${workingPath}`);
+      }
+    }
+
     const camera_id = `CAM_${uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
 
     try {
@@ -207,7 +282,7 @@ export const create = api(
           params.camera_ip,
           params.camera_port || 8080,
           params.camera_protocol || "http",
-          params.camera_path || "/video",
+          workingPath,
           params.camera_username || "",
           params.camera_password || "",
           "active",

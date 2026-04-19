@@ -201,8 +201,8 @@ class PoseAwarePPEDetector:
         self.temporal_window_size: int = 15
         self.temporal_required_positive: int = 10
         
-        # SH17 PPE detection cadence (every Nth frame). Default: every frame.
-        self.sh17_every_n: int = 1
+        # SH17 PPE detection cadence (every Nth frame). Default: from env or 1.
+        self.sh17_every_n: int = int(os.environ.get("PPE_DETECTION_CADENCE", "1"))
         self._frame_counter: int = 0
         self._last_ppe_detections: List[Dict] = []
 
@@ -311,9 +311,11 @@ class PoseAwarePPEDetector:
             else:
                 try:
                     self.pose_model.to(target_device)
+                    
                     dummy = np.zeros((64, 64, 3), dtype=np.uint8)
                     _ = self.pose_model(
-                        dummy, conf=0.5, verbose=False, device=target_device
+                        dummy, conf=0.5, verbose=False, device=target_device,
+                        half=(str(target_device).startswith("cuda"))
                     )
                     logger.info(
                         "🔧 Pose model CUDA warmup OK (%s)", target_device
@@ -398,11 +400,11 @@ class PoseAwarePPEDetector:
             pose_results = self.pose_model(
                 pose_frame,
                 conf=self.pose_confidence_threshold,
-                verbose=False
+                verbose=False,
+                half=(str(self.pose_model.device).startswith("cuda"))
             )
 
-            # Free GPU memory between sequential model calls
-            self._clear_gpu_memory()
+            # Inference complete
             
             # 2️⃣ Detect PPE items — use ORIGINAL frame for maximum detection accuracy
             ppe_detections = []

@@ -59,15 +59,6 @@ def create_blueprint(api):
             stream_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
             auth = HTTPBasicAuth(username, password) if (username and password) else None
 
-            # Alternative URLs for different camera types
-            alternative_urls = [
-                f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/video",
-                f"{protocol}://{camera['ip_address']}:{port}/mjpeg",
-                f"{protocol}://{camera['ip_address']}:{port}/stream",
-                f"{protocol}://{camera['ip_address']}:{port}/live"
-            ]
-
             from utils.redaction import format_upstream_url_for_log
 
             boundary = 'frame'
@@ -88,11 +79,17 @@ def create_blueprint(api):
                         
                         # Primary URL'yi dene
                         try:
-                            response = requests.get(stream_url, auth=auth, timeout=3)
+                            # 2 saniye timeout (firewall durumlarında hızlı fail için)
+                            response = requests.get(stream_url, auth=auth, timeout=2)
                             if response.status_code == 200:
                                 frame_data = np.frombuffer(response.content, np.uint8)
                                 frame = cv2.imdecode(frame_data, cv2.IMREAD_COLOR)
                                 working_url = stream_url
+                            elif response.status_code in [401, 403]:
+                                logger.error(f"🔐 Camera Auth Failed (HTTP {response.status_code}): {camera_id}")
+                                # Auth hatası durumunda döngüden çıkıp placeholder gösterebiliriz
+                        except requests.exceptions.Timeout:
+                            logger.warning(f"⏳ Connection Timeout for {camera_id} at {stream_url} (2s)")
                         except Exception as e:
                             logger.debug(
                                 "Primary URL failed (%s): %s",
@@ -105,29 +102,8 @@ def create_blueprint(api):
                                 e,
                             )
                         
-                        # Alternatif URL'leri dene
-                        if frame is None:
-                            for alt_url in alternative_urls:
-                                try:
-                                    response = requests.get(alt_url, auth=auth, timeout=3)
-                                    if response.status_code == 200:
-                                        frame_data = np.frombuffer(response.content, np.uint8)
-                                        frame = cv2.imdecode(frame_data, cv2.IMREAD_COLOR)
-                                        if frame is not None:
-                                            working_url = alt_url
-                                            break
-                                except Exception as e:
-                                    logger.debug(
-                                        "Alternative URL failed %s: %s",
-                                        format_upstream_url_for_log(
-                                            str(alt_url),
-                                            company_id=company_id,
-                                            camera_id=camera_id,
-                                            label="mjpeg_alt",
-                                        ),
-                                        e,
-                                    )
-                                    continue
+                        # Alternatif URL taraması kaldırıldı. 
+                        # Artık kayıt sırasında (backend/camera/camera.ts) doğru URL tespit ediliyor.
                         
                         if frame is not None and frame.size > 0:
                             frame_count += 1
@@ -1103,38 +1079,8 @@ def create_blueprint(api):
             username = camera.get('username', '')
             password = camera.get('password', '')
             
-            # Snapshot-only path'ler: tek kare döner, canlı akış değil. Proxy-stream için önce MJPEG dene.
-            SNAPSHOT_PATH_SUFFIXES = (
-                '/shot.jpg', '/photoaf.jpg', '/photo.jpg', '/image.jpg',
-                '/snapshot.jpg', '/snapshot.cgi', '/image.cgi'
-            )
-            is_snapshot_path = any(stream_path.endswith(s) or stream_path == s.lstrip('/') 
-                                   for s in SNAPSHOT_PATH_SUFFIXES)
-            
             # Never embed credentials into URLs that may reach the client.
             stream_url = f"http://{camera['ip_address']}:{port}{camera.get('stream_path', '/video')}"
-            
-            # Önce MJPEG stream URL'leri (canlı video), en sonda snapshot (tek kare)
-            stream_only_urls = [
-                f"{protocol}://{camera['ip_address']}:{port}/video",
-                f"{protocol}://{camera['ip_address']}:{port}/videofeed",
-                f"{protocol}://{camera['ip_address']}:{port}/mjpeg",
-                f"{protocol}://{camera['ip_address']}:{port}/stream",
-                f"{protocol}://{camera['ip_address']}:{port}/live",
-                f"{protocol}://{camera['ip_address']}:{port}/camera",
-                f"{protocol}://{camera['ip_address']}:{port}/webcam",
-                f"{protocol}://{camera['ip_address']}:{port}/video.mjpg",
-            ]
-            snapshot_fallback_urls = [
-                f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/photoaf.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/photo.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/image.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/snapshot.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/snapshot.cgi",
-                f"{protocol}://{camera['ip_address']}:{port}/image.cgi"
-            ]
-            alternative_urls = stream_only_urls + snapshot_fallback_urls
             
             # 🚀 DVR Kanalı ise RTSP -> MJPEG Dönüştürücü Kullan
             if camera.get('is_dvr') or str(camera.get('stream_path', '')).startswith('rtsp://'):
@@ -1237,58 +1183,27 @@ def create_blueprint(api):
                 resp.headers['X-Accel-Buffering'] = 'no'
                 return resp
             
-            # Kullanıcı path'i snapshot ise (örn. /shot.jpg) önce MJPEG stream dene; yoksa donuyor hissi olur.
-            if not is_snapshot_path:
-                logger.info(
-                    "🎥 Trying primary stream URL: %s",
-                    format_upstream_url_for_log(
-                        str(stream_url), company_id=company_id, camera_id=camera_id, label="primary"
-                    ),
-                )
-                try:
-                    response = requests.get(stream_url, auth=auth, headers=headers, timeout=2, stream=True)
-                    if response.status_code == 200:
-                        logger.info(
-                            "✅ Primary stream URL successful: %s",
-                            format_upstream_url_for_log(
-                                str(stream_url), company_id=company_id, camera_id=camera_id, label="primary"
-                            ),
-                        )
-                        return _stream_response(response)
-                except Exception as e:
-                    logger.warning(f"❌ Primary stream URL failed: {e}")
-            else:
-                logger.info(f"🎥 Primary path is snapshot ({stream_path}), trying MJPEG stream URLs first")
-            
-            for i, alt_url in enumerate(alternative_urls, 1):
-                try:
+            logger.info(
+                "🎥 Trying primary stream URL: %s",
+                format_upstream_url_for_log(
+                    str(stream_url), company_id=company_id, camera_id=camera_id, label="primary"
+                ),
+            )
+            try:
+                # Direct try with 2s timeout
+                response = requests.get(stream_url, auth=auth, headers=headers, timeout=2, stream=True)
+                if response.status_code == 200:
                     logger.info(
-                        "🎥 Trying alternative URL %s/%s: %s",
-                        i,
-                        len(alternative_urls),
+                        "✅ Primary stream URL successful: %s",
                         format_upstream_url_for_log(
-                            str(alt_url), company_id=company_id, camera_id=camera_id, label=f"alt{i}"
+                            str(stream_url), company_id=company_id, camera_id=camera_id, label="primary"
                         ),
                     )
-                    response = requests.get(alt_url, auth=auth, headers=headers, timeout=2, stream=True)
-                    if response.status_code == 200:
-                        logger.info(
-                            "✅ Alternative URL successful: %s",
-                            format_upstream_url_for_log(
-                                str(alt_url), company_id=company_id, camera_id=camera_id, label=f"alt{i}"
-                            ),
-                        )
-                        return _stream_response(response)
-                except Exception as e:
-                    logger.warning(
-                        "❌ Alternative URL %s failed %s: %s",
-                        i,
-                        format_upstream_url_for_log(
-                            str(alt_url), company_id=company_id, camera_id=camera_id, label=f"alt{i}"
-                        ),
-                        e,
-                    )
-                    continue
+                    return _stream_response(response)
+                else:
+                    logger.warning(f"❌ Primary stream URL failed with status {response.status_code}")
+            except Exception as e:
+                logger.warning(f"❌ Primary stream URL failed: {e}")
             
             # Eğer IP kamera linki patladıysa ama RTSP URL varsa son çare onu dene (Eskiden capture'da vardı)
             rtsp_url = camera.get('rtsp_url')
@@ -1317,7 +1232,7 @@ def create_blueprint(api):
                 return Response(_backup_rtsp_generator(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
             return _structured_error(
-                503,
+                200,
                 'STREAM_UNAVAILABLE',
                 'Kamera stream alınamadı',
                 details={
@@ -1331,7 +1246,7 @@ def create_blueprint(api):
         except Exception as e:
             logger.error(f"Proxy camera stream error: {e}")
             return _structured_error(
-                502,
+                200,
                 'PROXY_ERROR',
                 'Proxy stream error',
                 details={'retryable': True, 'suggested_backoff_ms': 2000},
@@ -1360,27 +1275,20 @@ def create_blueprint(api):
 
             from utils.redaction import format_upstream_url_for_log
             
-            # Snapshot URL'lerini oluştur
+            # Parameter parsing
             protocol = camera.get('protocol', 'http')
             port = camera.get('port', 8080)
             username = camera.get('username', '')
             password = camera.get('password', '')
-            
-            # Snapshot URL'leri - IP Webcam path'leri öncelikli
-            snapshot_urls = [
-                # IP Webcam specific paths (Android)
-                f"{protocol}://{camera['ip_address']}:{port}/shot.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/photoaf.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/photo.jpg",
-                # Generic snapshot paths
-                f"{protocol}://{camera['ip_address']}:{port}/snapshot.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/image.jpg",
-                f"{protocol}://{camera['ip_address']}:{port}/snapshot.cgi",
-                f"{protocol}://{camera['ip_address']}:{port}/image.cgi",
-                f"{protocol}://{camera['ip_address']}:{port}/capture",
-                f"{protocol}://{camera['ip_address']}:{port}/photo",
-                f"{protocol}://{camera['ip_address']}:{port}/picture"
-            ]
+
+            # Snapshot URL'ini oluştur - Sadece kayıtlı path kullanılır
+            stream_path = (camera.get('stream_path') or '/shot.jpg').strip()
+            if "://" in stream_path:
+                snapshot_url = stream_path
+            else:
+                if not stream_path.startswith('/'):
+                    stream_path = '/' + stream_path
+                snapshot_url = f"{protocol}://{camera['ip_address']}:{port}{stream_path}"
             
             # 🚀 DVR Kanalı ise RTSP -> Snapshot Dönüştürücü Kullan
             rtsp_url = camera.get('rtsp_url') or (camera.get('stream_path') if str(camera.get('stream_path', '')).startswith('rtsp://') else None)
@@ -1414,28 +1322,18 @@ def create_blueprint(api):
                 'User-Agent': 'SmartSafe-AI-Camera-Proxy/1.0',
                 'Accept': 'image/*'
             }
+            auth = HTTPBasicAuth(username, password) if (username and password) else None
             
-            # Authentication
-            auth = None
-            if username and password:
-                auth = HTTPBasicAuth(username, password)
-            
-            # URL'leri dene
-            for url in snapshot_urls:
-                try:
-                    response = requests.get(url, auth=auth, headers=headers, timeout=5)
-                    if response.status_code == 200:
-                        return Response(response.content, 
-                                     content_type=response.headers.get('content-type', 'image/jpeg'))
-                except Exception as e:
-                    logger.warning(
-                        "Snapshot URL failed %s: %s",
-                        format_upstream_url_for_log(
-                            str(url), company_id=company_id, camera_id=camera_id, label="proxy_snapshot"
-                        ),
-                        e,
-                    )
-                    continue
+            try:
+                logger.info("📸 Proxying snapshot via: %s", snapshot_url)
+                response = requests.get(snapshot_url, auth=auth, headers=headers, timeout=5)
+                if response.status_code == 200:
+                    return Response(response.content, 
+                                 content_type=response.headers.get('content-type', 'image/jpeg'))
+                else:
+                    logger.warning(f"❌ Snapshot URL failed with status {response.status_code}")
+            except Exception as e:
+                logger.warning(f"❌ Snapshot capture error: {e}")
             
             # Hiçbiri çalışmazsa ve yukarıda RTSP denememişsek (örn. IP kameranın RTSP'si varsa)
             if rtsp_url and not camera.get('is_dvr'):
@@ -1450,11 +1348,11 @@ def create_blueprint(api):
                  except: pass
 
             # Hiçbiri çalışmazsa hata döndür
-            return jsonify({'success': False, 'error': 'Kamera snapshot alınamadı'}), 404
+            return jsonify({'success': False, 'error': 'Kamera snapshot alınamadı'}), 200
             
         except Exception as e:
             logger.error(f"Proxy camera snapshot error: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({'success': False, 'error': str(e)}), 200
 
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/stream-status', methods=['GET'])
     def camera_stream_status(company_id, camera_id):
@@ -2184,41 +2082,70 @@ def create_blueprint(api):
                 
                 # ── 2) ONVIF başarısızsa → RTSP URL tahmini ─────────────────
                 if not onvif_success:
-                    entry_result['method'] = 'rtsp_probe'
+                    entry_result['method'] = 'probe'
                     
-                    # Yaygın RTSP URL formatları (Hikvision, Dahua, generic)
+                    # ── RTSP Templates ──
                     rtsp_templates = [
-                        # Hikvision
                         f"rtsp://{username}:{password}@{ip}:{port}/Streaming/Channels/101",
                         f"rtsp://{username}:{password}@{ip}:{port}/Streaming/Channels/1",
-                        # Dahua
                         f"rtsp://{username}:{password}@{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
-                        # Generic ONVIF
                         f"rtsp://{username}:{password}@{ip}:{port}/stream1",
                         f"rtsp://{username}:{password}@{ip}:{port}/live",
                         f"rtsp://{username}:{password}@{ip}:{port}/h264",
-                        # Auth-free variants
                         f"rtsp://{ip}:{port}/stream1",
                     ] if username and password else [
                         f"rtsp://{ip}:{port}/stream1",
                         f"rtsp://{ip}:{port}/live",
-                        f"rtsp://{ip}:{port}/h264",
+                    ]
+
+                    # ── MJPEG/HTTP Templates ──
+                    mjpeg_templates = [
+                        f"http://{ip}:{port}/video",
+                        f"http://{ip}:{port}/mjpeg",
+                        f"http://{ip}:{port}/videofeed",
+                        f"http://{ip}:{port}/stream",
+                        f"http://{ip}:{port}/live",
+                        f"http://{ip}:{port}/video.mjpg",
+                        f"http://{ip}:{port}/shot.jpg",
                     ]
                     
+                    # Determine which templates to try first based on user intent
+                    templates_to_try = []
+                    if protocol == 'rtsp':
+                        templates_to_try = rtsp_templates + mjpeg_templates
+                    else:
+                        templates_to_try = mjpeg_templates + rtsp_templates
+
                     working_url = None
                     try:
                         import cv2
-                        for url in rtsp_templates:
+                        import requests
+                        from requests.auth import HTTPBasicAuth
+                        
+                        for url in templates_to_try:
                             try:
-                                cap = cv2.VideoCapture(url)
-                                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
-                                if cap.isOpened():
-                                    ret, _frame = cap.read()
-                                    if ret:
-                                        working_url = url
-                                        cap.release()
-                                        break
-                                cap.release()
+                                if url.startswith('rtsp://'):
+                                    cap = cv2.VideoCapture(url)
+                                    cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000)
+                                    if cap.isOpened():
+                                        ret, _frame = cap.read()
+                                        if ret:
+                                            working_url = url
+                                            cap.release()
+                                            break
+                                    cap.release()
+                                else:
+                                    # HTTP probe with requests for faster fail
+                                    auth = HTTPBasicAuth(username, password) if username and password else None
+                                    r = requests.get(url, auth=auth, timeout=2, stream=True)
+                                    if r.status_code == 200:
+                                        # Check if it looks like a stream or image
+                                        ct = r.headers.get('Content-Type', '').lower()
+                                        if 'image' in ct or 'multipart' in ct:
+                                            working_url = url
+                                            r.close()
+                                            break
+                                    r.close()
                             except Exception:
                                 continue
                     except ImportError:
@@ -2231,17 +2158,16 @@ def create_blueprint(api):
                             'stream_uri': working_url,
                         }]
                     else:
-                        # Hiçbir URL çalışmasa bile kamerayı ekle (kullanıcı sonra düzeltebilir)
+                        # Fallback path if nothing found
+                        fallback_path = "/Streaming/Channels/101" if protocol == 'rtsp' else "/video"
                         channels_from_onvif = [{
                             'channel_number': 1,
                             'name': cam_name,
-                            # Never embed credentials into the URI; credentials are stored separately.
-                            'stream_uri': f"rtsp://{ip}:{port}/stream1",
+                            'stream_uri': f"{protocol}://{ip}:{port}{fallback_path}",
                         }]
                         entry_result['detail'] = (
                             'Otomatik bağlantı testi başarısız oldu. '
-                            'Kamera eklendi fakat stream URL\'si doğrulanmadı — '
-                            'kamera ayarlarından manuel olarak kontrol edin.'
+                            'Kamera varsayılan ayarla eklendi fakat doğrulanmadı.'
                         )
                 
                 # ── 3) Bulunan kanalları DB'ye ekle ─────────────────────────

@@ -183,7 +183,7 @@ def decide_frame(
                 elif roi_score < roi_uncertain_t:
                     roi_state = "UNCERTAIN"
 
-            track_conf = 0.6 if tid_i is not None else 0.15
+            track_conf = 0.6 if tid_i is not None else 0.40 # 0.15'ten 0.40'a çıkarıldı (takip olmasa da hemen reddetme)
             stability_score = 0.6
             jitter_px = 0.0
 
@@ -233,12 +233,12 @@ def decide_frame(
                 reject += 1
 
     frame_state: DecisionState
-    if accept > 0 and uncertain == 0 and reject == 0:
+    if accept > 0:
         frame_state = "ACCEPT"
-    elif accept == 0 and uncertain == 0 and reject > 0:
-        frame_state = "REJECT"
-    else:
+    elif uncertain > 0:
         frame_state = "UNCERTAIN"
+    else:
+        frame_state = "REJECT"
 
     if frame_state != "ACCEPT":
         reasons.append("decision_engine")

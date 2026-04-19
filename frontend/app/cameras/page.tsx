@@ -28,7 +28,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
-  VideoOff
+  VideoOff,
+  Camera
 } from "lucide-react";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
@@ -703,7 +704,7 @@ function CamerasContent() {
             onClick={() => setIsManageDvrsOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
           >
-            <Router className="w-4 h-4" /> DVR YÖNETİMİ
+            <Settings className="w-4 h-4" /> KAMERA YÖNETİMİ
           </button>
           <button
             onClick={toggleAllPrivacy}
@@ -1044,9 +1045,9 @@ function CamerasContent() {
             <div className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
               <div className="bg-slate-900 p-6 flex items-center justify-between text-white">
                 <div className="flex items-center gap-3">
-                  <X className="w-5 h-5" />
+                  <Settings className="w-5 h-5" />
                   <h3 className="font-black tracking-widest uppercase italic text-sm">
-                    DVR SİSTEM YÖNETİMİ
+                    KAMERA VE SİSTEM YÖNETİMİ
                   </h3>
                 </div>
                 <button
@@ -1060,24 +1061,104 @@ function CamerasContent() {
               <div className="p-8 overflow-y-auto">
                 <div className="flex items-center justify-between mb-8">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                    KAYITLI CİHAZLAR ({dvrs.length})
+                    YÖNETİLEBİLİR CİHAZ VE KAMERALAR
                   </p>
                   <button
                     onClick={() => router.push("/cameras/setup")}
                     className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90 transition-all cursor-pointer shadow-sm hover:shadow-lg hover:shadow-brand-teal/20 active:scale-95"
                   >
-                    <Plus className="w-4 h-4" /> CİHAZ EKLE
+                    <Plus className="w-4 h-4" /> YENİ EKLE
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  {dvrs.length === 0 ? (
-                    <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                      <p className="text-[10px] font-black text-slate-400 uppercase text-center w-full">
-                        Henüz DVR sistemi eklenmedi
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Standalone IP Cameras Section */}
+                  {managementCameras.filter(c => !c.dvr_id).length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+                        BAĞIMSIZ IP KAMERALAR
                       </p>
+                      <div className="grid grid-cols-1 gap-2">
+                        {managementCameras.filter(c => !c.dvr_id).map((camera) => (
+                          <div
+                            key={camera.camera_id}
+                            className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200/50 rounded-2xl hover:bg-slate-100 transition-all"
+                          >
+                            <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                                <Camera className="w-6 h-6" />
+                              </div>
+                              <div className="flex-1 overflow-hidden">
+                                {editingCameraId === camera.camera_id ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={editingCameraName}
+                                      onChange={(e) => setEditingCameraName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleInlineCameraSave(camera.camera_id);
+                                        if (e.key === "Escape") setEditingCameraId(null);
+                                      }}
+                                      className="h-8 bg-white border border-brand-teal rounded-lg px-2 text-[10px] font-black text-slate-900 w-full outline-none"
+                                    />
+                                    <button onClick={() => handleInlineCameraSave(camera.camera_id)} className="text-brand-teal p-1"><Check className="w-4 h-4" /></button>
+                                    <button onClick={() => setEditingCameraId(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <h4 className="font-black text-slate-900 text-[10px] truncate">{camera.camera_name}</h4>
+                                    <p className="text-[8px] font-bold text-slate-400 tracking-tight uppercase">
+                                      {camera.ip_address} • {camera.protocol?.toUpperCase()} • {camera.status === 'active' ? 'AKTİF' : 'PASİF'}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <button
+                                onClick={() => toggleCameraStatus(camera)}
+                                className={`w-9 h-9 flex items-center justify-center rounded-xl border border-transparent transition-all cursor-pointer ${camera.status === "active" ? "text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100" : "text-brand-teal hover:bg-brand-teal/10 hover:border-brand-teal/20"}`}
+                                title={camera.status === "active" ? "Kamerayı Gizle" : "Kamerayı Göster"}
+                              >
+                                {camera.status === "active" ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingCameraId(camera.camera_id);
+                                  setEditingCameraName(camera.camera_name || "");
+                                }}
+                                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                                title="İsim Düzenle"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCamera(camera)}
+                                className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                                title="Tamamen Sil"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ) : (
+                  )}
+
+                  {/* DVR Systems Section */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+                       DVR / NVR SİSTEMLERİ
+                    </p>
+                    {dvrs.length === 0 ? (
+                      <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                        <p className="text-[10px] font-black text-slate-400 uppercase text-center w-full">
+                          Henüz DVR sistemi eklenmedi
+                        </p>
+                      </div>
+                    ) : (
                     dvrs.map((dvr) => (
                       <div key={dvr.dvr_id} className="flex flex-col gap-2">
                         <div
@@ -1330,9 +1411,10 @@ function CamerasContent() {
                 </div>
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
+          </div>
+        </div>,
+        document.body,
+      )}
       {mounted &&
         createPortal(
           <ScheduleModal

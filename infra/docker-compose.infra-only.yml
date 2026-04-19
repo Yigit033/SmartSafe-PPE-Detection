@@ -35,6 +35,18 @@ services:
       timeout: 3s
       retries: 5
 
+  # 🕸️ PGWeb (Database UI)
+  pgweb:
+    image: sosedoff/pgweb
+    container_name: smartsafe-pgweb-local
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgres://smartsafe:smartsafe2024@postgres:5432/smartsafe_saas?sslmode=disable
+    depends_on:
+      - postgres
+
 volumes:
   postgres_data_local:
   redis_data_local:

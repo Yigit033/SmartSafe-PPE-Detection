@@ -1147,22 +1147,17 @@ class SmartSafeSaaSAPI:
             auth_required = False
             
             for endpoint in http_endpoints:
-                if self._test_http_endpoint(ip_address, port, endpoint, username, password):
+                success, is_auth_error = self._test_http_endpoint_with_detail(ip_address, port, endpoint, username, password)
+                if success:
                     working_endpoint = endpoint
                     test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ✅')
                     break
                 else:
-                    # Authentication gerekli mi kontrol et
-                    try:
-                        url = f"http://{ip_address}:{port}{endpoint}"
-                        response = requests.get(url, timeout=5)
-                        if response.status_code == 401:
-                            auth_required = True
-                            test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} 🔐 (Auth gerekli)')
-                            test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
-                    except Exception as e:
+                    if is_auth_error:
+                        auth_required = True
+                        test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} 🔐 (Auth gerekli)')
+                    else:
                         test_result['test_details']['endpoints_tested'].append(f'HTTP: {endpoint} ❌')
-                        test_result['test_details']['connection_steps'].append(f'Hata: {str(e)}')
             
             # Authentication gerekliyse kullanıcıya bildir
             if auth_required and not username and not password:
@@ -1217,7 +1212,7 @@ class SmartSafeSaaSAPI:
         import socket
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(2) # 5 -> 2s
             result = sock.connect_ex((ip_address, port))
             sock.close()
             if result == 0:
@@ -1231,26 +1226,33 @@ class SmartSafeSaaSAPI:
             return False
     
     def _test_http_endpoint(self, ip_address, port, endpoint, username, password):
-        """HTTP endpoint'i test et"""
+        """HTTP endpoint'i test et (Backward compatibility)"""
+        success, _ = self._test_http_endpoint_with_detail(ip_address, port, endpoint, username, password)
+        return success
+
+    def _test_http_endpoint_with_detail(self, ip_address, port, endpoint, username, password):
+        """HTTP endpoint'i test et ve detay döndür (success, is_auth_error)"""
+        url = f"http://{ip_address}:{port}{endpoint}"
         try:
             auth = None
             if username and password:
                 auth = (username, password)
             
-            url = f"http://{ip_address}:{port}{endpoint}"
-            response = requests.get(url, auth=auth, timeout=5)
+            response = requests.get(url, auth=auth, timeout=2) # 5 -> 2s
             if response.status_code == 200:
                 print(f"✅ HTTP endpoint başarılı: {url}")
-                return True
-            elif response.status_code == 401:
-                print(f"❌ Authentication gerekli: {url}")
-                return False
+                return True, False
+            elif response.status_code in [401, 403]:
+                print(f"❌ Authentication hatası: {url} (Status: {response.status_code})")
+                return False, True
             else:
                 print(f"❌ HTTP endpoint başarısız: {url} (Status: {response.status_code})")
-                return False
+                return False, False
         except Exception as e:
-            print(f"❌ HTTP endpoint hatası: {url} - {e}")
-            return False
+            # Timeout durumunda auth error değildir
+            is_timeout = isinstance(e, requests.exceptions.Timeout)
+            print(f"❌ HTTP endpoint hatası: {url} - {'Timeout (2s)' if is_timeout else e}")
+            return False, False
     
     def _test_rtsp_endpoint(self, ip_address, port, endpoint, username, password):
         """RTSP endpoint'i test et"""
@@ -2602,12 +2604,13 @@ smartsafe_requests_total 100
                         elif decision_summary.get("state") != "ACCEPT" and ppe_violations:
                             # Reliability gate: show overlay/metrics but avoid producing false alerts.
                             logger.info(
-                                "🛡️ DECISION_GATE [%s] state=%s accept=%s uncertain=%s reject=%s — violation events suppressed",
+                                "🛡️ DECISION_GATE [%s] state=%s accept=%s uncertain=%s reject=%s reasons=%s — violation events suppressed",
                                 camera_key,
                                 decision_summary.get("state"),
                                 decision_summary.get("people_accept"),
                                 decision_summary.get("people_uncertain"),
                                 decision_summary.get("people_reject"),
+                                decision_summary.get("reasons", []),
                             )
 
                         # ── VIOLATION DB & SNAPSHOT KAYIT ──────────────────────────────────
@@ -2634,7 +2637,7 @@ smartsafe_requests_total 100
                                             px1, py1, px2, py2 = p_bbox
                                             person_area = (px2 - px1) * (py2 - py1)
                                             frame_area = frame.shape[1] * frame.shape[0]
-                                            if person_area < (frame_area * 0.001):
+                                            if person_area < (frame_area * 0.0003):
                                                 person_visible = False
                                         else:
                                             person_visible = False
@@ -2784,7 +2787,8 @@ smartsafe_requests_total 100
                         if should_save:
                             self.save_detection_to_db(detection_data)
                     
-                    time.sleep(0.01)  # CPU'yu rahatlatmak için
+                    # Diğer servislerin (Frontend/Backend) kilitlenmemesi için nefes alma süresi
+                    time.sleep(0.05)
                 else:
                     time.sleep(0.1)
                     
@@ -3816,42 +3820,24 @@ smartsafe_requests_total 100
                 self._start_dvr_detection_polling(camera_key, camera_id, camera_info, active_detectors_ref)
                 return
 
-            # Kamera URL'sini oluştur - Alternatif URL'ler ile
+            # Kamera URL'sini oluştur - Artık alternatif taraması yok, direkt DB'deki path kullanılır
             camera_url = None
             if camera_info.get('ip_address') and camera_info.get('port'):
                 protocol = camera_info.get('protocol', 'http')
                 ip = camera_info['ip_address']
                 port = camera_info['port']
                 raw_stream_path = (camera_info.get('stream_path') or '/video').strip()
-                # Only normalize casing for relative paths; absolute URLs must keep original casing
-                # (credentials and paths can be case-sensitive depending on device).
-                stream_path = raw_stream_path.lower() if "://" not in raw_stream_path else raw_stream_path
+                stream_path = raw_stream_path if "://" in raw_stream_path else raw_stream_path
                 username = camera_info.get('username', '')
                 password = camera_info.get('password', '')
                 
-                # Snapshot-only path'ler: Detection worker /video kullanmasın; canlı görüntü /video'ya tek bağlansın
-                SNAPSHOT_SUFFIXES = ('/shot.jpg', '/photoaf.jpg', '/photo.jpg', '/image.jpg', '/snapshot.jpg', '/snapshot.cgi', '/image.cgi')
-                is_snapshot_path = any(stream_path.endswith(s) or stream_path == s.lstrip('/') for s in SNAPSHOT_SUFFIXES)
+                # Snapshot check to use proper worker (optional but better for stability)
+                SNAPSHOT_EXTS = ('.jpg', '.jpeg', '.cgi', '.png')
+                is_snapshot = any(stream_path.lower().endswith(ext) for ext in SNAPSHOT_EXTS)
                 
-                if is_snapshot_path:
-                    # Snapshot polling ile frame doldur - /video sadece tarayıcı canlı görüntü için kalsın
-                    base = f"http://{ip}:{port}"
-                    if username and password:
-                        base_auth = f"http://{username}:{password}@{ip}:{port}"
-                        snapshot_urls = [f"{base_auth}/shot.jpg", f"{base_auth}/photoaf.jpg", f"{base_auth}/photo.jpg",
-                                         f"{base_auth}/image.jpg", f"{base_auth}/snapshot.jpg"]
-                    else:
-                        snapshot_urls = [f"{base}/shot.jpg", f"{base}/photoaf.jpg", f"{base}/photo.jpg",
-                                        f"{base}/image.jpg", f"{base}/snapshot.jpg"]
-                    auth = (username, password) if (username and password) else None
-                    self.start_saas_camera_snapshot_polling(camera_key, snapshot_urls, auth, active_detectors_ref=active_detectors_ref)
-                    logger.info(f"✅ Snapshot polling başlatıldı (canlı görüntü /video için ayrıldı): {camera_key}")
-                    return
-                
-                # Ana URL - Authentication ile
+                # Auth format
                 if username and password:
                     if "://" in stream_path:
-                        # stream_path is already a full URL; do not prepend http://ip:port (prevents http...8000rtsp://... bugs).
                         camera_url = stream_path
                     elif protocol == 'rtsp':
                         camera_url = f"rtsp://{username}:{password}@{ip}:{port}{stream_path}"
@@ -3865,68 +3851,38 @@ smartsafe_requests_total 100
                     else:
                         camera_url = f"http://{ip}:{port}{stream_path}"
 
-                # Fail-fast validation: if we ended up with a malformed URL, stop early instead of feeding OpenCV garbage.
-                try:
-                    parts = urlsplit(str(camera_url))
-                    if not parts.scheme or not parts.netloc:
-                        raise ValueError("missing scheme/netloc")
-                    # Guard against accidental concatenation like "http://...:8000rtsp://..."
-                    s_url = str(camera_url)
-                    if s_url.startswith(("http://", "https://")) and "rtsp://" in s_url:
-                        raise ValueError("mixed-scheme URL (http prefix contains rtsp://)")
-                    # Optional schema-mismatch guard: if protocol says http but URL is rtsp (or vice versa), prefer URL's scheme.
-                    if isinstance(protocol, str) and protocol and parts.scheme and protocol != parts.scheme:
-                        logger.warning(
-                            f"⚠️ Kamera protocol/URL şema uyuşmazlığı: protocol={protocol}, url={parts.scheme} "
-                            f"(camera_id={camera_id}). URL şeması esas alınacak."
-                        )
-                except Exception as exc:
-                    logger.error(f"❌ Geçersiz kamera URL (fail-fast): {redact_url(str(camera_url))} — {exc}")
+                # Fail-fast validation
+                if not camera_url:
+                    logger.error(f"❌ Kamera URL oluşturulamadı: {camera_id}")
                     return
 
-                
-                # Alternatif URL'ler - Önce snapshot'lar (canlı görüntü /video ile çakışmasın), sonra stream
-                if username and password:
-                    alternative_urls = [
-                        f"http://{username}:{password}@{ip}:{port}/shot.jpg",
-                        f"http://{username}:{password}@{ip}:{port}/photoaf.jpg",
-                        f"http://{username}:{password}@{ip}:{port}/photo.jpg",
-                        f"http://{username}:{password}@{ip}:{port}/video",
-                        f"http://{username}:{password}@{ip}:{port}/mjpeg",
-                        f"http://{username}:{password}@{ip}:{port}/stream",
-                        f"http://{username}:{password}@{ip}:{port}/live",
-                        f"http://{username}:{password}@{ip}:{port}/camera",
-                        f"http://{username}:{password}@{ip}:{port}/webcam"
-                    ]
+                # Kamera worker'ı başlat
+                if is_snapshot:
+                    # Tek bir URL ile snapshot polling (alternatif denemeden)
+                    auth = (username, password) if (username and password) else None
+                    self.start_saas_camera_snapshot_polling(camera_key, [camera_url], auth, active_detectors_ref=active_detectors_ref)
                 else:
-                    alternative_urls = [
-                        f"http://{ip}:{port}/shot.jpg",
-                        f"http://{ip}:{port}/photoaf.jpg",
-                        f"http://{ip}:{port}/photo.jpg",
-                        f"http://{ip}:{port}/video",
-                        f"http://{ip}:{port}/mjpeg",
-                        f"http://{ip}:{port}/stream",
-                        f"http://{ip}:{port}/live",
-                        f"http://{ip}:{port}/camera",
-                        f"http://{ip}:{port}/webcam"
-                    ]
-                
-                # Kamera worker'ı alternatif URL'ler ile başlat
-                self.start_camera_with_alternatives(camera_key, camera_url, alternative_urls, active_detectors_ref=active_detectors_ref)
+                    camera_thread = threading.Thread(
+                        target=self.saas_camera_worker,
+                        args=(camera_key, camera_url, active_detectors_ref),
+                        daemon=True
+                    )
+                    camera_thread.start()
+                    logger.info(f"✅ SaaS Kamera worker başlatıldı: {camera_key} -> {redact_url(str(camera_url))}")
                 return
             else:
-                # Webcam kullan
+                # Local webcam fallback
                 camera_url = 0
+                logger.info(f"📹 SaaS Kamera (Webcam/Local) başlatılıyor: {camera_key}")
             
-            # Kamera worker thread'ini başlat
+            # Kamera worker thread'ini başlat (Webcam durumu için)
             camera_thread = threading.Thread(
                 target=self.saas_camera_worker,
                 args=(camera_key, camera_url, active_detectors_ref),
                 daemon=True
             )
             camera_thread.start()
-            
-            logger.info(f"✅ SaaS Kamera başlatıldı: {camera_id} -> {redact_url(str(camera_url))}")
+            logger.info(f"✅ SaaS Kamera (Local) başlatıldı: {camera_id}")
             
         except Exception as e:
             logger.error(f"❌ SaaS Kamera başlatma hatası: {e}")
@@ -4018,20 +3974,6 @@ smartsafe_requests_total 100
         t.start()
         logger.info(f"✅ DVR detection polling thread started: {camera_key}")
 
-    def start_camera_with_alternatives(self, camera_key, primary_url, alternative_urls, active_detectors_ref=None):
-        """Alternatif URL'ler ile kamera başlatma"""
-        try:
-            camera_thread = threading.Thread(
-                target=self.saas_camera_worker_with_alternatives,
-                args=(camera_key, primary_url, alternative_urls, active_detectors_ref),
-                daemon=True
-            )
-            camera_thread.start()
-            
-            logger.info(f"✅ Alternatif URL'ler ile kamera başlatıldı: {camera_key}")
-            
-        except Exception as e:
-            logger.error(f"❌ Alternatif kamera başlatma hatası: {e}")
 
     def start_saas_camera_snapshot_polling(self, camera_key, snapshot_urls, auth=None, active_detectors_ref=None):
         """Snapshot URL'leri ile polling worker başlat - /video canlı görüntüye kalsın"""
@@ -4084,214 +4026,6 @@ smartsafe_requests_total 100
             if camera_key in frame_buffers:
                 del frame_buffers[camera_key]
             logger.info(f"🛑 SaaS Snapshot polling durduruldu: {camera_key}")
-
-    def saas_camera_worker_with_alternatives(self, camera_key, primary_url, alternative_urls, active_detectors_ref=None):
-        """Alternatif URL'ler ile kamera worker"""
-        cap = None
-        ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
-        try:
-            import cv2
-            from utils.redaction import redact_url
-            
-            # Önce ana URL'yi dene
-            logger.info(f"🔍 Ana URL deneniyor: {redact_url(str(primary_url))}")
-            cap = cv2.VideoCapture(primary_url)
-            current_url = primary_url
-            
-            # Authentication ile dene - Daha güvenilir yöntem
-            if not cap.isOpened() and '@' in primary_url:
-                logger.info(f"🔐 Güvenli URL ayrıştırma ve authentication deneniyor...")
-                try:
-                    # Protokolü ayır
-                    protocol = "http"
-                    url_to_parse = primary_url
-                    if "://" in primary_url:
-                        protocol, url_to_parse = primary_url.split("://", 1)
-                    
-                    # Kullanıcı adı ve şifreyi ayrıştır
-                    if "@" in url_to_parse:
-                        auth_part, base_url = url_to_parse.rsplit("@", 1)
-                        
-                        if ":" in auth_part:
-                            username, password = auth_part.split(":", 1)
-                        else:
-                            username, password = auth_part, ""
-                        
-                        # Karakterleri decode et (URL'de %40 gibi yazılmış olabilir)
-                        username = unquote(username)
-                        password = unquote(password)
-                        
-                        # OpenCV authentication set etmeyi dene (base_url ile)
-                        full_base_url = f"{protocol}://{base_url}"
-                        cap = cv2.VideoCapture(full_base_url)
-                        
-                        if cap.isOpened():
-                            cap.set(cv2.CAP_PROP_USERNAME, username)
-                            cap.set(cv2.CAP_PROP_PASSWORD, password)
-                            logger.info(f"✅ OpenCV-native authentication başarılı: {username}")
-                        else:
-                            # Klasik yöntem: Safe URL oluştur (özel karakterleri koru)
-                            safe_user = quote(username)
-                            safe_pass = quote(password, safe='') # safe='' şifredeki / : falan her şeyi quote'lar
-                            safe_url = f"{protocol}://{safe_user}:{safe_pass}@{base_url}"
-                            
-                            cap.release()
-                            cap = cv2.VideoCapture(safe_url)
-                            if cap.isOpened():
-                                logger.info(f"✅ Güvenli URL ile bağlantı başarılı: {username} (protocol: {protocol})")
-                            else:
-                                logger.warning(f"❌ Güvenli URL bağlantısı başarısız: {protocol}://{username}:***@{base_url}")
-                except Exception as auth_error:
-                    logger.warning(f"⚠️ Authentication ayrıştırma hatası: {auth_error}")
-            
-            if not cap.isOpened():
-                logger.warning(f"⚠️ Ana URL başarısız, alternatifler deneniyor...")
-                
-                # Alternatif URL'leri dene
-                for alt_url in alternative_urls:
-                    logger.info(f"🔍 Alternatif URL deneniyor: {redact_url(str(alt_url))}")
-                    if cap is not None:
-                        try:
-                            cap.release()
-                        except Exception:
-                            pass
-                        cap = None
-                    cap = cv2.VideoCapture(alt_url)
-                    
-                    if cap.isOpened():
-                        logger.info(f"✅ Alternatif URL başarılı: {redact_url(str(alt_url))}")
-                        current_url = alt_url
-                        break
-                    else:
-                        logger.warning(f"❌ Alternatif URL başarısız: {redact_url(str(alt_url))}")
-            
-            if not cap.isOpened():
-                logger.error(f"❌ Hiçbir URL çalışmadı: {camera_key}")
-                return
-            
-            # Kamera ayarları
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_FPS, 15)
-            
-            camera_captures[camera_key] = cap
-            
-            logger.info(f"✅ SaaS Kamera worker başladı: {camera_key}")
-            frame_failure_counts[camera_key] = 0
-            frame_timestamps[camera_key] = time.time()  # Watchdog için ilk timestamp
-            
-            # ── Güçlendirilmiş reconnect parametreleri ──────────────────────
-            MAX_RECONNECT_ATTEMPTS = 5
-            reconnect_attempt = 0
-            consecutive_failures = 0
-            MAX_CONSECUTIVE_FAILURES = 30  # Bu kadar ardışık hata → reconnect dene
-            
-            while ad.get(camera_key, False):
-                ret, frame = cap.read()
-                if ret:
-                    frame_buffers[camera_key] = frame
-                    frame_timestamps[camera_key] = time.time()  # Watchdog timestamp güncelle
-                    frame_failure_counts[camera_key] = 0
-                    consecutive_failures = 0
-                    reconnect_attempt = 0  # Başarılı frame → reconnect sayacını sıfırla
-                else:
-                    consecutive_failures += 1
-                    frame_failure_counts[camera_key] = consecutive_failures
-                    
-                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                        # ── Reconnect mantığı (exponential backoff ile) ──────
-                        if reconnect_attempt >= MAX_RECONNECT_ATTEMPTS:
-                            logger.error(
-                                f"❌ Max reconnect denemesi aşıldı ({MAX_RECONNECT_ATTEMPTS}): "
-                                f"{camera_key} — kamera kalıcı arıza olarak işaretleniyor"
-                            )
-                            ad[camera_key] = False  # Detection worker'ı durdur
-                            break
-                        
-                        reconnect_attempt += 1
-                        backoff = min(2 ** (reconnect_attempt - 1), 16)  # 1→2→4→8→16s
-                        logger.warning(
-                            f"⚠️ Ardışık {consecutive_failures} hata — {camera_key}, "
-                            f"reconnect denemesi {reconnect_attempt}/{MAX_RECONNECT_ATTEMPTS} "
-                            f"(backoff {backoff}s)"
-                        )
-                        
-                        try:
-                            cap.release()
-                        except Exception:
-                            pass
-                        cap = None
-                        
-                        time.sleep(backoff)
-                        
-                        # Önce son başarılı URL'yi dene
-                        reconnected = False
-                        all_urls = [current_url] + [u for u in alternative_urls if u != current_url]
-                        
-                        for url in all_urls:
-                            try:
-                                cap = cv2.VideoCapture(url)
-                                if cap.isOpened():
-                                    test_ret, test_frame = cap.read()
-                                    if test_ret and test_frame is not None:
-                                        logger.info(f"✅ Reconnect başarılı ({reconnect_attempt}. deneme): {camera_key}")
-                                        current_url = url
-                                        camera_captures[camera_key] = cap
-                                        consecutive_failures = 0
-                                        reconnected = True
-                                        frame_timestamps[camera_key] = time.time()
-                                        break
-                                    else:
-                                        cap.release()
-                                        cap = None
-                                else:
-                                    if cap:
-                                        cap.release()
-                                    cap = None
-                            except Exception:
-                                if cap:
-                                    try:
-                                        cap.release()
-                                    except Exception:
-                                        pass
-                                cap = None
-                                continue
-                        
-                        if not reconnected:
-                            logger.warning(
-                                f"⚠️ Reconnect başarısız ({reconnect_attempt}. deneme): "
-                                f"{camera_key} — sonraki denemede tekrar denenecek"
-                            )
-                            # cap None kalacak, döngünün başına döndüğünde yine hata alıp
-                            # tekrar reconnect'e girecek
-                            if cap is None:
-                                cap = cv2.VideoCapture(current_url)
-                                camera_captures[camera_key] = cap
-                        
-                        continue  # Reconnect sonrası döngünün başına dön
-                    
-                    # Çok fazla log atmamak için sadece belirli eşiklerde uyarı ver
-                    elif consecutive_failures in (1, 5, 10, 20):
-                        logger.debug(f"⚠️ Frame okunamadı (count={consecutive_failures}): {camera_key}")
-                    
-                    time.sleep(0.05)
-                    
-        except Exception as e:
-            logger.error(f"❌ SaaS Kamera worker hatası: {e}")
-        finally:
-            if cap:
-                try:
-                    cap.release()
-                except Exception:
-                    pass
-            if camera_key in camera_captures:
-                del camera_captures[camera_key]
-            if camera_key in frame_buffers:
-                del frame_buffers[camera_key]
-            if camera_key in frame_timestamps:
-                del frame_timestamps[camera_key]
-            
-            logger.info(f"🛑 SaaS Kamera worker durduruldu: {camera_key}")
 
     def saas_camera_worker(self, camera_key, camera_url, active_detectors_ref=None):
         """SaaS Kamera Worker"""

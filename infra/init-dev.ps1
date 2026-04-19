@@ -38,8 +38,48 @@ if (-not (Get-Command encore -ErrorAction SilentlyContinue)) {
     $env:Path += ";$env:LOCALAPPDATA\encore\bin"
 }
 
+# 1.1 Docker Kontrolü
+Show-Header "1. Docker Kontrol Ediliyor..."
+$dockerStarted = $false
+try {
+    docker info > $null 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Docker $($c_K)al$($I_n)$($s_K)m$($I_n)yor, ba$($s_K)lat$($I_n)l$($I_n)yor..." -ForegroundColor Yellow
+        $dockerPath = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+        if (Test-Path $dockerPath) {
+            Start-Process $dockerPath
+            $dockerStarted = $true
+        } else {
+            Write-Host "Docker Desktop bulunamad$($I_n)! L$($u_K)tfen manuel olarak ba$($s_K)lat$($I_n)n." -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "Docker zaten $($c_K)al$($I_n)$($s_K)yor." -ForegroundColor Green
+    }
+} catch {
+    Write-Host "Docker kontrol$($u_K) s$($I_n)ras$($I_n)nda hata: $_" -ForegroundColor Red
+}
+
+if ($dockerStarted) {
+    Write-Host "Docker'$($I_n)n haz$($I_n)r olmas$($I_n) bekleniyor..." -ForegroundColor Yellow
+    $retryCount = 0
+    while ($retryCount -lt 60) {
+        docker info > $null 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Docker haz$($I_n)r!" -ForegroundColor Green
+            break
+        }
+        Start-Sleep -Seconds 2
+        $retryCount++
+    }
+    if ($retryCount -ge 60) {
+        Write-Host "Docker 2 dakika s$($u_K)resince ba$($s_K)layamad$($I_n). Devam edilemiyor." -ForegroundColor Red
+        exit 1
+    }
+}
+
 # 2. Altyapıyı Başlat
-Show-Header "1. Altyap$($I_n) Kontrol Ediliyor..."
+Show-Header "2. Altyap$($I_n) Kontrol Ediliyor..."
 docker compose -f "$PSScriptRoot/docker-compose.infra-only.yml" up -d
 
 # 3. Python (Core) Kurulumu

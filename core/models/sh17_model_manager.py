@@ -120,7 +120,11 @@ class SH17ModelManager:
             15: 'medical_suit', 16: 'safety_suit'
         }
         
-        logger.info(f"🎯 SH17 Model Manager başlatıldı - Device: {self.device}")
+        # 🚀 FPS OPTIMIZATION
+        self.sh17_imgsz = int(os.environ.get('SH17_IMGSZ', '640'))
+        self.sh17_half = os.environ.get('SH17_HALF', '0') == '1' and self.device != 'cpu'
+        
+        logger.info(f"🎯 SH17 Model Manager başlatıldı - Device: {self.device}, imgsz: {self.sh17_imgsz}, half: {self.sh17_half}")
         
         # RENDER.COM OPTIMIZATION: Lazy loading if in production
         if not self.lazy_loading:
@@ -941,7 +945,14 @@ class SH17ModelManager:
                 logger.warning(f"⚠️ SH17 {sector} modeli None")
                 return []
 
-            results = model(image, conf=confidence, device=self.device, verbose=False)
+            results = model(
+                image, 
+                conf=confidence, 
+                device=self.device, 
+                verbose=False,
+                imgsz=self.sh17_imgsz,
+                half=self.sh17_half
+            )
 
             model_names = getattr(model, 'names', {})
             num_classes = len(model_names)

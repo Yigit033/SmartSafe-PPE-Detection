@@ -72,9 +72,9 @@ export default function CameraSetupPage() {
     camera_name: "",
     camera_location: "Genel",
     camera_ip: "",
-    camera_port: 80,
+    camera_port: 8080,
     camera_protocol: "http",
-    camera_path: "/live",
+    camera_path: "/video",
     camera_username: "admin",
     camera_password: "",
   });
@@ -86,7 +86,7 @@ export default function CameraSetupPage() {
     password: "",
     base_name: "Kamera",
     location: "Genel",
-    port: 80,
+    port: 8080,
     use_onvif: true,
   });
 
@@ -150,7 +150,7 @@ export default function CameraSetupPage() {
     setFormData({
       ...formData,
       camera_ip: cam.ip,
-      camera_port: cam.port || 80,
+      camera_port: cam.port || 8080,
       camera_name: cam.model || `${cam.brand || "Kamera"} - ${cam.ip}`,
       camera_protocol: "http",
     });
@@ -322,7 +322,7 @@ export default function CameraSetupPage() {
         <div className="space-y-1">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-1 text-slate-400 hover:text-brand-teal transition-colors text-[10px] font-black uppercase mb-2"
+            className="flex items-center gap-1 text-slate-400 hover:text-brand-teal transition-colors text-[10px] font-black uppercase mb-2 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             KAMERALARA DÖN
@@ -495,7 +495,7 @@ export default function CameraSetupPage() {
                 ) : (
                   <button
                     onClick={startDiscovery}
-                    className="px-8 py-4 rounded-2xl bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-xl"
+                    className="px-8 py-4 rounded-2xl bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-xl cursor-pointer"
                   >
                     YENİDEN TARA
                   </button>
@@ -556,7 +556,7 @@ export default function CameraSetupPage() {
                     </div>
                     <button
                       onClick={() => handleSelectDiscovered(cam)}
-                      className="px-10 py-4 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal transition-all shadow-lg active:scale-95"
+                      className="px-10 py-4 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal transition-all shadow-lg active:scale-95 cursor-pointer"
                     >
                       YAPILANDIR
                     </button>
@@ -578,7 +578,7 @@ export default function CameraSetupPage() {
                     setCompletedMode(null);
                     setMode("select");
                   }}
-                  className="px-8 py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-900 transition-all"
+                  className="px-8 py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-900 transition-all cursor-pointer"
                 >
                   ← GERİ DÖN
                 </button>
@@ -601,7 +601,7 @@ export default function CameraSetupPage() {
                 <button
                   onClick={testConnection}
                   disabled={isTesting}
-                  className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-white border-2 border-slate-100 text-slate-600 font-black text-[10px] tracking-widest hover:border-slate-800 transition-all shadow-sm active:scale-95"
+                  className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-white border-2 border-slate-100 text-slate-600 font-black text-[10px] tracking-widest hover:border-slate-800 transition-all shadow-sm active:scale-95 cursor-pointer"
                 >
                   {isTesting ? (
                     <Loader2 className="w-4 h-4 animate-spin text-brand-teal" />
@@ -695,7 +695,7 @@ export default function CameraSetupPage() {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            camera_port: parseInt(e.target.value) || 80,
+                            camera_port: parseInt(e.target.value) || 8080,
                           })
                         }
                         className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-sm font-black text-slate-900 focus:bg-white outline-none border-l-[6px] border-l-slate-200"
@@ -783,14 +783,14 @@ export default function CameraSetupPage() {
                       setCompletedMode(null);
                       setMode("select");
                     }}
-                    className="px-10 py-5 text-slate-400 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest transition-all"
+                    className="px-10 py-5 text-slate-400 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
                   >
                     ← İPTAL
                   </button>
                   <button
                     disabled={isSaving}
                     type="submit"
-                    className="px-24 py-6 rounded-[2rem] bg-brand-teal text-white font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-brand-teal/30 hover:bg-brand-teal/90 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                    className="px-24 py-6 rounded-[2rem] bg-brand-teal text-white font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-brand-teal/30 hover:bg-brand-teal/90 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
                     {isSaving ? "KAYDEDİLİYOR..." : "SİSTEME KAYDET"}
                   </button>
@@ -890,14 +890,14 @@ export default function CameraSetupPage() {
                       setCompletedMode(null);
                       setMode("select");
                     }}
-                    className="px-10 py-5 text-slate-400 font-black text-[10px] uppercase tracking-widest"
+                    className="px-10 py-5 text-slate-400 font-black text-[10px] uppercase tracking-widest cursor-pointer"
                   >
                     ← VAZGEÇ
                   </button>
                   <button
                     disabled={isSaving}
                     type="submit"
-                    className="px-24 py-6 rounded-[2rem] bg-blue-600 text-white font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all hover:scale-105 active:scale-95"
+                    className="px-24 py-6 rounded-[2rem] bg-blue-600 text-white font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     {isSaving ? "BAŞLATILIYOR..." : "TOPLU TANIMLAMAYI BAŞLAT"}
                   </button>
@@ -933,7 +933,7 @@ export default function CameraSetupPage() {
                       dvr_type: "hikvision",
                     })
                   }
-                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all text-left group"
+                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-2xl bg-brand-teal/10 text-brand-teal flex items-center justify-center group-hover:bg-brand-teal group-hover:text-white transition-all">
@@ -960,7 +960,7 @@ export default function CameraSetupPage() {
                       dvr_type: "hikvision",
                     })
                   }
-                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all text-left group"
+                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
@@ -1122,14 +1122,14 @@ export default function CameraSetupPage() {
                       setCompletedMode(null);
                       setMode("select");
                     }}
-                    className="px-10 py-5 text-slate-400 font-black text-[10px] uppercase tracking-widest"
+                    className="px-10 py-5 text-slate-400 font-black text-[10px] uppercase tracking-widest cursor-pointer"
                   >
                     ← VAZGEÇ
                   </button>
                   <button
                     disabled={isSaving}
                     type="submit"
-                    className="px-24 py-6 rounded-[2rem] bg-indigo-600 text-white font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105"
+                    className="px-24 py-6 rounded-[2rem] bg-indigo-600 text-white font-black text-[12px] uppercase tracking-[0.2em] shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105 cursor-pointer"
                   >
                     {isSaving ? "BAĞLANIYOR..." : "CİHAZI SİSTEME EKLE"}
                   </button>
@@ -1259,7 +1259,7 @@ export default function CameraSetupPage() {
                 <button
                   type="button"
                   onClick={() => setMode("dvr")}
-                  className="px-8 py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-900 transition-colors"
+                  className="px-8 py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-900 transition-colors cursor-pointer"
                 >
                   ← Cihaz Bilgilerine Dön
                 </button>
@@ -1274,7 +1274,7 @@ export default function CameraSetupPage() {
                             : dvrChannels.map((c) => c.channel_number),
                         )
                       }
-                      className="text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-brand-teal transition-colors flex items-center gap-2"
+                      className="text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-brand-teal transition-colors flex items-center gap-2 cursor-pointer"
                     >
                       {selectedChannels.length === dvrChannels.length ? (
                         <MinusSquare className="w-4 h-4" />
@@ -1291,7 +1291,7 @@ export default function CameraSetupPage() {
                       isSaving || isDiscovering || selectedChannels.length === 0
                     }
                     onClick={finalizeDVR}
-                    className="px-20 py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl shadow-slate-200 hover:bg-black transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:scale-100 disabled:bg-slate-300"
+                    className="px-20 py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl shadow-slate-200 hover:bg-black transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:scale-100 disabled:bg-slate-300 cursor-pointer"
                   >
                     {isSaving ? "Kaydediliyor..." : "Kurulumu Tamamla"}
                   </button>
@@ -1334,14 +1334,14 @@ export default function CameraSetupPage() {
                     setCompletedMode(null);
                     setMode("select");
                   }}
-                  className="px-12 py-5 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 font-black text-[11px] uppercase tracking-widest hover:border-slate-800 hover:text-slate-900 transition-all shadow-sm"
+                  className="px-12 py-5 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 font-black text-[11px] uppercase tracking-widest hover:border-slate-800 hover:text-slate-900 transition-all shadow-sm cursor-pointer"
                 >
                   YENİ EKLE
                 </button>
                 <button
                   type="button"
                   onClick={() => goToCamerasPage()}
-                  className="px-16 py-5 rounded-2xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-2xl shadow-slate-200 active:scale-95"
+                  className="px-16 py-5 rounded-2xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-2xl shadow-slate-200 active:scale-95 cursor-pointer"
                 >
                   KAMERA PANELİNE GİT
                 </button>
