@@ -708,7 +708,7 @@ function CamerasContent() {
           </button>
           <button
             onClick={toggleAllPrivacy}
-            className={`flex items-center gap-2 rounded-xl border px-6 py-3.5 text-xs font-black transition-all cursor-pointer shadow-sm ${privacyModeCameras.length === cameras.length ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50 cursor-pointer"
           >
             {privacyModeCameras.length === cameras.length ? (
               <EyeOff className="w-4 h-4" />
@@ -725,8 +725,6 @@ function CamerasContent() {
           </button>
         </div>
       </section>
-
-
 
       {filteredCameras.length === 0 && !isLoading ? (
         <div className="mt-12 flex flex-col items-center justify-center p-24 bg-white/40 rounded-[3rem] border-2 border-dashed border-slate-100 animate-fade-in min-h-[450px]">

@@ -1,6 +1,6 @@
 {
   "name": "smart-safe-ai",
-  "version": "0.4.24",
+  "version": "0.4.25",
   "description": "SmartSafe AI - PPE Detection System",
   "main": "core/app.py",
   "scripts": {
