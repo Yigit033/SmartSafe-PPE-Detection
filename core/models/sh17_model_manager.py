@@ -464,7 +464,7 @@ class SH17ModelManager:
                         if canonical == 'haircap':
                             haircap_cls_ids.add(k)
                     if haircap_cls_ids:
-                        logger.info(f"🍽️ Haircap rescue (canonical match): cls_ids={haircap_cls_ids}")
+                        logger.debug(f"🍽️ Haircap rescue (canonical match): cls_ids={haircap_cls_ids}")
 
                     # Strateji 2: isim tabanlı token eşleme (fallback)
                     if not haircap_cls_ids:
@@ -473,7 +473,7 @@ class SH17ModelManager:
                             if any(token in vl for token in _HAIRCAP_NAME_TOKENS):
                                 haircap_cls_ids.add(k)
                         if haircap_cls_ids:
-                            logger.info(f"🍽️ Haircap rescue (token match): cls_ids={haircap_cls_ids}")
+                            logger.debug(f"🍽️ Haircap rescue (token match): cls_ids={haircap_cls_ids}")
 
                     # Strateji 3: dışlama — bilinen non-haircap sınıfları çıkar
                     if not haircap_cls_ids:
@@ -484,8 +484,8 @@ class SH17ModelManager:
                                 continue
                             haircap_cls_ids.add(k)
                         if haircap_cls_ids:
-                            logger.info(f"🍽️ Haircap rescue (exclusion strategy): candidate class_ids={haircap_cls_ids}, "
-                                       f"model_names={{ k: model_names[k] for k in haircap_cls_ids }}")
+                            logger.debug(f"🍽️ Haircap rescue (exclusion strategy): candidate class_ids={haircap_cls_ids}, "
+                                        f"model_names={{ k: model_names[k] for k in haircap_cls_ids }}")
 
                     # Sanity check: class ID'lerin model'in gerçek sınıf aralığında olduğunu doğrula
                     valid_ids = set(model_names.keys())
@@ -525,12 +525,12 @@ class SH17ModelManager:
                     # Tüm sınıfların dağılımını göster — model'in class_id=2'yi üretip üretmediğini doğrulamak için
                     rescue_class_summary = {model_names.get(k, f'?{k}'): v for k, v in rescue_all_classes.items()}
                     if rescue_raw:
-                        logger.info(f"🍽️ Haircap rescue: {len(rescue_raw)} raw at conf>={rescue_conf}")
+                        logger.debug(f"🍽️ Haircap rescue: {len(rescue_raw)} raw at conf>={rescue_conf}")
                     else:
-                        logger.info(f"🍽️ Haircap rescue: 0 haircap at conf>={rescue_conf}, "
-                                   f"target_cls_ids={haircap_cls_ids}, "
-                                   f"all_classes_in_rescue={rescue_class_summary}, "
-                                   f"model.names={model_names}")
+                        logger.debug(f"🍽️ Haircap rescue: 0 haircap at conf>={rescue_conf}, "
+                                      f"target_cls_ids={haircap_cls_ids}, "
+                                      f"all_classes_in_rescue={rescue_class_summary}, "
+                                      f"model.names={model_names}")
                     for rn, rc, cov, rb, cls_id in rescue_raw:
                         if cov > 60:
                             logger.debug(f"🍽️ Haircap rescue: {rn} rejected — oversized ({cov:.0f}%)")
@@ -559,9 +559,9 @@ class SH17ModelManager:
                 for d in detections:
                     key = d.get('raw_name', d.get('class_name', '?'))
                     summary[key] = summary.get(key, 0) + 1
-                logger.info(f"🍽️ Food PPE local: {len(detections)} tespit (conf>={food_conf}, imgsz={food_imgsz}, img={img_w}x{img_h}) → {summary}")
+                logger.debug(f"🍽️ Food PPE local: {len(detections)} tespit (conf>={food_conf}, imgsz={food_imgsz}, img={img_w}x{img_h}) → {summary}")
             else:
-                logger.info(f"🍽️ Food PPE local: 0 tespit (conf>={food_conf}, imgsz={food_imgsz}, img={img_w}x{img_h}, raw=[{raw_str}])")
+                logger.debug(f"🍽️ Food PPE local: 0 tespit (conf>={food_conf}, imgsz={food_imgsz}, img={img_w}x{img_h}, raw=[{raw_str}])")
             return detections
         except RuntimeError as e:
             if 'out of memory' in str(e).lower() or 'CUDA' in str(e):
@@ -702,8 +702,8 @@ class SH17ModelManager:
                             'model_type': 'ColorAnalysis-Fallback',
                             'raw_name': 'haircap_color',
                         })
-                        logger.info(f"🍽️ Color haircap: white={white_ratio:.0%} blue={blue_ratio:.0%} "
-                                   f"total={cap_ratio:.0%} → conf={conf:.2f}")
+                        logger.debug(f"🍽️ Color haircap: white={white_ratio:.0%} blue={blue_ratio:.0%} "
+                                    f"total={cap_ratio:.0%} → conf={conf:.2f}")
                 except ImportError:
                     logger.debug("cv2 not available for color analysis fallback")
                     break
@@ -711,8 +711,8 @@ class SH17ModelManager:
                     logger.debug(f"Color analysis failed: {e}")
 
         if haircap_detections:
-            logger.info(f"🍽️ Head-crop/color haircap rescue: {len(haircap_detections)} detections "
-                       f"(types: {[d['model_type'] for d in haircap_detections]})")
+            logger.debug(f"🍽️ Head-crop/color haircap rescue: {len(haircap_detections)} detections "
+                        f"(types: {[d['model_type'] for d in haircap_detections]})")
         return haircap_detections
 
     def _filter_food_haircap_candidates(
