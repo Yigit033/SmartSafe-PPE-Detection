@@ -138,7 +138,13 @@ class DatabaseAdapter:
         """Get database configuration based on environment"""
         try:
             # Check for PostgreSQL configuration first
-            database_url = os.getenv('DATABASE_URL')
+            database_url = (os.getenv("DATABASE_URL") or "").strip()
+            if database_url and "your_project_id" in database_url.replace(" ", ""):
+                logger.warning(
+                    "DATABASE_URL looks like a Supabase template placeholder (your_project_id); "
+                    "set a real URL or local Docker URL (see infra/docker-compose.infra-only.yml)."
+                )
+                database_url = ""
             if database_url and (database_url.startswith('postgresql://') or database_url.startswith('postgres://')):
                 logger.info("✅ PostgreSQL configuration found")
                 return DatabaseConfig(

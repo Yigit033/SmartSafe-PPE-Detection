@@ -82,6 +82,22 @@ if ($dockerStarted) {
 Show-Header "2. Altyap$($I_n) Kontrol Ediliyor..."
 docker compose -f "$PSScriptRoot/docker-compose.infra-only.yml" up -d
 
+# 2.1 PostgreSQL container hazır olana kadar bekle (migrate "connection terminated" önler)
+Show-Header "2.1 PostgreSQL bekleniyor (pg_isready)..."
+$pgReady = $false
+for ($i = 0; $i -lt 90; $i++) {
+    docker exec smartsafe-postgres-local pg_isready -U smartsafe -d smartsafe_saas 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $pgReady = $true
+        Write-Host "PostgreSQL haz$($I_n)r." -ForegroundColor Green
+        break
+    }
+    Start-Sleep -Seconds 1
+}
+if (-not $pgReady) {
+    Write-Host "Uyarı: PostgreSQL 90 sn i$($c_K)inde haz$($I_n)r olmad$($I_n); migrate yine de denenecek." -ForegroundColor Yellow
+}
+
 # 3. Python (Core) Kurulumu
 Show-Header "2. Core (Python) Kontrol Ediliyor..."
 cd "$rootDir/core"

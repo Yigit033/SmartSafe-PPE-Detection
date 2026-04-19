@@ -463,6 +463,23 @@ class PoseAwarePPEDetector:
                     except Exception:
                         # Non-fatal: fall back to existing regions.
                         pass
+
+            # OSD / zaman damgası üzerindeki düşük güvenli "person" kutularını burada ele:
+            # app.py sonrası strip yalnızca overlay listesini düzeltir; uyumluluk zaten bu listeden hesaplanmış olur.
+            try:
+                from utils.osd_person_heuristic import filter_pose_person_candidates
+
+                persons_with_pose = filter_pose_person_candidates(
+                    frame.shape, persons_with_pose
+                )
+            except Exception:
+                pass
+            if not persons_with_pose:
+                empty = self._create_empty_result()
+                if sector is not None:
+                    empty["sector"] = sector
+                empty["model_type"] = "YOLOv8-Pose+SH17 (no persons after OSD filter)"
+                return empty
             
             # 4️⃣ Associate PPE with persons using pose keypoints (all in original frame coords)
             enhanced_detections = self._associate_ppe_with_pose(
@@ -485,7 +502,14 @@ class PoseAwarePPEDetector:
                 logger.info(f"   PPE pool ({len(ppe_detections)}): {ppe_summary}")
 
                 # Sadece required_ppe'deki türleri göster (varsa), tüm 8 PPE tipini değil
-                REQUIRED_PPE_ALIASES_LOG = {'hairnet': 'haircap', 'hair_net': 'haircap', 'apron': 'safety_suit'}
+                REQUIRED_PPE_ALIASES_LOG = {
+                    'hairnet': 'haircap',
+                    'hair_net': 'haircap',
+                    'apron': 'safety_suit',
+                    'glasses': 'safety_glasses',
+                    'goggles': 'safety_glasses',
+                    'googles': 'safety_glasses',
+                }
                 if required_ppe is not None:
                     _rpp = set()
                     for item in required_ppe:
@@ -1410,7 +1434,14 @@ class PoseAwarePPEDetector:
         supported_required: Optional[List[str]] = None
         
         # UI/DB bazen farklı isimler kullanır; kanonik PPE_CONFIG anahtarlarına eşle
-        REQUIRED_PPE_ALIASES = {'hairnet': 'haircap', 'hair_net': 'haircap', 'apron': 'safety_suit'}
+        REQUIRED_PPE_ALIASES = {
+            'hairnet': 'haircap',
+            'hair_net': 'haircap',
+            'apron': 'safety_suit',
+            'glasses': 'safety_glasses',
+            'goggles': 'safety_glasses',
+            'googles': 'safety_glasses',
+        }
         if required_ppe is not None:
             # İsimleri normalize et (case-insensitive, trim) ve alias eşle
             normalized_required = []
@@ -1479,6 +1510,10 @@ class PoseAwarePPEDetector:
 
                 item = ppe.get(ppe_type)
                 if item:
+                    # Overlay: yalnızca şirket/sektör zorunlu PPE pozitif kutuları (negatiflerle aynı politika).
+                    # Aksi halde food modelinin eldiven/gözlük FP'leri zorunlu olmasa bile çiziliyordu.
+                    if not is_required_for_violation(ppe_type):
+                        continue
                     bbox_to_use = item.get('bbox', region_bbox)
                     if not bbox_to_use or len(bbox_to_use) != 4:
                         bbox_to_use = region_bbox

@@ -2380,6 +2380,37 @@ smartsafe_requests_total 100
                             logger.error(f"❌ Detection hatası: {detection_error}")
                             results = []
 
+                        # Şirket zorunlu PPE dışındaki sınıfları overlay'den düşür (ham SH17+food yolu).
+                        # Pose-aware pozitif kutular ayrıca detector içinde süzülür.
+                        if isinstance(results, list):
+                            try:
+                                from utils.overlay_requirements_filter import (
+                                    filter_detections_for_company_required_overlay,
+                                )
+                                from utils.osd_person_heuristic import (
+                                    strip_osd_style_person_detections,
+                                )
+
+                                results = filter_detections_for_company_required_overlay(
+                                    results, required_ppe, sector
+                                )
+                                results = strip_osd_style_person_detections(
+                                    frame.shape, results
+                                )
+                                _pd2 = sum(
+                                    1
+                                    for d in results
+                                    if isinstance(d, dict)
+                                    and str(d.get("class_name", "")).strip().lower()
+                                    in ("person", "kisi", "insan")
+                                )
+                                if _pd2 == 0 and people_detected > 0:
+                                    ppe_violations = []
+                                    ppe_compliant = 0
+                                people_detected = _pd2
+                            except Exception as _post_det_err:
+                                logger.debug(f"Post-detection overlay filter skipped: {_post_det_err}")
+
                         results_pre_roi = list(results) if isinstance(results, list) else []
                         _roi_debug_meta = None
                         _roi_debug = os.environ.get("ROI_DEBUG", "").strip().lower() in (
