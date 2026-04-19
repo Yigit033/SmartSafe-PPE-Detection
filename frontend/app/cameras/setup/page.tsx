@@ -6,6 +6,7 @@ import { getCompanyId } from "@/lib/session";
 import { goToCamerasPage } from "@/lib/camerasNavigation";
 import api from "@/lib/api";
 import core from "@/lib/core";
+import { useConfirm } from "@/context/ConfirmContext";
 import { 
   ArrowLeft, 
   Scan, 
@@ -66,6 +67,7 @@ export default function CameraSetupPage() {
     message: string;
   } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const { confirm } = useConfirm();
 
   // Single / Manual Form Data
   const [formData, setFormData] = useState({
@@ -234,11 +236,12 @@ export default function CameraSetupPage() {
       const data = await api.dvr.create(companyId!, dvrData);
 
       if (!data.success) {
-        alert(
-          data.error ||
-            data.message ||
-            "DVR kaydedilemedi. Bağlantı veya yetki bilgilerini kontrol edin.",
-        );
+        await confirm({
+          title: "DVR KAYDEDİLEMEDİ",
+          message: data.error || data.message || "Bağlantı veya yetki bilgilerini kontrol edin.",
+          confirmText: "TAMAM",
+          type: "danger"
+        });
         return;
       }
 
@@ -261,33 +264,32 @@ export default function CameraSetupPage() {
           (discData.channels || []).map((c: any) => c.channel_number),
         );
         const n = (discData.channels || []).length;
-        const lines: string[] = [];
-        if (data.restored) {
-          lines.push("DVR geri yüklendi");
-          if (data.message) lines.push(data.message);
-        } else if (data.message) {
-          lines.push(data.message);
-        } else {
-          lines.push("DVR kaydedildi.");
-        }
-        lines.push(
-          n > 0
-            ? `Keşif: ${n} kanal bulundu. Sonraki adımda seçim yapabilirsiniz.`
-            : "Keşif: kanal listesi boş döndü; bağlantı veya kanal sayısını kontrol edin.",
-        );
-        alert(lines.join("\n\n"));
+        const msg = data.restored 
+          ? "DVR geri yüklendi. " + (data.message || "")
+          : "DVR başarıyla kaydedildi.";
+          
+        await confirm({
+          title: "DVR BAĞLANTISI TAMAM",
+          message: `${msg}\n\n${n > 0 ? `Keşif: ${n} kanal bulundu. Seçim yapabilirsiniz.` : "Keşif: Kanal bulunamadı; DVR ayarlarını kontrol edin."}`,
+          confirmText: "DEVAM ET",
+          type: "info"
+        });
       } else {
-        alert(
-          (data.restored
-            ? `${data.message || "DVR geri yüklendi."}\n\n`
-            : `${data.message || "DVR kaydedildi."}\n\n`) +
-            (discData.error ||
-              "Kanal keşfi tamamlanamadı. Ağ erişimi ve DVR kimlik bilgilerini kontrol edin."),
-        );
+        await confirm({
+          title: "KANAL KEŞFİ HATASI",
+          message: (data.restored ? "DVR geri yüklendi ama kanallar keşfedilemedi. " : "DVR kaydedildi ama kanallar keşfedilemedi. ") + (discData.error || ""),
+          confirmText: "TAMAM",
+          type: "warning"
+        });
       }
     } catch (e) {
       console.error(e);
-      alert("Sunucuya bağlanılamadı veya beklenmeyen bir hata oluştu.");
+      await confirm({
+        title: "SİSTEM HATASI",
+        message: "Sunucu hatası veya beklenmeyen bir sorun oluştu.",
+        confirmText: "TAMAM",
+        type: "danger"
+      });
     } finally {
       setIsSaving(false);
       setIsDiscovering(false);

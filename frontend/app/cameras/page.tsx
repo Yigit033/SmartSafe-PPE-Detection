@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { abortAllStreams } from "@/lib/streamRegistry";
+import { useConfirm } from "@/context/ConfirmContext";
 import { 
   Router, 
   EyeOff, 
@@ -68,6 +69,7 @@ function CamerasContent() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { confirm } = useConfirm();
 
   const handleNavigate = (path: string) => {
     if (path === pathname) return;
@@ -349,44 +351,72 @@ function CamerasContent() {
           inactive > 0
             ? `${data.count} aktif kanal bulundu (${inactive} kanalda kamera bağlı değil).`
             : `${data.count} kanal başarıyla keşfedildi!`;
-        alert(`Keşif tamamlandı\n\n${msg}`);
+        await confirm({
+          title: "KEŞİF TAMAMLANDI",
+          message: msg,
+          confirmText: "TAMAM",
+          type: "info"
+        });
         fetchCameras("active");
       } else {
-        alert(`Hata: ${data.error || "Kanallar keşfedilemedi."}`);
+        await confirm({
+          title: "KÖK NEDEN HATASI",
+          message: data.error || "Kanallar keşfedilemedi.",
+          confirmText: "TAMAM",
+          type: "danger"
+        });
       }
     } catch (error) {
       console.error("Error discovering channels:", error);
-      alert("Sunucuyla bağlantı kurulamadı.");
+      await confirm({
+        title: "BAĞLANTI HATASI",
+        message: "Sunucuyla bağlantı kurulamadı.",
+        confirmText: "TAMAM",
+        type: "danger"
+      });
     } finally {
       setIsDiscoveringDvr(null);
     }
   };
 
   const deleteDvr = async (dvrId: string) => {
-    if (
-      !confirm(
-        "Bu DVR’yi listeden kaldırmak istiyor musunuz?\n\n" +
-          "Kayıtlar veritabanından silinmez; geçmiş ihlal ve raporlar korunur. " +
-          "Aynı cihazı tekrar eklediğinizde kayıt geri yüklenebilir.",
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: "CİHAZI KALDIR",
+      message: "Bu DVR’yi listeden kaldırmak istiyor musunuz? Geçmiş ihlal ve raporlar korunur.",
+      confirmText: "CİHAZI SİL",
+      cancelText: "VAZGEÇ",
+      type: "danger"
+    });
+
+    if (!ok) return;
     setIsDeletingDvr(true);
     try {
       const data = await api.dvr.remove(companyId, dvrId);
       if (data.success) {
-        alert(
-          data.message ||
-            "DVR listeden kaldırıldı. Geçmiş kayıtlar korunur; kamera listesi güncellendi.",
-        );
+        await confirm({
+          title: "BAŞARILI",
+          message: data.message || "Cihaz listeden kaldırıldı. Geçmiş kayıtlar korunur.",
+          confirmText: "TAMAM",
+          type: "info"
+        });
         fetchDvrs();
         fetchCameras("active");
       } else {
-        alert(`Hata: ${data.error || "DVR silinemedi."}`);
+        await confirm({
+          title: "HATA",
+          message: data.error || "DVR silinemedi.",
+          confirmText: "TAMAM",
+          type: "danger"
+        });
       }
     } catch (error) {
       console.error("Error deleting DVR:", error);
-      alert("Sunucuyla bağlantı kurulamadı.");
+      await confirm({
+        title: "SİSTEM HATASI",
+        message: "Sunucuyla bağlantı kurulamadı.",
+        confirmText: "TAMAM",
+        type: "danger"
+      });
     } finally {
       setIsDeletingDvr(false);
     }
@@ -432,10 +462,21 @@ function CamerasContent() {
         setEditingDvrId(null);
         fetchDvrs();
       } else {
-        alert("Güncellenemedi: " + (data.error || "Bilinmeyen hata"));
+        await confirm({
+          title: "GÜNCELLEME HATASI",
+          message: data.error || "Bilinmeyen bir sorun oluştu.",
+          confirmText: "TAMAM",
+          type: "danger"
+        });
       }
     } catch (error) {
       console.error("Error updating DVR inline:", error);
+      await confirm({
+        title: "BAĞLANTI HATASI",
+        message: "Sunucu hatası oluştu.",
+        confirmText: "TAMAM",
+        type: "danger"
+      });
     }
   };
 

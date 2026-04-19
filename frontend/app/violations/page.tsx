@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
+import { useConfirm } from "@/context/ConfirmContext";
 import { 
   Eye, 
   EyeOff, 
@@ -46,6 +47,7 @@ export default function ViolationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const { confirm } = useConfirm();
 
   // Calendar states
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -89,11 +91,15 @@ export default function ViolationsPage() {
     const companyId = getCompanyId();
     if (!companyId) return;
     const n = events.length;
-    const ok = window.confirm(
-      n > 0
-        ? `Bu şirkete ait ${n} ihlal kaydı kalıcı olarak silinecek. Devam edilsin mi?`
-        : "Kayıtlı ihlal yok; yine de veritabanındaki tüm ihlal olayları silinsin mi?",
-    );
+    const ok = await confirm({
+      title: "İHLALLERİ TEMİZLE",
+      message: n > 0 
+        ? `${n} adet ihlal kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misiniz?`
+        : "Veritabanındaki tüm geçmiş ihlal olayları silinecek. Emin misiniz?",
+      confirmText: "TÜMÜNÜ SİL",
+      cancelText: "VAZGEÇ",
+      type: "danger"
+    });
     if (!ok) return;
     setDeletingAll(true);
     try {
@@ -104,11 +110,21 @@ export default function ViolationsPage() {
         setSelectedEvent(null);
         setIsModalOpen(false);
       } else {
-        window.alert("İhlaller silinemedi. Lütfen tekrar deneyin.");
+        await confirm({
+          title: "HATA",
+          message: "İhlaller silinemedi. Lütfen tekrar deneyin.",
+          confirmText: "TAMAM",
+          type: "warning"
+        });
       }
     } catch (e) {
       console.error(e);
-      window.alert("Bağlantı hatası.");
+      await confirm({
+        title: "BAĞLANTI HATASI",
+        message: "Sunucuyla iletişim kurulamadı.",
+        confirmText: "TAMAM",
+        type: "danger"
+      });
     } finally {
       setDeletingAll(false);
     }

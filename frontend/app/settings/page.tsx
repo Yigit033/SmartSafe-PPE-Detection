@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
 import core from "@/lib/core";
+import { useConfirm } from "@/context/ConfirmContext";
 import { 
   Building2, 
   Hammer, 
@@ -56,6 +57,7 @@ export default function SettingsPage() {
     telegram_chat_id: ""
   });
   const companyId = getCompanyId();
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     fetchCompanyData();
@@ -110,8 +112,12 @@ export default function SettingsPage() {
       } as any);
 
       if (data.success) {
-        alert("Profil başarıyla güncellendi!");
-        // Sektör değişmişse PPE de değişeceği için hepsini yenile
+        await confirm({
+          title: "BAŞARILI",
+          message: "Şirket profil bilgileriniz başarıyla güncellendi.",
+          confirmText: "TAMAM",
+          type: "info"
+        });
         await fetchCompanyData();
       }
     } catch (error) {
@@ -195,7 +201,12 @@ export default function SettingsPage() {
       } as any);
 
       if (data.success) {
-        alert("PPE konfigürasyonu ve sektör başarıyla güncellendi!");
+        await confirm({
+          title: "KONFİGÜRASYON GÜNCELLENDİ",
+          message: "PPE gereksinimleri ve sektör ayarlarınız sisteme kaydedildi.",
+          confirmText: "TAMAM",
+          type: "info"
+        });
         fetchCompanyData();
       }
     } catch (error) {
@@ -210,7 +221,12 @@ export default function SettingsPage() {
     try {
       const data = await api.company.updateNotifications(companyId, notificationSettings);
       if (data.success) {
-        alert("Bildirim ayarları başarıyla güncellendi!");
+        await confirm({
+          title: "BİLDİRİMLER GÜNCELLENDİ",
+          message: "Bildirim tercihleriniz başarıyla sisteme yansıtıldı.",
+          confirmText: "TAMAM",
+          type: "info"
+        });
         fetchCompanyData();
       }
     } catch (error) {
@@ -224,13 +240,28 @@ export default function SettingsPage() {
     try {
       const data = await core.sendTestNotification(companyId!);
       if (data.success) {
-        alert("✅ Test bildirimi başarıyla gönderildi! Lütfen Telegram'ı kontrol edin.");
+        await confirm({
+          title: "BAĞLANTI DOĞRULANDI",
+          message: "Test bildirimi gönderildi! Lütfen Telegram'ı kontrol edin.",
+          confirmText: "HARİKA",
+          type: "info"
+        });
       } else {
-        alert("❌ Hata: " + (data.error || "Bildirim gönderilemedi."));
+        await confirm({
+          title: "GÖNDERİLEMEDİ",
+          message: "Hata: " + (data.error || "Bildirim gönderilemedi."),
+          confirmText: "TEKRAR DENE",
+          type: "danger"
+        });
       }
     } catch (error) {
       console.error("Error sending test notification:", error);
-      alert("❌ Sistem hatası oluştu.");
+      await confirm({
+        title: "SİSTEM HATASI",
+        message: "Bildirim servisine şu an ulaşılamıyor.",
+        confirmText: "TAMAM",
+        type: "danger"
+      });
     }
   };
 
