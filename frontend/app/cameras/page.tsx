@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { abortAllStreams } from "@/lib/streamRegistry";
 import { 
   Router, 
   EyeOff, 
@@ -66,6 +67,14 @@ function CamerasContent() {
   const [activeTab, setActiveTab] = useState("smart");
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  const handleNavigate = (path: string) => {
+    if (path === pathname) return;
+    window.dispatchEvent(new Event("navigation:start"));
+    abortAllStreams();
+    router.push(path);
+  };
 
   const [formData, setFormData] = useState({
     camera_name: "",
@@ -93,6 +102,8 @@ function CamerasContent() {
   const [privacyModeCameras, setPrivacyModeCameras] = useState<string[]>([]);
 
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  // Kamera başına stream key — sadece AI toggle'da güncellenir (stream yeniden bağlanır)
+  const [streamKeys, setStreamKeys] = useState<Record<string, number>>({});
   const [isManageDvrsOpen, setIsManageDvrsOpen] = useState(false);
   const [editingCameraId, setEditingCameraId] = useState<string | null>(null);
   const [editingCameraName, setEditingCameraName] = useState<string>("");
@@ -119,7 +130,7 @@ function CamerasContent() {
     const url = new URL(window.location.href);
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("page", "1");
-    router.push(url.pathname + url.search);
+    handleNavigate(url.pathname + url.search);
   };
 
   const setCurrentPage = useCallback(
@@ -128,15 +139,16 @@ function CamerasContent() {
         typeof pageOrFn === "function" ? pageOrFn(currentPage) : pageOrFn;
       const url = new URL(window.location.href);
       url.searchParams.set("page", String(next + 1));
-      router.push(url.pathname + url.search);
+      handleNavigate(url.pathname + url.search);
     },
-    [currentPage, router],
+    [currentPage, router, pathname],
   );
 
   const companyId = getCompanyId();
 
   useEffect(() => {
     setMounted(true);
+    // refreshKey artık stream URL'ine girmiyor, sadece iç yenileme için
     setRefreshKey(Date.now());
     fetchCameras("active");
     fetchDvrs();
@@ -153,7 +165,8 @@ function CamerasContent() {
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        setRefreshKey(Date.now());
+        // Sadece veri yenile, stream URL'ini değiştirme (titreme önleme)
+        fetchCameras("active");
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -270,7 +283,8 @@ function CamerasContent() {
       } else {
         await core.stopDetection(companyId, id);
       }
-      setRefreshKey(Date.now());
+      // Sadece bu kameranın stream key'ini güncelle → sadece o yeniden bağlanır
+      setStreamKeys((prev) => ({ ...prev, [id]: Date.now() }));
     } catch (error) {
       console.error(`Error toggling AI:`, error);
     }
@@ -718,7 +732,7 @@ function CamerasContent() {
             GİZLİLİK MODU
           </button>
           <button
-            onClick={() => router.push("/cameras/setup")}
+            onClick={() => handleNavigate("/cameras/setup")}
             className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 hover:bg-brand-teal/90 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" /> YENİ KAMERA EKLE
@@ -762,8 +776,8 @@ function CamerasContent() {
                     <MjpegCanvas
                       src={
                          isCameraAiEnabled(camera)
-                          ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${camera.camera_id}?t=${refreshKey}`
-                          : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream?t=${refreshKey}`
+                          ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${camera.camera_id}${streamKeys[camera.camera_id] ? `?t=${streamKeys[camera.camera_id]}` : ''}`
+                          : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream${streamKeys[camera.camera_id] ? `?t=${streamKeys[camera.camera_id]}` : ''}`
                       }
                       className={`w-full h-full transition-all duration-700 group-hover:scale-105 ${
                         failedCameras.includes(camera.camera_id)
@@ -838,31 +852,6 @@ function CamerasContent() {
                     )}
 
                     <div className="absolute top-4 left-4 flex gap-2">
-                      <div
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white shadow-lg transition-all duration-500 ${
-                          failedCameras.includes(camera.camera_id)
-                            ? "bg-slate-700 opacity-100"
-                            : loadedCameras.includes(camera.camera_id)
-                              ? "bg-red-500 opacity-100"
-                              : "opacity-0"
-                        }`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full bg-white ${failedCameras.includes(camera.camera_id) ? "" : "animate-pulse"}`}
-                        ></span>
-                        <span className="text-[8px] font-black uppercase tracking-tighter text-white">
-                          {failedCameras.includes(camera.camera_id)
-                            ? "BAĞLANTI YOK"
-                            : "CANLI"}
-                        </span>
-                      </div>
-                      {isCameraAiEnabled(camera) && (
-                        <div className="bg-brand-teal px-2.5 py-1 rounded-lg text-white shadow-lg animate-pulse">
-                          <span className="text-[8px] font-black uppercase tracking-tighter italic">
-                            AI ANALİZ AKTİF
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     <button
@@ -873,7 +862,7 @@ function CamerasContent() {
                           isCameraAiEnabled(camera),
                         );
                       }}
-                      className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all duration-500 shadow-xl cursor-pointer ${isCameraAiEnabled(camera) ? "bg-brand-teal/90 border-brand-teal text-white" : "bg-slate-900/60 border-white/10 text-white/50"}`}
+                      className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all duration-500 shadow-xl cursor-pointer ${isCameraAiEnabled(camera) ? "bg-white/90 border-brand-teal text-brand-teal" : "bg-slate-900/40 border-white/10 text-white/50"}`}
                     >
                         {isCameraAiEnabled(camera) ? <Activity className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       <span className="text-[9px] font-black uppercase tracking-widest">
@@ -894,18 +883,18 @@ function CamerasContent() {
                         <button
                           type="button"
                           onClick={() =>
-                            router.push(
+                            handleNavigate(
                               `/camera/${encodeURIComponent(camera.camera_id)}`,
                             )
                           }
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-brand-teal text-white shadow-lg cursor-pointer transition-all hover:bg-brand-teal/90 active:scale-95 hover:shadow-brand-teal/20"
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-brand-teal hover:text-white active:scale-95"
                           title="Tam Ekran"
                         >
                           <Maximize2 className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => toggleCameraPrivacy(camera.camera_id)}
-                          className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-all duration-300 shadow-sm hover:shadow-lg cursor-pointer active:scale-95 ${privacyModeCameras.includes(camera.camera_id) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-lg cursor-pointer active:scale-95 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-900 border-slate-900" : "text-slate-500 hover:bg-slate-50"}`}
                           title="Gizlilik Modu"
                         >
                            {privacyModeCameras.includes(camera.camera_id) ? (
@@ -1062,7 +1051,7 @@ function CamerasContent() {
                     YÖNETİLEBİLİR CİHAZ VE KAMERALAR
                   </p>
                   <button
-                    onClick={() => router.push("/cameras/setup")}
+                    onClick={() => handleNavigate("/cameras/setup")}
                     className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-brand-teal text-white text-[10px] font-black uppercase tracking-widest hover:bg-brand-teal/90 transition-all cursor-pointer shadow-sm hover:shadow-lg hover:shadow-brand-teal/20 active:scale-95"
                   >
                     <Plus className="w-4 h-4" /> YENİ EKLE

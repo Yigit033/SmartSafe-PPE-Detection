@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
+import NavigationProgress from "@/components/layout/NavigationProgress";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -66,6 +67,7 @@ export default function RootLayout({
 
     return (
       <div className="flex min-h-screen">
+        <NavigationProgress />
         {!isPublicPage && <Sidebar />}
         <div className={isPublicPage ? "flex-1 w-full" : "flex-1 pl-[280px]"}>
           {!isPublicPage && <TopBar />}

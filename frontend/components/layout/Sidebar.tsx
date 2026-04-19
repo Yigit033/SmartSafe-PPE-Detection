@@ -1,7 +1,9 @@
 "use client";
 
-import Link from "next/link";
+
 import { usePathname, useRouter } from "next/navigation";
+
+import { abortAllStreams } from "@/lib/streamRegistry";
 import { 
   LayoutDashboard, 
   Camera, 
@@ -49,6 +51,13 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const handleNavigate = (path: string) => {
+    if (path === pathname) return;
+    // Progress bar'ı tetikle
+    window.dispatchEvent(new Event("navigation:start"));
+    abortAllStreams(); // Tüm MJPEG bağlantılarını kapat
+    router.push(path);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -71,24 +80,26 @@ export default function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 space-y-1">
           {menuItems.map((item) => {
-            const isActive = pathname === item.path;
+            const isActive = pathname === item.path || 
+              (item.path !== "/" && pathname.startsWith(item.path));
             const Icon = item.icon;
             
-            const className = `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
+            const cls = `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
               isActive
                 ? "bg-brand-teal/10 text-brand-teal"
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             }`;
             
             return (
-              <Link
+              <button
                 key={item.path}
-                href={item.path}
-                className={className}
+                onClick={() => handleNavigate(item.path)}
+                className={cls}
+                style={{ width: "100%", textAlign: "left" }}
               >
                 <Icon className={`h-5 w-5 ${isActive ? "text-brand-teal" : "text-slate-400"}`} />
                 {item.name}
-              </Link>
+              </button>
             );
           })}
         </nav>

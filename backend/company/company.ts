@@ -89,6 +89,16 @@ export const getStats = api(
   { expose: true, method: "GET", path: "/company/:company_id/stats" },
   async ({ company_id }: { company_id: string }): Promise<CompanyStats> => {
     try {
+      // Ortamlar arası (dev/prod) tip farklılığını (timestamp vs double precision) otomatik algıla
+      const typeCheckRes = await pool.query(
+        "SELECT data_type FROM information_schema.columns WHERE table_name = 'violation_events' AND column_name = 'start_time' LIMIT 1"
+      );
+      const isUnixTimestamp = typeCheckRes.rows[0]?.data_type === 'double precision';
+      
+      // Tip bazlı tarih cast fonksiyonu
+      const timeCast = (col: string) => isUnixTimestamp ? `TO_TIMESTAMP(${col})` : col;
+      const dateCast = (col: string) => `(${timeCast(col)})::DATE`;
+
       // 0. Şirket kapasitesi
       const capRes = await pool.query(
         "SELECT COALESCE(max_cameras, 25)::int AS max_cameras FROM companies WHERE company_id = $1",
@@ -119,9 +129,9 @@ export const getStats = api(
       // 3. İhlal sayıları (Bugün, Dün, Aylık)
       const violationCountsRes = await pool.query(
         `SELECT
-          COUNT(*) FILTER (WHERE (start_time)::DATE = CURRENT_DATE) as today,
-          COUNT(*) FILTER (WHERE (start_time)::DATE = CURRENT_DATE - INTERVAL '1 day') as yesterday,
-          COUNT(*) FILTER (WHERE (start_time)::DATE > CURRENT_DATE - INTERVAL '30 days') as monthly
+          COUNT(*) FILTER (WHERE ${dateCast('start_time')} = CURRENT_DATE) as today,
+          COUNT(*) FILTER (WHERE ${dateCast('start_time')} = CURRENT_DATE - INTERVAL '1 day') as yesterday,
+          COUNT(*) FILTER (WHERE ${dateCast('start_time')} > CURRENT_DATE - INTERVAL '30 days') as monthly
          FROM violation_events
          WHERE company_id = $1`,
         [company_id],
@@ -140,7 +150,7 @@ export const getStats = api(
             ELSE 0 
           END as avg_compliance
          FROM detections
-         WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
+         WHERE company_id = $1 AND ${dateCast('timestamp')} = CURRENT_DATE`,
         [company_id],
       );
       const active_workers = parseInt(dailyMetricsRes.rows[0].active_workers);
@@ -149,11 +159,11 @@ export const getStats = api(
       // 5. Compliance Trend (Son 7 Günlük)
       const complianceTrendRes = await pool.query(
         `SELECT 
-           TO_CHAR(DATE(timestamp), 'YYYY-MM-DD') as day,
-           AVG(CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END) as rate
+            TO_CHAR(${dateCast('timestamp')}, 'YYYY-MM-DD') as day,
+            AVG(CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END) as rate
          FROM detections 
-         WHERE company_id = $1 AND timestamp > CURRENT_DATE - INTERVAL '7 days'
-         GROUP BY DATE(timestamp)
+         WHERE company_id = $1 AND ${timeCast('timestamp')} > CURRENT_DATE - INTERVAL '7 days'
+         GROUP BY ${dateCast('timestamp')}
          ORDER BY day ASC`,
         [company_id],
       );
@@ -165,10 +175,10 @@ export const getStats = api(
       // 5b. Saatlik Compliance Trend (Bugün)
       const hourlyComplianceRes = await pool.query(
         `SELECT 
-           EXTRACT(HOUR FROM timestamp) as hour,
-           AVG(CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END) as rate
+            EXTRACT(HOUR FROM ${timeCast('timestamp')}) as hour,
+            AVG(CASE WHEN people_detected > 0 THEN (ppe_compliant::FLOAT / people_detected::FLOAT * 100.0) ELSE 0 END) as rate
          FROM detections 
-         WHERE company_id = $1 AND DATE(timestamp) = CURRENT_DATE
+         WHERE company_id = $1 AND ${dateCast('timestamp')} = CURRENT_DATE
          GROUP BY hour
          ORDER BY hour ASC`,
         [company_id],
@@ -181,12 +191,12 @@ export const getStats = api(
       // 6. Violation Types Dağılımı (Son 30 Gün)
       const violationTypesRes = await pool.query(
         `SELECT 
-           violation_type, 
-           COUNT(*) as count 
-         FROM violation_events 
-         WHERE company_id = $1 AND (start_time)::DATE > CURRENT_DATE - INTERVAL '30 days'
-         GROUP BY violation_type
-         ORDER BY count DESC`,
+            violation_type, 
+            COUNT(*) as count 
+          FROM violation_events 
+          WHERE company_id = $1 AND ${dateCast('start_time')} > CURRENT_DATE - INTERVAL '30 days'
+          GROUP BY violation_type
+          ORDER BY count DESC`,
         [company_id],
       );
       const violation_types = violationTypesRes.rows.map(r => ({
@@ -197,12 +207,12 @@ export const getStats = api(
       // 7. Saatlik İhlal Dağılımı (Bugün)
       const hourlyViolationsRes = await pool.query(
         `SELECT 
-           EXTRACT(HOUR FROM start_time)::int as hour,
-           COUNT(*) as count
-         FROM violation_events
-         WHERE company_id = $1 AND (start_time)::DATE = CURRENT_DATE
-         GROUP BY hour
-         ORDER BY hour ASC`,
+            EXTRACT(HOUR FROM ${timeCast('start_time')})::int as hour,
+            COUNT(*) as count
+          FROM violation_events
+          WHERE company_id = $1 AND ${dateCast('start_time')} = CURRENT_DATE
+          GROUP BY hour
+          ORDER BY hour ASC`,
         [company_id],
       );
       const hourly_violations = hourlyViolationsRes.rows.map(r => ({

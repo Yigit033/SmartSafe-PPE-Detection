@@ -238,10 +238,10 @@ export default function CameraLiveView({
             />
           </div>
         ) : streamUrl ? (
-          <div className="relative w-full h-full min-h-[40vh] bg-black">
+          <div className="relative w-full aspect-video bg-black flex items-center justify-center">
             <MjpegCanvas
               src={streamUrl}
-              className="absolute inset-0 z-0 h-full w-full max-h-[80vh] object-contain"
+              className="w-full h-full"
               fps={30}
               onDimensions={(nw, nh, cw, ch) => {
                 setPreviewLayout({ nw, nh, cw, ch });
@@ -273,7 +273,7 @@ export default function CameraLiveView({
                   )}
                   naturalW={previewLayout.nw}
                   naturalH={previewLayout.nh}
-                  className="absolute inset-0 z-10 h-full w-full max-h-[80vh] opacity-60"
+                  className="absolute inset-0 z-10 w-full h-full opacity-60"
                 />
               )}
           </div>
