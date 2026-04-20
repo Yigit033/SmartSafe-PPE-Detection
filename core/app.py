@@ -4032,6 +4032,9 @@ smartsafe_requests_total 100
                             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                             if frame is not None:
                                 frame_buffers[camera_key] = frame
+                                # Watchdog health signal: a real frame arrived for this camera_key
+                                # (otherwise watchdog will stale every stale_threshold seconds).
+                                frame_timestamps[camera_key] = time.time()
                                 poll_count += 1
                         time.sleep(0.04)
                     except Exception as poll_err:
@@ -4089,6 +4092,8 @@ smartsafe_requests_total 100
                         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                         if frame is not None:
                             frame_buffers[camera_key] = frame
+                            # Watchdog health signal: snapshot poll yielded a decodable frame.
+                            frame_timestamps[camera_key] = time.time()
                 except Exception as e:
                     logger.debug(f"Snapshot poll hatası: {e}")
                 time.sleep(poll_interval)
@@ -4137,6 +4142,8 @@ smartsafe_requests_total 100
                 if ret:
                     frame_buffers[camera_key] = frame
                     frame_failure_counts[camera_key] = 0
+                    # Watchdog health signal: frame read succeeded.
+                    frame_timestamps[camera_key] = time.time()
                 else:
                     frame_failure_counts[camera_key] = frame_failure_counts.get(camera_key, 0) + 1
                     fail_count = frame_failure_counts[camera_key]
