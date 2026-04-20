@@ -71,10 +71,13 @@ function CamerasContent() {
   const pathname = usePathname();
   const { confirm } = useConfirm();
 
-  const handleNavigate = (path: string) => {
+  const handleNavigate = async (path: string) => {
     if (path === pathname) return;
     window.dispatchEvent(new Event("navigation:start"));
     abortAllStreams();
+    // AI video-feed bağlantıları TCP seviyesinde hemen kapanmayabiliyor.
+    // 150ms gecikme tarayıcıya bağlantıyı serbest bırakma fırsatı veriyor.
+    await new Promise((r) => setTimeout(r, 150));
     router.push(path);
   };
 
@@ -119,6 +122,7 @@ function CamerasContent() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [selectedCameraForSchedule, setSelectedCameraForSchedule] =
     useState<any>(null);
+  const [selectedDvrId, setSelectedDvrId] = useState<string>("all");
 
   const prevFiltersRef = useRef<{ search: string } | null>(null);
   const searchParams = useSearchParams();
@@ -564,7 +568,10 @@ function CamerasContent() {
     const matchesSearch =
       cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+    
+    const matchesDvr = selectedDvrId === "all" || cam.dvr_id === selectedDvrId;
+
+    return matchesSearch && matchesDvr;
   });
 
   const totalPages = Math.ceil(filteredCameras.length / camerasPerPage);
@@ -781,6 +788,36 @@ function CamerasContent() {
         </div>
       </section>
 
+      {/* DVR Filter Selector */}
+      {dvrs.length > 1 && (
+        <div className="flex flex-wrap items-center gap-3 animate-fade-in">
+          <button
+            onClick={() => setSelectedDvrId("all")}
+            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${
+              selectedDvrId === "all"
+                ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20"
+                : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            TÜMÜ
+          </button>
+          {dvrs.map((dvr) => (
+            <button
+              key={dvr.dvr_id}
+              onClick={() => setSelectedDvrId(dvr.dvr_id)}
+              className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 ${
+                selectedDvrId === dvr.dvr_id
+                  ? "bg-brand-teal text-white shadow-xl shadow-brand-teal/20"
+                  : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <Database className="w-3 h-3" />
+              {dvr.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {filteredCameras.length === 0 && !isLoading ? (
         <div className="mt-12 flex flex-col items-center justify-center p-24 bg-white/40 rounded-[3rem] border-2 border-dashed border-slate-100 animate-fade-in min-h-[450px]">
           <div className="w-24 h-24 bg-slate-50/50 rounded-full flex items-center justify-center mb-8 border border-slate-100">
@@ -975,14 +1012,14 @@ function CamerasContent() {
                     <h3 className="text-lg font-black text-slate-900 tracking-tight group-hover:text-brand-teal transition-colors">
                       {camera.camera_name}
                     </h3>
-                    <div className="flex items-center gap-1.5 mt-1 text-slate-400">
-                        <MapPin className="w-3 h-3" />
-                      <span className="text-[10px] font-black tracking-widest">
-                        {camera.location}
-                      </span>
+                    <div className="flex flex-col gap-1 mt-2">
+                      <div className="flex items-center gap-1.5 text-slate-400">
+                        <MapPin className="w-3 h-3 text-slate-300" />
+                        <span className="text-[10px] font-black tracking-widest uppercase">
+                          {camera.location || "BELİRTİLMEMİŞ"}
+                        </span>
+                      </div>
                     </div>
-
-
                   </div>
                 </div>
               );

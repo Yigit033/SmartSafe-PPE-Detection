@@ -51,11 +51,11 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const handleNavigate = (path: string) => {
+  const handleNavigate = async (path: string) => {
     if (path === pathname) return;
-    // Progress bar'ı tetikle
     window.dispatchEvent(new Event("navigation:start"));
-    abortAllStreams(); // Tüm MJPEG bağlantılarını kapat
+    abortAllStreams();
+    await new Promise((r) => setTimeout(r, 150));
     router.push(path);
   };
 

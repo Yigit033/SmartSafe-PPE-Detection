@@ -149,12 +149,12 @@ export default function ViolationsPage() {
     return true;
   });
 
-  // Resim URL'ini oluştur (Doğrudan Frontend/Public üzerinden çekmek için)
   const getSnapshotUrl = (path: string) => {
     if (!path) return "https://via.placeholder.com/400x300?text=Snapshot+Yok";
-    // Path: COMP_XXX/CAM_XXX/2025-10-31/file.jpg şeklinde geliyor
-    // Docker'da ../storage klasörünü frontend/public/storage altına mount ettik
-    return `/storage/violations/${path}`;
+    let p = path.replace(/\\/g, "/").trim();
+    p = p.replace(/^(storage\/)?violations\//i, "");
+    if (!p) return "https://via.placeholder.com/400x300?text=Snapshot+Yok";
+    return `/storage/violations/${p}`;
   };
 
   const formatTime = (ts: number) => {

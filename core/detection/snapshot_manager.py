@@ -21,12 +21,17 @@ class SnapshotManager:
     - Image optimization
     """
     
-    def __init__(self, base_path: str = "/app/storage/violations"):
+    def __init__(self, base_path: str = None):
         """
         Args:
-            base_path: Snapshot'ların kaydedileceği ana klasör
+            base_path: Snapshot'ların kaydedileceği ana klasör.
+                       None ise env SNAPSHOT_BASE_PATH veya proje-relativ yol kullanılır.
         """
-        # Docker ortamında /app/storage/violations kullanılır
+        if base_path is None:
+            base_path = os.environ.get("SNAPSHOT_BASE_PATH", "")
+        if not base_path:
+            project_root = Path(__file__).resolve().parent.parent.parent
+            base_path = str(project_root / "storage" / "violations")
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         
@@ -67,9 +72,9 @@ class SnapshotManager:
             snapshot_dir = self.base_path / company_id / camera_id / date_str
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             
-            # Dosya adı: PERSON_XXX_no_helmet_1730400000.jpg
             timestamp = int(datetime.now().timestamp())
-            filename = f"{person_id}_{violation_type}_{timestamp}.jpg"
+            safe_vtype = violation_type.replace("/", "_").replace("\\", "_").replace(",", "_")
+            filename = f"{person_id}_{safe_vtype}_{timestamp}.jpg"
             filepath = snapshot_dir / filename
             
             # Kişiyi crop et (bbox + padding)
@@ -95,8 +100,7 @@ class SnapshotManager:
             # Kaydet (JPEG quality: 85)
             cv2.imwrite(str(filepath), person_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
             
-            # Relative path döndür
-            relative_path = str(filepath.relative_to(self.base_path))
+            relative_path = str(filepath.relative_to(self.base_path)).replace("\\", "/")
             
             logger.info(f"📸 Snapshot saved: {relative_path}")
             return relative_path
@@ -130,7 +134,7 @@ class SnapshotManager:
             filepath = snapshot_dir / filename
 
             cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            relative_path = str(filepath.relative_to(self.base_path))
+            relative_path = str(filepath.relative_to(self.base_path)).replace("\\", "/")
             logger.info(f"📸 Full snapshot saved: {relative_path}")
             return relative_path
         except Exception as e:
