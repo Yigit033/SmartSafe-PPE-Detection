@@ -158,9 +158,16 @@ class StreamWatchdog:
             if last_ts is None:
                 if state.get('first_stale_time') is None:
                     state['first_stale_time'] = now
+                    self._add_event(
+                        'stale_detected',
+                        camera_key,
+                        f"Henüz frame_ts yok (grace başladı) — status={state['status']} "
+                        f"restart_count={state['restart_count']} backoff={state['backoff_sec']:.0f}s",
+                    )
                 elif now - state['first_stale_time'] > self._stale_threshold * 2:
                     # 2× stale threshold geçti, hiç frame gelmedi → restart dene
-                    self._handle_stale(camera_key, state, now)
+                    waited = now - state['first_stale_time']
+                    self._handle_stale(camera_key, state, now, seconds_since_frame=waited, last_ts=None)
                 continue
 
             seconds_since_frame = now - last_ts
@@ -176,9 +183,17 @@ class StreamWatchdog:
                 continue
 
             # Stale tespit edildi
-            self._handle_stale(camera_key, state, now)
+            self._handle_stale(camera_key, state, now, seconds_since_frame=seconds_since_frame, last_ts=last_ts)
 
-    def _handle_stale(self, camera_key: str, state: Dict, now: float):
+    def _handle_stale(
+        self,
+        camera_key: str,
+        state: Dict,
+        now: float,
+        *,
+        seconds_since_frame: float,
+        last_ts: Optional[float],
+    ):
         """Stale stream için müdahale mantığı."""
         if state['restart_count'] >= self._max_restarts:
             if state['status'] != 'dead':
@@ -190,6 +205,22 @@ class StreamWatchdog:
                     f"Kamera 'dead' olarak işaretlendi."
                 )
             return
+
+        # Always log the concrete stale evidence (this is the single most useful breadcrumb
+        # when diagnosing restart storms).
+        last_iso = (
+            datetime.fromtimestamp(last_ts, tz=timezone.utc).isoformat()
+            if last_ts else None
+        )
+        self._add_event(
+            'stale',
+            camera_key,
+            f"seconds_since_last_frame={seconds_since_frame:.1f}s "
+            f"threshold={self._stale_threshold:.0f}s "
+            f"last_frame_ts={last_ts} last_frame_utc={last_iso} "
+            f"status={state['status']} restart_count={state['restart_count']} "
+            f"backoff={state['backoff_sec']:.0f}s",
+        )
 
         state['status'] = 'restarting'
         state['restart_count'] += 1

@@ -1500,14 +1500,35 @@ class DatabaseAdapter:
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             '''
             
-            # start_time ve end_time sayısal (unix) ise datetime objesine çevir
+            # NOTE: violation_events.start_time/end_time are stored as unix epoch (double precision)
+            # in our production schema. Always write numeric seconds to avoid type mismatch.
             st = event_data.get('start_time')
-            if isinstance(st, (int, float)):
-                st = datetime.fromtimestamp(st)
+            if isinstance(st, datetime):
+                st = st.timestamp()
+            elif isinstance(st, str):
+                try:
+                    st = datetime.fromisoformat(st.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    st = None
+            elif st is not None:
+                try:
+                    st = float(st)
+                except Exception:
+                    st = None
                 
             et = event_data.get('end_time')
-            if isinstance(et, (int, float)):
-                et = datetime.fromtimestamp(et)
+            if isinstance(et, datetime):
+                et = et.timestamp()
+            elif isinstance(et, str):
+                try:
+                    et = datetime.fromisoformat(et.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    et = None
+            elif et is not None:
+                try:
+                    et = float(et)
+                except Exception:
+                    et = None
 
             params = (
                 event_data['event_id'],
@@ -1543,8 +1564,18 @@ class DatabaseAdapter:
             '''
             
             et = update_data.get('end_time')
-            if isinstance(et, (int, float)):
-                et = datetime.fromtimestamp(et)
+            if isinstance(et, datetime):
+                et = et.timestamp()
+            elif isinstance(et, str):
+                try:
+                    et = datetime.fromisoformat(et.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    et = None
+            elif et is not None:
+                try:
+                    et = float(et)
+                except Exception:
+                    et = None
 
             params = (
                 et,

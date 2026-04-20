@@ -732,22 +732,35 @@ class DVRStreamHandler:
     ) -> bool:
         """Kayıtlı URL veya ONVIF üzerinden akışı başlatır. Zaten aktifse anında döner."""
         try:
-            # 1. Hızlı Kontrol: Stream zaten aktif mi?
+            # 1) Atomic "starting" guard (prevents duplicate workers & restart storms)
             with self._lock:
-                if stream_id in self.active_streams:
-                    st = self.active_streams[stream_id]
-                    status = st.get('status')
-                    if status in ('active', 'starting'):
-                        logger.debug(f"ℹ️ Stream zaten aktif veya başlatılıyor ({status}): {stream_id}")
-                        if stream_id not in self.frame_buffers:
-                            self.frame_buffers[stream_id] = []
-                        return True
-                    else:
-                        # Stream var ama durmuş veya hatalı -> Yeniden başlat
-                        logger.info(f"🔄 Stream {stream_id} durumu '{status}', yeniden başlatılıyor...")
-                else:
-                    # Stream listede yok -> Yeni oluşturulacak
-                    self.active_streams[stream_id] = {}
+                st = self.active_streams.get(stream_id) or {}
+                status = st.get('status')
+                if status in ('active', 'starting'):
+                    logger.debug(f"ℹ️ Stream zaten aktif veya başlatılıyor ({status}): {stream_id}")
+                    if stream_id not in self.frame_buffers:
+                        self.frame_buffers[stream_id] = []
+                    return True
+                if status is not None:
+                    logger.info(f"🔄 Stream {stream_id} durumu '{status}', yeniden başlatılıyor...")
+                self.active_streams[stream_id] = st
+                # Mark as starting NOW under lock (race-safe)
+                self.active_streams[stream_id].update({
+                    'status': 'starting',
+                    'start_time': time.time(),
+                    'frame_count': 0,
+                    'error_count': 0,
+                    'ip_address': ip_address,
+                    'username': username,
+                    'password': password,
+                    'rtsp_port': rtsp_port,
+                    'channel_number': channel_number,
+                    'sector': sector or st.get('sector', 'construction'),
+                    # Preserve current on/off state if it exists; don't force-disable here.
+                    'ppe_detection_active': bool(st.get('ppe_detection_active', False)),
+                })
+                if stream_id not in self.frame_buffers:
+                    self.frame_buffers[stream_id] = []
 
             # 2. URL Çözümleme Stratejisi (Cache -> ONVIF -> Default)
             effective_url = rtsp_url
@@ -765,20 +778,13 @@ class DVRStreamHandler:
                         logger.info(f"✅ ONVIF URI başarıyla çözüldü: {stream_id}")
 
             # 3. Stream Metadata Güncelleme ve Worker Başlatma
-            self.active_streams[stream_id].update({
-                'rtsp_url': effective_url,
-                'status': 'starting',
-                'start_time': time.time(),
-                'frame_count': 0,
-                'error_count': 0,
-                'ip_address': ip_address,
-                'username': username,
-                'password': password,
-                'rtsp_port': rtsp_port,
-                'channel_number': channel_number,
-                'sector': sector or self.active_streams[stream_id].get('sector', 'construction'),
-                'ppe_detection_active': False,
-            })
+            with self._lock:
+                if stream_id not in self.active_streams:
+                    self.active_streams[stream_id] = {}
+                self.active_streams[stream_id].update({
+                    'rtsp_url': effective_url,
+                    'sector': sector or self.active_streams[stream_id].get('sector', 'construction'),
+                })
 
             self._ensure_stream_config(
                 stream_id,
@@ -787,9 +793,6 @@ class DVRStreamHandler:
                 required_ppe=required_ppe,
             )
             self._transition(stream_id, "starting", reason="start_requested", error_code=None)
-
-            if stream_id not in self.frame_buffers:
-                self.frame_buffers[stream_id] = []
 
             thread = threading.Thread(
                 target=self._stream_worker,
@@ -1241,6 +1244,12 @@ class DVRStreamHandler:
             frame_count = 0
             consecutive_errors = 0
             max_consecutive_errors = 10
+            last_good_frame_ts = time.time()
+            try:
+                if stream_id in self.active_streams:
+                    self.active_streams[stream_id]['last_frame_ts'] = last_good_frame_ts
+            except Exception:
+                pass
             
             while self.active_streams.get(stream_id, {}).get('status') == 'active':
                 try:
@@ -1248,7 +1257,14 @@ class DVRStreamHandler:
                     
                     if not ret or frame is None:
                         consecutive_errors += 1
+                        age = time.time() - last_good_frame_ts
                         logger.warning(f"⚠️ Failed to read frame from {stream_id} (error {consecutive_errors}/{max_consecutive_errors})")
+                        if consecutive_errors in (1, 3, 5, 10):
+                            logger.warning(
+                                f"⚠️ {stream_id}: no-frame age={age:.1f}s "
+                                f"(last_good_frame_ts={last_good_frame_ts:.0f}) "
+                                f"url={redact_url(successful_url or rtsp_url)}"
+                            )
                         
                         if consecutive_errors >= max_consecutive_errors:
                             logger.error(f"❌ Too many consecutive errors for {stream_id}, attempting reconnection...")
@@ -1277,6 +1293,12 @@ class DVRStreamHandler:
                                                 logger.info(f"✅ Channel {channel_number}: Reconnection successful: {url}")
                                                 successful_url = url
                                                 consecutive_errors = 0
+                                                last_good_frame_ts = time.time()
+                                                try:
+                                                    if stream_id in self.active_streams:
+                                                        self.active_streams[stream_id]['last_frame_ts'] = last_good_frame_ts
+                                                except Exception:
+                                                    pass
                                                 # Yeni çalışan URL'yi cache'e güncelle
                                                 if ip_address and channel_number:
                                                     self._cache_success_url(ip_address, channel_number, url)
@@ -1305,6 +1327,12 @@ class DVRStreamHandler:
                     
                     # Reset error count on successful frame
                     consecutive_errors = 0
+                    last_good_frame_ts = time.time()
+                    try:
+                        if stream_id in self.active_streams:
+                            self.active_streams[stream_id]['last_frame_ts'] = last_good_frame_ts
+                    except Exception:
+                        pass
                     
                     # Convert frame to JPEG
                     try:
@@ -1351,7 +1379,10 @@ class DVRStreamHandler:
                         
                         # Log progress every 120 frames
                         if frame_count % 120 == 0:
-                            logger.debug(f"📊 {stream_id}: {frame_count} frames captured")
+                            logger.debug(
+                                f"📊 {stream_id}: {frame_count} frames captured "
+                                f"(last_frame_ts={last_good_frame_ts:.0f}, url={redact_url(successful_url or rtsp_url)})"
+                            )
                         
                     except Exception as e:
                         logger.error(f"❌ Frame processing error for {stream_id}: {e}")
@@ -1360,7 +1391,11 @@ class DVRStreamHandler:
                     time.sleep(0.015)  # ~65 FPS (increased from 50 FPS)
                     
                 except Exception as e:
-                    logger.error(f"❌ Stream read error for {stream_id}: {e}")
+                    age = time.time() - last_good_frame_ts
+                    logger.error(
+                        f"❌ Stream read error for {stream_id}: {e} "
+                        f"(no-frame age={age:.1f}s, url={redact_url(successful_url or rtsp_url)})"
+                    )
                     consecutive_errors += 1
                     time.sleep(0.1)
                     
