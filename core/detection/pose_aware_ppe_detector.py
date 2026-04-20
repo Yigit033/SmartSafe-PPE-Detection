@@ -170,7 +170,8 @@ class PoseAwarePPEDetector:
         """
         self.pose_model = None
         self.ppe_detector = ppe_detector
-        self.pose_confidence_threshold = 0.5
+        # DVR OSD üzerinde düşük güvenli 'person' FP azaltmak için env ile yükseltilebilir (öneri: 0.58–0.65)
+        self.pose_confidence_threshold = float(os.environ.get("POSE_PERSON_CONFIDENCE", "0.55"))
         self.keypoint_confidence_threshold = 0.3
         
         # Keypoint smoothing - stabilize detection across frames
@@ -431,7 +432,23 @@ class PoseAwarePPEDetector:
             # 3️⃣ Extract pose data from (possibly downscaled) pose results
             persons_with_pose = self._extract_pose_data(pose_results, pose_frame.shape)
             
-            # 🔍 FALLBACK CHECK - If no persons detected, use standard detection
+            # ── Person gate ──────────────────────────────────────────────────
+            # Production safety: If pose sees no persons, do NOT fall back to
+            # SH17/COCO for "person" — this causes empty scenes (OSD/furniture)
+            # to generate fake persons and therefore fake PPE violations.
+            #
+            # Toggle with env var: POSE_REQUIRE_PERSON (default: 1)
+            require_person = os.environ.get("POSE_REQUIRE_PERSON", "1").strip().lower() not in (
+                "0",
+                "false",
+                "no",
+                "off",
+            )
+            if not persons_with_pose and require_person:
+                empty = self._create_empty_result()
+                empty["sector"] = sector
+                empty["model_type"] = "YOLOv8-Pose+SH17 (pose gate: no persons)"
+                return empty
             if not persons_with_pose:
                 logger.debug(
                     "ℹ️ No persons detected with pose, falling back to standard detection"
@@ -470,6 +487,14 @@ class PoseAwarePPEDetector:
                 from utils.osd_person_heuristic import filter_pose_person_candidates
 
                 persons_with_pose = filter_pose_person_candidates(
+                    frame.shape, persons_with_pose
+                )
+            except Exception:
+                pass
+            try:
+                from utils.person_quality_gate import filter_implausible_pose_persons
+
+                persons_with_pose = filter_implausible_pose_persons(
                     frame.shape, persons_with_pose
                 )
             except Exception:
@@ -750,7 +775,10 @@ class PoseAwarePPEDetector:
                             'keypoints': keypoint_data,
                             'anatomical_regions': anatomical_regions,
                             'class_name': 'person',
-                            'confidence': box_confidence
+                            'confidence': box_confidence,
+                            # Mark person detections that originate from pose
+                            # so upper layers can ignore SH17/COCO person FP's.
+                            'pose_based': True,
                         }
                         if track_id is not None:
                             person_dict['track_id'] = track_id

@@ -2,9 +2,10 @@
 DVR/OSD (tarih-saat, kanal yazısı) üzerindeki 'person' false positive azaltma.
 
 `OSD_PERSON_FILTER=1` ile açılır. İsteğe bağlı eşikler:
-  OSD_PERSON_MAX_CONF   — hassas bantta bu conf altındaki kişi kutusu elenir (varsayılan 0.52)
-  OSD_BOTTOM_Y0         — alt şerit başlangıcı, frame yüksekliği oranı (varsayılan 0.78)
-  OSD_SMALL_PERSON_AREA — küçük kutu üst sınırı, frame alanı oranı (varsayılan 0.008)
+  OSD_PERSON_MAX_CONF       — hassas bantta bu conf altındaki kişi kutusu elenir (varsayılan 0.62)
+  OSD_BOTTOM_Y0             — alt şerit başlangıcı (varsayılan 0.75)
+  OSD_SMALL_PERSON_AREA     — küçük kutu üst sınırı (varsayılan 0.008)
+  OSD_BOTTOM_HARD_DROP_AREA — alt şeritte bundan küçükse güvene bakmadan OSD say (varsayılan 0.006)
 """
 
 from __future__ import annotations
@@ -70,7 +71,11 @@ def _looks_like_osd_person(
     if y2 / fh <= 0.13 and h / fh <= 0.11 and w / fw >= 0.28:
         return True
 
-    # ── Alt satır zaman damgası: küçük kutu, ekranın alt %22'si ─────────
+    # ── DVR tek rakam / saat parçası: alt şeritte alanı çok küçük → conf ne olursa elenir
+    if bottom_band and area_ratio < hard_drop and (h / fh) <= 0.14 and cx >= fw * 0.28:
+        return True
+
+    # ── Alt satır zaman damgası: küçük kutu ─────────────────────────────
     if bottom_band and area_ratio <= small_area * 1.5 and cx >= fw * 0.30:
         if 0.06 <= ar <= 10.0:
             return True
@@ -84,7 +89,18 @@ def _looks_like_osd_person(
             return True
 
     # ── Çok küçük kutu, sağ yarı + alt bölge (tek tek rakamlar) ───────────
-    if area_ratio < 0.002 and cx >= fw * 0.55 and cy >= fh * 0.68:
+    if area_ratio < 0.0025 and cx >= fw * 0.52 and cy >= fh * 0.66:
+        return True
+
+    # ── Kalın OSD fontu: tek karakter alanı biraz büyük olabilir; alt bant + düşük-orta conf ──
+    if (
+        y1 >= fh * 0.86
+        and area_ratio < 0.022
+        and cx >= fw * 0.22
+        and (h / fh) <= 0.16
+        and confidence is not None
+        and confidence < 0.72
+    ):
         return True
 
     return False

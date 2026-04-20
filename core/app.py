@@ -2397,6 +2397,25 @@ smartsafe_requests_total 100
                                 results = strip_osd_style_person_detections(
                                     frame.shape, results
                                 )
+                                # Food sektöründe boş sahne FP'leri (OSD/masa/kolon) çoğunlukla
+                                # SH17/COCO "person" sınıfından gelir. Eğer pose çalışmıyorsa,
+                                # SH17 person'ı yok saymak daha güvenli: person yoksa ihlal yok.
+                                # Toggle: SH17_PERSON_DISABLED (default: food=1, other=0)
+                                _disable_sh17_person = os.environ.get(
+                                    "SH17_PERSON_DISABLED",
+                                    "1" if str(sector).strip().lower() in ("food", "food_beverage") else "0",
+                                ).strip().lower() in ("1", "true", "yes", "on")
+                                if _disable_sh17_person:
+                                    results = [
+                                        d
+                                        for d in results
+                                        if not (
+                                            isinstance(d, dict)
+                                            and str(d.get("class_name", "")).strip().lower()
+                                            in ("person", "kisi", "insan")
+                                            and not bool(d.get("pose_based", False))
+                                        )
+                                    ]
                                 _pd2 = sum(
                                     1
                                     for d in results
@@ -2459,11 +2478,13 @@ smartsafe_requests_total 100
                                     frame.shape, _dz, results
                                 )
                                 if _roi_on:
+                                    _pn_roi = ("person", "kisi", "insan")
                                     people_detected = sum(
                                         1
                                         for d in results
                                         if isinstance(d, dict)
-                                        and d.get("class_name") == "person"
+                                        and str(d.get("class_name", "")).strip().lower()
+                                        in _pn_roi
                                     )
                                     if people_detected == 0:
                                         ppe_violations = []
@@ -2556,6 +2577,26 @@ smartsafe_requests_total 100
                                 pass
                         except Exception as _roi_err:
                             logger.warning(f"⚠️ ROI filtre atlandı: {_roi_err}")
+
+                        # `results` tek kaynak: ROI açık/kapalı tüm yollarda kişi sayısı ve ihlal listesi tutarlı olsun
+                        if isinstance(results, list):
+                            _pn_sync = ("person", "kisi", "insan")
+                            _sync_pd = sum(
+                                1
+                                for d in results
+                                if isinstance(d, dict)
+                                and str(d.get("class_name", "")).strip().lower() in _pn_sync
+                            )
+                            if _sync_pd != people_detected:
+                                logger.debug(
+                                    "people_detected synced from results: %s -> %s",
+                                    people_detected,
+                                    _sync_pd,
+                                )
+                            people_detected = _sync_pd
+                            if people_detected == 0:
+                                ppe_violations = []
+                                ppe_compliant = 0
                         
                         if not results and people_detected == 0:
                             continue
@@ -2575,10 +2616,12 @@ smartsafe_requests_total 100
                                     contour = get_roi_contour_pixels(frame.shape, _dz)
                             except Exception:
                                 contour = None
+                            _pn_dec = ("person", "kisi", "insan")
                             persons_for_decision = [
                                 d
                                 for d in (results if isinstance(results, list) else [])
-                                if isinstance(d, dict) and d.get("class_name") == "person"
+                                if isinstance(d, dict)
+                                and str(d.get("class_name", "")).strip().lower() in _pn_dec
                             ]
                             decision_summary = decide_frame(
                                 camera_key,
@@ -2603,9 +2646,12 @@ smartsafe_requests_total 100
                         if people_detected > 0 and ppe_violations and decision_summary.get("state") == "ACCEPT":
                             try:
                                 # results listesinden person bbox'larını çıkar
+                                _pn_vt = ("person", "kisi", "insan")
                                 persons_from_result = [
-                                    d for d in (results if isinstance(results, list) else [])
-                                    if isinstance(d, dict) and d.get('class_name') == 'person'
+                                    d
+                                    for d in (results if isinstance(results, list) else [])
+                                    if isinstance(d, dict)
+                                    and str(d.get("class_name", "")).strip().lower() in _pn_vt
                                 ]
                                 if persons_from_result:
                                     for p_idx, person_det in enumerate(persons_from_result):
@@ -2621,15 +2667,10 @@ smartsafe_requests_total 100
                                         tracker_new_violations.extend(new_v)
                                         tracker_ended_violations.extend(ended_v)
                                 else:
-                                    # Kişi bbox yok; dummy bbox ile tek kayıt
-                                    new_v, ended_v = violation_tracker.process_detection(
-                                        camera_id=camera_id,
-                                        company_id=company_id,
-                                        person_bbox=[0, 0, 10, 10],
-                                        violations=list(ppe_violations),
+                                    # Kişi bbox yok: dummy ile ihlal üretme (OSD/ROI sonrası sahte PERSON_* riski)
+                                    logger.debug(
+                                        "ViolationTracker: atlandı (results içinde person bbox yok)"
                                     )
-                                    tracker_new_violations.extend(new_v)
-                                    tracker_ended_violations.extend(ended_v)
                             except Exception as vt_err:
                                 logger.warning(f"⚠️ ViolationTracker güncelleme hatası: {vt_err}")
                         elif decision_summary.get("state") != "ACCEPT" and ppe_violations:
