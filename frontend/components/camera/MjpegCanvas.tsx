@@ -36,12 +36,26 @@ const MjpegCanvas: React.FC<MjpegCanvasProps> = ({
   const startStreamRef = useRef<(() => void) | null>(null);
   useEffect(() => { fpsRef.current = fps; }, [fps]);
 
-  // Sayfa değişince stream'i anında iptal et
+  // Sayfa değişince stream'i ANINDA iptal et.
+  // isMountedRef: ilk render'da (mount) stream'i kesmemek için gerekli.
   const pathname = usePathname();
+  const isMountedRef = useRef(false);
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
+    // Pathname değişti → stream'i hemen kes
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      unregisterStream(abortControllerRef.current);
+      abortControllerRef.current = null;
+    }
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        unregisterStream(abortControllerRef.current);
+        abortControllerRef.current = null;
       }
     };
   }, [pathname]);
