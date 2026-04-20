@@ -8,6 +8,8 @@ import NavigationProgress from "@/components/layout/NavigationProgress";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ConfirmProvider } from "@/context/ConfirmContext";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export default function RootLayout({
@@ -104,7 +106,9 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${inter.className} ${!mounted || (!isReady && !isPublicPage) ? "bg-slate-50 flex items-center justify-center min-h-screen" : "antialiased bg-slate-50 text-slate-900"}`}
       >
-        {renderContent()}
+        <ConfirmProvider>
+          {renderContent()}
+        </ConfirmProvider>
       </body>
     </html>
   );
