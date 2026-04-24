@@ -132,6 +132,48 @@ export default function Home() {
     },
   ];
 
+  if (loading && !data) {
+    return (
+      <div className="space-y-8 animate-pulse pb-12" lang="tr">
+        {/* Header Skeleton */}
+        <section className="space-y-3">
+          <div className="h-10 w-64 bg-slate-200 rounded-2xl"></div>
+          <div className="h-6 w-96 bg-slate-100 rounded-full"></div>
+        </section>
+
+        {/* Stats Grid Skeleton */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-32 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex justify-between items-center">
+              <div className="space-y-3 flex-1">
+                <div className="h-3 w-20 bg-slate-100 rounded-full"></div>
+                <div className="h-8 w-24 bg-slate-200 rounded-xl"></div>
+              </div>
+              <div className="h-14 w-14 bg-slate-50 rounded-2xl"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts & Activity Skeleton */}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <div className="h-[450px] bg-white border border-slate-200 rounded-2xl shadow-sm p-8 flex flex-col gap-4">
+            <div className="h-10 w-full bg-slate-50 rounded-xl"></div>
+            <div className="flex-1 bg-slate-100 rounded-2xl"></div>
+          </div>
+          <div className="h-[450px] bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-6">
+            <div className="h-10 w-full bg-brand-orange/10 rounded-xl"></div>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex gap-4 items-center">
+                <div className="h-4 w-4 bg-slate-200 rounded-full"></div>
+                <div className="h-16 flex-1 bg-slate-50 rounded-xl"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in pb-12 text-slate-900" lang="tr">
       {/* Header Info */}

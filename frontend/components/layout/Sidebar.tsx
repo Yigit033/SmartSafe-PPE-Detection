@@ -1,6 +1,7 @@
 "use client";
 
 
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { abortAllStreams } from "@/lib/streamRegistry";
@@ -51,11 +52,16 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const handleNavigate = async (path: string) => {
+
+  // Mount olunca tüm route'ları arka planda compile et
+  useEffect(() => {
+    menuItems.forEach((item) => router.prefetch(item.path));
+  }, [router]);
+
+  const handleNavigate = (path: string) => {
     if (path === pathname) return;
     window.dispatchEvent(new Event("navigation:start"));
     abortAllStreams();
-    await new Promise((r) => setTimeout(r, 150));
     router.push(path);
   };
 
