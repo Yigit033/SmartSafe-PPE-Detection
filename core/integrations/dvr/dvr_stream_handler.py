@@ -565,7 +565,8 @@ class DVRStreamHandler:
         # ── Phase 2: Full Discovery (brute-force tarama) ─────────────────
         urls = self.generate_rtsp_urls(ip_address, username, password, rtsp_port, channel_number, brand)
         
-        logger.info(f"🔍 Discovery: Scanning {len(urls)} patterns for channel {channel_number}...")
+        # This log can be very noisy during multi-channel discovery; keep it debug.
+        logger.debug(f"🔍 Discovery: Scanning {len(urls)} patterns for channel {channel_number}...")
         
         for i, url in enumerate(urls[: max(1, self._start_url_budget)]):
             cap = None
@@ -652,6 +653,7 @@ class DVRStreamHandler:
                 return available_channels
 
             from concurrent.futures import ThreadPoolExecutor, as_completed
+            from concurrent.futures import TimeoutError as FuturesTimeoutError
 
             def _probe_channel(channel: int) -> int:
                 """Probe a single channel — returns channel number or -1."""
@@ -668,7 +670,7 @@ class DVRStreamHandler:
                         if cap.isOpened():
                             ret, frame = cap.read()
                             if ret and frame is not None:
-                                logger.info(f"✅ Channel probe success: {channel} via {url}")
+                                logger.debug(f"✅ Channel probe success: {channel} via {redact_url(str(url))}")
                                 return channel
                     except Exception:
                         pass
@@ -678,17 +680,27 @@ class DVRStreamHandler:
                 return -1
 
             with ThreadPoolExecutor(max_workers=max(1, self._channel_probe_workers)) as executor:
-                futures = {
-                    executor.submit(_probe_channel, ch): ch
-                    for ch in range(1, max_channels + 1)
-                }
-                for future in as_completed(futures, timeout=60):
-                    try:
-                        result = future.result()
-                        if result > 0:
-                            available_channels.append(result)
-                    except Exception:
-                        continue
+                futures = [executor.submit(_probe_channel, ch) for ch in range(1, max_channels + 1)]
+                completed = 0
+                try:
+                    for future in as_completed(futures, timeout=60):
+                        completed += 1
+                        try:
+                            result = future.result()
+                            if result > 0:
+                                available_channels.append(result)
+                        except Exception:
+                            continue
+                except FuturesTimeoutError:
+                    # Avoid noisy errors; timeouts are expected on some NVRs.
+                    pending = len(futures) - completed
+                    logger.warning(
+                        f"⚠️ Channel detection timed out: {pending}/{len(futures)} probes unfinished "
+                        f"(ip={ip_address}, max_channels={max_channels}, workers={self._channel_probe_workers})"
+                    )
+                    for f in futures:
+                        if not f.done():
+                            f.cancel()
 
         except Exception as e:
             logger.error(f"❌ Channel detection error: {e}")
