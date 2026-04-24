@@ -341,6 +341,49 @@ export default function ViolationsPage() {
       .toUpperCase();
   };
 
+  if (loading && events.length === 0) {
+    return (
+      <div className="space-y-8 animate-pulse pb-12" lang="tr">
+        {/* Header Skeleton */}
+        <section className="flex justify-between items-center">
+          <div className="space-y-3">
+            <div className="h-10 w-64 bg-slate-200 rounded-2xl"></div>
+            <div className="h-6 w-96 bg-slate-100 rounded-full"></div>
+          </div>
+          <div className="flex gap-3">
+            <div className="h-12 w-40 bg-slate-100 rounded-xl"></div>
+            <div className="h-12 w-48 bg-slate-100 rounded-xl"></div>
+          </div>
+        </section>
+
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar Skeleton */}
+          <aside className="lg:w-80 shrink-0 space-y-6">
+            <div className="h-[400px] bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col gap-4">
+              <div className="h-8 w-full bg-slate-100 rounded-lg"></div>
+              <div className="flex-1 bg-slate-50 rounded-2xl"></div>
+            </div>
+            <div className="h-32 bg-brand-orange/5 border border-brand-orange/10 rounded-[2rem] p-6">
+              <div className="h-3 w-24 bg-brand-orange/10 rounded-full mb-4"></div>
+              <div className="h-8 w-32 bg-slate-200 rounded-xl"></div>
+            </div>
+          </aside>
+
+          {/* Grid Skeleton */}
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white border border-slate-200 rounded-xl h-[280px] p-4 flex flex-col gap-4 shadow-sm">
+                <div className="flex-1 bg-slate-100 rounded-lg"></div>
+                <div className="h-4 w-1/2 bg-slate-100 rounded-full"></div>
+                <div className="h-6 w-2/3 bg-slate-200 rounded-full"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in pb-12" lang="tr">
       {/* Header */}

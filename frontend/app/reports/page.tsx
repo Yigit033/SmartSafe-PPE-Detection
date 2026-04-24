@@ -6,7 +6,7 @@ import api from "@/lib/api";
 
 export default function ReportsPage() {
   const [violations, setViolations] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const companyId = getCompanyId();
 
   useEffect(() => {
@@ -26,6 +26,48 @@ export default function ReportsPage() {
       setIsLoading(false);
     }
   };
+
+  if (isLoading && violations.length === 0) {
+    return (
+      <div className="space-y-8 animate-pulse pb-12" lang="tr">
+        {/* Header Skeleton */}
+        <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-3">
+            <div className="h-10 w-64 bg-slate-200 rounded-2xl"></div>
+            <div className="h-6 w-96 bg-slate-100 rounded-full"></div>
+          </div>
+          <div className="h-14 w-48 bg-slate-100 rounded-xl"></div>
+        </section>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Table Skeleton */}
+          <div className="lg:col-span-2 h-[500px] bg-white border border-slate-200 rounded-2xl shadow-sm p-8 flex flex-col gap-6">
+            <div className="h-10 w-full bg-slate-50 rounded-xl"></div>
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-12 w-full bg-slate-50 rounded-lg"></div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sidebar Skeleton */}
+          <section className="space-y-6">
+            <div className="h-48 bg-white border border-slate-200 rounded-2xl p-8 flex flex-col gap-6">
+              <div className="h-4 w-24 bg-slate-100 rounded-full"></div>
+              <div className="space-y-4">
+                <div className="h-6 w-full bg-slate-50 rounded-lg"></div>
+                <div className="h-6 w-full bg-slate-50 rounded-lg"></div>
+              </div>
+            </div>
+            <div className="h-40 bg-brand-orange/10 border border-brand-orange/20 rounded-2xl p-8">
+              <div className="h-4 w-16 bg-brand-orange/20 rounded-full mb-4"></div>
+              <div className="h-12 w-full bg-slate-200/50 rounded-xl"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">

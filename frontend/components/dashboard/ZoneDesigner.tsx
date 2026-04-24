@@ -254,7 +254,7 @@ export default function ZoneDesigner({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/95 backdrop-blur-3xl rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl animate-fade-in select-none">
+    <div className="flex flex-col h-full bg-slate-900/95 backdrop-blur-3xl rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl animate-fade-in select-none">
       <div className="bg-slate-800/80 p-6 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="bg-brand-teal p-3 rounded-2xl text-white shadow-xl shadow-brand-teal/20">
@@ -326,6 +326,12 @@ export default function ZoneDesigner({
         </div>
 
         <div className="flex gap-4">
+          <button
+            onClick={() => setPoints([])}
+            className="px-6 py-4 rounded-2xl bg-red-500/10 text-red-500 text-[10px] font-black hover:bg-red-500/20 transition-all uppercase tracking-widest"
+          >
+            BÖLGEYİ TEMİZLE
+          </button>
           <button
             onClick={() => setPoints(defaultPoints)}
             className="px-6 py-4 rounded-2xl bg-white/5 text-white/50 text-[10px] font-black hover:bg-white/10 transition-all uppercase tracking-widest"

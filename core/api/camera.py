@@ -1077,6 +1077,44 @@ def create_blueprint(api):
             return jsonify({'success': False, 'error': str(e)}), 500
 
 
+    @bp.route('/api/company/<company_id>/cameras/stop-streams', methods=['POST'])
+    def stop_camera_streams(company_id):
+        """
+        Frontend sayfa değiştirdiğinde çağrılır.
+        Aktif proxy stream bağlantılarını sonlandırır — Flask worker thread'lerini serbest bırakır.
+        AI detection worker'ları etkilenmez, arka planda çalışmaya devam eder.
+        """
+        try:
+            data = request.get_json(silent=True) or {}
+            camera_ids = data.get('camera_ids', [])
+
+            from integrations.dvr.dvr_stream_handler import get_stream_handler
+            sh = get_stream_handler()
+
+            stopped = []
+            if camera_ids:
+                # Sadece belirtilen kameraları durdur
+                for cam_id in camera_ids:
+                    stream_id = f"proxy:{company_id}:{cam_id}"
+                    sh.stop_stream(stream_id)
+                    stopped.append(stream_id)
+            else:
+                # Şirkete ait tüm aktif proxy stream'leri durdur
+                prefix = f"proxy:{company_id}:"
+                all_ids = list(getattr(sh, 'active_streams', {}).keys())
+                for sid in all_ids:
+                    if sid.startswith(prefix):
+                        sh.stop_stream(sid)
+                        stopped.append(sid)
+
+            logger.info(f"🛑 Stopped {len(stopped)} proxy stream(s) for company {company_id}: {stopped}")
+            return jsonify({'success': True, 'stopped': len(stopped)})
+
+        except Exception as e:
+            logger.error(f"stop_camera_streams error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+
     @bp.route('/api/company/<company_id>/cameras/<camera_id>/proxy-stream')
     def proxy_camera_stream(company_id, camera_id):
         """Kamera stream'ini proxy ile getir - CORS sorunlarını çözer"""

@@ -4,7 +4,7 @@
   "description": "SmartSafe AI - PPE Detection System",
   "main": "core/app.py",
   "scripts": {
-    "core": "cd core && venv\\Scripts\\python app.py",
+    "core": "chcp 65001 >nul && cd core && set PYTHONIOENCODING=utf-8 && venv\\Scripts\\python -u app.py",
     "backend": "cd backend && node ./scripts/encore-sync-if-needed.cjs && node ./scripts/migrate.cjs && encore run --listen=127.0.0.1:4477",
     "frontend": "cd frontend && npm run dev",
     "dev": "npm run setup && npx concurrently -n CORE,BACK,FRONT -c yellow,blue,cyan \"npm:core\" \"npm:backend\" \"npm:frontend\"",

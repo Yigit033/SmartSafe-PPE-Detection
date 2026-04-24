@@ -5,18 +5,18 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { abortAllStreams } from "@/lib/streamRegistry";
 import { useConfirm } from "@/context/ConfirmContext";
-import { 
-  Router, 
-  EyeOff, 
-  Eye, 
-  Plus, 
-  Trash2, 
-  Settings, 
-  X, 
-  Pencil, 
-  MapPin, 
-  Check, 
-  History, 
+import {
+  Router,
+  EyeOff,
+  Eye,
+  Plus,
+  Trash2,
+  Settings,
+  X,
+  Pencil,
+  MapPin,
+  Check,
+  History,
   Calendar,
   MoreVertical,
   ChevronDown,
@@ -31,7 +31,9 @@ import {
   ChevronRight,
   Database,
   VideoOff,
-  Camera
+  Camera,
+  Network,
+  BoxSelect,
 } from "lucide-react";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
@@ -43,6 +45,7 @@ import {
   polygonToVideoSpaceForOverlay,
 } from "@/lib/detectionZones";
 import ScheduleModal from "@/components/camera/ScheduleModal";
+import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
 
 export default function CamerasPage() {
   return (
@@ -63,7 +66,7 @@ function CamerasContent() {
   const [managementCameras, setManagementCameras] = useState<any[]>([]);
   const [isManagementLoading, setIsManagementLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Başlangıçta true yapıyoruz
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("smart");
   const [mounted, setMounted] = useState(false);
@@ -71,13 +74,10 @@ function CamerasContent() {
   const pathname = usePathname();
   const { confirm } = useConfirm();
 
-  const handleNavigate = async (path: string) => {
+  const handleNavigate = (path: string) => {
     if (path === pathname) return;
     window.dispatchEvent(new Event("navigation:start"));
     abortAllStreams();
-    // AI video-feed bağlantıları TCP seviyesinde hemen kapanmayabiliyor.
-    // 150ms gecikme tarayıcıya bağlantıyı serbest bırakma fırsatı veriyor.
-    await new Promise((r) => setTimeout(r, 150));
     router.push(path);
   };
 
@@ -122,6 +122,8 @@ function CamerasContent() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [selectedCameraForSchedule, setSelectedCameraForSchedule] =
     useState<any>(null);
+  const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+  const [selectedCameraForZone, setSelectedCameraForZone] = useState<any>(null);
   const [selectedDvrId, setSelectedDvrId] = useState<string>("all");
 
   const prevFiltersRef = useRef<{ search: string } | null>(null);
@@ -149,6 +151,27 @@ function CamerasContent() {
     },
     [currentPage, router, pathname],
   );
+
+  const handleSaveZones = async (zones: any[][]) => {
+    if (!selectedCameraForZone) return;
+    try {
+      const data = await api.camera.saveROI(
+        companyId,
+        selectedCameraForZone.camera_id,
+        {
+          zones,
+        },
+      );
+
+      if (data.success) {
+        setIsZoneModalOpen(false);
+        setSelectedCameraForZone(null);
+        fetchCameras("active");
+      }
+    } catch (error) {
+      console.error("Error saving zones:", error);
+    }
+  };
 
   const companyId = getCompanyId();
 
@@ -240,8 +263,7 @@ function CamerasContent() {
       ) {
         setEnabledAiCameras(data.active_camera_ids);
       }
-    } catch {
-    }
+    } catch {}
   };
 
   const toggleAllPrivacy = () => {
@@ -359,7 +381,7 @@ function CamerasContent() {
           title: "KEŞİF TAMAMLANDI",
           message: msg,
           confirmText: "TAMAM",
-          type: "info"
+          type: "info",
         });
         fetchCameras("active");
       } else {
@@ -367,7 +389,7 @@ function CamerasContent() {
           title: "KÖK NEDEN HATASI",
           message: data.error || "Kanallar keşfedilemedi.",
           confirmText: "TAMAM",
-          type: "danger"
+          type: "danger",
         });
       }
     } catch (error) {
@@ -376,7 +398,7 @@ function CamerasContent() {
         title: "BAĞLANTI HATASI",
         message: "Sunucuyla bağlantı kurulamadı.",
         confirmText: "TAMAM",
-        type: "danger"
+        type: "danger",
       });
     } finally {
       setIsDiscoveringDvr(null);
@@ -386,10 +408,11 @@ function CamerasContent() {
   const deleteDvr = async (dvrId: string) => {
     const ok = await confirm({
       title: "CİHAZI KALDIR",
-      message: "Bu DVR’yi listeden kaldırmak istiyor musunuz? Geçmiş ihlal ve raporlar korunur.",
+      message:
+        "Bu DVR’yi listeden kaldırmak istiyor musunuz? Geçmiş ihlal ve raporlar korunur.",
       confirmText: "CİHAZI SİL",
       cancelText: "VAZGEÇ",
-      type: "danger"
+      type: "danger",
     });
 
     if (!ok) return;
@@ -399,9 +422,11 @@ function CamerasContent() {
       if (data.success) {
         await confirm({
           title: "BAŞARILI",
-          message: data.message || "Cihaz listeden kaldırıldı. Geçmiş kayıtlar korunur.",
+          message:
+            data.message ||
+            "Cihaz listeden kaldırıldı. Geçmiş kayıtlar korunur.",
           confirmText: "TAMAM",
-          type: "info"
+          type: "info",
         });
         fetchDvrs();
         fetchCameras("active");
@@ -410,7 +435,7 @@ function CamerasContent() {
           title: "HATA",
           message: data.error || "DVR silinemedi.",
           confirmText: "TAMAM",
-          type: "danger"
+          type: "danger",
         });
       }
     } catch (error) {
@@ -419,7 +444,7 @@ function CamerasContent() {
         title: "SİSTEM HATASI",
         message: "Sunucuyla bağlantı kurulamadı.",
         confirmText: "TAMAM",
-        type: "danger"
+        type: "danger",
       });
     } finally {
       setIsDeletingDvr(false);
@@ -470,7 +495,7 @@ function CamerasContent() {
           title: "GÜNCELLEME HATASI",
           message: data.error || "Bilinmeyen bir sorun oluştu.",
           confirmText: "TAMAM",
-          type: "danger"
+          type: "danger",
         });
       }
     } catch (error) {
@@ -479,7 +504,7 @@ function CamerasContent() {
         title: "BAĞLANTI HATASI",
         message: "Sunucu hatası oluştu.",
         confirmText: "TAMAM",
-        type: "danger"
+        type: "danger",
       });
     }
   };
@@ -568,7 +593,7 @@ function CamerasContent() {
     const matchesSearch =
       cam.camera_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cam.ip_address?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesDvr = selectedDvrId === "all" || cam.dvr_id === selectedDvrId;
 
     return matchesSearch && matchesDvr;
@@ -594,6 +619,37 @@ function CamerasContent() {
     url.searchParams.delete("page");
     router.replace(url.pathname + url.search, { scroll: false });
   }, [searchTerm, router]);
+  if (isLoading && cameras.length === 0) {
+    return (
+      <div className="p-0 space-y-8 animate-pulse" lang="tr">
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-slate-200 rounded-full"></div>
+            <div className="h-10 w-64 bg-slate-200 rounded-2xl"></div>
+          </div>
+          <div className="flex gap-4">
+            <div className="h-12 w-40 bg-slate-200 rounded-2xl"></div>
+            <div className="h-12 w-40 bg-slate-200 rounded-2xl"></div>
+            <div className="h-12 w-40 bg-slate-200 rounded-2xl"></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-[2.5rem] p-6 h-[420px] flex flex-col gap-4 shadow-sm">
+              <div className="flex-1 bg-slate-100 rounded-3xl"></div>
+              <div className="h-7 w-2/3 bg-slate-200 rounded-full mt-2"></div>
+              <div className="h-4 w-1/2 bg-slate-100 rounded-full"></div>
+              <div className="flex gap-2 justify-end mt-auto pt-4 border-t border-slate-50">
+                <div className="h-10 w-10 bg-slate-100 rounded-xl"></div>
+                <div className="h-10 w-10 bg-slate-100 rounded-xl"></div>
+                <div className="h-10 w-10 bg-slate-100 rounded-xl"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fade-in text-slate-900 pb-12" lang="tr">
@@ -764,13 +820,13 @@ function CamerasContent() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsManageDvrsOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+            className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Settings className="w-4 h-4" /> KAMERA YÖNETİMİ
           </button>
           <button
             onClick={toggleAllPrivacy}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50 cursor-pointer"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 hover:scale-105 active:scale-95 cursor-pointer"
           >
             {privacyModeCameras.length === cameras.length ? (
               <EyeOff className="w-4 h-4" />
@@ -781,7 +837,7 @@ function CamerasContent() {
           </button>
           <button
             onClick={() => handleNavigate("/cameras/setup")}
-            className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 hover:bg-brand-teal/90 transition-all cursor-pointer"
+            className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 transition-all duration-300 hover:bg-brand-teal/90 hover:scale-105 hover:shadow-2xl hover:shadow-brand-teal/30 active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> YENİ KAMERA EKLE
           </button>
@@ -853,9 +909,9 @@ function CamerasContent() {
                   <div className="relative aspect-video bg-slate-900 overflow-hidden group-hover:ring-4 ring-brand-teal/10 transition-all duration-500">
                     <MjpegCanvas
                       src={
-                         isCameraAiEnabled(camera)
-                          ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${camera.camera_id}${streamKeys[camera.camera_id] ? `?t=${streamKeys[camera.camera_id]}` : ''}`
-                          : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream${streamKeys[camera.camera_id] ? `?t=${streamKeys[camera.camera_id]}` : ''}`
+                        isCameraAiEnabled(camera)
+                          ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${camera.camera_id}${streamKeys[camera.camera_id] ? `?t=${streamKeys[camera.camera_id]}` : ""}`
+                          : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${camera.camera_id}/proxy-stream${streamKeys[camera.camera_id] ? `?t=${streamKeys[camera.camera_id]}` : ""}`
                       }
                       className={`w-full h-full transition-all duration-700 group-hover:scale-105 ${
                         failedCameras.includes(camera.camera_id)
@@ -929,8 +985,7 @@ function CamerasContent() {
                       </div>
                     )}
 
-                    <div className="absolute top-4 left-4 flex gap-2">
-                    </div>
+                    <div className="absolute top-4 left-4 flex gap-2"></div>
 
                     <button
                       onClick={(e) => {
@@ -942,21 +997,17 @@ function CamerasContent() {
                       }}
                       className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all duration-500 shadow-xl cursor-pointer ${isCameraAiEnabled(camera) ? "bg-white/90 border-brand-teal text-brand-teal" : "bg-slate-900/40 border-white/10 text-white/50"}`}
                     >
-                        {isCameraAiEnabled(camera) ? <Activity className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {isCameraAiEnabled(camera) ? (
+                        <Activity className="w-3.5 h-3.5" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
                       <span className="text-[9px] font-black uppercase tracking-widest">
                         AI VIEW
                       </span>
                     </button>
 
-                    <div className="absolute bottom-4 left-4 right-4 z-50 flex items-end justify-between transition-all duration-300">
-                      <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-xl">
-                        <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">
-                          IP ADDRESS
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-900">
-                          {camera.ip_address}
-                        </p>
-                      </div>
+                    <div className="absolute bottom-4 left-4 right-4 z-50 flex items-end justify-end transition-all duration-300">
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -965,45 +1016,43 @@ function CamerasContent() {
                               `/camera/${encodeURIComponent(camera.camera_id)}`,
                             )
                           }
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 shadow-sm cursor-pointer transition-all hover:bg-brand-teal hover:text-white active:scale-95"
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 shadow-sm cursor-pointer transition-all duration-300 hover:bg-slate-200 hover:border-slate-500 hover:scale-105 hover:shadow-md active:scale-95"
                           title="Tam Ekran"
                         >
                           <Maximize2 className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => toggleCameraPrivacy(camera.camera_id)}
-                          className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-lg cursor-pointer active:scale-95 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-900 border-slate-900" : "text-slate-500 hover:bg-slate-50"}`}
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer active:scale-95 hover:bg-slate-200 hover:border-slate-500 hover:scale-105 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-400" : "text-brand-teal"}`}
                           title="Gizlilik Modu"
                         >
-                           {privacyModeCameras.includes(camera.camera_id) ? (
+                          {privacyModeCameras.includes(camera.camera_id) ? (
                             <EyeOff className="w-5 h-5" />
                           ) : (
                             <Eye className="w-5 h-5" />
                           )}
                         </button>
+
                         <button
-                          onClick={() => openEditModal(camera)}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-slate-600 border border-slate-200 cursor-pointer hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-slate-900/20 active:scale-95"
-                          title="Düzenle"
+                          onClick={() => {
+                            setSelectedCameraForZone(camera);
+                            setIsZoneModalOpen(true);
+                          }}
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 hover:scale-105 active:scale-95"
+                          title="Analiz Bölgesi"
                         >
-                          <Pencil className="w-5 h-5" />
+                          <BoxSelect className="w-5 h-5" />
                         </button>
+
                         <button
                           onClick={() => {
                             setSelectedCameraForSchedule(camera);
                             setIsScheduleModalOpen(true);
                           }}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-brand-teal/20 active:scale-95"
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 hover:scale-105 active:scale-95"
                           title="Çalışma Saatleri"
                         >
                           <History className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCamera(camera)}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-red-500 border border-slate-200 cursor-pointer hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-red-500/20 active:scale-95"
-                          title="Sil"
-                        >
-                          <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
                     </div>
@@ -1012,11 +1061,17 @@ function CamerasContent() {
                     <h3 className="text-lg font-black text-slate-900 tracking-tight group-hover:text-brand-teal transition-colors">
                       {camera.camera_name}
                     </h3>
-                    <div className="flex flex-col gap-1 mt-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
                       <div className="flex items-center gap-1.5 text-slate-400">
                         <MapPin className="w-3 h-3 text-slate-300" />
                         <span className="text-[10px] font-black tracking-widest uppercase">
                           {camera.location || "BELİRTİLMEMİŞ"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-400">
+                        <Network className="w-3 h-3 text-slate-300" />
+                        <span className="text-[10px] font-black tracking-widest uppercase">
+                          {camera.ip_address}
                         </span>
                       </div>
                     </div>
@@ -1072,7 +1127,7 @@ function CamerasContent() {
                 onClick={() => setLimit(1)}
                 className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 1 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
               >
-                  <Monitor className="w-4 h-4" />
+                <Monitor className="w-4 h-4" />
                 <span className="text-[10px] font-black uppercase tracking-widest leading-none">
                   1
                 </span>
@@ -1081,7 +1136,7 @@ function CamerasContent() {
                 onClick={() => setLimit(6)}
                 className={`flex items-center gap-2 px-3 h-9 rounded-xl transition-all ${camerasPerPage === 6 ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:bg-white"}`}
               >
-                  <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-4 h-4" />
                 <span className="text-[10px] font-black uppercase tracking-widest leading-none">
                   6
                 </span>
@@ -1096,7 +1151,40 @@ function CamerasContent() {
         </>
       )}
 
-
+      {/* Zone Designer Modal */}
+      {isZoneModalOpen &&
+        mounted &&
+        selectedCameraForZone &&
+        createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-12">
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => setIsZoneModalOpen(false)}
+            ></div>
+            <div className="relative w-full h-full max-w-7xl bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl animate-scale-in">
+              <ZoneDesigner
+                imageUrl={
+                  isCameraAiEnabled(selectedCameraForZone)
+                    ? `${core.getBaseUrl()}/api/company/${companyId}/video-feed/${selectedCameraForZone.camera_id}${streamKeys[selectedCameraForZone.camera_id] ? `?t=${streamKeys[selectedCameraForZone.camera_id]}` : ""}`
+                    : `${core.getBaseUrl()}/api/company/${companyId}/cameras/${selectedCameraForZone.camera_id}/proxy-stream${streamKeys[selectedCameraForZone.camera_id] ? `?t=${streamKeys[selectedCameraForZone.camera_id]}` : ""}`
+                }
+                initialZones={
+                  normalizeDetectionZonesPayload(
+                    selectedCameraForZone.detection_zones,
+                  ).polygons
+                }
+                zonesCoordSpace={
+                  normalizeDetectionZonesPayload(
+                    selectedCameraForZone.detection_zones,
+                  ).coordSpace
+                }
+                onSave={handleSaveZones}
+                onClose={() => setIsZoneModalOpen(false)}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* DVR Management Modal */}
       {isManageDvrsOpen &&
@@ -1138,76 +1226,114 @@ function CamerasContent() {
 
                 <div className="grid grid-cols-1 gap-6">
                   {/* Standalone IP Cameras Section */}
-                  {managementCameras.filter(c => !c.dvr_id).length > 0 && (
+                  {managementCameras.filter((c) => !c.dvr_id).length > 0 && (
                     <div className="space-y-3">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
                         BAĞIMSIZ IP KAMERALAR
                       </p>
                       <div className="grid grid-cols-1 gap-2">
-                        {managementCameras.filter(c => !c.dvr_id).map((camera) => (
-                          <div
-                            key={camera.camera_id}
-                            className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200/50 rounded-2xl hover:bg-slate-100 transition-all"
-                          >
-                            <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                                <Camera className="w-6 h-6" />
+                        {managementCameras
+                          .filter((c) => !c.dvr_id)
+                          .map((camera) => (
+                            <div
+                              key={camera.camera_id}
+                              className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200/50 rounded-2xl hover:bg-slate-100 transition-all"
+                            >
+                              <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                                  <Camera className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 overflow-hidden">
+                                  {editingCameraId === camera.camera_id ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        autoFocus
+                                        type="text"
+                                        value={editingCameraName}
+                                        onChange={(e) =>
+                                          setEditingCameraName(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter")
+                                            handleInlineCameraSave(
+                                              camera.camera_id,
+                                            );
+                                          if (e.key === "Escape")
+                                            setEditingCameraId(null);
+                                        }}
+                                        className="h-8 bg-white border border-brand-teal rounded-lg px-2 text-[10px] font-black text-slate-900 w-full outline-none"
+                                      />
+                                      <button
+                                        onClick={() =>
+                                          handleInlineCameraSave(
+                                            camera.camera_id,
+                                          )
+                                        }
+                                        className="text-brand-teal p-1"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingCameraId(null)}
+                                        className="text-slate-400 p-1"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <h4 className="font-black text-slate-900 text-[10px] truncate">
+                                        {camera.camera_name}
+                                      </h4>
+                                      <p className="text-[8px] font-bold text-slate-400 tracking-tight uppercase">
+                                        {camera.ip_address} •{" "}
+                                        {camera.protocol?.toUpperCase()} •{" "}
+                                        {camera.status === "active"
+                                          ? "AKTİF"
+                                          : "PASİF"}
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex-1 overflow-hidden">
-                                {editingCameraId === camera.camera_id ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      autoFocus
-                                      type="text"
-                                      value={editingCameraName}
-                                      onChange={(e) => setEditingCameraName(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleInlineCameraSave(camera.camera_id);
-                                        if (e.key === "Escape") setEditingCameraId(null);
-                                      }}
-                                      className="h-8 bg-white border border-brand-teal rounded-lg px-2 text-[10px] font-black text-slate-900 w-full outline-none"
-                                    />
-                                    <button onClick={() => handleInlineCameraSave(camera.camera_id)} className="text-brand-teal p-1"><Check className="w-4 h-4" /></button>
-                                    <button onClick={() => setEditingCameraId(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <h4 className="font-black text-slate-900 text-[10px] truncate">{camera.camera_name}</h4>
-                                    <p className="text-[8px] font-bold text-slate-400 tracking-tight uppercase">
-                                      {camera.ip_address} • {camera.protocol?.toUpperCase()} • {camera.status === 'active' ? 'AKTİF' : 'PASİF'}
-                                    </p>
-                                  </>
-                                )}
+                              <div className="flex items-center gap-2 ml-4">
+                                <button
+                                  onClick={() => toggleCameraStatus(camera)}
+                                  className={`w-9 h-9 flex items-center justify-center rounded-xl border border-transparent transition-all cursor-pointer ${camera.status === "active" ? "text-brand-teal hover:bg-red-50 hover:text-red-500 hover:border-red-100" : "text-slate-400 hover:bg-brand-teal/10 hover:text-brand-teal"}`}
+                                  title={
+                                    camera.status === "active"
+                                      ? "Kamerayı Gizle"
+                                      : "Kamerayı Göster"
+                                  }
+                                >
+                                  {camera.status === "active" ? (
+                                    <Eye className="w-4 h-4" />
+                                  ) : (
+                                    <EyeOff className="w-4 h-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingCameraId(camera.camera_id);
+                                    setEditingCameraName(
+                                      camera.camera_name || "",
+                                    );
+                                  }}
+                                  className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                                  title="İsim Düzenle"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCamera(camera)}
+                                  className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                                  title="Tamamen Sil"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 ml-4">
-                              <button
-                                onClick={() => toggleCameraStatus(camera)}
-                                className={`w-9 h-9 flex items-center justify-center rounded-xl border border-transparent transition-all cursor-pointer ${camera.status === "active" ? "text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100" : "text-brand-teal hover:bg-brand-teal/10 hover:border-brand-teal/20"}`}
-                                title={camera.status === "active" ? "Kamerayı Gizle" : "Kamerayı Göster"}
-                              >
-                                {camera.status === "active" ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingCameraId(camera.camera_id);
-                                  setEditingCameraName(camera.camera_name || "");
-                                }}
-                                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
-                                title="İsim Düzenle"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteCamera(camera)}
-                                className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
-                                title="Tamamen Sil"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     </div>
                   )}
@@ -1215,7 +1341,7 @@ function CamerasContent() {
                   {/* DVR Systems Section */}
                   <div className="space-y-3">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
-                       DVR / NVR SİSTEMLERİ
+                      DVR / NVR SİSTEMLERİ
                     </p>
                     {dvrs.length === 0 ? (
                       <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
@@ -1224,262 +1350,263 @@ function CamerasContent() {
                         </p>
                       </div>
                     ) : (
-                    dvrs.map((dvr) => (
-                      <div key={dvr.dvr_id} className="flex flex-col gap-2">
-                        <div
-                          className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl transition-all border border-slate-200/50 ${expandedDvrIds.includes(dvr.dvr_id) ? "rounded-b-none border-b-transparent" : "hover:bg-slate-100"}`}
-                        >
-                          <div className="flex items-center gap-4 flex-1">
-                            <button
-                              onClick={() => toggleDvrExpand(dvr.dvr_id)}
-                              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 cursor-pointer active:scale-90 ${expandedDvrIds.includes(dvr.dvr_id) ? "rotate-90 bg-brand-teal text-white shadow-md shadow-brand-teal/20" : "text-slate-400 hover:bg-slate-200 hover:text-slate-600"}`}
-                            >
-                              <ChevronRight className="w-4 h-4" />
-                            </button>
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                              <Database className="w-6 h-6" />
-                            </div>
-                            <div className="flex-1">
-                              {editingDvrId === dvr.dvr_id ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    autoFocus
-                                    type="text"
-                                    value={editingDvrName}
-                                    onChange={(e) =>
-                                      setEditingDvrName(e.target.value)
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter")
-                                        handleInlineDvrSave(dvr.dvr_id);
-                                      if (e.key === "Escape")
-                                        setEditingDvrId(null);
-                                    }}
-                                    className="h-8 bg-white border border-brand-teal rounded-lg px-2 text-[10px] font-black text-slate-900 w-full focus:outline-none shadow-sm shadow-brand-teal/10"
-                                  />
-                                  <button
-                                    onClick={() =>
-                                      handleInlineDvrSave(dvr.dvr_id)
-                                    }
-                                    className="w-7 h-7 flex items-center justify-center text-brand-teal hover:bg-brand-teal/10 rounded-lg shrink-0 cursor-pointer"
-                                    title="Kaydet"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingDvrId(null)}
-                                    className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0 cursor-pointer"
-                                    title="Vazgeç"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <h4 className="font-black text-slate-900 text-[10px] mb-0.5">
-                                  {dvr.name}
-                                </h4>
-                              )}
-                              <p className="text-[8px] font-bold text-slate-400 tracking-tight">
-                                {dvr.ip_address} • {dvr.max_channels} KANAL •{" "}
-                                {dvr.dvr_type}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => discoverChannels(dvr.dvr_id)}
-                              disabled={isDiscoveringDvr === dvr.dvr_id}
-                              className="flex items-center justify-center gap-2 px-4 h-9 rounded-xl bg-white border border-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all cursor-pointer disabled:opacity-50 active:scale-95"
-                            >
-                              {isDiscoveringDvr === dvr.dvr_id ? (
-                                <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-                              ) : (
-                                <Search className="w-4 h-4" />
-                              )}
-                              KEŞFET
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingDvrId(dvr.dvr_id);
-                                setEditingDvrName(dvr.name || "");
-                              }}
-                              className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer active:scale-95 border border-transparent"
-                              title="DVR Adını Düzenle"
-                            >
-                              <Pencil className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => deleteDvr(dvr.dvr_id)}
-                              disabled={isDeletingDvr}
-                              className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer disabled:opacity-50 active:scale-95 border border-transparent hover:border-red-100"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Collapsible Channels Section */}
-                        {expandedDvrIds.includes(dvr.dvr_id) && (
-                          <div className="bg-slate-50/50 border-x border-b border-slate-200/50 rounded-b-2xl p-4 pt-0 -mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="space-y-1 mt-4">
-                              <div className="px-2 mb-2 flex items-center justify-between">
-                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                  KEŞFEDİLEN KANALLAR
-                                </span>
-                                <span className="text-[8px] font-bold text-slate-300">
-                                  {(() => {
-                                    const dvrCams = managementCameras.filter(
-                                      (c) => c.dvr_id === dvr.dvr_id,
-                                    );
-                                    return dvrCams.length;
-                                  })()}{" "}
-                                  ADET
-                                </span>
+                      dvrs.map((dvr) => (
+                        <div key={dvr.dvr_id} className="flex flex-col gap-2">
+                          <div
+                            className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl transition-all border border-slate-200/50 ${expandedDvrIds.includes(dvr.dvr_id) ? "rounded-b-none border-b-transparent" : "hover:bg-slate-100"}`}
+                          >
+                            <div className="flex items-center gap-4 flex-1">
+                              <button
+                                onClick={() => toggleDvrExpand(dvr.dvr_id)}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 cursor-pointer active:scale-90 ${expandedDvrIds.includes(dvr.dvr_id) ? "rotate-90 bg-brand-teal text-white shadow-md shadow-brand-teal/20" : "text-slate-400 hover:bg-slate-200 hover:text-slate-600"}`}
+                              >
+                                <ChevronRight className="w-4 h-4" />
+                              </button>
+                              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                                <Database className="w-6 h-6" />
                               </div>
-                              <div className="grid grid-cols-1 gap-1">
-                                {managementCameras.filter(
-                                  (c) => c.dvr_id === dvr.dvr_id,
-                                ).length === 0 ? (
-                                  <div className="py-4 text-center">
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase italic">
-                                      Henüz kanal keşfedilmedi. Keşfet butonunu
-                                      kullanın.
-                                    </p>
+                              <div className="flex-1">
+                                {editingDvrId === dvr.dvr_id ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={editingDvrName}
+                                      onChange={(e) =>
+                                        setEditingDvrName(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter")
+                                          handleInlineDvrSave(dvr.dvr_id);
+                                        if (e.key === "Escape")
+                                          setEditingDvrId(null);
+                                      }}
+                                      className="h-8 bg-white border border-brand-teal rounded-lg px-2 text-[10px] font-black text-slate-900 w-full focus:outline-none shadow-sm shadow-brand-teal/10"
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleInlineDvrSave(dvr.dvr_id)
+                                      }
+                                      className="w-7 h-7 flex items-center justify-center text-brand-teal hover:bg-brand-teal/10 rounded-lg shrink-0 cursor-pointer"
+                                      title="Kaydet"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingDvrId(null)}
+                                      className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0 cursor-pointer"
+                                      title="Vazgeç"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
                                   </div>
                                 ) : (
-                                  managementCameras
-                                    .filter((c) => c.dvr_id === dvr.dvr_id)
-                                    .sort(
-                                      (a, b) =>
-                                        (a.channel_number || 0) -
-                                        (b.channel_number || 0),
-                                    )
-                                    .map((camera) => (
-                                      <div
-                                        key={camera.camera_id}
-                                        className="flex items-center justify-between p-2.5 bg-white border border-slate-100 rounded-xl hover:border-slate-300 transition-all group/channel"
-                                      >
-                                        <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                                          <div
-                                            className={`w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-[10px] font-black ${camera.status === "active" ? "bg-brand-teal text-white shadow-sm" : "bg-slate-100 text-slate-400 border border-slate-200"}`}
-                                          >
-                                            {camera.channel_number || "?"}
+                                  <h4 className="font-black text-slate-900 text-[10px] mb-0.5">
+                                    {dvr.name}
+                                  </h4>
+                                )}
+                                <p className="text-[8px] font-bold text-slate-400 tracking-tight">
+                                  {dvr.ip_address} • {dvr.max_channels} KANAL •{" "}
+                                  {dvr.dvr_type}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => discoverChannels(dvr.dvr_id)}
+                                disabled={isDiscoveringDvr === dvr.dvr_id}
+                                className="flex items-center justify-center gap-2 px-4 h-9 rounded-xl bg-white border border-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                              >
+                                {isDiscoveringDvr === dvr.dvr_id ? (
+                                  <div className="h-3 w-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                  <Search className="w-4 h-4" />
+                                )}
+                                KEŞFET
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingDvrId(dvr.dvr_id);
+                                  setEditingDvrName(dvr.name || "");
+                                }}
+                                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer active:scale-95 border border-transparent"
+                                title="DVR Adını Düzenle"
+                              >
+                                <Pencil className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => deleteDvr(dvr.dvr_id)}
+                                disabled={isDeletingDvr}
+                                className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer disabled:opacity-50 active:scale-95 border border-transparent hover:border-red-100"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Collapsible Channels Section */}
+                          {expandedDvrIds.includes(dvr.dvr_id) && (
+                            <div className="bg-slate-50/50 border-x border-b border-slate-200/50 rounded-b-2xl p-4 pt-0 -mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <div className="space-y-1 mt-4">
+                                <div className="px-2 mb-2 flex items-center justify-between">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                    KEŞFEDİLEN KANALLAR
+                                  </span>
+                                  <span className="text-[8px] font-bold text-slate-300">
+                                    {(() => {
+                                      const dvrCams = managementCameras.filter(
+                                        (c) => c.dvr_id === dvr.dvr_id,
+                                      );
+                                      return dvrCams.length;
+                                    })()}{" "}
+                                    ADET
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-1">
+                                  {managementCameras.filter(
+                                    (c) => c.dvr_id === dvr.dvr_id,
+                                  ).length === 0 ? (
+                                    <div className="py-4 text-center">
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase italic">
+                                        Henüz kanal keşfedilmedi. Keşfet
+                                        butonunu kullanın.
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    managementCameras
+                                      .filter((c) => c.dvr_id === dvr.dvr_id)
+                                      .sort(
+                                        (a, b) =>
+                                          (a.channel_number || 0) -
+                                          (b.channel_number || 0),
+                                      )
+                                      .map((camera) => (
+                                        <div
+                                          key={camera.camera_id}
+                                          className="flex items-center justify-between p-2.5 bg-white border border-slate-100 rounded-xl hover:border-slate-300 transition-all group/channel"
+                                        >
+                                          <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                            <div
+                                              className={`w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-[10px] font-black ${camera.status === "active" ? "bg-brand-teal text-white shadow-sm" : "bg-slate-100 text-slate-400 border border-slate-200"}`}
+                                            >
+                                              {camera.channel_number || "?"}
+                                            </div>
+                                            <div className="flex-1 overflow-hidden">
+                                              {editingCameraId ===
+                                              camera.camera_id ? (
+                                                <input
+                                                  autoFocus
+                                                  type="text"
+                                                  value={editingCameraName}
+                                                  onChange={(e) =>
+                                                    setEditingCameraName(
+                                                      e.target.value,
+                                                    )
+                                                  }
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Enter")
+                                                      handleInlineCameraSave(
+                                                        camera.camera_id,
+                                                      );
+                                                    if (e.key === "Escape")
+                                                      setEditingCameraId(null);
+                                                  }}
+                                                  className="w-full bg-slate-50 border border-brand-teal text-[10px] font-black text-slate-900 px-2 py-1 rounded-lg outline-none"
+                                                />
+                                              ) : (
+                                                <>
+                                                  <p className="text-[10px] font-black text-slate-900 truncate">
+                                                    {camera.camera_name}
+                                                  </p>
+                                                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                    CH {camera.channel_number} •{" "}
+                                                    {camera.status === "active"
+                                                      ? "AKTİF"
+                                                      : "GİZLİ"}
+                                                  </p>
+                                                </>
+                                              )}
+                                            </div>
                                           </div>
-                                          <div className="flex-1 overflow-hidden">
+                                          <div className="flex items-center gap-1 transition-opacity">
                                             {editingCameraId ===
                                             camera.camera_id ? (
-                                              <input
-                                                autoFocus
-                                                type="text"
-                                                value={editingCameraName}
-                                                onChange={(e) =>
-                                                  setEditingCameraName(
-                                                    e.target.value,
-                                                  )
-                                                }
-                                                onKeyDown={(e) => {
-                                                  if (e.key === "Enter")
+                                              <>
+                                                <button
+                                                  onClick={() =>
                                                     handleInlineCameraSave(
                                                       camera.camera_id,
-                                                    );
-                                                  if (e.key === "Escape")
-                                                    setEditingCameraId(null);
-                                                }}
-                                                className="w-full bg-slate-50 border border-brand-teal text-[10px] font-black text-slate-900 px-2 py-1 rounded-lg outline-none"
-                                              />
+                                                    )
+                                                  }
+                                                  className="w-8 h-8 flex items-center justify-center text-brand-teal hover:bg-brand-teal/10 rounded-lg transition-all cursor-pointer"
+                                                  title="Kaydet"
+                                                >
+                                                  <Check className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                  onClick={() =>
+                                                    setEditingCameraId(null)
+                                                  }
+                                                  className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                                                  title="Vazgeç"
+                                                >
+                                                  <X className="w-5 h-5" />
+                                                </button>
+                                              </>
                                             ) : (
                                               <>
-                                                <p className="text-[10px] font-black text-slate-900 truncate">
-                                                  {camera.camera_name}
-                                                </p>
-                                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                  CH {camera.channel_number} •{" "}
-                                                  {camera.status === "active"
-                                                    ? "AKTİF"
-                                                    : "GİZLİ"}
-                                                </p>
+                                                <button
+                                                  onClick={() =>
+                                                    toggleCameraStatus(camera)
+                                                  }
+                                                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${camera.status === "active" ? "text-brand-teal hover:bg-red-50 hover:text-red-500" : "text-slate-400 hover:bg-brand-teal/10 hover:text-brand-teal"}`}
+                                                  title={
+                                                    camera.status === "active"
+                                                      ? "Gizle"
+                                                      : "Göster"
+                                                  }
+                                                >
+                                                  {camera.status ===
+                                                  "active" ? (
+                                                    <Eye className="w-5 h-5" />
+                                                  ) : (
+                                                    <EyeOff className="w-5 h-5" />
+                                                  )}
+                                                </button>
+                                                <button
+                                                  onClick={() => {
+                                                    setEditingCameraId(
+                                                      camera.camera_id,
+                                                    );
+                                                    setEditingCameraName(
+                                                      camera.camera_name || "",
+                                                    );
+                                                  }}
+                                                  className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
+                                                  title="Düzenle"
+                                                >
+                                                  <Pencil className="w-5 h-5" />
+                                                </button>
                                               </>
                                             )}
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-1 transition-opacity">
-                                          {editingCameraId ===
-                                          camera.camera_id ? (
-                                            <>
-                                              <button
-                                                onClick={() =>
-                                                  handleInlineCameraSave(
-                                                    camera.camera_id,
-                                                  )
-                                                }
-                                                className="w-8 h-8 flex items-center justify-center text-brand-teal hover:bg-brand-teal/10 rounded-lg transition-all cursor-pointer"
-                                                title="Kaydet"
-                                              >
-                                                <Check className="w-5 h-5" />
-                                              </button>
-                                              <button
-                                                onClick={() =>
-                                                  setEditingCameraId(null)
-                                                }
-                                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
-                                                title="Vazgeç"
-                                              >
-                                                <X className="w-5 h-5" />
-                                              </button>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <button
-                                                onClick={() =>
-                                                  toggleCameraStatus(camera)
-                                                }
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${camera.status === "active" ? "text-slate-400 hover:text-red-500 hover:bg-red-50" : "text-brand-teal hover:bg-brand-teal/10"}`}
-                                                title={
-                                                  camera.status === "active"
-                                                    ? "Gizle"
-                                                    : "Göster"
-                                                }
-                                              >
-                                                 {camera.status === "active" ? (
-                                                   <EyeOff className="w-5 h-5" />
-                                                 ) : (
-                                                   <Eye className="w-5 h-5" />
-                                                 )}
-                                              </button>
-                                              <button
-                                                onClick={() => {
-                                                  setEditingCameraId(
-                                                    camera.camera_id,
-                                                  );
-                                                  setEditingCameraName(
-                                                    camera.camera_name || "",
-                                                  );
-                                                }}
-                                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
-                                                title="Düzenle"
-                                              >
-                                                <Pencil className="w-5 h-5" />
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))
-                                )}
+                                      ))
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
       {mounted &&
         createPortal(
           <ScheduleModal
