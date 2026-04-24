@@ -68,7 +68,7 @@ class IPCameraDiscovery:
             }
         }
     
-    def scan_network(self, network_range="192.168.1.0/24", timeout=2):
+    def scan_network(self, network_range="192.168.1.0/24", timeout=2, *, max_workers: int = None):
         """Ağı tarar ve IP kameraları bulur.
 
         Strateji:
@@ -76,6 +76,12 @@ class IPCameraDiscovery:
         2. Paralel port tarama (kalan IP'ler) — ONVIF desteklemeyen cihazlar
         """
         try:
+            if max_workers is None:
+                try:
+                    max_workers = int(os.environ.get("CAMERA_DISCOVERY_MAX_WORKERS", "12"))
+                except Exception:
+                    max_workers = 12
+            max_workers = max(1, min(int(max_workers), 64))
             network = ipaddress.IPv4Network(network_range, strict=False)
             self.total_ips = len(list(network.hosts()))
             self.scan_progress = 0
@@ -121,7 +127,7 @@ class IPCameraDiscovery:
                 if str(ip) not in onvif_found_ips
             ]
 
-            with ThreadPoolExecutor(max_workers=50) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(self.scan_ip, ip, timeout): ip
                     for ip in remaining_hosts

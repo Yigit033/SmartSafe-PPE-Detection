@@ -16,8 +16,72 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime
 from typing import Dict, Any
 import urllib.parse
+import threading
+import ipaddress
 
 logger = logging.getLogger(__name__)
+
+# ── Discovery/SYNC safety guards (in-memory, per-process) ────────────────────
+_DISCOVERY_LOCK = threading.Lock()
+_LAST_DISCOVERY_TS: Dict[tuple, float] = {}  # (company_id, op) -> epoch seconds
+
+
+def _env_truthy(name: str, default: str = "1") -> bool:
+    v = os.environ.get(name, default)
+    return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _require_admin_for_discovery(user_data: Dict[str, Any]) -> bool:
+    """Return True if request is allowed to run discovery/sync."""
+    if not _env_truthy("CAMERA_DISCOVERY_ADMIN_ONLY", "1"):
+        return True
+    role = str((user_data or {}).get("role", "")).strip().lower()
+    return role == "admin"
+
+
+def _allowed_network_range(network_range: str) -> bool:
+    """
+    Enforce CIDR allowlist for discovery/sync.
+    Env: CAMERA_DISCOVERY_ALLOWED_CIDRS="10.0.0.0/8,192.168.0.0/16"
+    Empty => allow all.
+    """
+    allowed = os.environ.get("CAMERA_DISCOVERY_ALLOWED_CIDRS", "").strip()
+    if not allowed:
+        return True
+    try:
+        target = ipaddress.ip_network(str(network_range).strip(), strict=False)
+    except Exception:
+        return False
+    for cidr in [x.strip() for x in allowed.split(",") if x.strip()]:
+        try:
+            net = ipaddress.ip_network(cidr, strict=False)
+        except Exception:
+            continue
+        # Require target to be fully contained in an allowed net
+        if target.subnet_of(net):
+            return True
+    return False
+
+
+def _acquire_discovery_ttl(company_id: str, op: str) -> tuple[bool, int]:
+    """
+    Basic rate-limit / debounce to prevent scan storms.
+    Env: CAMERA_DISCOVERY_MIN_INTERVAL_S (default 600s)
+    Returns: (ok, retry_after_seconds)
+    """
+    try:
+        min_interval = int(os.environ.get("CAMERA_DISCOVERY_MIN_INTERVAL_S", "600"))
+    except Exception:
+        min_interval = 600
+    now = time.time()
+    key = (str(company_id), str(op))
+    with _DISCOVERY_LOCK:
+        last = float(_LAST_DISCOVERY_TS.get(key, 0) or 0)
+        delta = now - last
+        if last > 0 and delta < min_interval:
+            return (False, int(max(1, min_interval - delta)))
+        _LAST_DISCOVERY_TS[key] = now
+        return (True, 0)
 
 
 def create_blueprint(api):
@@ -239,6 +303,20 @@ def create_blueprint(api):
             user_data = api.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
                 return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+            if not _require_admin_for_discovery(user_data):
+                return jsonify({'success': False, 'error': 'Bu işlem sadece admin kullanıcılar içindir'}), 403
+
+            ok, retry_after = _acquire_discovery_ttl(company_id, "discover")
+            if not ok:
+                resp = jsonify({
+                    'success': False,
+                    'error': 'Discovery çok sık tetiklendi. Lütfen bekleyip tekrar deneyin.',
+                    'retry_after_seconds': retry_after,
+                })
+                resp.status_code = 429
+                resp.headers['Retry-After'] = str(retry_after)
+                return resp
             
             data = request.get_json() or {}
             network_range = data.get('network_range')
@@ -246,6 +324,12 @@ def create_blueprint(api):
             
             # Eğer range verilmediyse, hem yerel ağı hem de kullanıcının IP'sini içeren bloğu tara
             if not network_range:
+                # Prod-safe default: require explicit range unless explicitly allowed.
+                if _env_truthy("CAMERA_DISCOVERY_REQUIRE_EXPLICIT_RANGE", "1"):
+                    return jsonify({
+                        'success': False,
+                        'error': 'network_range zorunlu (prod-safe). Örn: "192.168.1.0/24"',
+                    }), 400
                 user_ip = request.remote_addr
                 if user_ip and user_ip != '127.0.0.1':
                     parts = user_ip.split('.')
@@ -253,6 +337,12 @@ def create_blueprint(api):
                     logger.info(f"📍 Detected user IP {user_ip}, setting range to {network_range}")
                 else:
                     network_range = '192.168.1.0/24' # Fallback
+
+            if not _allowed_network_range(network_range):
+                return jsonify({
+                    'success': False,
+                    'error': f'network_range izinli değil: {network_range}',
+                }), 403
             
             logger.info(f"🔍 Starting unified camera discovery for company {company_id}")
             
@@ -282,6 +372,10 @@ def create_blueprint(api):
             
             # Fallback: Standard discovery sistemi
             logger.info("📱 Using standard discovery system")
+            logger.info(
+                f"🧾 Discovery audit: company_id={company_id} range={network_range} "
+                f"remote_ip={request.remote_addr} user={user_data.get('username')} role={user_data.get('role')}"
+            )
             
             discovered_cameras = []
             scan_time = '2.0 saniye'
@@ -1439,11 +1533,44 @@ def create_blueprint(api):
             user_data = api.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
                 return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+            if not _require_admin_for_discovery(user_data):
+                return jsonify({'success': False, 'error': 'Bu işlem sadece admin kullanıcılar içindir'}), 403
+
+            ok, retry_after = _acquire_discovery_ttl(company_id, "smart_discover")
+            if not ok:
+                resp = jsonify({
+                    'success': False,
+                    'error': 'Discovery çok sık tetiklendi. Lütfen bekleyip tekrar deneyin.',
+                    'retry_after_seconds': retry_after,
+                })
+                resp.status_code = 429
+                resp.headers['Retry-After'] = str(retry_after)
+                return resp
             
             data = request.get_json()
-            network_range = data.get('network_range', '192.168.1.0/24')
+            data = data or {}
+            network_range = data.get('network_range')
+
+            if not network_range:
+                if _env_truthy("CAMERA_DISCOVERY_REQUIRE_EXPLICIT_RANGE", "1"):
+                    return jsonify({
+                        'success': False,
+                        'error': 'network_range zorunlu (prod-safe). Örn: "192.168.1.0/24"',
+                    }), 400
+                network_range = '192.168.1.0/24'
+
+            if not _allowed_network_range(network_range):
+                return jsonify({
+                    'success': False,
+                    'error': f'network_range izinli değil: {network_range}',
+                }), 403
             
             logger.info(f"🧠 Smart camera discovery for company {company_id}")
+            logger.info(
+                f"🧾 Smart-discover audit: company_id={company_id} range={network_range} "
+                f"remote_ip={request.remote_addr} user={user_data.get('username')} role={user_data.get('role')}"
+            )
             
             try:
                 from integrations.cameras.camera_integration_manager import ProfessionalCameraManager
@@ -1753,12 +1880,44 @@ def create_blueprint(api):
             user_data = api.validate_session()
             if not user_data or user_data.get('company_id') != company_id:
                 return jsonify({'success': False, 'error': 'Geçersiz oturum'}), 401
+
+            if not _require_admin_for_discovery(user_data):
+                return jsonify({'success': False, 'error': 'Bu işlem sadece admin kullanıcılar içindir'}), 403
+
+            ok, retry_after = _acquire_discovery_ttl(company_id, "sync")
+            if not ok:
+                resp = jsonify({
+                    'success': False,
+                    'error': 'Sync çok sık tetiklendi. Lütfen bekleyip tekrar deneyin.',
+                    'retry_after_seconds': retry_after,
+                })
+                resp.status_code = 429
+                resp.headers['Retry-After'] = str(retry_after)
+                return resp
             
             data = request.get_json() or {}
-            network_range = data.get('network_range', '192.168.1.0/24')
+            network_range = data.get('network_range')
             force_sync = data.get('force_sync', False)  # Zorla yeniden sync
+
+            if not network_range:
+                if _env_truthy("CAMERA_DISCOVERY_REQUIRE_EXPLICIT_RANGE", "1"):
+                    return jsonify({
+                        'success': False,
+                        'error': 'network_range zorunlu (prod-safe). Örn: "192.168.1.0/24"',
+                    }), 400
+                network_range = '192.168.1.0/24'
+
+            if not _allowed_network_range(network_range):
+                return jsonify({
+                    'success': False,
+                    'error': f'network_range izinli değil: {network_range}',
+                }), 403
             
             logger.info(f"🔄 Starting unified camera sync for company {company_id}")
+            logger.info(
+                f"🧾 Sync audit: company_id={company_id} range={network_range} force_sync={force_sync} "
+                f"remote_ip={request.remote_addr} user={user_data.get('username')} role={user_data.get('role')}"
+            )
             
             result = {
                 'success': False,

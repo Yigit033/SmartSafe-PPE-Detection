@@ -517,6 +517,19 @@ Lists registered DVRs with discover/delete actions. Discover triggers channel sc
 | `DVR_CHANNEL_PROBE_WORKERS` | 4 | ThreadPool workers for parallel channel probing |
 | `DVR_PROBE_TTL_SUCCESS_S` | 600 | Seconds to cache successful probe results |
 | `DVR_PROBE_TTL_FAIL_S` | 60 | Seconds to cache failed probe results |
+| `CAMERA_DISCOVERY_MAX_WORKERS` | 12 | Max thread workers for IP discovery scan (per request) |
+| `CAMERA_DISCOVERY_ADMIN_ONLY` | 1 | If enabled, only role=admin can run discovery/sync |
+| `CAMERA_DISCOVERY_MIN_INTERVAL_S` | 600 | Per-company debounce window for discovery/sync |
+| `CAMERA_DISCOVERY_REQUIRE_EXPLICIT_RANGE` | 1 | If enabled, `network_range` must be provided (no auto /24) |
+| `CAMERA_DISCOVERY_ALLOWED_CIDRS` | _(empty)_ | Optional CIDR allowlist for discovery/sync ranges |
+
+### 11.1 Production Safety Defaults (Recommended)
+
+- Set `DVR_PROBE_CONCURRENCY=2` on sensitive NVRs (reduces concurrent RTSP opens).
+- Set `DVR_START_URL_BUDGET=10-12` to avoid long brute-force storms.
+- Set `DVR_PROBE_TTL_FAIL_S=120` to avoid frequent re-probing on failures.
+- Keep `CAMERA_DISCOVERY_ADMIN_ONLY=1` and `CAMERA_DISCOVERY_REQUIRE_EXPLICIT_RANGE=1`.
+- Configure `CAMERA_DISCOVERY_ALLOWED_CIDRS` for customer-approved subnets.
 
 ---
 
