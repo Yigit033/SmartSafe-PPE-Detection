@@ -1,5 +1,16 @@
 import sys
 import os
+# ── OpenCV/FFmpeg bootstrap (MUST run before any cv2 import) ────────────────
+# OpenCV's FFmpeg backend reads these environment variables when the native
+# module loads. Many modules in this repo import cv2; set defaults globally
+# at process start to ensure consistent behavior across DVR/NVR vendors.
+os.environ.setdefault(
+    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+    "rtsp_transport;tcp|analyzeduration;2000000|probesize;1000000",
+)
+# -8 = AV_LOG_QUIET. Override in env (e.g., 16) when troubleshooting.
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 # Ana dizini (root) sistem yoluna ekle - 'models' klasörünün dışarıda kalabilmesi için
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)

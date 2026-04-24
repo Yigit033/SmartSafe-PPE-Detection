@@ -1260,6 +1260,10 @@ def create_blueprint(api):
                     frame_sleep = 0.08
                     start_wait = time.time()
                     connected = False
+                    try:
+                        connect_timeout_s = float(os.environ.get("PROXY_STREAM_CONNECT_TIMEOUT_S", "10").strip())
+                    except Exception:
+                        connect_timeout_s = 10.0
                     
                     while True:
                         st_info = sh.get_stream_status(stream_id) or {}
@@ -1278,8 +1282,8 @@ def create_blueprint(api):
                         elif status == 'error':
                             logger.error(f"❌ Stream error detected in proxy: {stream_id}")
                             break
-                        elif not connected and (time.time() - start_wait > 10.0):
-                            # 10 saniye boyunca hiç bağlanamazsa pes et
+                        elif not connected and (time.time() - start_wait > connect_timeout_s):
+                            # Bağlantı penceresinde hiç "active+frame" göremezsek pes et
                             logger.warning(f"⚠️ Stream connection timeout: {stream_id}")
                             break
                         elif (status in ('stopping', 'stopped')):
