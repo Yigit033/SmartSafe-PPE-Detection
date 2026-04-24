@@ -82,11 +82,13 @@ class MultiTenantDatabase:
         self.db_path = db_path
         self.db_adapter = get_db_adapter()
         self._camera_cache: Dict[str, Dict] = {}
-        self._cache_ttl = 60 # 1 dakika cache
+        self._cache_ttl = int(os.environ.get('DB_CACHE_TTL', 60))
         self.init_database()
     
-    def get_connection(self, timeout: int = 30):
+    def get_connection(self, timeout: int = None):
         """Database connection with timeout"""
+        if timeout is None:
+            timeout = int(os.environ.get('DB_CONNECTION_TIMEOUT', 30))
         conn = self.db_adapter.get_connection(timeout)
         if conn is None:
             raise ConnectionError("❌ Veritabanı bağlantısı kurulamadı (PostgreSQL/SQLite erişilemiyor)")
@@ -302,7 +304,7 @@ class MultiTenantDatabase:
                     email TEXT UNIQUE NOT NULL,
                     phone TEXT,
                     address TEXT,
-                    max_cameras INTEGER DEFAULT 25,
+                    max_cameras INTEGER DEFAULT {int(os.environ.get('DEFAULT_MAX_CAMERAS', 25))},
                     subscription_type TEXT DEFAULT 'starter',
                     subscription_start DATETIME DEFAULT CURRENT_TIMESTAMP,
                     subscription_end DATETIME,
@@ -672,10 +674,10 @@ class MultiTenantDatabase:
             # Abonelik bitiş tarihi
             if company_data.get('account_type') == 'demo':
                 # Demo hesaplar için 7 gün
-                subscription_end = datetime.now() + timedelta(days=7)
+                subscription_end = datetime.now() + timedelta(days=int(os.environ.get('FREE_TRIAL_DAYS', 7)))
             else:
                 # Normal hesaplar için 7 gün ücretsiz + 1 yıl ücretli
-                subscription_end = datetime.now() + timedelta(days=7 + 365)
+                subscription_end = datetime.now() + timedelta(days=int(os.environ.get('SUBSCRIPTION_EXTENDED_DAYS', 372)))
             
             # PPE konfigürasyonunu işle
             ppe_config = company_data.get('required_ppe', {})

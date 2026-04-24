@@ -39,38 +39,6 @@ PPE_CONFIG icindeki tum `pos_label` ve `neg_label` degerleri Turkce'ye cevrildi:
 
 ---
 
-## 2. False Positive Engelleme (Person Validation Gate)
-
-### 2.1 Pose Detector Tarafinda
-**Dosya:** `core/detection/pose_aware_ppe_detector.py` → `_extract_pose_data()`
-
-Yer yazilari ("Bariyer", "Sariyer" vb.), araba tekerlekleri ve rastgele nesnelerin "person" olarak algilanmasini engellemek icin 4 katmanli filtre:
-
-| Filtre | Env Variable | Default | Aciklama |
-|--------|-------------|---------|----------|
-| Min confidence | `MIN_PERSON_CONF` | 0.40 | %40 altindaki person reddedilir |
-| Min yukseklik | `MIN_PERSON_H_RATIO` | 0.08 | Frame yuksekliginin %8'inden kucuk reddedilir |
-| Max aspect ratio | `MAX_PERSON_ASPECT` | 2.5 | w/h > 2.5 olan yatik bbox reddedilir |
-| Min keypoint sayisi | `MIN_PERSON_KEYPOINTS` | 3 | 3'ten az gecerli keypoint varsa reddedilir |
-
-Keypoint kontrolu en etkili filtre: gercek bir insan en az 3 keypoint'e (bas, omuz, kalca) sahiptir, bir harf veya nesne 0-1 keypoint'e sahiptir.
-
-### 2.2 SH17 Detector Tarafinda
-**Dosya:** `core/models/sh17_model_manager.py` → `_detect_with_sh17()`
-
-Person validation gate eklendi:
-- `MIN_PERSON_CONF` (0.40), `MAX_PERSON_ASPECT` (2.5) kontrolleri
-- `MIN_PERSON_AREA_RATIO` (0.003): Frame alaninin %0.3'unden kucuk person bbox reddedilir
-
-### 2.3 Overlay Cizim Tarafinda (Son Savunma)
-**Dosya:** `core/app.py` → `draw_saas_overlay()`
-
-Detection pipeline'dan bir sekilde gecse bile overlay'da gosterilmez:
-- `MIN_PERSON_CONF` kontrolu
-- Keypoint sayisi kontrolu (`MIN_PERSON_KEYPOINTS`)
-- Aspect ratio kontrolu (w/h > 2.5)
-
----
 
 ## 3. Haircap Matching Iyilestirmeleri
 
@@ -168,15 +136,6 @@ Tum IoU'lar 0 oldugunda, PPE merkezinin person merkezine uzakligi person diagona
 
 ---
 
-## 7. ByteTrack Uyumluluk
-**Dosya:** `core/detection/pose_aware_ppe_detector.py`
-
-- `sv.ByteTrack()` init try/except ile sarmalandi
-- Yeni supervision surumlerinde `track_thresh` desteklenmezse default constructor kullaniliyor
-- `bbox_ema_ttl_s`: 8.0 → 1.5 (stale track'ler daha hizli temizleniyor)
-
----
-
 ## 8. Database Migration
 **Dosya:** `backend/violation/migrations/3_add_resolution_snapshot_and_person_violations.up.sql` (YENi)
 
@@ -187,61 +146,3 @@ CREATE TABLE IF NOT EXISTS person_violations (...);
 
 - `resolution_snapshot_path`: Violation cozulme snapshot'i
 - `person_violations`: Aylik kisi bazli ihlal istatistikleri
-
----
-
-## 9. Frontend Iyilestirmeleri
-
-### 9.1 DVR Filter
-**Dosya:** `frontend/app/cameras/page.tsx`
-
-- Kamera listesinde DVR bazli filtreleme butonu eklendi
-- Birden fazla DVR varsa "TUMU" + her DVR icin ayri buton
-
-### 9.2 Stream Yonetimi
-**Dosyalar:** `frontend/components/camera/MjpegCanvas.tsx`, `frontend/components/layout/Sidebar.tsx`, `frontend/app/cameras/page.tsx`
-
-- Sayfa degisikliginde MJPEG stream'leri aninda kapatiliyor
-- 150ms gecikme: tarayiciya TCP baglantisini serbest birakma firsati
-- `isMountedRef`: Ilk render'da stream'in kesilmesini engelliyor
-
-### 9.3 Kamera Karti Duzeni
-**Dosya:** `frontend/app/cameras/page.tsx`
-
-- Location alani `"BELIRTILMEMIS"` fallback'i eklendi
-- Kart layout iyilestirildi
-
----
-
-## Etkilenen Dosyalar Ozeti
-
-| Dosya | Degisiklik |
-|-------|-----------|
-| `core/detection/pose_aware_ppe_detector.py` | +252 / -131 |
-| `core/detection/utils/visual_overlay.py` | +104 / -55 |
-| `core/app.py` | +79 / -36 |
-| `core/models/sh17_model_manager.py` | +51 / -22 |
-| `core/utils/overlay_requirements_filter.py` | +46 / -22 |
-| `core/detection/snapshot_manager.py` | +13 / -7 |
-| `frontend/app/cameras/page.tsx` | +43 / -12 |
-| `frontend/app/violations/page.tsx` | +5 / -3 |
-| `frontend/components/camera/MjpegCanvas.tsx` | +14 / -2 |
-| `frontend/components/layout/Sidebar.tsx` | +3 / -3 |
-| `frontend/next.config.ts` | +10 / -0 |
-| `backend/violation/migrations/3_*.up.sql` | +32 (yeni) |
-
----
-
-## Environment Variables (Tumu Opsiyonel)
-
-| Variable | Default | Aciklama |
-|----------|---------|----------|
-| `MIN_PERSON_CONF` | 0.40 | Min person confidence |
-| `MIN_PERSON_H_RATIO` | 0.08 | Min person height / frame height |
-| `MAX_PERSON_ASPECT` | 2.5 | Max person w/h orani |
-| `MIN_PERSON_KEYPOINTS` | 3 | Min gecerli keypoint sayisi |
-| `MIN_PERSON_AREA_RATIO` | 0.003 | Min person alan / frame alan orani |
-| `PPE_LOG_SUMMARY_EVERY_S` | 2.0 | Log throttle suresi (saniye) |
-| `PPE_LOG_GROUP_FLUSH_EVERY_S` | 10.0 | Log grup flush suresi (saniye) |
-| `SNAPSHOT_BASE_PATH` | (proje/storage/violations) | Snapshot kayit dizini |
-| `OSD_PERSON_FILTER` | 1 | OSD false positive filtresi |

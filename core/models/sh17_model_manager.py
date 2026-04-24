@@ -211,8 +211,9 @@ class SH17ModelManager:
 
         logger.info("📦 SH17 yolo9e.pt modeli yükleniyor...")
 
-        # Öncelik sırası: yolo9e.pt → sektör klasörlerinden biri → yolov8n (fallback)
+        # Öncelik sırası: env (DETECTION_MODEL_PATH) -> yolo9e.pt -> sektör klasörlerinden biri -> yolov8n (fallback)
         candidate_paths = [
+            os.environ.get('DETECTION_MODEL_PATH', str(Path(self.models_dir) / 'yolo9e.pt')),
             str(Path(self.models_dir) / 'yolo9e.pt'),
             str(Path(self.models_dir) / 'sh17_base' / 'sh17_base_model' / 'weights' / 'best.pt'),
             str(Path(self.models_dir) / 'sh17_construction' / 'sh17_construction_model' / 'weights' / 'best.pt'),
@@ -744,6 +745,13 @@ class SH17ModelManager:
             d.get("bbox") for d in (sh17_detections or [])
             if d.get("class_name") == "person" and isinstance(d.get("bbox"), list) and len(d.get("bbox")) == 4
         ]
+        # Face kutuları: food modelin haircap FP'lerini eleemek için kullanılır.
+        # Bir haircap center'ı face bbox'ın İÇİNDE ise gerçek bone değil — bone
+        # yüzün üstünde durur, yüz üzerinde değil.
+        face_boxes: List[List[float]] = [
+            d.get("bbox") for d in (sh17_detections or [])
+            if d.get("class_name") == "face" and isinstance(d.get("bbox"), list) and len(d.get("bbox")) == 4
+        ]
 
         img_h, img_w = (None, None)
         if image_shape and len(image_shape) == 2:
@@ -786,6 +794,7 @@ class SH17ModelManager:
         filtered: List[Dict] = []
         dropped = 0
         haircap_dropped = False
+        _no_overlap_bboxes: List[str] = []
         for det in food_detections:
             if det.get("class_name") != "haircap":
                 filtered.append(det)
@@ -820,7 +829,7 @@ class SH17ModelManager:
             if (cov is not None and cov >= 0.25) or (aspect >= 4.0) or (aspect <= 0.20):
                 dropped += 1
                 haircap_dropped = True
-                logger.info(
+                logger.debug(
                     "🍽️ Food haircap dropped (guard): conf=%.3f bbox=%s cov=%.0f%% aspect=%.2f model_type=%s",
                     float(det.get("confidence", 0.0)),
                     [round(float(v), 1) for v in hb],
@@ -830,42 +839,183 @@ class SH17ModelManager:
                 )
                 continue
 
+            # ── Guard 2: Anatomik "bone kafa ÜSTÜNDE olmalı" kontrolü ────
+            # Food model cafe/restaurant arka plan dokularını (saç, duvar,
+            # masa, bej kıyafet) sık sık haircap sanıyor. Gerçek bir bone:
+            #   • Kafanın üst yarısında durur (merkez head'in üst %60'ında)
+            #   • Yüzü örtmez (face bbox merkez haricap içinde değildir)
+            # Bu iki kural FP'leri önemli ölçüde kırpar; gerçek bone'lar
+            # kafa üstünde olduğu için etkilenmez.
+            hb_cx = (x1 + x2) / 2.0
+            hb_cy = (y1 + y2) / 2.0
+
+            # (a) Face üzeri kontrol — haircap center'ı face bbox içinde ise FP.
+            haircap_on_face = False
+            for fb in face_boxes:
+                try:
+                    fx1, fy1, fx2, fy2 = map(float, fb)
+                    if fx1 <= hb_cx <= fx2 and fy1 <= hb_cy <= fy2:
+                        haircap_on_face = True
+                        break
+                except Exception:
+                    continue
+
+            if haircap_on_face:
+                dropped += 1
+                haircap_dropped = True
+                _no_overlap_bboxes.append(
+                    f"conf={float(det.get('confidence', 0.0)):.2f} face_overlap"
+                )
+                logger.debug(
+                    "🍽️ Food haircap dropped (on-face): conf=%.3f bbox=%s",
+                    float(det.get("confidence", 0.0)),
+                    [round(float(v), 1) for v in hb],
+                )
+                continue
+
             best_iou = 0.0
             any_center_ok = False
+            head_top_ok = False  # haircap center head üst %60'ında mı?
 
             # Primary: relate to SH17 head boxes (ideal)
             for head in head_boxes:
                 best_iou = max(best_iou, _iou(hb, head))
                 if _center_in_expanded_box(hb, head, pad=0.35):
                     any_center_ok = True
+                # Head üst %60 anatomik kontrolü
+                try:
+                    hx1, hy1, hx2, hy2 = map(float, head)
+                    head_h = hy2 - hy1
+                    head_w = hx2 - hx1
+                    if head_h > 1 and head_w > 1:
+                        y_top_limit = hy1 + head_h * 0.60
+                        y_above_limit = hy1 - head_h * 0.30
+                        x_left_limit = hx1 - head_w * 0.25
+                        x_right_limit = hx2 + head_w * 0.25
+                        if (
+                            y_above_limit <= hb_cy <= y_top_limit
+                            and x_left_limit <= hb_cx <= x_right_limit
+                        ):
+                            head_top_ok = True
+                except Exception:
+                    pass
+
+            # (b) Head var ama haircap kafanın ALT yarısında / yanında →
+            # gerçek bone değil. IoU/center-overlap geçse bile drop.
+            if head_boxes and not head_top_ok:
+                dropped += 1
+                haircap_dropped = True
+                _no_overlap_bboxes.append(
+                    f"conf={float(det.get('confidence', 0.0)):.2f} not_head_top"
+                )
+                logger.debug(
+                    "🍽️ Food haircap dropped (not-head-top): conf=%.3f bbox=%s",
+                    float(det.get("confidence", 0.0)),
+                    [round(float(v), 1) for v in hb],
+                )
+                continue
 
             # Fallback: if head is missing, relate to SH17 person boxes.
+            # İyileştirme: person bbox full + upper-body proxy (üst %35 ~ baş/omuz bölgesi).
+            # SH17 head bulamadığında bu proxy head region yerine geçer.
             if not head_boxes and person_boxes:
                 for pb in person_boxes:
                     best_iou = max(best_iou, _iou(hb, pb))
-                    if _center_in_expanded_box(hb, pb, pad=0.15):
+                    # pad 0.15 → 0.25 (person bbox kenar kaydığı durumları yakala)
+                    if _center_in_expanded_box(hb, pb, pad=0.25):
                         any_center_ok = True
+                    # Upper-body head proxy — person'un üst %35'lik bölgesi
+                    try:
+                        px1, py1, px2, py2 = map(float, pb)
+                        p_h = py2 - py1
+                        if p_h > 1:
+                            upper_box = [px1, py1, px2, py1 + p_h * 0.35]
+                            best_iou = max(best_iou, _iou(hb, upper_box))
+                            if _center_in_expanded_box(hb, upper_box, pad=0.30):
+                                any_center_ok = True
+                    except Exception:
+                        pass
 
-            # Tolerant thresholds: haircap çok küçük olabilir. Ama "alakasız dev bbox"ları elemek için yeterli.
+            # heads=0 AND persons=0 → SH17 henüz kimseyi görmemiş olabilir;
+            # guard'lardan geçmiş geçerli haircap'leri drop etme,
+            # nihai association pose_aware_ppe_detector'a bırakılır.
+            if not head_boxes and not person_boxes:
+                filtered.append(det)
+                logger.debug(
+                    "🍽️ Food haircap kept (no heads/persons to relate): conf=%.3f bbox=%s",
+                    float(det.get("confidence", 0.0)),
+                    [round(float(v), 1) for v in hb],
+                )
+                continue
+
             if best_iou >= 0.005 or any_center_ok:
                 filtered.append(det)
             else:
+                # ── High-confidence haircap rescue ────────────────────────────
+                # Food model yüksek conf ile haircap diyor ama SH17 ne head ne
+                # de person ile IoU/center eşleşmesi üretemedi. İki yaygın neden:
+                #   (a) SH17 bu kişinin kafasını hiç algılayamadı (head_boxes=0)
+                #   (b) SH17 bazı kişilerin kafasını algılıyor, bazılarınınkini
+                #       algılayamıyor — haircap kafasız kişiye ait.
+                # Her iki durumda da pose_aware_ppe_detector'un IoU+proximity
+                # fallback'leri haircap'i doğru kişiye bağlayabilir; filter
+                # aşamasında drop etmek yerine nihai karar orada verilsin.
+                try:
+                    _cf = float(det.get("confidence", 0.0))
+                except Exception:
+                    _cf = 0.0
+
+                _rescued = False
+                # Case (a): head yok, person var — conf >= 0.50
+                if not head_boxes and person_boxes and _cf >= 0.50:
+                    _rescued = True
+                    _rescue_reason = "no-head"
+                # Case (b): head < person (kafaları eksik yakalanmış) ve haircap
+                #          merkezi person'lardan birinin üst %45'inde — conf >= 0.55
+                elif (
+                    head_boxes
+                    and person_boxes
+                    and len(head_boxes) < len(person_boxes)
+                    and _cf >= 0.55
+                ):
+                    try:
+                        hx1, hy1, hx2, hy2 = map(float, hb)
+                        hcx = (hx1 + hx2) / 2.0
+                        hcy = (hy1 + hy2) / 2.0
+                        for pb in person_boxes:
+                            px1, py1, px2, py2 = map(float, pb)
+                            p_h = py2 - py1
+                            if p_h <= 1:
+                                continue
+                            if (
+                                px1 <= hcx <= px2
+                                and py1 <= hcy <= py1 + p_h * 0.45
+                            ):
+                                _rescued = True
+                                _rescue_reason = "partial-head"
+                                break
+                    except Exception:
+                        pass
+
+                if _rescued:
+                    filtered.append(det)
+                    logger.debug(
+                        "🍽️ Food haircap kept (%s rescue, conf=%.3f): bbox=%s",
+                        _rescue_reason, _cf, [round(float(v), 1) for v in hb],
+                    )
+                    continue
+
                 dropped += 1
                 haircap_dropped = True
-                logger.info(
-                    "🍽️ Food haircap dropped (no overlap): conf=%.3f bbox=%s best_iou=%.4f heads=%d persons=%d model_type=%s",
-                    float(det.get("confidence", 0.0)),
-                    [round(float(v), 1) for v in hb],
-                    best_iou,
-                    len(head_boxes),
-                    len(person_boxes),
-                    det.get("model_type"),
+                _no_overlap_bboxes.append(
+                    f"conf={_cf:.2f} iou={best_iou:.4f}"
                 )
 
-        if dropped:
+        if dropped or filtered:
+            no_overlap_str = f" | no_overlap({len(_no_overlap_bboxes)}): [{', '.join(_no_overlap_bboxes[:5])}]" if _no_overlap_bboxes else ""
             logger.info(
-                f"🍽️ Food haircap filter: dropped={dropped} kept={len(filtered)} "
-                f"(heads={len(head_boxes)} persons={len(person_boxes)})"
+                f"🍽️ Haircap filter: dropped={dropped} kept={len(filtered)} "
+                f"heads={len(head_boxes)} persons={len(person_boxes)}{no_overlap_str}"
             )
         return filtered, haircap_dropped
 

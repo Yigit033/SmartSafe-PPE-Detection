@@ -56,72 +56,91 @@ except ImportError:
 #      model_classes below (via a NAME_MAP dict, like _FOOD_PPE_NAME_MAP).
 #   3. The bbox area filter (>85% of frame → rejected) applies automatically.
 # ─────────────────────────────────────────────────────────────────────────────
-PPE_CONFIG = {
-    'helmet': {
-        'model_classes': ['helmet', 'hard_hat', 'hardhat', 'baret'],
-        'region': 'head',
-        'pos_label': 'Helmet',
-        'neg_label': 'NO-Helmet',
-        'violation_tr': 'Baret eksik',
-        'default_critical': True,
-    },
-    'safety_vest': {
-        'model_classes': ['safety_vest', 'vest', 'yelek'],
-        'region': 'torso',
-        'pos_label': 'Safety Vest',
-        'neg_label': 'NO-Vest',
-        'violation_tr': 'Yelek eksik',
-        'default_critical': True,
-    },
-    'safety_shoes': {
-        'model_classes': ['safety_shoes', 'shoes', 'shoe', 'ayakkabı', 'ayakkabi'],
-        'region': 'feet',
-        'pos_label': 'Safety Shoes',
-        'neg_label': 'NO-Shoes',
-        'violation_tr': 'Güvenlik ayakkabısı eksik',
-        'default_critical': True,
-    },
-    'gloves': {
-        'model_classes': ['gloves'],
-        'region': 'hands',
-        'pos_label': 'Gloves',
-        'neg_label': 'NO-Gloves',
-        'violation_tr': 'Eldiven eksik',
-        'default_critical': False,
-    },
-    'safety_glasses': {
-        'model_classes': ['safety_glasses', 'glasses', 'googles', 'goggles', 'gozluk'],
-        'region': 'head',
-        'pos_label': 'Safety Glasses',
-        'neg_label': 'NO-Glasses',
-        'violation_tr': 'Gözlük eksik',
-        'default_critical': False,
-    },
-    'face_mask': {
-        'model_classes': ['face_mask_medical', 'face_mask', 'mask'],
-        'region': 'head',
-        'pos_label': 'Face Mask',
-        'neg_label': 'NO-Mask',
-        'violation_tr': 'Maske eksik',
-        'default_critical': False,
-    },
-    'safety_suit': {
-        'model_classes': ['safety_suit', 'medical_suit', 'apron'],
-        'region': 'torso',
-        'pos_label': 'Safety Suit',
-        'neg_label': 'NO-Suit',
-        'violation_tr': 'Koruyucu tulum eksik',
-        'default_critical': False,
-    },
-    'haircap': {
-        'model_classes': ['haircap', 'bone', 'file', 'kep'],
-        'region': 'head',
-        'pos_label': 'Haircap',
-        'neg_label': 'NO-Haircap',
-        'violation_tr': 'Saç filesi/Bone eksik',
-        'default_critical': True,
-    },
-}
+try:
+    from configs.constants import PPE_CONFIG
+except ImportError:
+    # Kanonik PPE tanımları: model sınıf adları, anatomik bölge ve overlay/ihlal etiketleri
+    # ─────────────────────────────────────────────────────────────────────────────
+    # PPE_CONFIG — Single source of truth for all PPE types.
+    #
+    # To add a NEW PPE type:
+    #   1. Add an entry here with model_classes, region, labels, etc.
+    #   2. Ensure the detection model(s) output a class name that matches one of
+    #      the model_classes strings (exact or substring match).
+    #   3. No other code changes needed — the pipeline handles the rest.
+    #
+    # To add a NEW sector-specific model:
+    #   1. Add the model loading in sh17_model_manager.py
+    #   2. Map the model's raw class names to canonical names that appear in
+    #      model_classes below (via a NAME_MAP dict, like _FOOD_PPE_NAME_MAP).
+    #   3. The bbox area filter (>85% of frame → rejected) applies automatically.
+    # ─────────────────────────────────────────────────────────────────────────────
+    PPE_CONFIG = {
+        'helmet': {
+            'model_classes': ['helmet', 'hard_hat', 'hardhat', 'baret'],
+            'region': 'head',
+            'pos_label': 'Baret',
+            'neg_label': 'Baret YOK',
+            'violation_tr': 'Baret eksik',
+            'default_critical': True,
+        },
+        'safety_vest': {
+            'model_classes': ['safety_vest', 'vest', 'yelek'],
+            'region': 'torso',
+            'pos_label': 'Yelek',
+            'neg_label': 'Yelek YOK',
+            'violation_tr': 'Yelek eksik',
+            'default_critical': True,
+        },
+        'safety_shoes': {
+            'model_classes': ['safety_shoes', 'shoes', 'shoe', 'ayakkabı', 'ayakkabi'],
+            'region': 'feet',
+            'pos_label': 'Ayakkabı',
+            'neg_label': 'Ayakkabı YOK',
+            'violation_tr': 'Güvenlik ayakkabısı eksik',
+            'default_critical': True,
+        },
+        'gloves': {
+            'model_classes': ['gloves'],
+            'region': 'hands',
+            'pos_label': 'Eldiven',
+            'neg_label': 'Eldiven YOK',
+            'violation_tr': 'Eldiven eksik',
+            'default_critical': False,
+        },
+        'safety_glasses': {
+            'model_classes': ['safety_glasses', 'glasses', 'googles', 'goggles', 'gozluk'],
+            'region': 'head',
+            'pos_label': 'Gözlük',
+            'neg_label': 'Gözlük YOK',
+            'violation_tr': 'Gözlük eksik',
+            'default_critical': False,
+        },
+        'face_mask': {
+            'model_classes': ['face_mask_medical', 'face_mask', 'mask'],
+            'region': 'head',
+            'pos_label': 'Maske',
+            'neg_label': 'Maske YOK',
+            'violation_tr': 'Maske eksik',
+            'default_critical': False,
+        },
+        'safety_suit': {
+            'model_classes': ['safety_suit', 'medical_suit', 'apron', 'suit', 'tulum', 'onluk'],
+            'region': 'torso',
+            'pos_label': 'Önlük',
+            'neg_label': 'Önlük YOK',
+            'violation_tr': 'Koruyucu tulum eksik',
+            'default_critical': False,
+        },
+        'haircap': {
+            'model_classes': ['haircap', 'bone', 'file', 'kep', 'hairnet', 'hair_net'],
+            'region': 'head',
+            'pos_label': 'Bone',
+            'neg_label': 'Bone YOK',
+            'violation_tr': 'Saç filesi/Bone eksik',
+            'default_critical': True,
+        },
+    }
 
 # -----------------------------------------------------------------------------
 # Açık uçlu mimari: Sektör / PPE bazlı minimum confidence override'ları
@@ -148,6 +167,11 @@ def _get_min_confidence_for_ppe(sector: Optional[str], ppe_type: str) -> Optiona
         sector_key = "food"
     overrides = PPE_MIN_CONFIDENCE_OVERRIDES.get(sector_key, {})
     return overrides.get(ppe_type)
+
+
+# Log throttling sabitleri
+PPE_LOG_SUMMARY_EVERY_S = float(os.environ.get("PPE_LOG_SUMMARY_EVERY_S", "2"))
+PPE_LOG_GROUP_FLUSH_EVERY_S = float(os.environ.get("PPE_LOG_GROUP_FLUSH_EVERY_S", "10"))
 
 
 class PoseAwarePPEDetector:
@@ -185,6 +209,11 @@ class PoseAwarePPEDetector:
         self.bbox_smoothing_factor = 0.55  # 55% previous, 45% current
         self._bbox_ema: Dict[Tuple[str, int], Tuple[List[float], float]] = {}  # (kind, id) -> (bbox, last_ts)
         self._bbox_ema_ttl_s: float = 8.0  # prune stale tracks to bound memory
+
+        # Log throttle state
+        self._log_last_ts: Dict[str, float] = {}
+        self._log_group_buf: Dict[str, list] = {}
+        self._log_group_last_flush: Dict[str, float] = {}
 
         # Optional ByteTrack-based person tracker (single instance per detector)
         self.byte_tracker = None
@@ -266,10 +295,19 @@ class PoseAwarePPEDetector:
             return cur
 
         prev_bbox, _ts = prev
-        # If the current box jumps far (identity swap / occlusion / re-id),
-        # do NOT "drag" the previous EMA; reset immediately to stay aligned.
+        # If the current box jumps far (identity swap / occlusion / re-id)
+        # OR area changes dramatically (ör. head-region keypoint kaçması
+        # nedeniyle önceki frame'de full_body boyunda bbox kaydedildiyse,
+        # yeni frame'de gerçek head gelince EMA eski büyük kutuyu sürükler
+        # ve "Bone YOK" bir kaç frame boyunca insan boyunda çizilir),
+        # EMA'yı reset et.
         try:
-            if self._bbox_iou(prev_bbox, cur) < 0.10:
+            prev_area = max(0.0, prev_bbox[2] - prev_bbox[0]) * max(0.0, prev_bbox[3] - prev_bbox[1])
+            cur_area = max(0.0, cur[2] - cur[0]) * max(0.0, cur[3] - cur[1])
+            area_ratio = 1.0
+            if prev_area > 1.0 and cur_area > 1.0:
+                area_ratio = max(prev_area, cur_area) / min(prev_area, cur_area)
+            if self._bbox_iou(prev_bbox, cur) < 0.10 or area_ratio > 3.0:
                 self._bbox_ema[key] = (cur, now)
                 return cur
         except Exception:
@@ -350,6 +388,28 @@ class PoseAwarePPEDetector:
         new_h = self._max_inference_height
         resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
         return resized, scale
+
+    def _throttled(self, key: str, interval_s: float = None) -> bool:
+        """True döndürürse log atlanabilir (throttle süresi dolmamış)."""
+        if interval_s is None:
+            interval_s = PPE_LOG_SUMMARY_EVERY_S
+        now = time.time()
+        last = self._log_last_ts.get(key, 0.0)
+        if now - last < interval_s:
+            return True
+        self._log_last_ts[key] = now
+        return False
+
+    def _bump_group(self, group_key: str, entry: str):
+        """Gruplanmış log'a satır ekle; flush süresi dolduğunda toplu yazar."""
+        self._log_group_buf.setdefault(group_key, []).append(entry)
+        now = time.time()
+        last_flush = self._log_group_last_flush.get(group_key, 0.0)
+        if now - last_flush >= PPE_LOG_GROUP_FLUSH_EVERY_S:
+            buf = self._log_group_buf.pop(group_key, [])
+            if buf:
+                logger.info(f"📊 [{group_key}] {len(buf)} entries: {'; '.join(buf[-5:])}")
+            self._log_group_last_flush[group_key] = now
 
     @staticmethod
     def _clear_gpu_memory():
@@ -1065,13 +1125,16 @@ class PoseAwarePPEDetector:
         enhanced_persons: List[Dict] = []
         frame_h, frame_w = frame_shape[:2]
 
+        # Exclusive PPE assignment: bir PPE nesnesi bir kişiye atandıktan sonra
+        # diğer kişiler için pool'dan çıkarılır (aynı bone'nin 2 kişiye gitmesini engeller)
+        _assigned_ppe_ids: Dict[str, set] = {ptype: set() for ptype in PPE_CONFIG}
+
         for idx, person in enumerate(persons):
             regions = person['anatomical_regions']
             person_bbox = person['bbox']
 
             person_ppe: Dict[str, Optional[Dict]] = {}
             compliance: Dict[str, bool] = {}
-            # Eldivenler için eldeki kapsamı ayrı ayrı takip et (sol / sağ)
             ppe_meta: Dict[str, Dict[str, bool]] = {}
             glove_hands = {'left': False, 'right': False}
 
@@ -1079,7 +1142,6 @@ class PoseAwarePPEDetector:
                 region_name = cfg['region']
                 region_bbox = regions.get(region_name)
                 if region_bbox is None:
-                    # Fallback: full body bölgesini kullan
                     region_bbox = regions.get('full_body', person_bbox)
 
                 # Haircap association is very sensitive to head region tightness.
@@ -1089,7 +1151,7 @@ class PoseAwarePPEDetector:
                         x1, y1, x2, y2 = [float(v) for v in region_bbox]
                         w = max(1.0, x2 - x1)
                         h = max(1.0, y2 - y1)
-                        pad = 0.40  # 40% expansion on each side (tuned for small head_region from pose)
+                        pad = 0.40
                         ex1 = max(0.0, x1 - w * pad)
                         ey1 = max(0.0, y1 - h * pad)
                         ex2 = min(float(frame_w), x2 + w * pad)
@@ -1098,8 +1160,14 @@ class PoseAwarePPEDetector:
                     except Exception:
                         pass
 
+                # Pool'dan zaten atanmış PPE'leri çıkar
+                available_items = [
+                    item for item in ppe_by_type.get(ppe_type, [])
+                    if id(item) not in _assigned_ppe_ids[ppe_type]
+                ]
+
                 best_match = self._find_best_ppe_match(
-                    ppe_by_type.get(ppe_type, []),
+                    available_items,
                     region_bbox,
                     person_bbox,
                     ppe_type=ppe_type
@@ -1114,6 +1182,9 @@ class PoseAwarePPEDetector:
 
                 person_ppe[ppe_type] = best_match
                 compliance[ppe_type] = best_match is not None
+
+                if best_match is not None:
+                    _assigned_ppe_ids[ppe_type].add(id(best_match))
 
                 if ppe_type == 'gloves':
                     try:
@@ -1165,65 +1236,57 @@ class PoseAwarePPEDetector:
                     except Exception:
                         pass
 
-                # 🔎 Detailed logging for haircap matching
+                # 🔎 Consolidated haircap logging (throttled)
                 if ppe_type == 'haircap':
                     candidates = ppe_by_type.get(ppe_type, [])
-                    if not candidates:
-                        logger.info(
-                            f"   🔍 Person {idx} haircap: 0 candidates in pool — "
-                            f"food model did not detect any Haircap in this frame"
-                        )
-                    else:
-                        for cand in candidates:
+                    if not candidates and not self._throttled("haircap_empty"):
+                        logger.info("🔍 Haircap: 0 candidates in pool — food model did not detect any")
+                    elif candidates and not self._throttled("haircap_match"):
+                        parts = []
+                        for ci, cand in enumerate(candidates):
                             cbbox = cand.get('bbox', [])
                             if len(cbbox) != 4:
                                 continue
                             iou_r = self._calculate_iou(cbbox, region_bbox)
                             iou_p = self._calculate_iou(cbbox, person_bbox)
+                            ok = "OK" if best_match is not None else "NO"
+                            parts.append(f"P{idx}[h={iou_r:.2f} p={iou_p:.2f} {ok}]")
+                        if parts:
                             logger.info(
-                                f"   🔍 Person {idx} haircap candidate: "
-                                f"conf={cand.get('confidence', 0):.2f}, "
-                                f"IoU_head={iou_r:.3f}, IoU_person={iou_p:.3f}, "
-                                f"matched={'YES' if best_match is not None else 'NO'}"
+                                f"🔍 Haircap match: {len(candidates)} candidates | {' '.join(parts)}"
                             )
 
-                        # One-shot bbox dump to close the loop on geometry:
-                        # person_bbox, pose-derived head region, and haircap bbox from food model.
-                        # Enable via env: PPE_ASSOC_BBOX_DUMP=1
-                        if (not self._assoc_bbox_dump_done) and os.getenv("PPE_ASSOC_BBOX_DUMP", "0") == "1":
-                            try:
-                                head_bbox = regions.get("head") if isinstance(regions, dict) else None
-
-                                # Pick the candidate most overlapping the person bbox (even if region match fails).
-                                best_cand = None
-                                best_piou = -1.0
-                                for cand in candidates:
-                                    cb = cand.get("bbox", [])
-                                    if len(cb) != 4:
-                                        continue
-                                    piou = self._calculate_iou(cb, person_bbox)
-                                    if piou > best_piou:
-                                        best_piou = piou
-                                        best_cand = cand
-
-                                logger.info(
-                                    "📦 ASSOC_BBOX_DUMP person=%s person_bbox=%s head_region=%s haircap_bbox=%s "
-                                    "haircap_conf=%.3f iou_head=%.4f iou_person=%.4f",
-                                    idx,
-                                    [round(float(v), 1) for v in (person_bbox or [])] if person_bbox else None,
-                                    [round(float(v), 1) for v in (head_bbox or [])] if head_bbox else None,
-                                    [round(float(v), 1) for v in ((best_cand or {}).get("bbox") or [])] if best_cand else None,
-                                    float((best_cand or {}).get("confidence", 0.0)),
-                                    self._calculate_iou((best_cand or {}).get("bbox", []), head_bbox)
-                                    if (best_cand and head_bbox)
-                                    else 0.0,
-                                    self._calculate_iou((best_cand or {}).get("bbox", []), person_bbox)
-                                    if best_cand
-                                    else 0.0,
-                                )
-                            finally:
-                                # Regardless of any dump issues, never spam logs.
-                                self._assoc_bbox_dump_done = True
+                    # One-shot bbox dump (env: PPE_ASSOC_BBOX_DUMP=1)
+                    if candidates and (not self._assoc_bbox_dump_done) and os.getenv("PPE_ASSOC_BBOX_DUMP", "0") == "1":
+                        try:
+                            head_bbox = regions.get("head") if isinstance(regions, dict) else None
+                            best_cand = None
+                            best_piou = -1.0
+                            for cand in candidates:
+                                cb = cand.get("bbox", [])
+                                if len(cb) != 4:
+                                    continue
+                                piou = self._calculate_iou(cb, person_bbox)
+                                if piou > best_piou:
+                                    best_piou = piou
+                                    best_cand = cand
+                            logger.info(
+                                "📦 ASSOC_BBOX_DUMP person=%s person_bbox=%s head_region=%s haircap_bbox=%s "
+                                "haircap_conf=%.3f iou_head=%.4f iou_person=%.4f",
+                                idx,
+                                [round(float(v), 1) for v in (person_bbox or [])] if person_bbox else None,
+                                [round(float(v), 1) for v in (head_bbox or [])] if head_bbox else None,
+                                [round(float(v), 1) for v in ((best_cand or {}).get("bbox") or [])] if best_cand else None,
+                                float((best_cand or {}).get("confidence", 0.0)),
+                                self._calculate_iou((best_cand or {}).get("bbox", []), head_bbox)
+                                if (best_cand and head_bbox)
+                                else 0.0,
+                                self._calculate_iou((best_cand or {}).get("bbox", []), person_bbox)
+                                if best_cand
+                                else 0.0,
+                            )
+                        finally:
+                            self._assoc_bbox_dump_done = True
 
                 if logger.isEnabledFor(logging.DEBUG) and ppe_type in ('face_mask', 'safety_suit', 'haircap'):
                     candidates = ppe_by_type.get(ppe_type, [])
@@ -1278,30 +1341,26 @@ class PoseAwarePPEDetector:
         
         # Type-specific thresholds (shoes need lower threshold due to occlusion)
         iou_threshold = {
-            'helmet': 0.03,        # slightly more tolerant for helmets
-            'haircap': 0.03,       # bone/file de kask gibi başın üstünde
+            'helmet': 0.03,
+            'haircap': 0.05,       # sıkılaştırıldı (eski: 0.03) — false match azaltma
             'safety_vest': 0.05,
-            'safety_shoes': 0.02,  # Lower for shoes - often partially visible
+            'safety_shoes': 0.02,
             'gloves': 0.05,
             'safety_glasses': 0.05,
             'face_mask': 0.05,
-            # Gıda önlüğü için: bölge IoU düşük olsa bile kişiyle örtüşmesi yeterli,
-            # bu yüzden safety_suit için bölge eşiğini 0.0 yapıyoruz.
             'safety_suit': 0.0,
             'general': 0.05
         }.get(ppe_type, 0.05)
         
-        # Küçük PPE (bone, eldiven, maske, önlük, gözlük) kişi kutusuyla çok az örtüşür;
-        # person_iou 0.02+ yeterli (aksi halde best_match hiç set edilmez, fallback'ler devreye girmez).
         person_iou_threshold = {
-            'helmet': 0.08,        # allow slightly weaker overlap with person
-            'haircap': 0.02,       # bone/kep küçük bbox → düşük person IoU
+            'helmet': 0.08,
+            'haircap': 0.10,       # sıkılaştırıldı (eski: 0.02) — false match azaltma
             'safety_vest': 0.1,
-            'safety_shoes': 0.05,  # Lower for shoes
-            'gloves': 0.02,        # eldiven küçük
-            'safety_glasses': 0.02,# gözlük küçük
-            'face_mask': 0.02,     # maske küçük
-            'safety_suit': 0.02,   # önlük bazen küçük tespit
+            'safety_shoes': 0.05,
+            'gloves': 0.02,
+            'safety_glasses': 0.02,
+            'face_mask': 0.02,
+            'safety_suit': 0.02,
             'general': 0.1
         }.get(ppe_type, 0.1)
         
@@ -1361,9 +1420,8 @@ class PoseAwarePPEDetector:
             try:
                 px1, py1, px2, py2 = person_bbox
                 person_height = max(float(py2) - float(py1), 1.0)
-                top_fraction = py1 + person_height * 0.45  # üst ~%45'lik dilim "baş" kabul
-                # Küçük bone/helmet bbox'larda person_iou çok düşük olabilir; 0.01 yeterli
-                min_person_iou = 0.01
+                top_fraction = py1 + person_height * 0.45
+                min_person_iou = 0.08  # sıkılaştırıldı (eski: 0.01)
                 if best_center_y is not None and best_person_iou >= min_person_iou and best_center_y <= top_fraction:
                     logger.debug(
                         f"✅ Helmet/haircap fallback match accepted: best_iou={best_iou:.3f}, "
@@ -1400,9 +1458,10 @@ class PoseAwarePPEDetector:
                 pass
 
         # ── Fallback 3: Küçük PPE → merkez kişi kutusu içindeyse kabul et ──
-        # Bölge (head/hands) dar hesaplandıysa Fallback 2 yetmeyebilir; kişi kutusu daha geniş.
         small_ppe_types = ('haircap', 'helmet', 'gloves', 'face_mask', 'safety_glasses', 'safety_suit')
-        if best_match is not None and ppe_type in small_ppe_types and best_person_iou > 0:
+        # haircap/helmet için Fallback 3'te de minimum person_iou gerekli (false match azaltma)
+        min_piou_fb3 = 0.08 if ppe_type in ('haircap', 'helmet') else 0.0
+        if best_match is not None and ppe_type in small_ppe_types and best_person_iou > min_piou_fb3:
             try:
                 ppe_bbox = best_match.get('bbox', [])
                 if len(ppe_bbox) == 4 and len(person_bbox) == 4:
@@ -1418,7 +1477,33 @@ class PoseAwarePPEDetector:
                         return best_match
             except Exception:
                 pass
-        
+
+        # ── Fallback 4: Proximity — tüm IoU'lar 0 olduğunda mesafe bazlı kabul ──
+        # Pose model'in bbox'u yanlış hesapladığı durumlarda: PPE merkezi kişi merkezine
+        # yeterince yakınsa kabul et.
+        if best_match is not None and best_person_iou == 0 and best_iou == 0:
+            try:
+                ppe_bbox = best_match.get('bbox', [])
+                if len(ppe_bbox) == 4 and len(person_bbox) == 4:
+                    ppe_cx = (float(ppe_bbox[0]) + float(ppe_bbox[2])) / 2.0
+                    ppe_cy = (float(ppe_bbox[1]) + float(ppe_bbox[3])) / 2.0
+                    px1, py1, px2, py2 = [float(v) for v in person_bbox]
+                    pcx = (px1 + px2) / 2.0
+                    pcy = (py1 + py2) / 2.0
+                    pw = max(px2 - px1, 1.0)
+                    ph = max(py2 - py1, 1.0)
+                    person_diag = (pw ** 2 + ph ** 2) ** 0.5
+                    dist = ((ppe_cx - pcx) ** 2 + (ppe_cy - pcy) ** 2) ** 0.5
+                    proximity_ratio = 0.50
+                    if dist < person_diag * proximity_ratio:
+                        logger.debug(
+                            f"✅ Proximity fallback for {ppe_type}: "
+                            f"dist={dist:.1f}, threshold={person_diag * proximity_ratio:.1f}"
+                        )
+                        return best_match
+            except Exception:
+                pass
+
         return None
     
     def _calculate_iou(self, box1: List[float], box2: List[float]) -> float:
@@ -1532,7 +1617,30 @@ class PoseAwarePPEDetector:
             # Add PPE detections with anatomical regions (positive + negative)
             for ppe_type, cfg in PPE_CONFIG.items():
                 region_name = cfg['region']
-                region_bbox = regions.get(region_name) or regions.get('full_body')
+                region_bbox = regions.get(region_name)
+
+                # Region yoksa person bbox'tan anatomik proxy hesapla.
+                # Eski kodda full_body fallback kullanılıyordu; bu, head pose
+                # keypoint'i kaçan frame'lerde "Bone YOK" bbox'ını insanın
+                # yarısı boyunda çiziyordu. Anatomik proxy ile region neye
+                # karşılık geliyorsa (head=üst %20, torso=%20-60, hands=%35-70,
+                # feet=alt %20) o orana sıkıştırılır.
+                if region_bbox is None and p_bbox and len(p_bbox) == 4:
+                    try:
+                        _px1, _py1, _px2, _py2 = map(float, p_bbox)
+                        _ph = _py2 - _py1
+                        if _ph > 1:
+                            if region_name == 'head':
+                                region_bbox = [_px1, _py1, _px2, _py1 + _ph * 0.20]
+                            elif region_name == 'torso':
+                                region_bbox = [_px1, _py1 + _ph * 0.20, _px2, _py1 + _ph * 0.60]
+                            elif region_name == 'hands':
+                                region_bbox = [_px1, _py1 + _ph * 0.35, _px2, _py1 + _ph * 0.70]
+                            elif region_name == 'feet':
+                                region_bbox = [_px1, _py1 + _ph * 0.80, _px2, _py2]
+                    except Exception:
+                        region_bbox = None
+
                 if region_bbox is None:
                     continue
 
@@ -1552,6 +1660,56 @@ class PoseAwarePPEDetector:
                         ph = float(p_bbox[3]) - float(p_bbox[1])
                         if pw > 0 and ph > 0 and (bw * bh) > (pw * ph) * 2.0:
                             bbox_to_use = region_bbox
+
+                    # ── Pozitif PPE için anatomik clamp ────────────────────────
+                    # Food model bazen haircap / face_mask / apron bbox'larını
+                    # person boyunda döndürüyor. Bu durumda "Bone 0.95" etiketi
+                    # tüm insan boyunda çiziliyor (kafada değil). Negatif (NO-*)
+                    # tarafta kullanılan anatomik kırpmayı pozitifte de uygula.
+                    if (
+                        bbox_to_use and len(bbox_to_use) == 4
+                        and region_bbox and len(region_bbox) == 4
+                    ):
+                        try:
+                            rx1, ry1, rx2, ry2 = map(float, region_bbox)
+                            rh = ry2 - ry1
+                            anatomical = None
+                            if region_name == 'head':
+                                if ppe_type == 'haircap':
+                                    anatomical = [rx1, ry1, rx2, ry1 + 0.45 * rh]
+                                elif ppe_type == 'face_mask':
+                                    anatomical = [rx1, ry1 + 0.45 * rh, rx2, ry2]
+                            elif region_name == 'torso' and ppe_type == 'safety_suit':
+                                anatomical = [rx1, ry1 - 0.10 * rh, rx2, ry2 + 0.20 * rh]
+                            elif region_name == 'hands' and ppe_type == 'gloves':
+                                anatomical = [rx1, ry1 + 0.10 * rh, rx2, ry2 + 0.10 * rh]
+
+                            if anatomical is not None:
+                                bx1, by1, bx2, by2 = map(float, bbox_to_use)
+                                bw_f = bx2 - bx1
+                                bh_f = by2 - by1
+                                ax1, ay1, ax2, ay2 = map(float, anatomical)
+                                aw_f = max(ax2 - ax1, 1.0)
+                                ah_f = max(ay2 - ay1, 1.0)
+                                bcx = (bx1 + bx2) / 2.0
+                                bcy = (by1 + by2) / 2.0
+                                too_big = (bw_f * bh_f) > (aw_f * ah_f) * 2.5
+                                center_out = not (
+                                    ax1 <= bcx <= ax2 and ay1 <= bcy <= ay2
+                                )
+                                too_tall_haircap = False
+                                if (
+                                    ppe_type == 'haircap'
+                                    and p_bbox and len(p_bbox) == 4
+                                ):
+                                    p_h = float(p_bbox[3]) - float(p_bbox[1])
+                                    if p_h > 0 and bh_f > p_h * 0.30:
+                                        too_tall_haircap = True
+                                if too_big or center_out or too_tall_haircap:
+                                    bbox_to_use = anatomical
+                        except Exception:
+                            pass
+
                     # Smooth positive PPE bbox per person+type to reduce jitter in overlay.
                     if tid is not None and bbox_to_use and len(bbox_to_use) == 4:
                         try:

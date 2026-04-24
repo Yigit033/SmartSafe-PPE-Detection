@@ -45,7 +45,7 @@ class NotificationService:
         # Botun geçerli olup olmadığını kontrol et ve kimliğini doğrula
         try:
             me_url = f"https://api.telegram.org/bot{self.global_bot_token}/getMe"
-            me_res = requests.get(me_url, timeout=10).json()
+            me_res = requests.get(me_url, timeout=int(os.environ.get('SOCKET_TIMEOUT', 10))).json()
             if me_res.get('ok'):
                 bot_info = me_res.get('result', {})
                 logger.info(f"✨ Telegram Bot Doğrulandı: @{bot_info.get('username')} ({bot_info.get('first_name')})")
@@ -69,8 +69,8 @@ class NotificationService:
         while self._polling_active:
             try:
                 url = f"https://api.telegram.org/bot{self.global_bot_token}/getUpdates"
-                params = {"offset": offset, "timeout": 30}
-                response = requests.get(url, params=params, timeout=35)
+                params = {"offset": offset, "timeout": int(os.environ.get('TELEGRAM_TIMEOUT', 30))}
+                response = requests.get(url, params=params, timeout=int(os.environ.get('TELEGRAM_POLLING_TIMEOUT', 35)))
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -80,7 +80,7 @@ class NotificationService:
                 elif response.status_code == 409:
                     # Conflict: Başka bir instance çalışıyor
                     logger.warning("⚠️ Telegram Polling Conflict: Başka bir bot örneği çalışıyor olabilir. 10 saniye bekleniyor...")
-                    time.sleep(10)
+                    time.sleep(int(os.environ.get('TELEGRAM_RETRY_DELAY', 10)))
                 elif response.status_code == 401:
                     logger.error("🛑 Telegram Bot Token GEÇERSİZ! Polling durduruluyor.")
                     self._polling_active = False
@@ -315,7 +315,7 @@ class NotificationService:
                 "text": text,
                 "parse_mode": "Markdown"
             }
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json=payload, timeout=int(os.environ.get('TELEGRAM_TIMEOUT', 10)))
             if response.status_code == 200:
                 logger.info(f"✅ Telegram notification sent to {chat_id}")
                 return True
@@ -337,7 +337,7 @@ class NotificationService:
                     "caption": caption,
                     "parse_mode": "Markdown"
                 }
-                response = requests.post(url, data=payload, files=files, timeout=15)
+                response = requests.post(url, data=payload, files=files, timeout=int(os.environ.get('TELEGRAM_PHOTO_TIMEOUT', 15)))
                 
             if response.status_code == 200:
                 logger.info(f"✅ Telegram photo notification sent to {chat_id}")

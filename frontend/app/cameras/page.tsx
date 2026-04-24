@@ -822,14 +822,14 @@ function CamerasContent() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsManageDvrsOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 hover:scale-105 active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 active:scale-95 cursor-pointer"
           >
             <Settings className="w-4 h-4" /> KAMERA YÖNETİMİ
           </button>
           {isDev() && (
             <button
               onClick={toggleAllPrivacy}
-              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 hover:scale-105 active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 active:scale-95 cursor-pointer"
             >
               {privacyModeCameras.length === cameras.length ? (
                 <EyeOff className="w-4 h-4" />
@@ -841,7 +841,7 @@ function CamerasContent() {
           )}
           <button
             onClick={() => handleNavigate("/cameras/setup")}
-            className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 transition-all duration-300 hover:bg-brand-teal/90 hover:scale-105 hover:shadow-2xl hover:shadow-brand-teal/30 active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 transition-all duration-300 hover:bg-brand-teal/90 hover:shadow-2xl hover:shadow-brand-teal/30 active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> YENİ KAMERA EKLE
           </button>
@@ -1020,7 +1020,7 @@ function CamerasContent() {
                               `/camera/${encodeURIComponent(camera.camera_id)}`,
                             )
                           }
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 shadow-sm cursor-pointer transition-all duration-300 hover:bg-slate-200 hover:border-slate-500 hover:scale-105 hover:shadow-md active:scale-95"
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 shadow-sm cursor-pointer transition-all duration-300 hover:bg-slate-200 hover:border-slate-500 hover:shadow-md active:scale-95"
                           title="Tam Ekran"
                         >
                           <Maximize2 className="w-5 h-5" />
@@ -1028,7 +1028,7 @@ function CamerasContent() {
                         {isDev() && (
                           <button
                             onClick={() => toggleCameraPrivacy(camera.camera_id)}
-                            className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer active:scale-95 hover:bg-slate-200 hover:border-slate-500 hover:scale-105 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-400" : "text-brand-teal"}`}
+                            className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer active:scale-95 hover:bg-slate-200 hover:border-slate-500 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-400" : "text-brand-teal"}`}
                             title="Gizlilik Modu"
                           >
                             {privacyModeCameras.includes(camera.camera_id) ? (
@@ -1044,7 +1044,7 @@ function CamerasContent() {
                             setSelectedCameraForZone(camera);
                             setIsZoneModalOpen(true);
                           }}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 hover:scale-105 active:scale-95"
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 active:scale-95"
                           title="Analiz Bölgesi"
                         >
                           <BoxSelect className="w-5 h-5" />
@@ -1055,7 +1055,7 @@ function CamerasContent() {
                             setSelectedCameraForSchedule(camera);
                             setIsScheduleModalOpen(true);
                           }}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 hover:scale-105 active:scale-95"
+                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 active:scale-95"
                           title="Çalışma Saatleri"
                         >
                           <CalendarCheck className="w-5 h-5" />
@@ -1359,12 +1359,16 @@ function CamerasContent() {
                       dvrs.map((dvr) => (
                         <div key={dvr.dvr_id} className="flex flex-col gap-2">
                           <div
-                            className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl transition-all border border-slate-200/50 ${expandedDvrIds.includes(dvr.dvr_id) ? "rounded-b-none border-b-transparent" : "hover:bg-slate-100"}`}
+                            onClick={() => toggleDvrExpand(dvr.dvr_id)}
+                            className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl transition-all border border-slate-200/50 cursor-pointer ${expandedDvrIds.includes(dvr.dvr_id) ? "rounded-b-none border-b-transparent" : "hover:bg-slate-100"}`}
                           >
                             <div className="flex items-center gap-4 flex-1">
                               <button
-                                onClick={() => toggleDvrExpand(dvr.dvr_id)}
-                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 cursor-pointer active:scale-90 ${expandedDvrIds.includes(dvr.dvr_id) ? "rotate-90 bg-brand-teal text-white shadow-md shadow-brand-teal/20" : "text-slate-400 hover:bg-slate-200 hover:text-slate-600"}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleDvrExpand(dvr.dvr_id);
+                                }}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 cursor-pointer active:scale-90 ${expandedDvrIds.includes(dvr.dvr_id) ? "rotate-90 text-brand-teal" : "text-slate-400 hover:bg-slate-200 hover:text-slate-600"}`}
                               >
                                 <ChevronRight className="w-4 h-4" />
                               </button>
@@ -1417,9 +1421,12 @@ function CamerasContent() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                               <button
-                                onClick={() => discoverChannels(dvr.dvr_id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  discoverChannels(dvr.dvr_id);
+                                }}
                                 disabled={isDiscoveringDvr === dvr.dvr_id}
                                 className="flex items-center justify-center gap-2 px-4 h-9 rounded-xl bg-white border border-slate-200 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-brand-teal hover:text-white hover:border-brand-teal transition-all cursor-pointer disabled:opacity-50 active:scale-95"
                               >
@@ -1431,7 +1438,8 @@ function CamerasContent() {
                                 KEŞFET
                               </button>
                               <button
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setEditingDvrId(dvr.dvr_id);
                                   setEditingDvrName(dvr.name || "");
                                 }}
@@ -1441,7 +1449,10 @@ function CamerasContent() {
                                 <Pencil className="w-5 h-5" />
                               </button>
                               <button
-                                onClick={() => deleteDvr(dvr.dvr_id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteDvr(dvr.dvr_id);
+                                }}
                                 disabled={isDeletingDvr}
                                 className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer disabled:opacity-50 active:scale-95 border border-transparent hover:border-red-100"
                               >

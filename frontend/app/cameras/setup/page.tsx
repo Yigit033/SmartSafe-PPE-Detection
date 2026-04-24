@@ -6,32 +6,33 @@ import { getCompanyId } from "@/lib/session";
 import { goToCamerasPage } from "@/lib/camerasNavigation";
 import api from "@/lib/api";
 import core from "@/lib/core";
+import { isDev } from "@/lib/utils";
 import { useConfirm } from "@/context/ConfirmContext";
-import { 
-  ArrowLeft, 
-  Scan, 
-  Pointer, 
-  Search, 
-  SquarePen, 
-  LayoutGrid, 
-  Settings2, 
-  CheckCircle2, 
-  Compass, 
-  Camera, 
-  HardDrive, 
-  ScanQrCode, 
-  Video, 
-  VideoOff, 
-  Wifi, 
-  Check, 
-  X, 
-  Building2, 
-  Landmark, 
-  MinusSquare, 
-  CheckSquare, 
-  BadgeCheck, 
+import {
+  ArrowLeft,
+  Scan,
+  Pointer,
+  Search,
+  SquarePen,
+  LayoutGrid,
+  Settings2,
+  CheckCircle2,
+  Compass,
+  Camera,
+  HardDrive,
+  ScanQrCode,
+  Video,
+  VideoOff,
+  Wifi,
+  Check,
+  X,
+  Building2,
+  Landmark,
+  MinusSquare,
+  CheckSquare,
+  BadgeCheck,
   Star,
-  Loader2
+  Loader2,
 } from "lucide-react";
 
 type SetupMode =
@@ -121,7 +122,9 @@ export default function CameraSetupPage() {
     }, 300);
 
     try {
-      const range = batchData.ip_list.includes("/") ? batchData.ip_list : undefined;
+      const range = batchData.ip_list.includes("/")
+        ? batchData.ip_list
+        : undefined;
       const data = await core.discoverCameras(companyId!, {
         network_range: range,
         auto_sync: false,
@@ -129,7 +132,7 @@ export default function CameraSetupPage() {
 
       // API standard discovery_result.cameras veya top-level cameras döndürebilir
       const cameras = data.discovery_result?.cameras || data.cameras || [];
-      
+
       if (data.success && cameras.length > 0) {
         setDiscoveredCameras(cameras);
       } else if (data.success && cameras.length === 0) {
@@ -238,9 +241,12 @@ export default function CameraSetupPage() {
       if (!data.success) {
         await confirm({
           title: "DVR KAYDEDİLEMEDİ",
-          message: data.error || data.message || "Bağlantı veya yetki bilgilerini kontrol edin.",
+          message:
+            data.error ||
+            data.message ||
+            "Bağlantı veya yetki bilgilerini kontrol edin.",
           confirmText: "TAMAM",
-          type: "danger"
+          type: "danger",
         });
         return;
       }
@@ -264,22 +270,26 @@ export default function CameraSetupPage() {
           (discData.channels || []).map((c: any) => c.channel_number),
         );
         const n = (discData.channels || []).length;
-        const msg = data.restored 
+        const msg = data.restored
           ? "DVR geri yüklendi. " + (data.message || "")
           : "DVR başarıyla kaydedildi.";
-          
+
         await confirm({
           title: "DVR BAĞLANTISI TAMAM",
           message: `${msg}\n\n${n > 0 ? `Keşif: ${n} kanal bulundu. Seçim yapabilirsiniz.` : "Keşif: Kanal bulunamadı; DVR ayarlarını kontrol edin."}`,
           confirmText: "DEVAM ET",
-          type: "info"
+          type: "info",
         });
       } else {
         await confirm({
           title: "KANAL KEŞFİ HATASI",
-          message: (data.restored ? "DVR geri yüklendi ama kanallar keşfedilemedi. " : "DVR kaydedildi ama kanallar keşfedilemedi. ") + (discData.error || ""),
+          message:
+            (data.restored
+              ? "DVR geri yüklendi ama kanallar keşfedilemedi. "
+              : "DVR kaydedildi ama kanallar keşfedilemedi. ") +
+            (discData.error || ""),
           confirmText: "TAMAM",
-          type: "warning"
+          type: "warning",
         });
       }
     } catch (e) {
@@ -288,7 +298,7 @@ export default function CameraSetupPage() {
         title: "SİSTEM HATASI",
         message: "Sunucu hatası veya beklenmeyen bir sorun oluştu.",
         confirmText: "TAMAM",
-        type: "danger"
+        type: "danger",
       });
     } finally {
       setIsSaving(false);
@@ -510,8 +520,12 @@ export default function CameraSetupPage() {
                     TARAMA ARALIĞI (BOŞ BIRAKIRSANIZ OTOMATİK BULUR)
                   </label>
                   <input
-                    value={batchData.ip_list.includes("/") ? batchData.ip_list : ""}
-                    onChange={(e) => setBatchData({ ...batchData, ip_list: e.target.value })}
+                    value={
+                      batchData.ip_list.includes("/") ? batchData.ip_list : ""
+                    }
+                    onChange={(e) =>
+                      setBatchData({ ...batchData, ip_list: e.target.value })
+                    }
                     className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-xs font-black text-slate-900 focus:bg-white focus:border-brand-teal outline-none"
                     placeholder="Örn: 192.168.1.0/24 (Boşsa Oto-Tespit)"
                   />
@@ -535,7 +549,11 @@ export default function CameraSetupPage() {
                   >
                     <div className="flex items-center gap-6">
                       <div className="h-16 w-16 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-400 group-hover:bg-brand-teal group-hover:text-white transition-all shadow-inner">
-                        {cam.onvif ? <ScanQrCode className="w-8 h-8" /> : <Video className="w-8 h-8" />}
+                        {cam.onvif ? (
+                          <ScanQrCode className="w-8 h-8" />
+                        ) : (
+                          <Video className="w-8 h-8" />
+                        )}
                       </div>
                       <div>
                         <h4 className="text-lg font-black text-slate-900 uppercase leading-none mb-2">
@@ -621,7 +639,11 @@ export default function CameraSetupPage() {
                   <div
                     className={`h-10 w-10 rounded-[1rem] flex items-center justify-center ${testResult.success ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}
                   >
-                    {testResult.success ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+                    {testResult.success ? (
+                      <Check className="w-5 h-5" />
+                    ) : (
+                      <X className="w-5 h-5" />
+                    )}
                   </div>
                   <span className="text-[11px] font-black uppercase tracking-widest leading-relaxed">
                     {testResult.message}
@@ -920,61 +942,71 @@ export default function CameraSetupPage() {
                 </p>
               </div>
 
-              <div className="flex gap-4 mb-10">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDvrData({
-                      ...dvrData,
-                      name: "Ek Bina DVR",
-                      ip_address: "160.75.85.3",
-                      port: 8000,
-                      rtsp_port: 554,
-                      username: "admin",
-                      password: "Opsn810710.",
-                      dvr_type: "hikvision",
-                    })
-                  }
-                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all text-left group cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-brand-teal/10 text-brand-teal flex items-center justify-center group-hover:bg-brand-teal group-hover:text-white transition-all">
-                      <Building2 className="w-6 h-6" />
+              {isDev() && (
+                <div className="flex gap-4 mb-10">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDvrData({
+                        ...dvrData,
+                        name: "Ek Bina DVR",
+                        ip_address: "160.75.85.3",
+                        port: 8000,
+                        rtsp_port: 554,
+                        username: "admin",
+                        password: "Opsn810710.",
+                        dvr_type: "hikvision",
+                      })
+                    }
+                    className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-brand-teal hover:bg-white transition-all text-left group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-2xl bg-brand-teal/10 text-brand-teal flex items-center justify-center group-hover:bg-brand-teal group-hover:text-white transition-all">
+                        <Building2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase">
+                          EK BİNA
+                        </h4>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                          160.75.85.3
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-black text-slate-900 uppercase">EK BİNA</h4>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">160.75.85.3</p>
-                    </div>
-                  </div>
-                </button>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDvrData({
-                      ...dvrData,
-                      name: "Taşkışla DVR",
-                      ip_address: "10.64.221.50",
-                      port: 8000,
-                      rtsp_port: 554,
-                      username: "admin",
-                      password: "Opsn810710.",
-                      dvr_type: "hikvision",
-                    })
-                  }
-                  className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all text-left group cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                      <Landmark className="w-6 h-6" />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDvrData({
+                        ...dvrData,
+                        name: "Taşkışla DVR",
+                        ip_address: "10.64.221.50",
+                        port: 8000,
+                        rtsp_port: 554,
+                        username: "admin",
+                        password: "Opsn810710.",
+                        dvr_type: "hikvision",
+                      })
+                    }
+                    className="flex-1 p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 hover:border-indigo-600 hover:bg-white transition-all text-left group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                        <Landmark className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase">
+                          TAŞKIŞLA
+                        </h4>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                          10.64.221.50
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-black text-slate-900 uppercase">TAŞKIŞLA</h4>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">10.64.221.50</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
+                  </button>
+                </div>
+              )}
 
               <form
                 onSubmit={saveDVR}
@@ -1221,7 +1253,9 @@ export default function CameraSetupPage() {
                                   : "bg-white text-slate-300 shadow-sm"
                               }`}
                             >
-                              {selectedChannels.includes(channel.channel_number) ? (
+                              {selectedChannels.includes(
+                                channel.channel_number,
+                              ) ? (
                                 <CheckCircle2 className="w-6 h-6" />
                               ) : (
                                 <Video className="w-6 h-6" />

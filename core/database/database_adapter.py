@@ -1527,7 +1527,7 @@ class DatabaseAdapter:
             elif et is not None:
                 try:
                     et = float(et)
-                except Exception:
+                except Exception:   
                     et = None
 
             params = (

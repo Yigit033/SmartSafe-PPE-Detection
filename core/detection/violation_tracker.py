@@ -248,16 +248,27 @@ class ViolationTracker:
         ended_violations = []
         
         # Violation type mapping (Türkçe -> İngilizce)
-        violation_map = {
-            'Baret eksik': 'no_helmet',
-            'Yelek eksik': 'no_vest',
-            'Güvenlik ayakkabısı eksik': 'no_shoes'
-        }
+        # PPE_CONFIG'den dinamik olarak oluşturulur (violation_tr -> key)
+        try:
+            from configs.constants import PPE_CONFIG
+            violation_map = {v['violation_tr']: k for k, v in PPE_CONFIG.items()}
+        except Exception:
+            violation_map = {
+                'Baret eksik': 'no_helmet',
+                'Yelek eksik': 'no_vest',
+                'Güvenlik ayakkabısı eksik': 'no_shoes'
+            }
         
         # Mevcut ihlalleri normalize et
         current_violations = set()
         for v in violations:
-            violation_type = violation_map.get(v, v.lower().replace(' ', '_'))
+            # Önce haritadan bak, yoksa canonical format (lowercase + underscore)
+            violation_type = violation_map.get(v)
+            if not violation_type:
+                # 'no_' prefix ekle (ihlal olduğu için)
+                clean_v = v.lower().replace(' ', '_')
+                violation_type = f"no_{clean_v}" if not clean_v.startswith('no_') else clean_v
+            
             current_violations.add(violation_type)
         
         # Kamera için aktif ihlalleri al

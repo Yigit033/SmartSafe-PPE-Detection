@@ -27,6 +27,11 @@ def filter_detections_for_company_required_overlay(
     """
     - Kişi (person) kutuları tutulur.
     - PPE / head vb.: model sınıfı → sector_config `id`; `id` required_ppe içindeyse tutulur.
+    - Pose-aware detector çıktıları (`pose_based=True`) zaten detector içinde
+      `is_required_for_violation` süzgecinden geçtiği için burada muaf tutulur.
+      Aksi halde Türkçe pos/neg label'ları (ör. 'Maske', 'Önlük YOK') sh17
+      canonical adlarıyla eşleşmeyip overlay'den düşüyor ve ekranda sadece
+      kişi kutusu görünüyordu.
     - required_ppe None veya boş: davranış değişmez (liste olduğu gibi; boş liste = sadece kişi).
     """
     if not detections or not isinstance(detections, list):
@@ -39,6 +44,9 @@ def filter_detections_for_company_required_overlay(
         for d in detections:
             if not isinstance(d, dict):
                 continue
+            if bool(d.get("pose_based", False)):
+                out.append(d)
+                continue
             cn = _norm_class_name(str(d.get("class_name", "")))
             if cn in ("person", "kisi", "insan"):
                 out.append(d)
@@ -47,6 +55,9 @@ def filter_detections_for_company_required_overlay(
     out = []
     for d in detections:
         if not isinstance(d, dict):
+            continue
+        if bool(d.get("pose_based", False)):
+            out.append(d)
             continue
         raw_cn = str(d.get("class_name", ""))
         cn = _norm_class_name(raw_cn)

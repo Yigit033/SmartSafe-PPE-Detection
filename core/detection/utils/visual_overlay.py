@@ -8,9 +8,144 @@ Production-grade bounding box rendering with:
   - Adaptive sizing based on frame resolution
 """
 
+import os
 import cv2
 import numpy as np
 from typing import Tuple, Optional
+
+# ─── Unicode (Türkçe) metin için PIL/Pillow render ──────────────────────────
+# cv2.putText Hershey fontları yalnızca Latin1'i render eder; Ö/ö/Ü/Ç/Ş/İ/ğ
+# karakterleri "?" olarak çıkıyor. Pillow TrueType fontu ile UTF-8 metni
+# ROI içinde çiziyoruz (tüm frame dönüşümü değil, sadece pill alanı).
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _PIL_AVAILABLE = True
+except ImportError:
+    _PIL_AVAILABLE = False
+
+_FONT_CACHE: dict = {}
+
+_FONT_CANDIDATES = [
+    # Windows
+    r"C:\Windows\Fonts\calibri.ttf",
+    r"C:\Windows\Fonts\arial.ttf",
+    r"C:\Windows\Fonts\segoeui.ttf",
+    # Linux
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    # macOS
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/Library/Fonts/Arial.ttf",
+]
+
+
+def _get_pil_font(px_size: int):
+    """Cache'li TrueType font getter. Bulunamazsa PIL default bitmap font."""
+    if not _PIL_AVAILABLE:
+        return None
+    key = int(max(8, px_size))
+    if key in _FONT_CACHE:
+        return _FONT_CACHE[key]
+    for path in _FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                f = ImageFont.truetype(path, key)
+                _FONT_CACHE[key] = f
+                return f
+            except Exception:
+                continue
+    # Fallback — Türkçe karakter desteği sınırlı
+    try:
+        f = ImageFont.load_default()
+        _FONT_CACHE[key] = f
+        return f
+    except Exception:
+        return None
+
+
+_TR_ASCII_MAP = str.maketrans({
+    "Ö": "O", "ö": "o",
+    "Ü": "U", "ü": "u",
+    "Ç": "C", "ç": "c",
+    "Ş": "S", "ş": "s",
+    "İ": "I", "ı": "i",
+    "Ğ": "G", "ğ": "g",
+})
+
+
+def _draw_text_unicode(
+    img: np.ndarray,
+    text: str,
+    x: int,
+    y_top: int,
+    color_bgr: Tuple[int, int, int],
+    px_size: int,
+) -> None:
+    """
+    UTF-8 metni (x, y_top) top-left köşesinden itibaren çizer.
+    PIL varsa TrueType ile Türkçe karakterleri doğru render eder;
+    yoksa Ö/ö → O/o şeklinde ASCII fallback yapıp cv2.putText kullanır.
+    Performans için frame'in yalnızca metin ROI'si dönüştürülür.
+    """
+    if not text:
+        return
+    h_img, w_img = img.shape[:2]
+    if not _PIL_AVAILABLE:
+        fs = max(0.35, px_size / 28.0)
+        ascii_text = text.translate(_TR_ASCII_MAP)
+        (tw, th), baseline = cv2.getTextSize(ascii_text, cv2.FONT_HERSHEY_DUPLEX, fs, 1)
+        cv2.putText(
+            img, ascii_text, (x, y_top + th),
+            cv2.FONT_HERSHEY_DUPLEX, fs, color_bgr, 1, cv2.LINE_AA,
+        )
+        return
+
+    font = _get_pil_font(px_size)
+    if font is None:
+        ascii_text = text.translate(_TR_ASCII_MAP)
+        fs = max(0.35, px_size / 28.0)
+        (tw, th), baseline = cv2.getTextSize(ascii_text, cv2.FONT_HERSHEY_DUPLEX, fs, 1)
+        cv2.putText(
+            img, ascii_text, (x, y_top + th),
+            cv2.FONT_HERSHEY_DUPLEX, fs, color_bgr, 1, cv2.LINE_AA,
+        )
+        return
+
+    # ROI sınırlarını hesapla
+    try:
+        bbox = font.getbbox(text)
+        tw = bbox[2] - bbox[0] + 2
+        th = bbox[3] - bbox[1] + 2
+    except Exception:
+        try:
+            tw, th = font.getsize(text)  # type: ignore[attr-defined]
+            tw += 2
+            th += 2
+        except Exception:
+            tw = int(px_size * len(text) * 0.6)
+            th = int(px_size * 1.2)
+
+    x1 = max(0, x)
+    y1 = max(0, y_top)
+    x2 = min(w_img, x + tw)
+    y2 = min(h_img, y_top + th)
+    if x1 >= x2 or y1 >= y2:
+        return
+
+    roi = img[y1:y2, x1:x2]
+    try:
+        pil_roi = Image.fromarray(cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_roi)
+        rgb = (int(color_bgr[2]), int(color_bgr[1]), int(color_bgr[0]))
+        draw.text((x - x1, y_top - y1), text, font=font, fill=rgb)
+        img[y1:y2, x1:x2] = cv2.cvtColor(np.array(pil_roi), cv2.COLOR_RGB2BGR)
+    except Exception:
+        ascii_text = text.translate(_TR_ASCII_MAP)
+        fs = max(0.35, px_size / 28.0)
+        cv2.putText(
+            img, ascii_text, (x, y_top + int(th * 0.8)),
+            cv2.FONT_HERSHEY_DUPLEX, fs, color_bgr, 1, cv2.LINE_AA,
+        )
 
 
 # ─── colour palette ──────────────────────────────────────────────────────────
@@ -120,10 +255,15 @@ def _draw_label_pill(
     """
     Draw a rounded semi-transparent pill behind the label text.
     Optionally draw a small confidence bar inside the pill.
+
+    Text Pillow TrueType ile çizilir → Ö/ö/Ü/Ç/Ş/İ/Ğ karakterleri bozulmaz.
     """
     font = cv2.FONT_HERSHEY_DUPLEX
     text_thickness = 1
-    (tw, th), baseline = cv2.getTextSize(text, font, font_scale, text_thickness)
+    # Pill boyutlandırması için cv2 metrikleri ASCII-normalize üzerinden
+    # hesaplanır; TrueType ile çizilen Türkçe metin aynı pill içinde durur.
+    sizing_text = text.translate(_TR_ASCII_MAP)
+    (tw, th), baseline = cv2.getTextSize(sizing_text, font, font_scale, text_thickness)
 
     pad_x, pad_y = 6, 4
     pill_w = tw + 2 * pad_x
@@ -151,12 +291,17 @@ def _draw_label_pill(
     brightness = color[0] * 0.114 + color[1] * 0.587 + color[2] * 0.299
     txt_col = (255, 255, 255) if brightness < 160 else (20, 20, 20)
 
-    text_y = pill_y1 + pad_y + th
-    cv2.putText(img, text, (pill_x1 + pad_x, text_y), font, font_scale, txt_col, text_thickness, cv2.LINE_AA)
+    # Pillow ile Türkçe-uyumlu çizim. PIL piksel cinsinden boyut ister;
+    # font_scale yaklaşık olarak cv2-Hershey oranıdır (0.5 ≈ 14 px).
+    px_size = max(10, int(round(font_scale * 28)))
+    text_top_y = pill_y1 + pad_y
+    _draw_text_unicode(
+        img, text, pill_x1 + pad_x, text_top_y, txt_col, px_size
+    )
 
     # Confidence mini-bar
     if confidence is not None and confidence > 0:
-        bar_y = text_y + 3
+        bar_y = text_top_y + th + 3
         bar_x1 = pill_x1 + pad_x
         bar_max_w = pill_w - 2 * pad_x
         bar_w = max(1, int(bar_max_w * min(confidence, 1.0)))
@@ -305,9 +450,10 @@ def draw_hud_bar(
     if sector:
         parts.append((f"Sector: {sector.upper()}", (180, 180, 180)))
 
+    px_size = max(11, int(round(fs * 28)))
     for txt, col in parts:
-        cv2.putText(frame, txt, (x, text_y), font, fs, col, t, cv2.LINE_AA)
-        tw = cv2.getTextSize(txt, font, fs, t)[0][0]
+        (tw, th), _ = cv2.getTextSize(txt.translate(_TR_ASCII_MAP), font, fs, t)
+        _draw_text_unicode(frame, txt, x, max(0, text_y - th), col, px_size)
         x += tw + int(20 * s)
 
     return frame

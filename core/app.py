@@ -6,6 +6,13 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
+# Sabitleri (Constants) yükle ve os.environ'a enjekte et
+try:
+    from configs.constants import inject_to_environ
+    inject_to_environ()
+except ImportError:
+    pass
+
 
 from flask import Flask, request, jsonify, session, Response, send_from_directory
 from flask_cors import CORS
@@ -150,10 +157,10 @@ live_violation_state = {}  # SaaS canlı tespit için ihlal durumu (start/resolu
 frame_failure_counts = {}  # Kamera okuma hataları sayacı
 frame_timestamps = {}      # camera_key → son frame zamanı (epoch) — StreamWatchdog izler
 
-# İYİLEŞTİRİLDİ: Response Caching
+# Response Caching
 response_cache = {}
 cache_timestamps = {}
-CACHE_DURATION = 300  # 5 dakika cache süresi
+CACHE_DURATION = int(os.environ.get('CACHE_DURATION', 300))
 
 # ── Multi-Camera Production Resource Management ─────────────────────────────
 # 20-30 kamera eşzamanlı çalışırken kaynak tüketimini sınırla
@@ -186,7 +193,7 @@ _MAX_INFERENCE_WORKERS = int(_os.environ.get(
 ))
 
 # Maksimum eşzamanlı aktif kamera (lisans/kaynak sınırı)
-MAX_CONCURRENT_CAMERAS = int(_os.environ.get('MAX_CONCURRENT_CAMERAS', 32))
+MAX_CONCURRENT_CAMERAS = int(os.environ.get('MAX_CONCURRENT_CAMERAS', 32))
 
 # Inference semaphore: aynı anda en fazla _MAX_INFERENCE_WORKERS thread YOLO inference yapabilir
 _inference_semaphore = _threading.Semaphore(_MAX_INFERENCE_WORKERS)
@@ -349,22 +356,23 @@ class SmartSafeSaaSAPI:
 
         
         # Enable CORS
-        allowed_origins = [
-            'http://localhost:3000',
-            'http://localhost:3377',
-            'http://127.0.0.1:3000',
-            'http://127.0.0.1:3377',
-            'http://localhost:8000',
-            'http://localhost:5577',
-            'http://127.0.0.1:5577',
-            'http://localhost:8088',
-            'http://127.0.0.1:8088',
-            'https://getsmartsafeai.com',  # Production frontend domain
-            'https://www.getsmartsafeai.com',  # WWW variant
-            'https://app.getsmartsafeai.com',  # Backend custom domain
-            'https://*.vercel.app',  # Vercel preview ve production domains
-            os.getenv('FRONTEND_URL', '')  # Environment variable ile özelleştirilebilir
-        ]
+        import json
+        try:
+            # constants.py'den gelen listeyi kullan
+            from configs.constants import CORS_ALLOWED_ORIGINS
+            allowed_origins = list(CORS_ALLOWED_ORIGINS)
+        except ImportError:
+            allowed_origins = [
+                'http://localhost:3000',
+                'http://127.0.0.1:3000',
+                'https://getsmartsafeai.com',
+                'https://*.vercel.app'
+            ]
+        
+        # Ek olarak .env'den tekil URL'yi de ekle
+        frontend_url = os.getenv('FRONTEND_URL', '')
+        if frontend_url and frontend_url not in allowed_origins:
+            allowed_origins.append(frontend_url)
         
         # CORS konfigürasyonu
         CORS(self.app, 
@@ -975,9 +983,16 @@ class SmartSafeSaaSAPI:
         register_all_blueprints(self)
         
         # 📸 Serve violation snapshots
-        @self.app.route('/static/violations/<path:filename>')
+        @self.app.route('/storage/violations/<path:filename>')
         def serve_violation_snapshot(filename):
-            return send_from_directory('violations', filename)
+            snapshot_mgr = get_snapshot_manager()
+            return send_from_directory(str(snapshot_mgr.base_path), filename)
+
+        # Legacy compat route
+        @self.app.route('/static/violations/<path:filename>')
+        def serve_violation_snapshot_legacy(filename):
+            snapshot_mgr = get_snapshot_manager()
+            return send_from_directory(str(snapshot_mgr.base_path), filename)
             
         logger.info("✅ All API routes registered successfully")
 
@@ -1212,7 +1227,7 @@ class SmartSafeSaaSAPI:
         import socket
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(2) # 5 -> 2s
+            sock.settimeout(int(os.environ.get('SOCKET_TIMEOUT', 2)))
             result = sock.connect_ex((ip_address, port))
             sock.close()
             if result == 0:
@@ -1238,7 +1253,7 @@ class SmartSafeSaaSAPI:
             if username and password:
                 auth = (username, password)
             
-            response = requests.get(url, auth=auth, timeout=2) # 5 -> 2s
+            response = requests.get(url, auth=auth, timeout=int(os.environ.get('API_REQUEST_TIMEOUT', 5)))
             if response.status_code == 200:
                 print(f"✅ HTTP endpoint başarılı: {url}")
                 return True, False
@@ -1317,7 +1332,7 @@ class SmartSafeSaaSAPI:
                     else:
                         auth = None
                     
-                    response = requests.get(shot_url, auth=auth, timeout=5)
+                    response = requests.get(shot_url, auth=auth, timeout=int(os.environ.get('SNAPSHOT_TIMEOUT', 5)))
                     if response.status_code == 200:
                         print("✅ Shot endpoint çalışıyor")
                         
@@ -1406,7 +1421,7 @@ class SmartSafeSaaSAPI:
         print(f"Tespit sistemi başlatılıyor - Kamera: {camera_key}, Sektör: {mode}, Confidence: {confidence}")
         
         # Detection sonuçları için queue oluştur
-        detection_results[camera_key] = queue.Queue(maxsize=10)
+        detection_results[camera_key] = queue.Queue(maxsize=int(os.environ.get('DETECTION_QUEUE_SIZE', 20)))
         
         # Şirketin sektörünü belirle
         try:
@@ -2158,7 +2173,7 @@ smartsafe_requests_total 100
     def _saas_detection_worker_inner(self, camera_key, camera_id, company_id, detection_mode, confidence, ad):
         """saas_detection_worker iç mantığı — finally cleanup dış katmanda."""
         # Detection sonuçları için queue oluştur
-        detection_results[camera_key] = queue.Queue(maxsize=20)
+        detection_results[camera_key] = queue.Queue(maxsize=int(os.environ.get('DETECTION_QUEUE_SIZE', 20)))
         
         # Kamera başlat
         self.start_saas_camera(camera_key, camera_id, company_id, active_detectors_ref=ad)
@@ -2278,9 +2293,9 @@ smartsafe_requests_total 100
                 if _dvr:
                     _camera_cfg = dict(_dvr) if not isinstance(_dvr, dict) else _dvr
         
-        frame_skip = int(_camera_cfg.get('frame_skip', 0) or os.environ.get('FRAME_SKIP', 3))
+        frame_skip = int(_camera_cfg.get('frame_skip', 0) or os.environ.get('DEFAULT_FRAME_SKIP', 3))
         if frame_skip < 1:
-            frame_skip = 3
+            frame_skip = int(os.environ.get('DEFAULT_FRAME_SKIP', 3))
         optimized_confidence = max(0.5, confidence)
 
         if os.environ.get("ROI_DEBUG", "").strip().lower() in ("1", "true", "yes", "on"):
@@ -2296,9 +2311,8 @@ smartsafe_requests_total 100
         _active = active_ai_detectors.get(camera_key, False)
         logger.info(f"🔍 SaaS Detection worker loop başlıyor: active_ai_detectors.get({camera_key}) = {_active}")
         
-        # DVR kanalları için stream hazır olana kadar daha uzun bekle
         _is_dvr = '_ch' in camera_id
-        _initial_wait = 0.5 if _is_dvr else 0.1
+        _initial_wait = float(os.environ.get('DVR_INITIAL_WAIT', 0.5)) if _is_dvr else float(os.environ.get('STANDARD_INITIAL_WAIT', 0.1))
         logger.info(f"⏳ Initial wait: {_initial_wait}s (DVR={_is_dvr}) for {camera_key}")
         time.sleep(_initial_wait)
 
@@ -3474,7 +3488,7 @@ smartsafe_requests_total 100
             helmet_ratio = max_helmet_pixels / total_pixels if total_pixels > 0 else 0
             
             # Gelişmiş threshold
-            helmet_threshold = 0.05  # %5'ten fazla pixel varsa kask var
+            helmet_threshold = float(os.environ.get('HELMET_PIXEL_THRESHOLD', 0.05))
             helmet_detected = helmet_ratio > helmet_threshold
             helmet_confidence = min(helmet_ratio * 10, 1.0)  # Confidence hesapla
             
@@ -3505,7 +3519,7 @@ smartsafe_requests_total 100
             vest_ratio = max_vest_pixels / total_pixels if total_pixels > 0 else 0
             
             # Gelişmiş threshold
-            vest_threshold = 0.08  # %8'den fazla pixel varsa yelek var
+            vest_threshold = float(os.environ.get('VEST_PIXEL_THRESHOLD', 0.08))
             vest_detected = vest_ratio > vest_threshold
             vest_confidence = min(vest_ratio * 8, 1.0)  # Confidence hesapla
             
@@ -4065,7 +4079,7 @@ smartsafe_requests_total 100
     def saas_camera_worker_snapshot_polling(self, camera_key, snapshot_urls, auth=None, active_detectors_ref=None):
         """Snapshot URL'lerden periyodik frame al - MJPEG /video tarayıcıya ayrılır"""
         working_url = None
-        poll_interval = 0.25  # 4 FPS snapshot - detection için yeterli
+        poll_interval = float(os.environ.get('POLL_INTERVAL', 0.25))
         ad = active_detectors_ref if active_detectors_ref is not None else active_detectors
         try:
             for url in snapshot_urls:
