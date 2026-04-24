@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
+import { isDev } from "@/lib/utils";
 import { useConfirm } from "@/context/ConfirmContext";
 import { 
   Eye, 
@@ -398,22 +399,24 @@ export default function ViolationsPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => setPrivacyMode(!privacyMode)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 border cursor-pointer ${
-              privacyMode
-                ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {privacyMode ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
-            GİZLİLİK MODU
-          </button>
+          {isDev() && (
+            <button
+              type="button"
+              onClick={() => setPrivacyMode(!privacyMode)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 border cursor-pointer ${
+                privacyMode
+                  ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {privacyMode ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+              GİZLİLİK MODU
+            </button>
+          )}
 
           <button
             type="button"

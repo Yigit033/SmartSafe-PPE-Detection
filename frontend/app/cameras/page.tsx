@@ -18,6 +18,7 @@ import {
   Check,
   History,
   Calendar,
+  CalendarCheck,
   MoreVertical,
   ChevronDown,
   Monitor,
@@ -40,6 +41,7 @@ import api from "@/lib/api";
 import core from "@/lib/core";
 import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import MjpegCanvas from "@/components/camera/MjpegCanvas";
+import { isDev } from "@/lib/utils";
 import {
   normalizeDetectionZonesPayload,
   polygonToVideoSpaceForOverlay,
@@ -824,17 +826,19 @@ function CamerasContent() {
           >
             <Settings className="w-4 h-4" /> KAMERA YÖNETİMİ
           </button>
-          <button
-            onClick={toggleAllPrivacy}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 hover:scale-105 active:scale-95 cursor-pointer"
-          >
-            {privacyModeCameras.length === cameras.length ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
-            GİZLİLİK MODU
-          </button>
+          {isDev() && (
+            <button
+              onClick={toggleAllPrivacy}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-xs font-black text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-100 hover:border-slate-400 hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              {privacyModeCameras.length === cameras.length ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+              GİZLİLİK MODU
+            </button>
+          )}
           <button
             onClick={() => handleNavigate("/cameras/setup")}
             className="flex items-center gap-2 rounded-xl bg-brand-teal px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-brand-teal/20 transition-all duration-300 hover:bg-brand-teal/90 hover:scale-105 hover:shadow-2xl hover:shadow-brand-teal/30 active:scale-95 cursor-pointer"
@@ -1021,17 +1025,19 @@ function CamerasContent() {
                         >
                           <Maximize2 className="w-5 h-5" />
                         </button>
-                        <button
-                          onClick={() => toggleCameraPrivacy(camera.camera_id)}
-                          className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer active:scale-95 hover:bg-slate-200 hover:border-slate-500 hover:scale-105 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-400" : "text-brand-teal"}`}
-                          title="Gizlilik Modu"
-                        >
-                          {privacyModeCameras.includes(camera.camera_id) ? (
-                            <EyeOff className="w-5 h-5" />
-                          ) : (
-                            <Eye className="w-5 h-5" />
-                          )}
-                        </button>
+                        {isDev() && (
+                          <button
+                            onClick={() => toggleCameraPrivacy(camera.camera_id)}
+                            className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer active:scale-95 hover:bg-slate-200 hover:border-slate-500 hover:scale-105 ${privacyModeCameras.includes(camera.camera_id) ? "text-slate-400" : "text-brand-teal"}`}
+                            title="Gizlilik Modu"
+                          >
+                            {privacyModeCameras.includes(camera.camera_id) ? (
+                              <EyeOff className="w-5 h-5" />
+                            ) : (
+                              <Eye className="w-5 h-5" />
+                            )}
+                          </button>
+                        )}
 
                         <button
                           onClick={() => {
@@ -1052,7 +1058,7 @@ function CamerasContent() {
                           className="w-10 h-10 flex items-center justify-center rounded-xl bg-white text-brand-teal border border-slate-200 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-xl hover:bg-slate-200 hover:border-slate-500 hover:scale-105 active:scale-95"
                           title="Çalışma Saatleri"
                         >
-                          <History className="w-5 h-5" />
+                          <CalendarCheck className="w-5 h-5" />
                         </button>
                       </div>
                     </div>
