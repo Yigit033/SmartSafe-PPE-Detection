@@ -124,7 +124,11 @@ def assign_track_ids_to_person_detections(
     for i, tid in enumerate(tids):
         if tid is None:
             continue
+        # Do not override an existing track_id coming from upstream (e.g. pose model tracker),
+        # otherwise pose_based PPE parent_track_id and temporal gating can desync.
         try:
+            if persons[i].get("track_id") is not None:
+                continue
             persons[i]["track_id"] = int(tid)
         except Exception:
             continue

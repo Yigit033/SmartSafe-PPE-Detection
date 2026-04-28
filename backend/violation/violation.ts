@@ -47,6 +47,7 @@ interface ViolationEvent {
   snapshot_path: string;
   count: number;
   status: string;
+  debug_meta?: any;
 }
 
 /** PR3 şeması: source_type + dvr_channel_id (migration 2+3 uygulanmış DB). */

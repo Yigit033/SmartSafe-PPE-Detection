@@ -2,13 +2,11 @@
 
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
-import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import MjpegCanvas from "@/components/camera/MjpegCanvas";
 import api from "@/lib/api";
 import core from "@/lib/core";
 import {
   normalizeDetectionZonesPayload,
-  polygonToVideoSpaceForOverlay,
 } from "@/lib/detectionZones";
 import { 
   RefreshCcw, 
@@ -259,23 +257,6 @@ export default function CameraLiveView({
                 </div>
               </div>
             )}
-            {zonesMeta.polygons.length > 0 &&
-              zonesMeta.polygons[0].length > 0 &&
-              !isCameraAiEnabled(camera) && (
-                <VideoRoiOverlay
-                  polygon={polygonToVideoSpaceForOverlay(
-                    zonesMeta.polygons[0],
-                    zonesMeta.coordSpace,
-                    previewLayout.cw,
-                    previewLayout.ch,
-                    previewLayout.nw,
-                    previewLayout.nh,
-                  )}
-                  naturalW={previewLayout.nw}
-                  naturalH={previewLayout.nh}
-                  className="absolute inset-0 z-10 w-full h-full opacity-60"
-                />
-              )}
           </div>
         ) : (
           <div className="text-white/20 text-center px-4">

@@ -125,11 +125,12 @@ except ImportError:
             'default_critical': False,
         },
         'safety_suit': {
-            'model_classes': ['safety_suit', 'medical_suit', 'apron', 'suit', 'tulum', 'onluk'],
+            'model_classes': ['safety_suit', 'medical_suit', 'apron', 'suit', 'tulum', 'onluk', 'protective_suit'],
             'region': 'torso',
+            'fallback_regions': ['full_body'],
             'pos_label': 'Önlük',
             'neg_label': 'Önlük YOK',
-            'violation_tr': 'Koruyucu tulum eksik',
+            'violation_tr': 'Koruyucu tulum/önlük eksik',
             'default_critical': False,
         },
         'haircap': {
@@ -195,7 +196,7 @@ class PoseAwarePPEDetector:
         self.pose_model = None
         self.ppe_detector = ppe_detector
         # DVR OSD üzerinde düşük güvenli 'person' FP azaltmak için env ile yükseltilebilir (öneri: 0.58–0.65)
-        self.pose_confidence_threshold = float(os.environ.get("POSE_PERSON_CONFIDENCE", "0.55"))
+        self.pose_confidence_threshold = float(os.environ.get("POSE_PERSON_CONFIDENCE", "0.60"))
         self.keypoint_confidence_threshold = 0.3
         
         # Keypoint smoothing - stabilize detection across frames
@@ -490,7 +491,8 @@ class PoseAwarePPEDetector:
                     ppe_detections = self._last_ppe_detections
             
             # 3️⃣ Extract pose data from (possibly downscaled) pose results
-            persons_with_pose = self._extract_pose_data(pose_results, pose_frame.shape)
+            # Scaled back to full frame size for consistent PPE association
+            persons_with_pose = self._extract_pose_data(pose_results, frame.shape, pose_scale)
             
             # ── Person gate ──────────────────────────────────────────────────
             # Production safety: If pose sees no persons, do NOT fall back to
@@ -517,30 +519,6 @@ class PoseAwarePPEDetector:
                     return self.ppe_detector.detect_ppe(frame, sector, confidence)
                 return self._create_empty_result()
 
-            # 3.5️⃣ Rescale pose coordinates back to original frame dimensions
-            if pose_scale < 1.0:
-                inv = 1.0 / pose_scale
-                for person in persons_with_pose:
-                    bbox = person.get('bbox')
-                    if bbox and len(bbox) == 4:
-                        person['bbox'] = [bbox[0]*inv, bbox[1]*inv, bbox[2]*inv, bbox[3]*inv]
-                    for kp in person.get('keypoints', []):
-                        kp['x'] = kp['x'] * inv
-                        kp['y'] = kp['y'] * inv
-                    # CRITICAL: anatomical_regions were computed in pose_frame coordinates.
-                    # Recompute them in original-frame coordinates to avoid "shifted" NO-* boxes.
-                    try:
-                        pb = person.get('bbox')
-                        if pb and len(pb) == 4:
-                            person['anatomical_regions'] = self._calculate_anatomical_regions_from_pose(
-                                person.get('keypoints', []),
-                                (float(pb[0]), float(pb[1]), float(pb[2]), float(pb[3])),
-                                frame.shape,
-                            )
-                    except Exception:
-                        # Non-fatal: fall back to existing regions.
-                        pass
-
             # OSD / zaman damgası üzerindeki düşük güvenli "person" kutularını burada ele:
             # app.py sonrası strip yalnızca overlay listesini düzeltir; uyumluluk zaten bu listeden hesaplanmış olur.
             try:
@@ -566,25 +544,23 @@ class PoseAwarePPEDetector:
                 empty["model_type"] = "YOLOv8-Pose+SH17 (no persons after OSD filter)"
                 return empty
             
-            # 4️⃣ Associate PPE with persons using pose keypoints (all in original frame coords)
-            enhanced_detections = self._associate_ppe_with_pose(
+            # 4️⃣ Associate PPE with persons using pose keypoints
+            enhanced_persons, ppe_by_type = self._associate_ppe_with_pose(
                 persons_with_pose, ppe_detections, frame.shape, sector=sector
             )
             
             # 5️⃣ Calculate compliance with pose-aware scoring
             compliance_result = self._calculate_pose_aware_compliance(
-                enhanced_detections, sector, required_ppe
+                enhanced_persons, sector, ppe_by_type, required_ppe=required_ppe
             )
             
             # 🔍 QUALITY CHECK - If compliance is 0% and we have people, might be detection/association issue
             if compliance_result['people_detected'] > 0 and compliance_result['compliance_rate'] == 0:
-                logger.warning(f"⚠️ 0% compliance for {compliance_result['people_detected']} people")
-
                 ppe_summary: Dict[str, int] = {}
                 for det in ppe_detections:
                     cn = str(det.get('class_name', ''))
                     ppe_summary[cn] = ppe_summary.get(cn, 0) + 1
-                logger.info(f"   PPE pool ({len(ppe_detections)}): {ppe_summary}")
+                logger.debug(f"   PPE pool ({len(ppe_detections)}): {ppe_summary}")
 
                 # Sadece required_ppe'deki türleri göster (varsa), tüm 8 PPE tipini değil
                 REQUIRED_PPE_ALIASES_LOG = {
@@ -606,14 +582,18 @@ class PoseAwarePPEDetector:
                 else:
                     _rpp = None  # None → tüm PPE tiplerini göster
 
-                for idx, ed in enumerate(enhanced_detections):
+                missing_summary = []
+                for idx, ed in enumerate(enhanced_persons):
                     if _rpp is not None:
                         matched = {k: True for k, v in ed['ppe'].items() if v is not None and k in _rpp}
                         missing = [k for k, v in ed['ppe'].items() if v is None and k in _rpp]
                     else:
                         matched = {k: True for k, v in ed['ppe'].items() if v is not None}
                         missing = [k for k, v in ed['ppe'].items() if v is None]
-                    logger.info(f"   Person {idx}: matched={matched}, missing={missing}")
+                    tid = ed.get('person', {}).get('track_id')
+                    missing_summary.append(f"P{idx}[ID:{tid}]: {missing}")
+                    
+                logger.info(f"⚠️ 0% compliance ({compliance_result['people_detected']} ppl). Pool: {ppe_summary}. Missing: {', '.join(missing_summary)}")
             
             elapsed = time.time() - start_time
             logger.info(f"⚡ Pose-aware detection: {len(persons_with_pose)} persons, "
@@ -688,7 +668,7 @@ class PoseAwarePPEDetector:
         logger.debug(f"🎯 Smoothed keypoints for person {person_id}")
         return smoothed_kpts
     
-    def _extract_pose_data(self, pose_results, frame_shape: Tuple[int, int, int]) -> List[Dict]:
+    def _extract_pose_data(self, pose_results, original_frame_shape: Tuple, pose_scale: float = 1.0) -> List[Dict]:
         """Extract person bounding boxes and keypoints from pose results"""
         persons = []
         
@@ -760,14 +740,13 @@ class PoseAwarePPEDetector:
                 
                 for i in range(min_len):
                     try:
-                        box = boxes[i]
-                        kpts = keypoints[i]
+                        # Scale back to original frame coordinates
+                        x1, y1, x2, y2 = boxes[i] / pose_scale
+                        kpts = keypoints[i] / pose_scale
                         kpt_conf = confidences[i] if i < len(confidences) else np.array([])
                         
-                        x1, y1, x2, y2 = box
-                        
-                        # 🔧 STRICT BBOX CLIPPING - Ensure person bbox stays within frame
-                        frame_height, frame_width = frame_shape[:2]
+                        # 🔧 STRICT BBOX CLIPPING - Ensure person bbox stays within original frame
+                        frame_height, frame_width = original_frame_shape[:2]
                         x1 = max(0, min(x1, frame_width - 1))
                         x2 = max(x1 + 1, min(x2, frame_width))
                         y1 = max(0, min(y1, frame_height - 1))
@@ -788,35 +767,29 @@ class PoseAwarePPEDetector:
                                             'confidence': float(conf)
                                         })
                         
-                        # Determine stable track ID if available from ByteTrack
+                        # Determine stable track ID
                         track_id = None
                         if tracker_ids is not None and i < len(tracker_ids):
                             raw_tid = tracker_ids[i]
                             if raw_tid is not None:
-                                try:
-                                    track_id = int(raw_tid)
-                                except (TypeError, ValueError):
-                                    track_id = None
+                                try: track_id = int(raw_tid)
+                                except (TypeError, ValueError): pass
 
-                        # Use track_id for keypoint smoothing when available, otherwise fallback to index
+                        # 🔧 KEYPOINT SMOOTHING - Reduces jitter and drift
+                        # Use track_id or index fallback
                         smoothing_id = track_id if track_id is not None else i
                         keypoint_data = self._smooth_keypoints(keypoint_data, smoothing_id)
 
-                        # Smooth PERSON bbox (in current frame coordinate space).
-                        # This reduces jitter before anatomical regions are derived.
-                        # Only smooth when we have a stable tracker id.
-                        # Smoothing on per-frame index causes identity swaps which look like "laggy" boxes.
+                        # BBOX SMOOTHING on original coordinates
                         if track_id is not None:
                             try:
                                 sm_bbox = self._ema_bbox("person", int(track_id), [x1, y1, x2, y2], now=time.time())
-                                if sm_bbox and len(sm_bbox) == 4:
-                                    x1, y1, x2, y2 = sm_bbox
-                            except Exception:
-                                pass
+                                if sm_bbox: x1, y1, x2, y2 = sm_bbox
+                            except Exception: pass
                         
-                        # Calculate anatomical regions from keypoints
+                        # Calculate anatomical regions in original frame space
                         anatomical_regions = self._calculate_anatomical_regions_from_pose(
-                            keypoint_data, (x1, y1, x2, y2), frame_shape
+                            keypoint_data, (x1, y1, x2, y2), original_frame_shape
                         )
                         
                         # Get box confidence safely
@@ -871,14 +844,29 @@ class PoseAwarePPEDetector:
         frame_height, frame_width = frame_shape[:2]
         px1, py1, px2, py2 = person_bbox
         
-        # 🔧 STRICT CLIPPING HELPER - Ensures bbox never exceeds frame
+        # 🔧 STRICT CLIPPING HELPER - Ensures bbox never exceeds person boundaries excessively
         def clip_bbox(x1, y1, x2, y2):
-            """Clip bbox to frame boundaries with safety checks"""
-            x1 = max(0, min(x1, frame_width - 1))
-            x2 = max(x1 + 1, min(x2, frame_width))
-            y1 = max(0, min(y1, frame_height - 1))
-            y2 = max(y1 + 1, min(y2, frame_height))
-            return [x1, y1, x2, y2]
+            """Clip bbox to frame boundaries AND person boundaries with safety margin"""
+            # Frame clipping
+            x1 = max(0.0, min(x1, float(frame_width - 1)))
+            x2 = max(x1 + 1.0, min(x2, float(frame_width)))
+            y1 = max(0.0, min(y1, float(frame_height - 1)))
+            y2 = max(y1 + 1.0, min(y2, float(frame_height)))
+            
+            # Person boundary clamping (with 10% margin)
+            pw = px2 - px1
+            ph = py2 - py1
+            px_min = px1 - pw * 0.1
+            px_max = px2 + pw * 0.1
+            py_min = py1 - ph * 0.1
+            py_max = py2 + ph * 0.1
+            
+            x1 = max(x1, px_min)
+            x2 = min(x2, px_max)
+            y1 = max(y1, py_min)
+            y2 = min(y2, py_max)
+            
+            return [float(x1), float(y1), float(x2), float(y2)]
         
         # Create keypoint lookup
         kpt_dict = {kpt['index']: kpt for kpt in keypoints}
@@ -905,20 +893,24 @@ class PoseAwarePPEDetector:
             valid_ys = [y for y in head_ys if 0 <= y < frame_height]
             
             if valid_xs and valid_ys:
-                # Expand head region (helmet is larger than head)
+                # Expand head region (helmet is larger than head, mask is below nose)
                 head_width = max(valid_xs) - min(valid_xs)
                 head_height = max(valid_ys) - min(valid_ys)
                 
-                # Use person bbox as fallback if keypoints are too sparse
-                if head_width < 5:
-                    head_width = (px2 - px1) * 0.4
-                if head_height < 5:
-                    head_height = (py2 - py1) * 0.25
+                # Person height-based dynamic minimums to prevent "flattened" head boxes
+                person_h = py2 - py1
+                min_h = person_h * 0.15
+                min_w = (px2 - px1) * 0.15
                 
-                head_x1 = min(valid_xs) - head_width * 0.3
-                head_x2 = max(valid_xs) + head_width * 0.3
-                head_y1 = min(valid_ys) - head_height * 0.5  # Extend up for helmet
-                head_y2 = max(valid_ys) + head_height * 0.2
+                if head_width < min_w:
+                    head_width = max(head_width, min_w)
+                if head_height < min_h:
+                    head_height = max(head_height, min_h)
+                
+                head_x1 = min(valid_xs) - head_width * 0.4
+                head_x2 = max(valid_xs) + head_width * 0.4
+                head_y1 = min(valid_ys) - head_height * 0.6  # Extend up for helmet
+                head_y2 = max(valid_ys) + head_height * 0.5  # Extend down for mask (mouth/chin)
                 
                 head_region = clip_bbox(head_x1, head_y1, head_x2, head_y2)
         
@@ -1118,12 +1110,13 @@ class PoseAwarePPEDetector:
 
         non_empty = {ptype: len(items) for ptype, items in ppe_by_type.items() if items}
         if non_empty:
-            logger.info(f"🔍 PPE grouped: {non_empty}")
+            logger.debug(f"🔍 PPE grouped: {non_empty}")
         else:
-            logger.warning("🔍 PPE grouped: no PPE items matched any PPE_CONFIG type")
+            logger.debug("🔍 PPE grouped: no PPE items matched any PPE_CONFIG type")
 
         enhanced_persons: List[Dict] = []
         frame_h, frame_w = frame_shape[:2]
+
 
         # Exclusive PPE assignment: bir PPE nesnesi bir kişiye atandıktan sonra
         # diğer kişiler için pool'dan çıkarılır (aynı bone'nin 2 kişiye gitmesini engeller)
@@ -1140,9 +1133,11 @@ class PoseAwarePPEDetector:
 
             for ppe_type, cfg in PPE_CONFIG.items():
                 region_name = cfg['region']
-                region_bbox = regions.get(region_name)
-                if region_bbox is None:
-                    region_bbox = regions.get('full_body', person_bbox)
+                # Önlük/Tulum tüm vücudu kapladığı için torso yerine full_body kullanmak daha sağlıklı
+                if ppe_type == 'safety_suit':
+                    region_bbox = regions.get('full_body') or regions.get('torso') or person_bbox
+                else:
+                    region_bbox = regions.get(region_name) or person_bbox
 
                 # Haircap association is very sensitive to head region tightness.
                 # Expand head region slightly for haircap only to reduce false "IoU_head=0.000".
@@ -1166,7 +1161,7 @@ class PoseAwarePPEDetector:
                     if id(item) not in _assigned_ppe_ids[ppe_type]
                 ]
 
-                best_match = self._find_best_ppe_match(
+                best_match, match_reason = self._find_best_ppe_match(
                     available_items,
                     region_bbox,
                     person_bbox,
@@ -1179,9 +1174,11 @@ class PoseAwarePPEDetector:
                     conf = float(best_match.get('confidence', 0.0))
                     if conf < min_conf:
                         best_match = None
+                        match_reason = f"Confidence {conf:.2f} < threshold {min_conf:.2f}"
 
                 person_ppe[ppe_type] = best_match
                 compliance[ppe_type] = best_match is not None
+                ppe_meta.setdefault('match_reasons', {})[ppe_type] = match_reason
 
                 if best_match is not None:
                     _assigned_ppe_ids[ppe_type].add(id(best_match))
@@ -1240,7 +1237,7 @@ class PoseAwarePPEDetector:
                 if ppe_type == 'haircap':
                     candidates = ppe_by_type.get(ppe_type, [])
                     if not candidates and not self._throttled("haircap_empty"):
-                        logger.info("🔍 Haircap: 0 candidates in pool — food model did not detect any")
+                        logger.debug("🔍 Haircap: 0 candidates in pool — food model did not detect any")
                     elif candidates and not self._throttled("haircap_match"):
                         parts = []
                         for ci, cand in enumerate(candidates):
@@ -1329,10 +1326,10 @@ class PoseAwarePPEDetector:
                 }
             )
 
-        return enhanced_persons
+        return enhanced_persons, ppe_by_type
     
     def _find_best_ppe_match(self, ppe_items: List[Dict], region: List[float], 
-                            person_bbox: List[float], ppe_type: str = 'general') -> Optional[Dict]:
+                            person_bbox: List[float], ppe_type: str = 'general') -> Tuple[Optional[Dict], str]:
         """Find best PPE match for anatomical region using IoU with type-specific thresholds."""
         best_match = None
         best_iou = 0.0
@@ -1402,18 +1399,18 @@ class PoseAwarePPEDetector:
                     best_by_person_center_y = None
 
         # If no match found via region IoU, promote the best person_iou candidate
+        match_reason = "No candidates in pool"
         if best_match is None and best_by_person_iou is not None:
             best_match = best_by_person_iou
             best_person_iou = best_by_person_iou_val
             best_center_y = best_by_person_center_y
-            logger.debug(
-                f"🔄 No region IoU match for {ppe_type}, using best person_iou candidate: "
-                f"person_iou={best_by_person_iou_val:.3f}"
-            )
+            match_reason = f"Promoted from person_iou ({best_by_person_iou_val:.3f})"
+        elif best_match is not None:
+            match_reason = f"Matched via region IoU ({best_iou:.3f})"
         
         # Standart kural: bölge IoU eşiğinin üzerinde ise kabul et
         if best_match is not None and best_iou > iou_threshold:
-            return best_match
+            return best_match, match_reason
         
         # ── Fallback 1: Kask ve bone/haircap → kişinin üst kısmında mı? ──
         if ppe_type in ('helmet', 'haircap') and best_match is not None and best_person_iou > 0:
@@ -1421,21 +1418,13 @@ class PoseAwarePPEDetector:
                 px1, py1, px2, py2 = person_bbox
                 person_height = max(float(py2) - float(py1), 1.0)
                 top_fraction = py1 + person_height * 0.45
-                min_person_iou = 0.08  # sıkılaştırıldı (eski: 0.01)
+                min_person_iou = 0.08
                 if best_center_y is not None and best_person_iou >= min_person_iou and best_center_y <= top_fraction:
-                    logger.debug(
-                        f"✅ Helmet/haircap fallback match accepted: best_iou={best_iou:.3f}, "
-                        f"person_iou={best_person_iou:.3f}, center_y={best_center_y:.1f}, "
-                        f"person_top_limit={top_fraction:.1f}"
-                    )
-                    return best_match
+                    return best_match, f"Fallback 1: Top fraction (p_iou={best_person_iou:.2f})"
             except Exception:
                 pass
         
         # ── Fallback 2: Genel center-containment kontrolü ──
-        # Küçük PPE öğelerinin (gözlük, maske, eldiven) IoU değeri düşük olabilir
-        # çünkü anatomik bölge dar tanımlı. Eğer PPE'nin merkezi bölgenin
-        # içindeyse ve kişiyle bir miktar örtüşüyorsa, kabul et.
         if best_match is not None and best_person_iou > 0:
             try:
                 ppe_bbox = best_match.get('bbox', [])
@@ -1443,23 +1432,14 @@ class PoseAwarePPEDetector:
                     ppe_cx = (float(ppe_bbox[0]) + float(ppe_bbox[2])) / 2.0
                     ppe_cy = (float(ppe_bbox[1]) + float(ppe_bbox[3])) / 2.0
                     rx1, ry1, rx2, ry2 = [float(v) for v in region]
-                    
                     center_inside = (rx1 <= ppe_cx <= rx2) and (ry1 <= ppe_cy <= ry2)
-                    
                     if center_inside:
-                        logger.debug(
-                            f"✅ Center-containment fallback for {ppe_type}: "
-                            f"ppe_center=({ppe_cx:.0f},{ppe_cy:.0f}), "
-                            f"region=[{rx1:.0f},{ry1:.0f},{rx2:.0f},{ry2:.0f}], "
-                            f"IoU_region={best_iou:.3f}, IoU_person={best_person_iou:.3f}"
-                        )
-                        return best_match
+                        return best_match, f"Fallback 2: Center-containment (p_iou={best_person_iou:.2f})"
             except Exception:
                 pass
 
         # ── Fallback 3: Küçük PPE → merkez kişi kutusu içindeyse kabul et ──
         small_ppe_types = ('haircap', 'helmet', 'gloves', 'face_mask', 'safety_glasses', 'safety_suit')
-        # haircap/helmet için Fallback 3'te de minimum person_iou gerekli (false match azaltma)
         min_piou_fb3 = 0.08 if ppe_type in ('haircap', 'helmet') else 0.0
         if best_match is not None and ppe_type in small_ppe_types and best_person_iou > min_piou_fb3:
             try:
@@ -1470,41 +1450,15 @@ class PoseAwarePPEDetector:
                     px1, py1, px2, py2 = [float(v) for v in person_bbox]
                     center_in_person = (px1 <= ppe_cx <= px2) and (py1 <= ppe_cy <= py2)
                     if center_in_person:
-                        logger.debug(
-                            f"✅ Person-bbox containment fallback for {ppe_type}: "
-                            f"IoU_person={best_person_iou:.3f}"
-                        )
-                        return best_match
+                        return best_match, f"Fallback 3: Person-bbox containment (p_iou={best_person_iou:.2f})"
             except Exception:
                 pass
 
-        # ── Fallback 4: Proximity — tüm IoU'lar 0 olduğunda mesafe bazlı kabul ──
-        # Pose model'in bbox'u yanlış hesapladığı durumlarda: PPE merkezi kişi merkezine
-        # yeterince yakınsa kabul et.
-        if best_match is not None and best_person_iou == 0 and best_iou == 0:
-            try:
-                ppe_bbox = best_match.get('bbox', [])
-                if len(ppe_bbox) == 4 and len(person_bbox) == 4:
-                    ppe_cx = (float(ppe_bbox[0]) + float(ppe_bbox[2])) / 2.0
-                    ppe_cy = (float(ppe_bbox[1]) + float(ppe_bbox[3])) / 2.0
-                    px1, py1, px2, py2 = [float(v) for v in person_bbox]
-                    pcx = (px1 + px2) / 2.0
-                    pcy = (py1 + py2) / 2.0
-                    pw = max(px2 - px1, 1.0)
-                    ph = max(py2 - py1, 1.0)
-                    person_diag = (pw ** 2 + ph ** 2) ** 0.5
-                    dist = ((ppe_cx - pcx) ** 2 + (ppe_cy - pcy) ** 2) ** 0.5
-                    proximity_ratio = 0.50
-                    if dist < person_diag * proximity_ratio:
-                        logger.debug(
-                            f"✅ Proximity fallback for {ppe_type}: "
-                            f"dist={dist:.1f}, threshold={person_diag * proximity_ratio:.1f}"
-                        )
-                        return best_match
-            except Exception:
-                pass
+        # ── Final Fallback: If we have a promoted match with good person_iou, accept it ──
+        if best_match is not None and best_person_iou >= 0.05:
+            return best_match, f"Accepted via person_iou fallback ({best_person_iou:.3f})"
 
-        return None
+        return None, f"Rejected: iou={best_iou:.3f} < {iou_threshold}, p_iou={best_person_iou:.3f} < {person_iou_threshold}"
     
     def _calculate_iou(self, box1: List[float], box2: List[float]) -> float:
         """Calculate Intersection over Union"""
@@ -1529,11 +1483,13 @@ class PoseAwarePPEDetector:
             union = area1 + area2 - intersection
             
             return intersection / max(union, 1e-6)
-        except:
+        except Exception as e:
+            logger.error(f"❌ IoU Calc Error: {e} | box1={box1} type={type(box1)} | box2={box2} type={type(box2)}")
             return 0.0
     
     def _calculate_pose_aware_compliance(self, enhanced_persons: List[Dict], 
                                         sector: Optional[str],
+                                        ppe_by_type: Dict[str, List[Dict]],
                                         required_ppe: Optional[List[str]] = None) -> Dict:
         """Calculate compliance with pose-aware scoring"""
         
@@ -1613,6 +1569,22 @@ class PoseAwarePPEDetector:
                     pass
             all_detections.append(person)
             p_bbox = person.get('bbox') if isinstance(person, dict) else None
+            
+            # Detect Side Profile (only one eye or one ear visible)
+            kpts = person.get('keypoints', [])
+            left_eye = next((k for k in kpts if k.get('index') == 1), None)
+            right_eye = next((k for k in kpts if k.get('index') == 2), None)
+            left_ear = next((k for k in kpts if k.get('index') == 3), None)
+            right_ear = next((k for k in kpts if k.get('index') == 4), None)
+            
+            eyes_visible = sum(1 for e in [left_eye, right_eye] if e)
+            ears_visible = sum(1 for e in [left_ear, right_ear] if e)
+            is_side_profile = (eyes_visible == 1) or (ears_visible == 1 and eyes_visible < 2)
+            
+            if is_side_profile:
+                ppe_meta['is_side_profile'] = True
+                if not self._throttled(f"side_profile_{tid}"):
+                    logger.debug(f"👤 Side profile detected for Person ID:{tid} (eyes:{eyes_visible}, ears:{ears_visible})")
             
             # Add PPE detections with anatomical regions (positive + negative)
             for ppe_type, cfg in PPE_CONFIG.items():
@@ -1723,6 +1695,9 @@ class PoseAwarePPEDetector:
                             'confidence': float(item.get('confidence', 0.9)),
                             'missing': False,
                             'pose_based': True,
+                            'ppe_type': ppe_type,
+                            'parent_track_id': tid,
+                            'parent_bbox': list(p_bbox) if p_bbox and len(p_bbox) == 4 else None,
                         }
                     )
                 else:
@@ -1754,11 +1729,39 @@ class PoseAwarePPEDetector:
                                 gloves_y2 = y2 + 0.10 * h
                                 draw_bbox = [x1, gloves_y1, x2, gloves_y2]
                         # Smooth negative (NO-*) bbox per person+type to reduce jitter.
+                        # BUT: never allow EMA to "drag" an oversized stale box across frames.
+                        raw_draw_bbox = list(draw_bbox) if draw_bbox and len(draw_bbox) == 4 else draw_bbox
                         if tid is not None and draw_bbox and len(draw_bbox) == 4:
                             try:
-                                draw_bbox = self._ema_bbox(f"ppe_neg:{ppe_type}", tid, list(draw_bbox), now=time.time())
+                                sm = self._ema_bbox(f"ppe_neg:{ppe_type}", tid, list(draw_bbox), now=time.time())
+                                # Clamp EMA result to parent person bbox (if present) to avoid giant boxes.
+                                if sm and len(sm) == 4 and p_bbox and len(p_bbox) == 4:
+                                    px1, py1, px2, py2 = map(float, p_bbox)
+                                    sx1, sy1, sx2, sy2 = map(float, sm)
+                                    sx1 = max(sx1, px1)
+                                    sy1 = max(sy1, py1)
+                                    sx2 = min(sx2, px2)
+                                    sy2 = min(sy2, py2)
+                                    # If clamp collapses or becomes too small, revert to raw.
+                                    if (sx2 - sx1) <= 2 or (sy2 - sy1) <= 2:
+                                        draw_bbox = raw_draw_bbox
+                                    else:
+                                        draw_bbox = [sx1, sy1, sx2, sy2]
+                                else:
+                                    draw_bbox = sm
+                                # Oversize guard: if EMA box is way larger than the raw band, revert.
+                                try:
+                                    if raw_draw_bbox and len(raw_draw_bbox) == 4 and draw_bbox and len(draw_bbox) == 4:
+                                        rx1, ry1, rx2, ry2 = map(float, raw_draw_bbox)
+                                        ex1, ey1, ex2, ey2 = map(float, draw_bbox)
+                                        raw_area = max(0.0, rx2 - rx1) * max(0.0, ry2 - ry1)
+                                        ema_area = max(0.0, ex2 - ex1) * max(0.0, ey2 - ey1)
+                                        if raw_area > 1.0 and ema_area > raw_area * 1.8:
+                                            draw_bbox = raw_draw_bbox
+                                except Exception:
+                                    pass
                             except Exception:
-                                pass
+                                draw_bbox = raw_draw_bbox
                         all_detections.append(
                             {
                                 'bbox': draw_bbox,
@@ -1766,6 +1769,10 @@ class PoseAwarePPEDetector:
                                 'confidence': 0.9,
                                 'missing': True,
                                 'pose_based': True,
+                                'ppe_type': ppe_type,
+                                'parent_track_id': tid,
+                                'match_reason': ppe_meta.get('match_reasons', {}).get(ppe_type, "No reason found"),  # 🎯 Sebebi buradan çekeceğiz
+                                'parent_bbox': list(p_bbox) if p_bbox and len(p_bbox) == 4 else None,
                             }
                         )
             
@@ -1839,6 +1846,19 @@ class PoseAwarePPEDetector:
         
         compliance_rate = int((compliant_people / max(total_people, 1)) * 100) if total_people > 0 else 100
         
+        # Add global debug info about the PPE pool
+        ppe_pool_debug = {}
+        for ptype, items in ppe_by_type.items():
+            if items:
+                ppe_pool_debug[ptype] = [
+                    {
+                        'bbox': [round(float(v), 1) for v in item.get('bbox', [])],
+                        'conf': round(float(item.get('confidence', 0.0)), 3),
+                        'class': item.get('class_name')
+                    }
+                    for item in items
+                ]
+
         return {
             'detections': all_detections,
             'people_detected': total_people,
@@ -1850,7 +1870,8 @@ class PoseAwarePPEDetector:
             'total_people': total_people,
             'compliant_people': compliant_people,
             'violations_count': len(set(violations)),
-            'pose_enhanced': True
+            'pose_enhanced': True,
+            'debug_pool': ppe_pool_debug
         }
     
     def _create_empty_result(self) -> Dict:

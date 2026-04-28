@@ -285,11 +285,80 @@ Her farkli `px_size` icin bir kere yuklenir, sonraki cagrilarda bellekten gelir.
 | Dosya | Tip | Ozet |
 |-------|-----|------|
 | `backend/violation/migrations/4_violation_events_epoch_time_columns.up.sql` | YENI | TIMESTAMP -> DOUBLE PRECISION |
+| `backend/violation/migrations/5_violation_events_add_debug_meta.up.sql` | YENI | violation_events.debug_meta (JSONB) |
 | `backend/scripts/verify-violation-schema.cjs` | YENI | Schema smoke-test scripti |
 | `core/utils/overlay_requirements_filter.py` | M | pose_based=True bypass |
 | `core/models/sh17_model_manager.py` | M | Upper-body proxy, partial-head rescue, on-face guard, not-head-top guard, face_boxes toplama |
-| `core/detection/pose_aware_ppe_detector.py` | M | Pozitif anatomik clamp, full_body fallback kaldirma, anatomik proxy (head/torso/hands/feet), EMA area-ratio reset |
+| `core/detection/pose_aware_ppe_detector.py` | M | Pozitif anatomik clamp, full_body fallback kaldirma, anatomik proxy (head/torso/hands/feet), EMA area-ratio reset, pose-based PPE'ye parent_track_id + parent_bbox |
+| `core/detection/pose_aware_ppe_detector.py` | M | Missing (NO-*) EMA clamp: parent person bbox'a kırp + oversize guard (devasa "YOK" kutularını azaltır) |
 | `core/detection/utils/visual_overlay.py` | M | Pillow TrueType ROI render, font cache, ASCII fallback, _TR_ASCII_MAP, _draw_text_unicode, label_pill + hud_bar entegrasyonu |
+| `core/utils/detection_roi.py` | M | Pose-based PPE'ler icin parent-ROI mirasi (parent_track_id / parent_bbox uzerinden) |
+| `core/configs/constants.py` | M | `PROXY_STREAM_CONNECT_TIMEOUT_S=20` eklendi |
+| `core/utils/temporal_ppe_gating.py` | YENI | PPE bazli temporal gating (N-of-M + histerezis) |
+| `core/app.py` | M | Overlay toggle: default sadece person bbox + warning label, `OVERLAY_SHOW_PPE_BOXES=1` ile detay PPE kutuları |
+| `core/app.py` | M | violation_events'e debug_meta (temporal gating/ROI/decision gate) yaz |
+| `core/app.py` | M | debug_meta derinlestirildi: event person track_id esleme + anatomical_regions + pose-based PPE listesi (mask VAR/YOK sayimi) |
+| `core/utils/violation_debug_meta.py` | YENI | debug_meta builder helper (app.py'yi sisirmez) |
+| `core/utils/temporal_ppe_gating.py` | M | temporal gating stats: window/miss_count/%missing/confirmed debug_meta'ya |
+| `core/app.py` | M | ViolationTracker'a kisi-bazli ihlal gonder: temporal_gating confirmed_missing olmayan track'lerde event uretme |
+| `core/database/database_adapter.py` | M | violation_events insert: debug_meta JSONB yaz |
+| `backend/violation/violation.ts` | M | ViolationEvent response: debug_meta alanı |
+
+---
+
+## 8. ROI-Disi Bbox Gizleme (Parent-ROI Mirasi)
+
+### 8.1 Sorun
+
+ROI polygonu ile calisan `filter_detections_by_roi`, her tespite kendi `bbox`'inin alt-orta noktasinin ROI
+icinde olup olmadigini kontrol ediyordu. Ancak pose-aware PPE kutulari (ornegin "Maske YOK" = yuz bolgesi
+bbox'i) icin alt-orta nokta gogusun ortasina yakindir ve kisi ROI icinde durmasina ragmen bu PPE bbox'i
+ROI cizgisinin disina dusup elenebiliyor ya da tam tersine ROI disinda duran bir kisinin PPE bbox'i
+("Bone 0.90") ROI icine denk dustugu icin cizilebiliyordu.
+
+Gorsel etki: turnike/mutfak kamerasinda ROI disinda kalan kapi onundeki insanlar icin de "Bone YOK",
+"Onluk YOK", "Maske YOK" kutulari ciziliyordu.
+
+### 8.2 Cozum
+
+Pose-aware detector urettigi her pose-based PPE tespitine artik parent person bilgisini ekliyor:
+
+```python
+all_detections.append({
+    'bbox': bbox_to_use,
+    'class_name': cfg['pos_label'],
+    ...
+    'pose_based': True,
+    'parent_track_id': tid,
+    'parent_bbox': list(p_bbox) if p_bbox and len(p_bbox) == 4 else None,
+})
+```
+
+`filter_detections_by_roi` once tum person tespitlerini ROI'ye gore degerlendirip
+`person_inside_by_tid` / `person_inside_by_bbox` haritalarini olusturuyor; ardindan pose-based PPE
+tespitleri icin parent'in ROI durumunu miras aliyor:
+
+```python
+if is_pose_based and not _is_person_detection(item):
+    inside = _parent_inside(item)
+    if inside is None:
+        inside = _eval_inside(bbox)
+else:
+    inside = _eval_inside(bbox)
+```
+
+Boylece:
+- ROI icindeki kisiye ait `Maske YOK` / `Bone YOK` / `Onluk YOK` kutulari her zaman cizilir.
+- ROI disindaki kisinin PPE kutulari (pose-based) bosluk birakmadan elenir.
+- SH17'den gelen ham sinif tespitleri (pose_based=False) eski bbox alt-orta kurali ile calisir.
+
+### 8.3 Dosyalar
+
+- `core/detection/pose_aware_ppe_detector.py` — pozitif + negatif pose-based PPE append'lerine
+  `parent_track_id` ve `parent_bbox` eklendi.
+- `core/utils/detection_roi.py` — `filter_detections_by_roi` person haritasi + `_parent_inside()`
+  helper'i ile yeniden yazildi; ROI poligonunun aktif oldugu durumda pose-based PPE'ler parent'in
+  ROI durumunu miras aliyor.
 
 ---
 

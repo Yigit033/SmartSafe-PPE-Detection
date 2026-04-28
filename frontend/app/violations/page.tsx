@@ -22,7 +22,8 @@ import {
   Shirt,
   Footprints,
   ShieldAlert,
-  Download
+  Download,
+  RefreshCw
 } from "lucide-react";
 
 interface ViolationEvent {
@@ -36,6 +37,7 @@ interface ViolationEvent {
   snapshot_path: string;
   count: number;
   status: string;
+  debug_meta?: any;
 }
 
 export default function ViolationsPage() {
@@ -54,6 +56,7 @@ export default function ViolationsPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [showDebugMeta, setShowDebugMeta] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -67,24 +70,25 @@ export default function ViolationsPage() {
     localStorage.setItem("violationsPrivacyMode", String(next));
   };
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const companyId = getCompanyId();
-        if (!companyId) return;
-        
-        const result = await api.violation.getEvents(companyId);
-        
-        if (result.success) {
-          setEvents(result.events);
-        }
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      } finally {
-        setLoading(false);
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      const companyId = getCompanyId();
+      if (!companyId) return;
+      
+      const result = await api.violation.getEvents(companyId);
+      
+      if (result.success) {
+        setEvents(result.events);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching events:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchEvents();
   }, []);
 
@@ -417,6 +421,16 @@ export default function ViolationsPage() {
               GİZLİLİK MODU
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={fetchEvents}
+            disabled={loading}
+            className="bg-white text-brand-orange px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-50 transition-colors flex items-center gap-2 border border-brand-orange/20 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            YENİLE
+          </button>
 
           <button
             type="button"
@@ -810,6 +824,29 @@ export default function ViolationsPage() {
                                 ))}
                             </div>
                           </div>
+
+                          {/* Debug meta (DB explainability) */}
+                          {selectedEvent.debug_meta && (
+                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                  DEBUG / NEDEN BU İHLAL?
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowDebugMeta((v) => !v)}
+                                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                                >
+                                  {showDebugMeta ? "GİZLE" : "GÖSTER"}
+                                </button>
+                              </div>
+                              {showDebugMeta && (
+                                <pre className="mt-3 max-h-[240px] overflow-auto rounded-xl bg-white border border-slate-200 p-3 text-[11px] leading-relaxed text-slate-700">
+{JSON.stringify(selectedEvent.debug_meta, null, 2)}
+                                </pre>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-auto pt-8 flex gap-4">

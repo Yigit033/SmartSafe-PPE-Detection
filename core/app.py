@@ -46,7 +46,37 @@ log_level = getattr(logging, _env_log_level, logging.INFO)
 if os.environ.get('RENDER') and _env_log_level == 'INFO':
     log_level = logging.WARNING
 
-logging.basicConfig(level=log_level, format='%(levelname)s:%(name)s:%(message)s')
+# Setup Handlers
+handlers = [logging.StreamHandler()]
+
+# Add File Handler (gated by env var, default ON for debugging)
+if os.environ.get('LOG_FILE_ENABLED', '1') == '1':
+    from logging.handlers import TimedRotatingFileHandler
+    
+    # Ensure logs directory exists in core/logs
+    log_dir = os.path.join(current_dir, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_file_path = os.path.join(log_dir, 'smart_safe.log')
+    
+    # Rotate every midnight, keep 30 days of logs
+    file_handler = TimedRotatingFileHandler(
+        log_file_path, 
+        when='midnight', 
+        interval=1, 
+        backupCount=30, 
+        encoding='utf-8'
+    )
+    # Add a suffix for rotated files (e.g., smart_safe.log.2023-10-27)
+    file_handler.suffix = "%Y-%m-%d"
+    handlers.append(file_handler)
+
+logging.basicConfig(
+    level=log_level, 
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=handlers
+)
 logger = logging.getLogger(__name__)
 
 # Keep request logs, but suppress ultra-noisy polling endpoints (200 OK spam).
@@ -99,7 +129,7 @@ import queue
 from io import BytesIO
 import bcrypt
 from pathlib import Path
-from detection.utils.visual_overlay import draw_styled_box, get_class_color, draw_hud_bar, reset_label_registry
+from detection.utils.visual_overlay import draw_styled_box, get_class_color, draw_hud_bar, reset_label_registry, draw_roi_polygon
 
 # Load environment variables
 load_dotenv()
@@ -2043,35 +2073,20 @@ smartsafe_requests_total 100
     # --- Schedule Management Methods ---
     
     def is_detection_running(self, camera_key):
-        """Kamera veya kanal için algılamanın aktif olup olmadığını döner.
-        
-        DB'yi single source of truth olarak kullanır.
-        Thread ölmüşse zombie state tespit edilir ve hem DB hem memory temizlenir.
-        """
-        # Önce DB'ye bak (process-safe)
+        """Kamera veya kanal için algılamanın aktif olup olmadığını döner."""
+        # 1. Önce bu process'teki thread'e bak (Hızlı ve güvenilir)
+        thread_info = detection_threads.get(camera_key)
+        if thread_info and isinstance(thread_info, dict):
+            thread_obj = thread_info.get('thread')
+            if thread_obj and thread_obj.is_alive():
+                return True
+
+        # 2. Memory'de yoksa DB'ye bak (Fallback)
         try:
             db_active = get_db_adapter().is_detection_active(camera_key)
+            return bool(db_active)
         except Exception:
-            db_active = active_ai_detectors.get(camera_key, False)
-        
-        if not db_active:
-            # DB'de yoksa memory'den de temizle
-            active_ai_detectors[camera_key] = False
-            return False
-        
-        # DB aktif diyor — thread gerçekten yaşıyor mu kontrol et
-        thread_info = detection_threads.get(camera_key, {})
-        thread_obj = thread_info.get('thread') if isinstance(thread_info, dict) else None
-        if thread_obj is not None and not thread_obj.is_alive():
-            # Zombie: DB True ama thread ölmüş → her yeri temizle
-            logger.warning(f"🧟 Zombie detection tespit edildi: {camera_key} — thread ölü. DB+memory temizleniyor.")
-            active_ai_detectors[camera_key] = False
-            active_detectors[camera_key] = False
-            try:
-                get_db_adapter().set_detection_active(camera_key, '', '', active=False)
-            except Exception:
-                pass
-            return False
+            return active_ai_detectors.get(camera_key, False)
         
         return True
 
@@ -2084,8 +2099,9 @@ smartsafe_requests_total 100
             logger.error(f"❌ Database not ready for scheduled start: {camera_key}")
             return False
 
-        if self.is_detection_running(camera_key):
-            logger.debug(f"ℹ️ {camera_key} zaten AI aktif, atlanıyor.")
+        # Yerel bellek kontrolü (zaten çalışıyorsa başlatma)
+        if camera_key in detection_threads and detection_threads[camera_key]['thread'].is_alive():
+            logger.debug(f"ℹ️ {camera_key} zaten bu process'te aktif, atlanıyor.")
             return False
 
         logger.info(f"🚀 Scheduled Start: {camera_key} ({camera_type})")
@@ -2116,6 +2132,68 @@ smartsafe_requests_total 100
             }
         }
         return True
+
+    def start_background_sync(self):
+        """Aktif tespitleri periyodik olarak DB ile senkronize eden arka plan thread'ini başlatır."""
+        def sync_loop():
+            # Rastgele bir offset ver ki tüm worker'lar aynı anda DB'ye yüklenmesin
+            import random
+            time.sleep(random.uniform(5, 15))
+            
+            while True:
+                try:
+                    self.sync_active_detections_from_db()
+                except Exception as e:
+                    logger.error(f"⚠️ Background sync loop error: {e}")
+                
+                # Her 30 saniyede bir kontrol et
+                time.sleep(30)
+                
+        sync_thread = threading.Thread(target=sync_loop, daemon=True)
+        sync_thread.start()
+        logger.info("📡 Background Detection Sync Thread started.")
+
+    def sync_active_detections_from_db(self):
+        """Startup synchronization: DB'deki aktif tespitleri Core belleğine yükler ve başlatır."""
+        try:
+            logger.info("🔄 Syncing active detections from database...")
+            
+            if not self.ensure_database_initialized():
+                logger.error("❌ Database not ready for startup sync")
+                return
+                
+            active_list = get_db_adapter().get_all_active_detections()
+            if not active_list:
+                logger.info("ℹ️ No active detections found in database to sync.")
+                return
+                
+            logger.info(f"🔍 Found {len(active_list)} active detections in DB. Resuming...")
+            
+            for item in active_list:
+                try:
+                    camera_key = item.get('camera_key')
+                    company_id = item.get('company_id')
+                    camera_id = item.get('camera_id')
+                    mode = item.get('detection_mode', 'ppe')
+                    confidence = item.get('confidence_threshold', 0.5)
+                    
+                    if not camera_key or not company_id or not camera_id:
+                        continue
+                        
+                    # Eğer bu process'te henüz thread'i yoksa başlat
+                    is_in_memory = camera_key in detection_threads and detection_threads[camera_key]['thread'].is_alive()
+                    
+                    if not is_in_memory:
+                        logger.info(f"▶️ Resuming detection for {camera_key}")
+                        self.internal_start_detection(company_id, camera_id, "SaaS-Auto", mode, confidence)
+                    else:
+                        logger.debug(f"ℹ️ {camera_key} is already running in memory, skipping resume.")
+                except Exception as item_err:
+                    logger.error(f"⚠️ Error resuming detection for item {item}: {item_err}")
+                    
+            logger.info("✅ Startup sync complete.")
+        except Exception as e:
+            logger.error(f"❌ sync_active_detections_from_db failed: {e}")
 
     def internal_stop_detection(self, company_id, camera_id):
         """Zamanlayıcı tarafından tetiklenen dâhili algılama durdurma."""
@@ -2358,6 +2436,7 @@ smartsafe_requests_total 100
                         ppe_compliant = 0
                         
                         pose_aware_handled = False
+                        pose_aware_debug_info = {}
                         try:
                             with _inference_semaphore:  # Max N thread aynı anda inference
                                 if pose_detector is not None:
@@ -2371,6 +2450,11 @@ smartsafe_requests_total 100
                                         raw_violations = pose_result.get('ppe_violations', [])
                                         ppe_violations = raw_violations if isinstance(raw_violations, list) else []
                                         results = pose_result.get('detections', [])
+                                        # Capture extended debug metadata (debug_pool, etc.)
+                                        pose_aware_debug_info = {
+                                            k: v for k, v in pose_result.items() 
+                                            if k not in ('detections', 'ppe_violations', 'compliant_people', 'people_detected')
+                                        }
                                         pose_aware_handled = True
                                         logger.debug(
                                             f"🎯 PoseAware: {people_detected} kişi, "
@@ -2499,7 +2583,7 @@ smartsafe_requests_total 100
 
                             _dz = _camera_cfg.get("detection_zones")
                             if isinstance(results, list) and _dz is not None:
-                                results, _roi_stats, _roi_on = filter_detections_by_roi(
+                                results, _roi_stats, _roi_on, _roi_contour = filter_detections_by_roi(
                                     frame.shape, _dz, results
                                 )
                                 if _roi_on:
@@ -2626,6 +2710,49 @@ smartsafe_requests_total 100
                         if not results and people_detected == 0:
                             continue
 
+                        # Debug meta collection for DB (violation_events.debug_meta)
+                        _debug_temporal_missing_by_type = {}
+                        _debug_temporal_stats_by_type = {}
+                        _debug_ppe_violations_before_temporal = list(ppe_violations) if isinstance(ppe_violations, list) else ppe_violations
+
+                        # ── Temporal PPE gating (mask N-of-M + hysteresis) ───────────────────
+                        # Reduce false positives: only keep "Maske YOK" + "Maske eksik" when
+                        # repeated evidence is seen over recent inference steps, per track_id.
+                        if isinstance(results, list) and people_detected > 0:
+                            try:
+                                from utils.temporal_ppe_gating import apply_temporal_ppe_gating
+                                from configs.constants import PPE_CONFIG
+
+                                results, _missing_by_type, _missing_stats = apply_temporal_ppe_gating(camera_key, results)
+                                if isinstance(_missing_by_type, dict):
+                                    _debug_temporal_missing_by_type = _missing_by_type
+                                if isinstance(_missing_stats, dict):
+                                    _debug_temporal_stats_by_type = _missing_stats
+
+                                # Drop frame-level violation labels for PPE types that are NOT confirmed missing.
+                                # We use PPE_CONFIG.violation_tr as the source-of-truth labels.
+                                if isinstance(ppe_violations, list) and ppe_violations and isinstance(_missing_by_type, dict):
+                                    keep_labels = set()
+                                    for ppe_type, tids in _missing_by_type.items():
+                                        if tids:
+                                            try:
+                                                keep_labels.add(str(PPE_CONFIG.get(ppe_type, {}).get("violation_tr", "")).strip())
+                                            except Exception:
+                                                pass
+                                    # If no types confirmed, remove all known PPE_CONFIG violation labels from this frame.
+                                    known_labels = {
+                                        str(cfg.get("violation_tr", "")).strip()
+                                        for cfg in (PPE_CONFIG or {}).values()
+                                        if isinstance(cfg, dict) and str(cfg.get("violation_tr", "")).strip()
+                                    }
+                                    ppe_violations = [
+                                        v
+                                        for v in ppe_violations
+                                        if (str(v).strip() not in known_labels) or (str(v).strip() in keep_labels)
+                                    ]
+                            except Exception:
+                                pass
+
                         # İhlal listesini normalize et (dict formatına çevir, string'leri sar)
                         normalized_ppe_violations, simple_ppe_violations = self._normalize_ppe_violations(ppe_violations)
                         ppe_violations = simple_ppe_violations
@@ -2679,15 +2806,63 @@ smartsafe_requests_total 100
                                     and str(d.get("class_name", "")).strip().lower() in _pn_vt
                                 ]
                                 if persons_from_result:
+                                    # Per-person violation filtering: if temporal gating is enabled and we have
+                                    # stats_by_type for this frame, only emit violations confirmed for that track_id.
+                                    try:
+                                        from configs.constants import PPE_CONFIG
+
+                                        _violation_tr_to_ppe_type = {
+                                            str(cfg.get("violation_tr", "")).strip(): str(ppe_type).strip()
+                                            for ppe_type, cfg in (PPE_CONFIG or {}).items()
+                                            if isinstance(cfg, dict) and str(cfg.get("violation_tr", "")).strip()
+                                        }
+                                    except Exception:
+                                        _violation_tr_to_ppe_type = {}
+
                                     for p_idx, person_det in enumerate(persons_from_result):
                                         if person_det.get("decision") not in (None, "ACCEPT"):
                                             continue
                                         p_bbox = person_det.get('bbox', [0, 0, 10, 10])
+
+                                        per_person_violations = list(ppe_violations)
+                                        try:
+                                            # If we have temporal stats for this frame, filter by confirmed_missing for this track.
+                                            tid_raw = person_det.get("track_id")
+                                            tid_i = int(tid_raw) if tid_raw is not None else None
+                                            if (
+                                                tid_i is not None
+                                                and isinstance(_debug_temporal_stats_by_type, dict)
+                                                and _debug_temporal_stats_by_type
+                                            ):
+                                                confirmed_types = set()
+                                                for ppe_type, per_tid in _debug_temporal_stats_by_type.items():
+                                                    if not isinstance(per_tid, dict):
+                                                        continue
+                                                    st = per_tid.get(str(tid_i)) or per_tid.get(tid_i)
+                                                    if isinstance(st, dict) and bool(st.get("confirmed_missing", False)):
+                                                        confirmed_types.add(str(ppe_type))
+                                                if confirmed_types:
+                                                    filtered = []
+                                                    for v in per_person_violations:
+                                                        vt = str(v).strip()
+                                                        ppe_type = _violation_tr_to_ppe_type.get(vt)
+                                                        if ppe_type and ppe_type in confirmed_types:
+                                                            filtered.append(v)
+                                                        elif ppe_type is None:
+                                                            # Non-PPE violations (if any) pass through.
+                                                            filtered.append(v)
+                                                    per_person_violations = filtered
+                                                else:
+                                                    # Nothing confirmed missing for this person → no violations for tracker.
+                                                    per_person_violations = []
+                                        except Exception:
+                                            per_person_violations = list(ppe_violations)
+
                                         new_v, ended_v = violation_tracker.process_detection(
                                             camera_id=camera_id,
                                             company_id=company_id,
                                             person_bbox=p_bbox,
-                                            violations=list(ppe_violations),
+                                            violations=per_person_violations,
                                         )
                                         tracker_new_violations.extend(new_v)
                                         tracker_ended_violations.extend(ended_v)
@@ -2758,6 +2933,41 @@ smartsafe_requests_total 100
                                             if snapshot_path:
                                                 new_ev['snapshot_path'] = snapshot_path
                                                 logger.info(f"📸 VIOLATION SNAPSHOT: {snapshot_path}")
+                                            
+                                                # Persist explainability metadata into DB (debug_meta JSONB)
+                                                try:
+                                                    # Ensure debug_meta is JSON-serializable (no set/np types).
+                                                    _missing_by_type_json = _debug_temporal_missing_by_type
+                                                    try:
+                                                        if isinstance(_debug_temporal_missing_by_type, dict):
+                                                            _missing_by_type_json = {
+                                                                str(k): sorted([int(x) for x in v]) if isinstance(v, (set, list, tuple)) else v
+                                                                for k, v in _debug_temporal_missing_by_type.items()
+                                                            }
+                                                    except Exception:
+                                                        _missing_by_type_json = {}
+                                                    from utils.violation_debug_meta import build_violation_debug_meta
+
+                                                    new_ev["debug_meta"] = build_violation_debug_meta(
+                                                        camera_key=camera_key,
+                                                        camera_id=camera_id,
+                                                        company_id=company_id,
+                                                        frame_shape=list(frame.shape[:2]) if frame is not None else None,
+                                                        person_visible=bool(person_visible),
+                                                        event_person_bbox=list(p_bbox) if isinstance(p_bbox, list) else p_bbox,
+                                                        results=results,
+                                                        decision_summary=dict(decision_summary) if isinstance(decision_summary, dict) else decision_summary,
+                                                        roi_on=bool(_roi_on) if "_roi_on" in locals() else None,
+                                                        roi_stats=dict(_roi_stats) if "_roi_stats" in locals() and isinstance(_roi_stats, dict) else None,
+                                                        temporal_missing_by_type_json=_missing_by_type_json,
+                                                        temporal_stats_by_type=_debug_temporal_stats_by_type,
+                                                        ppe_violations_before=_debug_ppe_violations_before_temporal,
+                                                        ppe_violations_after=list(ppe_violations) if isinstance(ppe_violations, list) else ppe_violations,
+                                                        frame_skip=int(frame_skip),
+                                                        processing_time_ms=float(processing_time) if "processing_time" in locals() else None,
+                                                    )
+                                                except Exception:
+                                                    pass
                                                 
                                                 # violation_events tablosuna kaydet
                                                 if db_adapter.add_violation_event(new_ev):
@@ -2854,7 +3064,9 @@ smartsafe_requests_total 100
                             'confidence_threshold': float(confidence),
                             'detections': results if isinstance(results, list) else [],  # bbox listesi overlay için
                             'roi_debug': _roi_debug_meta,
+                            'roi_contour': _roi_contour if '_roi_contour' in locals() else None,
                             'decision': decision_summary,
+                            'pose_aware_debug': pose_aware_debug_info,
                         }
                         
                         # Queue'ya ekle
@@ -4308,14 +4520,33 @@ smartsafe_requests_total 100
             if roi_dbg and isinstance(roi_dbg, dict):
                 _draw_roi_debug_on_frame(frame, roi_dbg)
 
+            # 📐 ROI'yi bizzat kare üzerine çiz (Core-side visualization)
+            roi_contour = detection_data.get("roi_contour")
+            if roi_contour is not None:
+                frame = draw_roi_polygon(frame, roi_contour)
+
             # 🎯 BOUNDING BOX ÇİZİMİ - PPE Detection Sonuçları
             # Draw order: persons first, then positive PPE, then missing PPE
             # so that label deconfliction stacks missing labels above positive ones.
             detections = detection_data.get('detections', [])
             if detections and isinstance(detections, list):
+                # Default: keep overlay clean by drawing only PERSON bbox + warning labels.
+                # Enable detailed PPE boxes via env: OVERLAY_SHOW_PPE_BOXES=1
+                try:
+                    show_ppe_boxes = os.environ.get("OVERLAY_SHOW_PPE_BOXES", "0").strip().lower() in (
+                        "1",
+                        "true",
+                        "yes",
+                        "on",
+                    )
+                except Exception:
+                    show_ppe_boxes = False
+
                 persons = []
                 positives = []
                 negatives = []
+                missing_by_tid: dict = {}
+                present_by_tid: dict = {}
                 for det in detections:
                     if not isinstance(det, dict):
                         continue
@@ -4327,33 +4558,137 @@ smartsafe_requests_total 100
                     else:
                         positives.append(det)
 
-                for detection in persons + positives + negatives:
-                    bbox = detection.get('bbox', [])
-                    class_name = detection.get('class_name', 'unknown')
-                    confidence = detection.get('confidence', 0.0)
-                    is_missing = bool(detection.get('missing', False))
-                    is_person = class_name.lower() in ('person', 'kisi', 'insan')
-
-                    if roi_dbg and isinstance(roi_dbg, dict) and is_person:
-                        continue
-
-                    if len(bbox) == 4:
-                        try:
-                            x1, y1, x2, y2 = [int(coord) for coord in bbox]
-                            
-                            color = get_class_color(class_name, is_missing=is_missing)
-                            
-                            label = f"{class_name} {confidence:.2f}"
-                            
-                            frame = draw_styled_box(
-                                frame, x1, y1, x2, y2, label, color,
-                                confidence=confidence,
-                                is_person=is_person,
-                                is_missing=is_missing,
-                            )
-                        except Exception as bbox_error:
-                            logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
+                if not show_ppe_boxes:
+                    # Aggregate missing labels per person track_id (pose-based detections only).
+                    for det in negatives:
+                        if not bool(det.get("pose_based", False)):
                             continue
+                        ptid = det.get("parent_track_id")
+                        if ptid is None:
+                            continue
+                        try:
+                            tid = int(ptid)
+                        except Exception:
+                            continue
+                        lbl = str(det.get("class_name", "")).strip()
+                        if not lbl:
+                            continue
+                        missing_by_tid.setdefault(tid, [])
+                        missing_by_tid[tid].append(lbl)
+
+                    # Aggregate present labels per person track_id (pose-based detections only).
+                    for det in positives:
+                        if not bool(det.get("pose_based", False)):
+                            continue
+                        ptid = det.get("parent_track_id")
+                        if ptid is None:
+                            continue
+                        try:
+                            tid = int(ptid)
+                        except Exception:
+                            continue
+                        lbl = str(det.get("class_name", "")).strip()
+                        if not lbl:
+                            continue
+                        # Display format: "<PPE> VAR" (e.g., "Önlük VAR")
+                        present_by_tid.setdefault(tid, [])
+                        present_by_tid[tid].append(f"{lbl} VAR")
+
+                    for detection in persons:
+                        bbox = detection.get('bbox', [])
+                        class_name = detection.get('class_name', 'person')
+                        confidence = detection.get('confidence', 0.0)
+                        is_person = True
+
+                        if roi_dbg and isinstance(roi_dbg, dict) and is_person:
+                            continue
+
+                        if len(bbox) == 4:
+                            try:
+                                x1, y1, x2, y2 = [int(coord) for coord in bbox]
+                                color = get_class_color(class_name, is_missing=False)
+
+                                base = f"{class_name} {float(confidence):.2f}"
+                                tid = detection.get("track_id")
+                                missing_lbls = []
+                                present_lbls = []
+                                if tid is not None:
+                                    try:
+                                        missing_lbls = missing_by_tid.get(int(tid), [])
+                                    except Exception:
+                                        missing_lbls = []
+                                    try:
+                                        present_lbls = present_by_tid.get(int(tid), [])
+                                    except Exception:
+                                        present_lbls = []
+                                if missing_lbls:
+                                    # De-dup + keep stable order
+                                    seen = set()
+                                    uniq = []
+                                    for s in missing_lbls:
+                                        if s in seen:
+                                            continue
+                                        seen.add(s)
+                                        uniq.append(s)
+                                    # Keep label reasonably short for pill renderer
+                                    extra = " | " + ", ".join(uniq[:4])
+                                    if len(uniq) > 4:
+                                        extra += f" +{len(uniq) - 4}"
+                                    label = base + extra
+                                elif present_lbls:
+                                    seen = set()
+                                    uniq = []
+                                    for s in present_lbls:
+                                        if s in seen:
+                                            continue
+                                        seen.add(s)
+                                        uniq.append(s)
+                                    extra = " | " + ", ".join(uniq[:4])
+                                    if len(uniq) > 4:
+                                        extra += f" +{len(uniq) - 4}"
+                                    label = base + extra
+                                else:
+                                    label = base
+
+                                frame = draw_styled_box(
+                                    frame, x1, y1, x2, y2, label, color,
+                                    confidence=confidence,
+                                    is_person=True,
+                                    is_missing=False,
+                                )
+                            except Exception as bbox_error:
+                                logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
+                                continue
+                else:
+                    for detection in persons + positives + negatives:
+                        bbox = detection.get('bbox', [])
+                        class_name = detection.get('class_name', 'unknown')
+                        confidence = detection.get('confidence', 0.0)
+                        is_missing = bool(detection.get('missing', False))
+                        is_person = class_name.lower() in ('person', 'kisi', 'insan')
+
+                        if roi_dbg and isinstance(roi_dbg, dict) and is_person:
+                            continue
+
+                        if len(bbox) == 4:
+                            try:
+                                x1, y1, x2, y2 = [int(coord) for coord in bbox]
+                                
+                                color = get_class_color(class_name, is_missing=is_missing)
+                                
+                                label = f"{class_name} {confidence:.2f}"
+                                
+                                frame = draw_styled_box(
+                                    frame, x1, y1, x2, y2, label, color,
+                                    confidence=confidence,
+                                    is_person=is_person,
+                                    is_missing=is_missing,
+                                )
+                            except Exception as bbox_error:
+                                logger.warning(f"⚠️ Bounding box çizim hatası: {bbox_error}")
+                                continue
+
+                # (Bounding boxes drawn by the chosen branch above.)
             
             # Zaman damgası (sağ alt köşe)
             timestamp = detection_data.get('timestamp', '')
@@ -4541,6 +4876,13 @@ def create_app():
             print("🕒 Schedule Manager started during app creation")
         except Exception as sched_err:
             print(f"⚠️ Schedule Manager startup failed: {sched_err}")
+            
+        # --- Sync Active Detections ---
+        try:
+            api_server.sync_active_detections_from_db()
+            api_server.start_background_sync()
+        except Exception as sync_err:
+            print(f"⚠️ Startup detection sync failed: {sync_err}")
             
         app = api_server.app
         print(f"✅ Global Flask app created successfully: {app}")

@@ -11,6 +11,7 @@ kaydetmek gerekir).
 from __future__ import annotations
 
 import json
+import os
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -166,6 +167,16 @@ def bbox_bottom_center(bbox: Any) -> Optional[Tuple[float, float]]:
     return ((x1 + x2) / 2.0, y2)
 
 
+def bbox_center(bbox: Any) -> Optional[Tuple[float, float]]:
+    if not bbox or len(bbox) < 4:
+        return None
+    try:
+        x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+    except (TypeError, ValueError):
+        return None
+    return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+
+
 def point_inside_polygon(pt: Tuple[float, float], contour: np.ndarray) -> bool:
     r = cv2.pointPolygonTest(contour, pt, False)
     return r >= 0
@@ -254,17 +265,102 @@ def filter_detections_by_roi(
 
     Dönen istatistik: total_with_bbox, inside_roi, outside_roi (bbox'lı girdiler için).
     Üçüncü değer: ROI poligonu uygulandı mı.
+
+    Kural:
+      - Person/kişi tespitleri → bbox alt-orta noktası ROI içindeyse tutulur.
+      - `pose_based=True` PPE tespitleri (ör. "Maske YOK", "Bone") → parent
+        person'ın ROI durumunu miras alır (parent_track_id veya parent_bbox
+        üzerinden). Parent yoksa veya parent dışarıdaysa bu PPE çizilmez.
+      - Diğer tespitler (SH17 ham etiketleri vb.) → eski davranış (alt-orta
+        noktası ROI içindeyse tutulur).
     """
     stats = {"total_with_bbox": 0, "inside_roi": 0, "outside_roi": 0}
     zones = parse_detection_zones(detection_zones_raw)
     norm_poly = _first_polygon_norm(zones)
     if norm_poly is None:
-        return results, stats, False
+        return results, stats, False, None
+
+    logger.info(f"📍 ROI DEBUG | Kamera için kullanılan ham ROI: {detection_zones_raw}")
 
     if len(frame_shape) < 2:
-        return results, stats, False
+        return results, stats, False, None
     h, w = int(frame_shape[0]), int(frame_shape[1])
+    
+    # 🧪 TEST: Eğer poligon sağdan eksikse (UI hatası şüphesi), otomatik olarak en sağa uzat
+    # Normalize X değerlerini kontrol et, eğer hiçbiri 0.95'i geçmiyorsa sağa yasla
+    if norm_poly is not None and len(norm_poly) > 0:
+        max_x = np.max(norm_poly[:, 0])
+        _expand_limit = float(os.environ.get('ROI_AUTO_EXPAND_X_THRESHOLD', 0.80))
+        if max_x < _expand_limit:
+             logger.warning(f"⚠️ ROI sağdan eksik görünüyor (max_x={max_x:.2f}). Otomatik genişletiliyor...")
+             # En sağdaki noktaları ve onlara yakın olanları (sağ %20'lik dilim) 1.0'a çek
+             threshold = max_x * 0.8
+             norm_poly[:, 0] = np.where(norm_poly[:, 0] >= threshold, 1.0, norm_poly[:, 0])
+
     contour = normalized_polygon_to_pixels(norm_poly, w, h)
+
+
+    person_inside_by_tid: Dict[int, bool] = {}
+    person_inside_by_bbox: List[Tuple[Tuple[int, int, int, int], bool]] = []
+
+    def _eval_inside(bbox: Any) -> Optional[bool]:
+        # Ayak ucu yerine merkez noktasına bakıyoruz (daha esnek)
+        pt = bbox_center(bbox)
+        if pt is None:
+            return None
+        return bool(point_inside_polygon(pt, contour))
+
+    for item in results:
+        if not _is_person_detection(item):
+            continue
+        bbox = item.get("bbox") if isinstance(item, dict) else None
+        if not bbox or len(bbox) < 4:
+            continue
+        inside = _eval_inside(bbox)
+        if inside is not None:
+            if not inside:
+                logger.debug(f"📍 Person OUTSIDE ROI: bbox={bbox}")
+        
+        if inside is None:
+            continue
+        try:
+            tid = item.get("track_id") if isinstance(item, dict) else None
+            if tid is not None:
+                person_inside_by_tid[int(tid)] = inside
+        except (TypeError, ValueError):
+            pass
+        try:
+            key = (
+                int(bbox[0]),
+                int(bbox[1]),
+                int(bbox[2]),
+                int(bbox[3]),
+            )
+            person_inside_by_bbox.append((key, inside))
+        except (TypeError, ValueError):
+            pass
+
+    def _parent_inside(item: Dict[str, Any]) -> Optional[bool]:
+        ptid = item.get("parent_track_id")
+        if ptid is not None:
+            try:
+                v = person_inside_by_tid.get(int(ptid))
+                if v is not None:
+                    return bool(v)
+            except (TypeError, ValueError):
+                pass
+        pbb = item.get("parent_bbox")
+        if pbb and len(pbb) == 4:
+            try:
+                key = (int(pbb[0]), int(pbb[1]), int(pbb[2]), int(pbb[3]))
+            except (TypeError, ValueError):
+                key = None
+            if key is not None:
+                for k, v in person_inside_by_bbox:
+                    if k == key:
+                        return bool(v)
+            return _eval_inside(pbb)
+        return None
 
     kept: List[Any] = []
     for item in results:
@@ -276,14 +372,28 @@ def filter_detections_by_roi(
             kept.append(item)
             continue
         stats["total_with_bbox"] += 1
-        pt = bbox_bottom_center(bbox)
-        if pt is None:
+
+        is_pose_based = bool(item.get("pose_based", False))
+        inside: Optional[bool]
+
+        if is_pose_based and not _is_person_detection(item):
+            inside = _parent_inside(item)
+            if inside is None:
+                inside = _eval_inside(bbox)
+        else:
+            inside = _eval_inside(bbox)
+
+        if inside is None:
             kept.append(item)
             continue
-        if point_inside_polygon(pt, contour):
+        if inside:
             stats["inside_roi"] += 1
             kept.append(item)
         else:
             stats["outside_roi"] += 1
 
-    return kept, stats, True
+    return kept, stats, True, contour
+
+
+def _get_empty_return(results, stats):
+    return results, stats, False, None

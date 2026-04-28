@@ -457,3 +457,37 @@ def draw_hud_bar(
         x += tw + int(20 * s)
 
     return frame
+
+
+def draw_roi_polygon(
+    frame: np.ndarray,
+    polygon_px: np.ndarray,
+    color: Tuple[int, int, int] = (255, 165, 0),  # Default: orange
+    alpha: float = 0.30,  # Görünürlüğü artırmak için 0.15 -> 0.30
+) -> np.ndarray:
+    """
+    Draw a semi-transparent ROI polygon on the frame.
+    """
+    if polygon_px is None or len(polygon_px) < 3:
+        return frame
+
+    # 1. Alanın içini yarı saydam boya
+    overlay = frame.copy()
+    cv2.fillPoly(overlay, [polygon_px.astype(np.int32)], color)
+    cv2.addWeighted(overlay, alpha, frame, 1.0 - alpha, 0, frame)
+
+    # 2. Kenar çizgilerini daha belirgin çiz (kesik çizgi efekti için ince kalınlık)
+    cv2.polylines(
+        frame, [polygon_px.astype(np.int32)], True, color, 4, cv2.LINE_AA
+    )
+    
+    # 3. ROI köşelerine küçük noktalar koy (daha teknik bir görünüm)
+    for pt in polygon_px:
+        # OpenCV contour formatı Nx1x2 olduğu için pt[0] -> [x, y] döner
+        if pt.ndim == 2 and pt.shape[0] == 1:
+            px, py = pt[0]
+        else:
+            px, py = pt
+        cv2.circle(frame, (int(px), int(py)), 3, color, -1, cv2.LINE_AA)
+
+    return frame

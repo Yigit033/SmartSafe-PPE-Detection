@@ -1496,8 +1496,9 @@ class DatabaseAdapter:
                 INSERT INTO violation_events (
                     event_id, company_id, camera_id, person_id, violation_type,
                     start_time, end_time, duration_seconds, snapshot_path, severity, status,
-                    source_type, dvr_channel_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    source_type, dvr_channel_id,
+                    debug_meta
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             '''
             
             # NOTE: violation_events.start_time/end_time are stored as unix epoch (double precision)
@@ -1544,6 +1545,7 @@ class DatabaseAdapter:
                 event_data.get('status', 'active'),
                 source_type,
                 dvr_channel_id,
+                psycopg2.extras.Json(self._json_sanitize(event_data.get('debug_meta'))) if event_data.get('debug_meta') is not None else None,
             )
             
             self.execute_query(query, params)
@@ -1553,6 +1555,35 @@ class DatabaseAdapter:
         except Exception as e:
             logger.error(f"❌ Add violation event error: {e}")
             return False
+
+    def _json_sanitize(self, obj: Any) -> Any:
+        """Convert non-JSON types (set, tuple, numpy) into JSON-serializable structures."""
+        try:
+            # Fast path
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, dict):
+                return {str(k): self._json_sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [self._json_sanitize(v) for v in obj]
+            if isinstance(obj, set):
+                return [self._json_sanitize(v) for v in sorted(list(obj))]
+            # numpy scalars / arrays
+            try:
+                import numpy as _np  # type: ignore
+
+                if isinstance(obj, _np.generic):
+                    return obj.item()
+                if isinstance(obj, _np.ndarray):
+                    return obj.tolist()
+            except Exception:
+                pass
+            # Fallback: stringify
+            return str(obj)
+        except Exception:
+            return str(obj)
     
     def update_violation_event(self, event_id: str, update_data: Dict) -> bool:
         """İhlal event'ini güncelle (bittiğinde)"""
@@ -1880,6 +1911,18 @@ class DatabaseAdapter:
             return [row['camera_id'] for row in rows]
         except Exception as e:
             logger.error(f"❌ get_active_detections_list error: {e}")
+            return []
+
+    def get_all_active_detections(self) -> List[Dict]:
+        """Tüm aktif tespitleri (tüm şirketler) DB'den döner. Startup senkronizasyonu için."""
+        try:
+            query = "SELECT * FROM active_detections WHERE status = TRUE"
+            rows = self.execute_query(query, fetch_all=True)
+            if not rows or not isinstance(rows, list):
+                return []
+            return rows
+        except Exception as e:
+            logger.error(f"❌ get_all_active_detections error: {e}")
             return []
 
 

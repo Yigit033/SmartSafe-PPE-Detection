@@ -39,12 +39,10 @@ import {
 import { getCompanyId } from "@/lib/session";
 import api from "@/lib/api";
 import core from "@/lib/core";
-import VideoRoiOverlay from "@/components/camera/VideoRoiOverlay";
 import MjpegCanvas from "@/components/camera/MjpegCanvas";
 import { isDev } from "@/lib/utils";
 import {
   normalizeDetectionZonesPayload,
-  polygonToVideoSpaceForOverlay,
 } from "@/lib/detectionZones";
 import ScheduleModal from "@/components/camera/ScheduleModal";
 import ZoneDesigner from "@/components/dashboard/ZoneDesigner";
@@ -896,15 +894,6 @@ function CamerasContent() {
             className={`mt-12 grid gap-8 ${camerasPerPage === 1 ? "grid-cols-1 max-w-5xl mx-auto" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}
           >
             {paginatedCameras.map((camera) => {
-              const zonesPayload = normalizeDetectionZonesPayload(
-                camera.detection_zones,
-              );
-              const streamLay = streamLayoutByCamera[camera.camera_id];
-              const showRoiOverlay =
-                zonesPayload.polygons.length > 0 &&
-                zonesPayload.polygons[0].length > 0 &&
-                !failedCameras.includes(camera.camera_id);
-
               return (
                 <div
                   key={camera.camera_id}
@@ -923,7 +912,7 @@ function CamerasContent() {
                           : "opacity-100"
                       }`}
                       fps={30}
-                      onDimensions={(nw, nh, cw, ch) => {
+                      onDimensions={(nw: number, nh: number, cw: number, ch: number) => {
                         setStreamLayoutByCamera((prev) => ({
                           ...prev,
                           [camera.camera_id]: { nw, nh, cw, ch },
@@ -951,21 +940,6 @@ function CamerasContent() {
                       }}
                     />
 
-                    {showRoiOverlay && (
-                      <VideoRoiOverlay
-                        polygon={polygonToVideoSpaceForOverlay(
-                          zonesPayload.polygons[0],
-                          zonesPayload.coordSpace,
-                          streamLay?.cw ?? 0,
-                          streamLay?.ch ?? 0,
-                          streamLay?.nw ?? 0,
-                          streamLay?.nh ?? 0,
-                        )}
-                        naturalW={streamLay?.nw ?? 0}
-                        naturalH={streamLay?.nh ?? 0}
-                        className="absolute inset-0 z-10 h-full w-full opacity-70 transition-opacity duration-500 group-hover:opacity-100"
-                      />
-                    )}
 
                     {privacyModeCameras.includes(camera.camera_id) && (
                       <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 backdrop-blur-[1px] transition-all duration-500">

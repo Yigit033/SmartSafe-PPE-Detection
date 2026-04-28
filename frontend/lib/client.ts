@@ -902,6 +902,7 @@ export namespace violation {
         "snapshot_path": string
         count: number
         status: string
+        "debug_meta"?: any
     }
 
     export class ServiceClient {
