@@ -1,0 +1,6 @@
+outs:
+- md5: 1e2a419e58d25ba060e1cd064452d77d.dir
+  size: 3251363831
+  nfiles: 67329
+  hash: md5
+  path: master_food_ppe_v1

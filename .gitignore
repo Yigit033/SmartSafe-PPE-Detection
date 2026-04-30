@@ -6,7 +6,9 @@ __pycache__/
 
 # --- Local datasets & training artifacts (keep repo clean) ---
 datasets/raw/
-datasets/staging/
+# Keep staging datasets out of git, but allow DVC metadata files (*.dvc).
+datasets/staging/*
+!datasets/staging/*.dvc
 training/runs/
 
 # --- Large model artifacts (store locally, not in git) ---
