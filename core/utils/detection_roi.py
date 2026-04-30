@@ -280,25 +280,12 @@ def filter_detections_by_roi(
     if norm_poly is None:
         return results, stats, False, None
 
-    logger.info(f"📍 ROI DEBUG | Kamera için kullanılan ham ROI: {detection_zones_raw}")
 
     if len(frame_shape) < 2:
         return results, stats, False, None
     h, w = int(frame_shape[0]), int(frame_shape[1])
-    
-    # 🧪 TEST: Eğer poligon sağdan eksikse (UI hatası şüphesi), otomatik olarak en sağa uzat
-    # Normalize X değerlerini kontrol et, eğer hiçbiri 0.95'i geçmiyorsa sağa yasla
-    if norm_poly is not None and len(norm_poly) > 0:
-        max_x = np.max(norm_poly[:, 0])
-        _expand_limit = float(os.environ.get('ROI_AUTO_EXPAND_X_THRESHOLD', 0.80))
-        if max_x < _expand_limit:
-             logger.warning(f"⚠️ ROI sağdan eksik görünüyor (max_x={max_x:.2f}). Otomatik genişletiliyor...")
-             # En sağdaki noktaları ve onlara yakın olanları (sağ %20'lik dilim) 1.0'a çek
-             threshold = max_x * 0.8
-             norm_poly[:, 0] = np.where(norm_poly[:, 0] >= threshold, 1.0, norm_poly[:, 0])
 
     contour = normalized_polygon_to_pixels(norm_poly, w, h)
-
 
     person_inside_by_tid: Dict[int, bool] = {}
     person_inside_by_bbox: List[Tuple[Tuple[int, int, int, int], bool]] = []

@@ -49,6 +49,8 @@ class _Ev:
 
 _lock = threading.Lock()
 _hist: DefaultDict[str, Dict[Tuple[int, str], Deque[_Ev]]] = defaultdict(dict)
+_track_first_seen: Dict[str, Dict[int, float]] = defaultdict(dict) # camera_key -> {track_id: timestamp}
+STRANGER_THRESHOLD_S = 5.0 # Bu süreden az süredir sahnede olanlar "Stranger/Yeni" kabul edilir.
 
 
 def _get_cfg(ppe_type: str) -> Dict[str, object]:
@@ -68,18 +70,18 @@ def _get_cfg(ppe_type: str) -> Dict[str, object]:
     ppe_type_n = str(ppe_type or "").strip().lower()
 
     # Defaults tuned for low-FPS inference (0.8–1.7 FPS) with reasonable latency.
-    m = _env_int("PPE_N_OF_M_M", 5)
-    n = _env_int("PPE_N_OF_M_N", 3)
+    m = _env_int("PPE_N_OF_M_M", 6)
+    n = _env_int("PPE_N_OF_M_N", 4)
     forgive = _env_int("PPE_FORGIVE_WINDOW", 2)
     extra = _env_int("PPE_HYSTERESIS_EXTRA", 1)
     ttl = _env_float("PPE_TRACK_TTL_S", 10.0)
 
     if ppe_type_n == "face_mask":
         # If project already tuned mask vars, respect them.
-        m = _env_int("MASK_N_OF_M_M", 20)
-        n = _env_int("MASK_N_OF_M_N", 18)
-        forgive = _env_int("MASK_FORGIVE_WINDOW", 8)
-        extra = _env_int("MASK_HYSTERESIS_EXTRA", 5)
+        m = _env_int("MASK_N_OF_M_M", 8)   # Eskiden 20 idi
+        n = _env_int("MASK_N_OF_M_N", 5)   # Eskiden 18 idi
+        forgive = _env_int("MASK_FORGIVE_WINDOW", 3)
+        extra = _env_int("MASK_HYSTERESIS_EXTRA", 2)
         ttl = _env_float("MASK_TRACK_TTL_S", ttl)
 
     if ppe_type_n == "haircap":
@@ -119,7 +121,7 @@ def _prune(camera_key: str, now: float, ttl: float) -> None:
 def apply_temporal_ppe_gating(
     camera_key: str,
     detections: List[dict],
-) -> Tuple[List[dict], Dict[str, Set[int]], Dict[str, Dict[int, dict]]]:
+) -> Tuple[List[dict], Dict[str, Set[int]], Dict[str, Set[int]], Dict[str, Dict[int, dict]]]:
     """
     Returns (filtered_detections, confirmed_missing_track_ids_by_ppe_type).
 
@@ -183,50 +185,56 @@ def apply_temporal_ppe_gating(
                 )
 
         confirmed_missing: Dict[str, Set[int]] = defaultdict(set)
+        potential_missing: Dict[str, Set[int]] = defaultdict(set)  # 1+ evidence
         stats_by_type: Dict[str, Dict[int, dict]] = defaultdict(dict)
+        
         for (tid, ppe_type), q in tracks.items():
             if not q:
                 continue
             cfg = _get_cfg(ppe_type)
             n = int(cfg["n"])
-            forgive = int(cfg["forgive"])
-            extra = int(cfg["extra"])
             ttl = float(cfg["ttl"])
-            m = int(cfg["m"])
-
-            # Ignore stale deques for this type.
+            
             if now - float(q[-1].t) > ttl:
                 continue
 
+            # 🕒 STRANGER/RESIDENT MANTIĞI: Kişinin ne kadar süredir sahnede olduğunu bul
+            cam_first_seen = _track_first_seen[camera_key]
+            if tid not in cam_first_seen:
+                cam_first_seen[tid] = now
+            
+            scene_duration = now - cam_first_seen.get(tid, now)
+            is_stranger = scene_duration < STRANGER_THRESHOLD_S
+
             miss_cnt = sum(int(ev.missing) for ev in q)
             pres_cnt = sum(int(ev.present) for ev in q)
-            if forgive > 0:
-                recent = list(q)[-min(forgive, len(q)) :]
-                present_recent = any(int(ev.present) == 1 for ev in recent)
-            else:
-                present_recent = False
-            req = n + (extra if present_recent else 0)
+            
+            # GATING LOGIC: Stranger için 2, Resident için cfg['n']
+            req = 2 if is_stranger else n
+            
             confirmed = bool(miss_cnt >= req)
             if confirmed:
                 confirmed_missing[str(ppe_type)].add(int(tid))
-            # Capture stats for explainability (% missing over window).
-            try:
-                wl = int(len(q))
+            
+            # 🔍 LOOSE MODE: En az 1 kez bile görüldüyse potansiyel say
+            wl = int(len(q))
+            miss_ratio = 0.0
+            if miss_cnt >= 1:
+                potential_missing[str(ppe_type)].add(int(tid))
                 miss_ratio = float(miss_cnt) / float(wl) if wl > 0 else 0.0
-            except Exception:
-                wl = None
-                miss_ratio = None
+
             stats_by_type[str(ppe_type)][int(tid)] = {
                 "window_len": wl,
                 "m": m,
                 "n": n,
                 "missing_count": int(miss_cnt),
                 "present_count": int(pres_cnt),
-                "present_recent": bool(present_recent),
                 "required_missing": int(req),
                 "confirmed_missing": bool(confirmed),
                 "missing_ratio": miss_ratio,
                 "missing_pct": (miss_ratio * 100.0) if isinstance(miss_ratio, float) else None,
+                "is_stranger": is_stranger,
+                "scene_duration": scene_duration
             }
 
     # Filter out unconfirmed missing mask boxes (keep present boxes).
@@ -244,7 +252,21 @@ def apply_temporal_ppe_gating(
                     continue
         out.append(d)
 
-    return out, {k: set(v) for k, v in confirmed_missing.items()}, {
+    # 🧹 Periodic cleanup for _track_first_seen (Memory safety)
+    if len(_track_first_seen[camera_key]) > 200:
+        with _lock:
+            h = _hist[camera_key]
+            for old_tid in list(_track_first_seen[camera_key].keys()):
+                # If no history exists for any PPE type for this TID, it's dead
+                is_dead = True
+                for (tid_key, ppe_key) in h.keys():
+                    if tid_key == old_tid:
+                        is_dead = False
+                        break
+                if is_dead:
+                    del _track_first_seen[camera_key][old_tid]
+
+    return out, {k: set(v) for k, v in confirmed_missing.items()}, {k: set(v) for k, v in potential_missing.items()}, {
         k: dict(v) for k, v in stats_by_type.items()
     }
 

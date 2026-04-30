@@ -32,6 +32,7 @@ from flask_limiter.util import get_remote_address
 
 import sqlite3
 import json
+import uuid
 
 import threading
 import time
@@ -370,6 +371,7 @@ class SmartSafeSaaSAPI:
         
         # SH17 Model Manager entegrasyonu (Production Optimized - Lazy Loading)
         self.sh17_manager = None
+        self._potential_violation_tracker = {} # camera_key -> { (tid, ppe_type): bool }
         try:
             from models.sh17_model_manager import SH17ModelManager
             self.sh17_manager = SH17ModelManager()
@@ -2660,14 +2662,6 @@ smartsafe_requests_total 100
                                         _roi_debug_meta["final_persons"] = fin_out
                                 if _roi_debug_meta is not None:
                                     _st = _roi_debug_meta["stats"]
-                                    _msg = (
-                                        "[ROI_DEBUG] "
-                                        f"total_persons={_st['total_persons']} "
-                                        f"inside_roi={_st['inside_roi']} "
-                                        f"outside_roi={_st['outside_roi']}"
-                                    )
-                                    print(_msg, flush=True)
-                                    logger.info(_msg)
 
                             # BBox reliability metrics (env-gated) — person-centric.
                             try:
@@ -2715,15 +2709,15 @@ smartsafe_requests_total 100
                         _debug_temporal_stats_by_type = {}
                         _debug_ppe_violations_before_temporal = list(ppe_violations) if isinstance(ppe_violations, list) else ppe_violations
 
-                        # ── Temporal PPE gating (mask N-of-M + hysteresis) ───────────────────
-                        # Reduce false positives: only keep "Maske YOK" + "Maske eksik" when
-                        # repeated evidence is seen over recent inference steps, per track_id.
                         if isinstance(results, list) and people_detected > 0:
                             try:
                                 from utils.temporal_ppe_gating import apply_temporal_ppe_gating
                                 from configs.constants import PPE_CONFIG
 
-                                results, _missing_by_type, _missing_stats = apply_temporal_ppe_gating(camera_key, results)
+                                # 🎨 Canlı izlemede anlık tepki için ham sonuçları sakla
+                                results_for_overlay = [d.copy() for d in results] if isinstance(results, list) else []
+
+                                results, _missing_by_type, _potential_by_type, _missing_stats = apply_temporal_ppe_gating(camera_key, results)
                                 if isinstance(_missing_by_type, dict):
                                     _debug_temporal_missing_by_type = _missing_by_type
                                 if isinstance(_missing_stats, dict):
@@ -2750,6 +2744,10 @@ smartsafe_requests_total 100
                                         for v in ppe_violations
                                         if (str(v).strip() not in known_labels) or (str(v).strip() in keep_labels)
                                     ]
+                                
+                                # 🔍 LOOSE LOGGING: Potansiyel ihlalleri debug için kaydet (Rate-limited)
+                                if isinstance(_potential_by_type, dict) and _potential_by_type:
+                                    self._handle_potential_violations(camera_key, camera_id, company_id, _potential_by_type, results_for_overlay, frame)
                             except Exception:
                                 pass
 
@@ -2926,7 +2924,8 @@ smartsafe_requests_total 100
                                                     person_id=new_ev['person_id'],
                                                     violation_type=new_ev['violation_type'],
                                                     person_bbox=p_bbox,
-                                                    event_id=new_ev['event_id']
+                                                    event_id=new_ev['event_id'],
+                                                    tag="STRICT"
                                                 )
                                             
                                             # Sadece geçerli bir snapshot varsa DB'ye kaydet ve bildir
@@ -3062,7 +3061,7 @@ smartsafe_requests_total 100
                             'processing_time': float(round(processing_time / 1000, 3)),  # Frontend uyumlu
                             'detection_mode': str(detection_mode),
                             'confidence_threshold': float(confidence),
-                            'detections': results if isinstance(results, list) else [],  # bbox listesi overlay için
+                            'detections': results_for_overlay if 'results_for_overlay' in locals() and results_for_overlay else (results if isinstance(results, list) else []),
                             'roi_debug': _roi_debug_meta,
                             'roi_contour': _roi_contour if '_roi_contour' in locals() else None,
                             'decision': decision_summary,
@@ -4404,6 +4403,71 @@ smartsafe_requests_total 100
             
             logger.info(f"🛑 SaaS Kamera worker durduruldu: {camera_key}")
 
+    def _handle_potential_violations(self, camera_key, camera_id, company_id, potential_by_type, results_for_overlay, frame):
+        """
+        Potansiyel (loose) ihlalleri her Track ID için sadece BİR KEZ kaydeder.
+        """
+        if not potential_by_type:
+            return
+
+        # Tracker'ı bu kamera için hazırla
+        if camera_key not in self._potential_violation_tracker:
+            self._potential_violation_tracker[camera_key] = {}
+        
+        tracker = self._potential_violation_tracker[camera_key]
+
+        for ppe_type, tids in potential_by_type.items():
+            for tid in tids:
+                key = (int(tid), str(ppe_type))
+                if key in tracker:
+                    continue # Zaten bu kişi için potansiyel ihlal atıldı
+
+                # Kayıt at
+                tracker[key] = True
+                
+                # Person bbox'ı bul
+                p_bbox = None
+                for det in results_for_overlay:
+                    if int(det.get("track_id", -1)) == int(tid) and det.get("class_name") == "person":
+                        p_bbox = det.get("bbox")
+                        break
+                
+                if p_bbox:
+                    try:
+                        # 📸 Snapshot al (Debug/Loose ihlal için)
+                        snapshot_mgr = get_snapshot_manager()
+                        eid = f"POT_{uuid.uuid4().hex[:8]}"
+                        pid = f"PERSON_{tid}"
+                        
+                        from configs.constants import PPE_CONFIG
+                        violation_label = str(PPE_CONFIG.get(ppe_type, {}).get("violation_tr", f"{ppe_type} eksik")).strip()
+                        
+                        snap_path = snapshot_mgr.capture_violation_snapshot(
+                            frame, company_id, camera_id, pid, violation_label, p_bbox, eid, tag="POTENTIAL"
+                        )
+                        
+                        # 🗄️ Veritabanına kaydet
+                        event_data = {
+                            'event_id': eid,
+                            'company_id': company_id,
+                            'camera_id': camera_id,
+                            'person_id': pid,
+                            'violation_type': violation_label,
+                            'start_time': datetime.now().isoformat(),
+                            'snapshot_path': snap_path,
+                            'severity': 'low', # Potansiyel ihlaller düşük seviye
+                            'status': 'potential', # 🔍 Kritik: Frontend/Backend ayırımı için
+                            'debug_meta': {
+                                'is_potential': True,
+                                'track_id': tid,
+                                'ppe_type': ppe_type
+                            }
+                        }
+                        self.db.db_adapter.add_violation_event(event_data)
+                        logger.info(f"🔍 [LOOSE] Potansiyel ihlal kaydedildi: Person {tid} -> {violation_label}")
+                    except Exception as e:
+                        logger.error(f"❌ Potential violation save error: {e}")
+
     def generate_saas_frames(self, camera_key, company_id, camera_id, active_detectors_ref=None):
         """SaaS Frame Generator - detection state ref ile senkron"""
         
@@ -4547,6 +4611,8 @@ smartsafe_requests_total 100
                 negatives = []
                 missing_by_tid: dict = {}
                 present_by_tid: dict = {}
+                missing_by_bbox: dict = {}
+                present_by_bbox: dict = {}
                 for det in detections:
                     if not isinstance(det, dict):
                         continue
@@ -4559,40 +4625,30 @@ smartsafe_requests_total 100
                         positives.append(det)
 
                 if not show_ppe_boxes:
-                    # Aggregate missing labels per person track_id (pose-based detections only).
-                    for det in negatives:
-                        if not bool(det.get("pose_based", False)):
-                            continue
+                    # 3. PPE'leri kişilere bağla (ID yoksa BBox fallback)
+                    for det in negatives + positives:
                         ptid = det.get("parent_track_id")
-                        if ptid is None:
-                            continue
-                        try:
-                            tid = int(ptid)
-                        except Exception:
-                            continue
-                        lbl = str(det.get("class_name", "")).strip()
-                        if not lbl:
-                            continue
-                        missing_by_tid.setdefault(tid, [])
-                        missing_by_tid[tid].append(lbl)
-
-                    # Aggregate present labels per person track_id (pose-based detections only).
-                    for det in positives:
-                        if not bool(det.get("pose_based", False)):
-                            continue
-                        ptid = det.get("parent_track_id")
-                        if ptid is None:
-                            continue
-                        try:
-                            tid = int(ptid)
-                        except Exception:
-                            continue
-                        lbl = str(det.get("class_name", "")).strip()
-                        if not lbl:
-                            continue
-                        # Display format: "<PPE> VAR" (e.g., "Önlük VAR")
-                        present_by_tid.setdefault(tid, [])
-                        present_by_tid[tid].append(f"{lbl} VAR")
+                        if ptid is not None:
+                            try:
+                                tid = int(ptid)
+                                if det.get('missing', False):
+                                    missing_by_tid.setdefault(tid, []).append(str(det.get("class_name", "")).strip())
+                                else:
+                                    lbl = str(det.get("class_name", "")).strip()
+                                    present_by_tid.setdefault(tid, []).append(f"{lbl} VAR")
+                            except Exception:
+                                pass
+                        
+                        # ID eşleşmediyse veya yoksa, BBox bazlı sözlüğe ekle
+                        pb = det.get("parent_bbox")
+                        if pb and len(pb) == 4:
+                            # BBox'ı tuple yapıp key olarak kullan
+                            pb_key = tuple([round(float(v), 2) for v in pb])
+                            if det.get('missing', False):
+                                missing_by_bbox.setdefault(pb_key, []).append(str(det.get("class_name", "")).strip())
+                            else:
+                                lbl = str(det.get("class_name", "")).strip()
+                                present_by_bbox.setdefault(pb_key, []).append(f"{lbl} VAR")
 
                     for detection in persons:
                         bbox = detection.get('bbox', [])
@@ -4614,13 +4670,18 @@ smartsafe_requests_total 100
                                 present_lbls = []
                                 if tid is not None:
                                     try:
-                                        missing_lbls = missing_by_tid.get(int(tid), [])
+                                        missing_lbls.extend(missing_by_tid.get(int(tid), []))
                                     except Exception:
-                                        missing_lbls = []
+                                        pass
                                     try:
-                                        present_lbls = present_by_tid.get(int(tid), [])
+                                        present_lbls.extend(present_by_tid.get(int(tid), []))
                                     except Exception:
-                                        present_lbls = []
+                                        pass
+                                
+                                # Fallback: BBox eşleşmesi (ID yoksa veya ID ile bulunamadıysa)
+                                p_bbox_key = tuple([round(float(v), 2) for v in bbox])
+                                missing_lbls.extend(missing_by_bbox.get(p_bbox_key, []))
+                                present_lbls.extend(present_by_bbox.get(p_bbox_key, []))
                                 if missing_lbls:
                                     # De-dup + keep stable order
                                     seen = set()

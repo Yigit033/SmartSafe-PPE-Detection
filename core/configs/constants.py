@@ -59,17 +59,17 @@ RESCUE_CONFIDENCE_THRESHOLD = 0.20
 
 # Temporal PPE Gating (N-of-M + track-based hysteresis)
 TEMPORAL_PPE_GATING = 1
-PPE_N_OF_M_M = 10
-PPE_N_OF_M_N = 8
+PPE_N_OF_M_M = 6
+PPE_N_OF_M_N = 4
 PPE_FORGIVE_WINDOW = 3
 PPE_HYSTERESIS_EXTRA = 2
 PPE_TRACK_TTL_S = 10
 
 # Specific overrides for face_mask (often more flicker-prone)
-MASK_N_OF_M_M = 20
-MASK_N_OF_M_N = 18
-MASK_FORGIVE_WINDOW = 8
-MASK_HYSTERESIS_EXTRA = 5
+MASK_N_OF_M_M = 8
+MASK_N_OF_M_N = 5
+MASK_FORGIVE_WINDOW = 3
+MASK_HYSTERESIS_EXTRA = 2
 
 # Logging & Observability
 LOG_LEVEL = "INFO"

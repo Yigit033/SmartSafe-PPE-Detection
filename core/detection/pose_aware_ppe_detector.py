@@ -596,8 +596,6 @@ class PoseAwarePPEDetector:
                 logger.info(f"⚠️ 0% compliance ({compliance_result['people_detected']} ppl). Pool: {ppe_summary}. Missing: {', '.join(missing_summary)}")
             
             elapsed = time.time() - start_time
-            logger.info(f"⚡ Pose-aware detection: {len(persons_with_pose)} persons, "
-                       f"{compliance_result['compliance_rate']}% compliance ({elapsed:.3f}s)")
             
             return compliance_result
             

@@ -45,7 +45,8 @@ class SnapshotManager:
         person_id: str,
         violation_type: str,
         person_bbox: list,
-        event_id: str
+        event_id: str,
+        tag: str = "STRICT"
     ) -> Optional[str]:
         """
         İhlal anında snapshot çek ve kaydet
@@ -74,7 +75,8 @@ class SnapshotManager:
             
             timestamp = int(datetime.now().timestamp())
             safe_vtype = violation_type.replace("/", "_").replace("\\", "_").replace(",", "_")
-            filename = f"{person_id}_{safe_vtype}_{timestamp}.jpg"
+            # Tag'i dosya isminin başına ekle
+            filename = f"{tag}_{person_id}_{safe_vtype}_{timestamp}.jpg"
             filepath = snapshot_dir / filename
             
             # Kişiyi crop et (bbox + padding)
