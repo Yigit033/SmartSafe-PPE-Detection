@@ -14,3 +14,6 @@ training/runs/
 # --- Large model artifacts (store locally, not in git) ---
 models/candidates/*.pt
 models/**/weights/*.pt
+
+# --- Local dry runs and output logs ---
+runs/

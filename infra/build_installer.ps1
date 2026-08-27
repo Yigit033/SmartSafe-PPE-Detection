@@ -1,7 +1,20 @@
 # Inno Setup Terminal Derleme Scripti
-$ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+$ISCC_paths = @(
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+    "C:\Program Files\Inno Setup 6\ISCC.exe",
+    "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
+    "C:\Program Files\Inno Setup 7\ISCC.exe"
+)
 
-if (-not (Test-Path $ISCC)) {
+$ISCC = $null
+foreach ($path in $ISCC_paths) {
+    if (Test-Path $path) {
+        $ISCC = $path
+        break
+    }
+}
+
+if (-not $ISCC) {
     echo "[HATA] Inno Setup (ISCC.exe) bulunamadi! Lutfen Inno Setup'in kurulu oldugundan emin olun."
     exit
 }

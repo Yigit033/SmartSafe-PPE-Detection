@@ -145,9 +145,38 @@ if (-not (Check-Docker)) {
     exit
 }
 
-# Ad$($i_noktasiz)mlar
-Update-Status "G$($u_kucuk)ncellemeler Denetleniyor..." "Bulut senkronizasyonu yap$($i_noktasiz)l$($i_noktasiz)yor..."
-try { $null = Start-Process "docker" -ArgumentList "compose pull --quiet" -WindowStyle Hidden -Wait } catch {}
+# İndirme Adımı (Kullanıcı Dostu İlerleme)
+Update-Status "G$($u_kucuk)ncellemeler Denetleniyor..." "Yapay Zeka paketleri indiriliyor (İnternet h$($i_noktasiz)z$($i_noktasiz)na g$($o_kucuk)re s$($u_kucuk)rebilir)..."
+$logFile = "$env:TEMP\docker_pull.log"
+$logErr = "$env:TEMP\docker_pull_err.log"
+Remove-Item $logFile, $logErr -ErrorAction SilentlyContinue
+try { 
+    $pullProcess = Start-Process "docker" -ArgumentList "compose pull" -WindowStyle Hidden -RedirectStandardOutput $logFile -RedirectStandardError $logErr -PassThru
+    $startTime = Get-Date
+    
+    while (-not $pullProcess.HasExited) {
+        $elapsed = (Get-Date) - $startTime
+        $timeStr = "{0:mm} dk {0:ss} sn" -f $elapsed
+        $statusMsg = "B$($u_kucuk)y$($u_kucuk)k AI dosyalar$($i_noktasiz) indiriliyor, l$($u_kucuk)tfen kapatmay$($i_noktasiz)n... ($timeStr)"
+        
+        $activeLog = if (Test-Path $logErr) { $logErr } else { $logFile }
+        if (Test-Path $activeLog) {
+            # Loglardan son "Downloading" veya "Extracting" hareketini bul
+            $lastActivity = Get-Content $activeLog -Tail 20 -ErrorAction SilentlyContinue | Where-Object { $_ -match "Downloading|Extracting|Pulling" } | Select-Object -Last 1
+            if ($lastActivity) {
+                # Konsol karakterlerini temizle ve kısalt
+                $cleanLog = $lastActivity -replace '[^a-zA-Z0-9\s:/\.\-]', ''
+                $cleanLog = $cleanLog.Trim()
+                if ($cleanLog.Length -gt 45) { $cleanLog = $cleanLog.Substring(0, 45) + "..." }
+                $statusMsg = "($timeStr) $cleanLog"
+            }
+        }
+        
+        Update-Status "Sistem G$($u_kucuk)ncelleniyor..." $statusMsg
+        Start-Sleep -Milliseconds 800
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+} catch {}
 
 Update-Status "Konteynerler Haz$($i_noktasiz)rlan$($i_noktasiz)yor..." "Servisler aya$($g_yumusak)a kald$($i_noktasiz)r$($i_noktasiz)l$($i_noktasiz)yor..."
 $null = Start-Process "docker" -ArgumentList "compose up -d --remove-orphans" -WindowStyle Hidden -Wait
