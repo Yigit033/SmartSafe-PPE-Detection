@@ -7,6 +7,7 @@ services:
       - RENDER=true
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://encore:password@postgres:5432/smartsafe
+      - REDIS_URL=redis://redis:6379/0
     networks:
       - smartsafe-network
     depends_on:
